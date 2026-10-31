@@ -155,7 +155,7 @@ public sealed class PanelView : ContentView, IDisposable
     {
         if (Dispatcher.IsDispatchRequired)
         {
-            Dispatcher.Dispatch(Rebuild);
+            Dispatcher.DispatchLabelled("plug-ins page: rebuild", Rebuild);
         }
         else
         {

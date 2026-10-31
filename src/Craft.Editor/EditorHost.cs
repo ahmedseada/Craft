@@ -955,6 +955,8 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     {
         var scope = new PluginScope(this, plugin.Name);
         long start = Stopwatch.GetTimestamp();
+        // Named for the UI watchdog: a slow activation is a stall report that says which plug-in it was.
+        using var label = Labels.Enter("plug-in start: " + plugin.Name);
         try
         {
             var handle = plugin.Activate(scope) ?? throw new InvalidOperationException("Activate returned null (it returns what deactivates the plug-in).");

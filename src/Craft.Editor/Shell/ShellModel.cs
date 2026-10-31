@@ -417,9 +417,18 @@ public sealed class ShellModel : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         Workspace workspace;
+        SettingsFile workspaceSettings;
+        string? branch;
         try
         {
-            workspace = new Workspace(path, Options);
+            // The folder's checks and files (its .craft/settings.json, its git branch) are read on the thread pool: the
+            // UI thread only takes what they say (the owner's start-up stalls).
+            var options = Options;
+            (workspace, workspaceSettings, branch) = await Task.Run(() =>
+            {
+                var opened = new Workspace(path, options);
+                return (opened, SettingsFile.Load(CraftSettings.WorkspaceFilePath(opened.Root)), GitBranch.Read(opened.Root));
+            });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -429,7 +438,7 @@ public sealed class ShellModel : IDisposable
 
         StopWatching();
         Workspace?.Dispose();
-        Settings.Workspace = SettingsFile.Load(CraftSettings.WorkspaceFilePath(workspace.Root));
+        Settings.Workspace = workspaceSettings;
         ReloadOptions();
 
         // Made again with the options that now include the workspace's own (its CRAFT_WORKSPACE_IGNORE applies to its tree);
@@ -440,7 +449,7 @@ public sealed class ShellModel : IDisposable
         Watch();
         Recent.Add(Workspace.Root, RecentKind.Folder);
         Layout.HasFolder = true;
-        Branch = GitBranch.Read(Workspace.Root);
+        Branch = branch;
         WorkspaceChanged?.Invoke(this, EventArgs.Empty);
         return true;
     }

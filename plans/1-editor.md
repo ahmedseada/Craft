@@ -2077,6 +2077,65 @@ the owner's machine, not only headless.
     with the app and system details into `CRAFT_CRASH_FOLDER`, shown for the owner to review and paste. Nothing is sent
     anywhere. Every option per the option rule.
 
+**From the run with a C# error (2026-10-31, on ebe717f and 8dcc3de)**
+22. **"C# worked but when I introduced a C# error it crashed"**, with the log's `AI: Fix CS1002 failed` and `The agent run
+    failed`: the RTX 5070 Ti (16 GB) out of memory, 13.55 GiB in use, 1.02 GiB offloaded, for one 7B int8 model (about 8 GB).
+    **Built (2026-10-31).** Causes found:
+    - *Two copies of the model.* Craft's `ModelHost` had no limit, and a loaded model is kept under everything its load
+      depends on (name, device, context, weights, adapter); `AiModels` kept its lease under the name only, and the load
+      command (the composer's chip) went to the provider directly. A model loaded again under other settings (a device or
+      weights pick, an adapter) loaded a second copy while the first stayed, held by the earlier lease or for its 10-minute
+      keep-alive: 13.55 + 1.02 GiB fits two copies of the int8 weights (one is about 7-8 GiB), not one with its cache (inferred from the numbers; the owner's next run shows the device memory in use after a load). Fix: `AiModels` keeps each role's lease (chat,
+      completion) under all of those settings and gives the old one back when a role's settings change; the load command
+      goes through `AiModels` (one copy, one key); the provider unloads every idle model before it loads another
+      (`LocalModelProvider.LetIdleGo`, never one in use). The KV cache was not it: Idrak sizes it per request (the prompt
+      and the reply's limit, `DecodingContext(promptLength + limit)`), never the model's whole context up front.
+    - *"AI: Fix CS1002" ran from the Problems row's Fix button* (nothing binds or runs it otherwise; code actions run only
+      when picked). Its failure was a modal message: it is a notification now, and every out-of-memory failure (chat,
+      agent, code action, a load, completion) says what to do (`AiErrors.Describe`: a smaller model at the chip, smaller
+      weights, other GPU programs closed; IDRAK_OFFLOAD named, never set).
+    - *Headless, the editor's own path does not throw* (test `Diagnostics.TypingACSharpErrorKeystrokeByKeystrokeNeverThrowsAndStaysOnTheUiThread`:
+      the test project opened through ShellModel with the C# language, on a UI thread of its own; a missing `;`, an unknown
+      name, an unclosed string and brace typed and deleted a key at a time, the passes landing between keys; squiggles
+      painted, Problems rows, the status count, hover, the code actions at each error and at the caret; every view event
+      checked to arrive on the UI thread). Hardened where it could throw: a hover whose text was deleted before its pause
+      ended asked Roslyn for a position past the end (`ArgumentOutOfRangeException` out of a dispatched action ends a
+      WinUI app): it is dropped, and any edit cancels a waiting hover; the diagnostics shown are clamped to the text (to
+      their own snapshot before they are mapped, to the current one after: `EditorModel.ClampTo`); a Problems row's Fix
+      or Explain takes the problem as the editor has it now (`ShellText.CurrentProblem`, "gone" said), its Go to clamps;
+      `EditorView` hops the model's DiagnosticsChanged, Invalidated and CaretMoved to the UI thread when a buffer changed
+      on a worker; the Problems list keeps its rows (and the strip its tabs) when nothing it shows changed, instead of
+      replacing the WinUI list's items on every keystroke. Tests in `Diagnostics`. The owner's crash report still names
+      the exact frame: send it (`CRAFT_CRASH_FOLDER`).
+23. **The model loads only when asked** (the owner: "an action after the model is selected in the agent composer, not
+    while the editor starts nor while it runs"; then "a smaller one for inline completion, the big one for agents, with
+    settings"). **Built (2026-10-31).** Two models, each a setting: `model` (the chat, the agent, the code actions; the
+    composer's chip picks it) and `completionModel` (default `Qwen/Qwen2.5-Coder-1.5B`, a setting's default: its
+    fill-in-the-middle format is Idrak.Text.Plugins' as for any model; the settings page picks it). Nothing loads at
+    start-up (`loadOnStart`, default off, new) or while editing: the chat model loads when it is picked or confirmed at the
+    chip, on the first message of the chat or the agent (the composer says "Loading …, the message is sent once it is
+    loaded"; the load is an activity with its stage and Cancel), or by 'AI: Load the local model'; completion loads its own
+    small model on its first request (`completionLoad`, default on; off: only a model already loaded), never the chat
+    model, which it uses only while loaded; with no model it does nothing and says so once in the status bar
+    ("Completion: off — no model loaded", the reason as its tooltip). A failed completion load or an out-of-memory
+    generation is not tried again on every pause: only when its settings change or the model is loaded on purpose.
+    `CRAFT_PLUGIN_AI_MODEL` names the model; it no longer means load it. The voice and learning plug-ins' models already
+    loaded only on use (the recognizer on its command or on listening, the trainer on a training round). Tests `ModelLoading`.
+    For the owner on a 16 GB card: the 7B at int8 beside the 1.5B leaves room for the agent's cache; a 7B at float32 does not.
+24. **Two UI stalls at start-up** (309 and 214 ms, "unlabelled UI work"; before them: notifications, the watchdog, the
+    platform's hook, the learning plug-in's posts). **Built (2026-10-31).** The page's `OnAppearing` is a window event, so
+    everything it ran was unlabelled: the plug-ins' start, the rail and menus, and after the folder's open its handlers.
+    Found on the UI thread and moved off: the folder's open read `.craft/settings.json`, the git branch and checked the
+    folder there (now on the thread pool, `ShellModel.OpenFolderAsync`); the chat read and parsed the kept chat
+    (`.craft/chat.json`) there when the first document opened (now on the pool, shown through the dispatcher,
+    `AiChatPanel.KeptRead`); the voice plug-in loaded its families' packages in its activation (now on the pool; what needs
+    them waits, `VoicePlugin.EnsurePackages`). Redundant work dropped: a folder with no settings of its own reloaded equal
+    options, which re-applied the whole window's theme and rebuilt every open editor's model and language session; equal
+    options now change nothing. Labelled: each part of `OnAppearing`, each plug-in's activation ("plug-in start: NAME"),
+    the window's resize, the folder's handlers, the code font's pick and measure (editor and terminal), the terminal's
+    paint, and every view's dispatch (`UiDispatch.DispatchLabelled`): the next report names the work. The plug-ins'
+    Idrak libraries were already registered before the window (phase U). The owner's next run on Windows names what is left.
+
 **Already planned and still owed** (from the earlier notes, in U and U2 above): the notification centre, every
 operation in the status bar, the window never freezing, the settings and Models pages not covering the menus, new
 files showing in the tree, the side panel gone, every panel collapsible and resizable, and the open question of

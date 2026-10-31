@@ -178,6 +178,7 @@ public static class AiPluginTests
             await panel.Kept.WaitAsync(TimeSpan.FromSeconds(10));                 // written off the UI thread
             Check.True(File.Exists(kept), "the conversation is kept in the workspace");
             var again = new AiChatPanel(host, () => fixture.Settings, fixture.Models);
+            await again.KeptRead.WaitAsync(TimeSpan.FromSeconds(10));            // read on the thread pool, shown through the dispatcher
             Check.True(again.History.Count == 2 && again.Entries.Any(e => e.Role == ConversationRole.Code && e.Actions.Count == 1), "a new panel reads it back, its code still applicable");
             again.NewChat();
             await again.Kept.WaitAsync(TimeSpan.FromSeconds(10));
@@ -316,6 +317,7 @@ public static class AiPluginTests
             var stopped = AiSettings.Read(k => k switch { "chatMaxTokens" => "16", "chatStops" => "END|<stop;here>", "agentStops" => "", _ => null });
             Check.True(stopped is { ChatMaxTokens: 16, ChatStops: ["END", "<stop;here>"], AgentStops: [] } && new AiSettings().ChatMaxTokens == 2048 && limited.ChatStops.Count == 1,
                 "chatMaxTokens and chatStops are settings ('|' between stops, a stop may hold ';')");
+            await panel.Kept.WaitAsync(TimeSpan.FromSeconds(10));                 // the kept chat's write ends before the folder goes
         }
         finally
         {
@@ -554,7 +556,7 @@ public static class AiPluginTests
             }
 
             ModelProviders.Register(new FakeProvider(null, text, tokenizer));
-            Settings = new AiSettings { ModelProvider = ProviderName, Model = "fake", CompletionDelayMilliseconds = 20, CompletionMaxTokens = 32 };
+            Settings = new AiSettings { ModelProvider = ProviderName, Model = "fake", CompletionModel = "fake", CompletionDelayMilliseconds = 20, CompletionMaxTokens = 32 };
             _models = new AiModels(() => Settings);
             Provider = new AiInlineCompletion(() => Settings, _models);
             InlineCompletionProviders.Register(Provider);

@@ -90,6 +90,7 @@ internal sealed class VoiceModels : IDisposable
         CancellationToken cancellationToken) where T : class, IDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
+        VoicePlugin.EnsurePackages();                    // the speech families, registered off the UI thread at activation
         var key = string.Join('\n', name, settings.ComputeDevice, settings.Language);
         // One load at a time (a second request waits for it, then shares it); the counters take their own lock, so the UI
         // thread's Release never waits for a load.

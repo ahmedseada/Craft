@@ -186,7 +186,14 @@ public sealed class VoicePlugin : IEditorPlugin
         var own = typeof(VoicePlugin).Assembly;
         IdrakInPlugins.IncludeLibraries(own);
         var settings = VoiceSettings.From(host.Settings);
-        IdrakInPlugins.IncludePackages(own, settings.IdrakPlugins);
+        // The families' packages load on the thread pool (assemblies and their registrations took the UI thread at
+        // start-up); what needs them (a recognizer's or a synthesizer's load, the registries' description) waits for them.
+        lock (PackagesGate)
+        {
+            s_packages = settings.IdrakPlugins;
+        }
+
+        _ = Task.Run(EnsurePackages);
         var session = new VoiceSession(host, () => Current = null);
         Current = session;
         return session;
@@ -197,7 +204,31 @@ public sealed class VoicePlugin : IEditorPlugin
     /// from a folder): "AudioCaptures: …", "AudioPlaybacks: …", "SpeechFamilies: …", "SpeechSynthesisFamilies: …",
     /// "LiveCommitPolicies: …", and the load context Idrak.Audio lives in.
     /// </summary>
-    public static IReadOnlyList<string> DescribeRegistries() =>
+    public static IReadOnlyList<string> DescribeRegistries()
+    {
+        EnsurePackages();
+        return Registries();
+    }
+
+    /// <summary>
+    /// Registers the Idrak plug-in packages (the speech families) of the settings the plug-in was activated with, from its
+    /// own load context, once (a second caller waits for the first); any thread, never the UI's at start-up.
+    /// </summary>
+    internal static void EnsurePackages()
+    {
+        IReadOnlyList<string> packages;
+        lock (PackagesGate)
+        {
+            packages = s_packages;
+        }
+
+        IdrakInPlugins.IncludePackages(typeof(VoicePlugin).Assembly, packages);
+    }
+
+    private static readonly Lock PackagesGate = new();
+    private static IReadOnlyList<string> s_packages = [];
+
+    private static IReadOnlyList<string> Registries() =>
     [
         "AudioCaptures: " + string.Join(", ", Idrak.Audio.Abstractions.AudioCaptures.Names.Order(StringComparer.Ordinal)),
         "AudioPlaybacks: " + string.Join(", ", Idrak.Audio.Abstractions.AudioPlaybacks.Names.Order(StringComparer.Ordinal)),

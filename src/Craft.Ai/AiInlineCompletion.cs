@@ -42,6 +42,8 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
     private readonly Func<bool> _active;
     private ModelLease? _detectedFor;
     private CompletionMode? _mode;
+    private string? _unavailable;
+    private (string Key, string Reason)? _generationFailure;
 
     /// <summary>A provider over <paramref name="models"/>, reading <paramref name="settings"/> at each request, answering while <paramref name="active"/>.</summary>
     public AiInlineCompletion(Func<AiSettings> settings, AiModels models, Func<bool>? active = null)
@@ -72,11 +74,35 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
     /// <summary>Raised (on the request's thread) when a completion ended: its statistics (prompt and cached tokens, rates).</summary>
     public event EventHandler<GenerationStats>? Completed;
 
+    /// <summary>
+    /// Raised (on the asking thread) when whether completion can answer changed: why not (no model loaded, its load or its
+    /// last generation failed), or null when it can again. Said once per reason, quietly (the status bar), never a dialog.
+    /// </summary>
+    public event EventHandler<string?>? Unavailable;
+
+    /// <summary>Why completion does not answer now, or null when it does.</summary>
+    public string? UnavailableReason => _unavailable;
+
     /// <inheritdoc />
     public bool Accepts(InlineCompletionRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return _active() && _settings().Completion && _models.HasCompletionModel;
+        var settings = _settings();
+        if (!_active() || !settings.Completion)
+        {
+            return false;
+        }
+
+        // Never a model loaded for completion behind the user's back: only one it may use now (its own small one, loaded on
+        // its first request when completionLoad allows it, or the chat model while loaded); a failure stops the asking.
+        string? reason = _generationFailure is { } failure && failure.Key == FailureKey(settings) ? failure.Reason : _models.CompletionUnavailable;
+        if (!string.Equals(reason, _unavailable, StringComparison.Ordinal))
+        {
+            _unavailable = reason;
+            Unavailable?.Invoke(this, reason);
+        }
+
+        return reason is null;
     }
 
     /// <inheritdoc />
@@ -84,7 +110,11 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
     {
         ArgumentNullException.ThrowIfNull(request);
         var settings = _settings();
-        var lease = await _models.CompletionAsync(cancellationToken).ConfigureAwait(false);
+        if (await _models.CompletionAsync(cancellationToken).ConfigureAwait(false) is not { } lease)
+        {
+            yield break;                                                // no model to use now: Accepts says why
+        }
+
         var model = lease.Text ?? throw new NotSupportedException($"The model {lease.Model} gives no text model, so it cannot complete text.");
         var (prompt, stops) = Layout(request, lease, settings);
         var options = new GenerationOptions
@@ -104,7 +134,7 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
         using var activity = Activities.Start("Completion", ActivityKinds.Generation, keep: false);
         try
         {
-            await foreach (var chunk in model.StreamAsync(prompt, options, cancellationToken).ConfigureAwait(false))
+            await foreach (var chunk in Guarded(model.StreamAsync(prompt, options, cancellationToken), settings, cancellationToken).ConfigureAwait(false))
             {
                 activity.Report(null, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Math.Max(generated, chunk.Generated)} tokens"));
                 if (chunk.Done && chunk.Stats is { } stats)
@@ -163,6 +193,44 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
             }
         }
     }
+
+    // The model's stream with its failure kept: an out-of-memory one (or any) stops completion asking on every pause until
+    // the completion settings change, said once in the status bar; the editor's controller keeps the error too.
+    private async IAsyncEnumerable<GenerationChunk> Guarded(IAsyncEnumerable<GenerationChunk> stream, AiSettings settings, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var chunks = stream.GetAsyncEnumerator(cancellationToken);
+        try
+        {
+            while (true)
+            {
+                bool more;
+                try
+                {
+                    more = await chunks.MoveNextAsync().ConfigureAwait(false);
+                }
+                catch (Exception error) when (error is not OperationCanceledException && AiErrors.IsOutOfMemory(error))
+                {
+                    _generationFailure = (FailureKey(settings), "Completion stopped: " + AiErrors.Describe(error, settings, forCompletion: true));
+                    throw;
+                }
+
+                if (!more)
+                {
+                    yield break;
+                }
+
+                yield return chunks.Current;
+            }
+        }
+        finally
+        {
+            await chunks.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    // What a generation failure is kept for: the completion settings of the model (another model, device or weights asks again).
+    private static string FailureKey(AiSettings settings) =>
+        string.Join('\n', settings.CompletionModel, settings.Model, settings.Device, settings.Weights, settings.Context.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
     /// The prompt for <paramref name="request"/> and its stops: the model's fill-in-the-middle format over the prefix and

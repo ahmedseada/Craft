@@ -45,6 +45,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private double _modelSeconds;
     private string _sandboxName = "";
     private bool _waiting;
+    private string? _loadingModel;
     private IActivity? _activity;
     private bool _disposed;
 
@@ -339,9 +340,11 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
 #pragma warning restore CA1031
         {
             Host.Log(EditorLogLevel.Error, "The agent run failed.", error);
-            Log(new ConversationEntry(ConversationRole.Error, error.Message));
+            // An out-of-memory failure says what to do (a smaller model at the chip, other GPU programs closed), in words.
+            string said = AiErrors.Describe(error, settings);
+            Log(new ConversationEntry(ConversationRole.Error, said));
             end = "Failed.";
-            activity.Fail("the agent run failed: " + error.Message, error, () => Run = StartAsync(task, CancellationToken.None));
+            activity.Fail("the agent run failed: " + said, error, () => Run = StartAsync(task, CancellationToken.None));
         }
 
         _activity = null;
@@ -364,7 +367,31 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     {
         var token = activity.CancellationToken;
         activity.Report(null, "waiting for the model (its download and load show on their own)");
-        var lease = await _models.ChatAsync(token).ConfigureAwait(false);
+        // The owner's Windows run: the model loads when the agent is first used, never at start-up. The composer says
+        // "loading…" until it is ready, and the task goes to the model once it is.
+        if (!_models.IsChatLoaded)
+        {
+            Post(() =>
+            {
+                _loadingModel = settings.Model;
+                UpdateStatus();
+            });
+        }
+
+        ModelLease lease;
+        try
+        {
+            lease = await _models.ChatAsync(token).ConfigureAwait(false);
+        }
+        finally
+        {
+            Post(() =>
+            {
+                _loadingModel = null;
+                UpdateStatus();
+            });
+        }
+
         var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot run as an agent.");
         // Idrak's built-ins (the "process" sandbox, the coding languages of the families' plug-in) are registered by now:
         // the lease's load registered the plug-in's Idrak libraries and the idrakPlugins packages.
@@ -554,6 +581,12 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         }
 
         var settings = _settings();
+        if (IsBusy && _loadingModel is { } loading)
+        {
+            Status = $"Loading {loading}… the task goes to the model once it is loaded (its progress and Cancel are in the status bar).";
+            return;
+        }
+
         var elapsed = _elapsed.Elapsed;
         string state = IsBusy ? (_waiting ? "Waiting for you · " : "Running · ") : "";
         Status = string.Create(CultureInfo.InvariantCulture,

@@ -423,9 +423,9 @@ public sealed class ModelsPage : ContentView, IDisposable
         }
     }
 
-    private void OnStatusChanged(object? sender, EventArgs e) => Dispatcher.Dispatch(Refresh);
+    private void OnStatusChanged(object? sender, EventArgs e) => Dispatcher.DispatchLabelled("models page: refresh", Refresh);
 
-    private void OnProgress(object? sender, EditorProgressItem e) => Dispatcher.Dispatch(Refresh);
+    private void OnProgress(object? sender, EditorProgressItem e) => Dispatcher.DispatchLabelled("models page: progress", Refresh);
 
     private Task OpenSectionAsync(string section)
     {

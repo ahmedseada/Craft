@@ -83,7 +83,13 @@ public sealed class EditorDrawable : IDrawable, IDisposable
             var options = model.Options;
             // The owner's note 14: the bundled JetBrains Mono as the platform's canvas reaches it (its files on Windows),
             // checked by its glyph widths, else the first monospaced fallback; picked once per family and size.
-            if (_picker.Ensure(canvas, options.FontFamily, options.FontFallback, options.FontSize, _measurer))
+            bool picked;
+            using (Labels?.Enter("editor: pick and measure the code font"))
+            {
+                picked = _picker.Ensure(canvas, options.FontFamily, options.FontFallback, options.FontSize, _measurer);
+            }
+
+            if (picked)
             {
                 if (_picker.FellBackFrom is { } from && !string.Equals(_fellBackFrom, from, StringComparison.Ordinal))
                 {

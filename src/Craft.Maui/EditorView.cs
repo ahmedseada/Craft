@@ -224,7 +224,7 @@ public sealed class EditorView : ContentView, IDisposable
         }
 
         var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities);
-        model.Dispatch = action => Dispatcher.Dispatch(_labels is { } labels ? () => labels.Run("editor: a language's answer", action) : action);
+        model.Dispatch = action => Dispatcher.DispatchLabelled("editor: a language's answer", action);
         model.DiagnosticsChanged += OnModelDiagnosticsChanged;
         model.DefinitionRequested += OnModelDefinitionRequested;
         model.Invalidated += OnModelInvalidated;
@@ -304,7 +304,7 @@ public sealed class EditorView : ContentView, IDisposable
     {
         // Raised on the language's parse thread: the repaint happens on the UI thread, for the model still shown.
         var model = sender as EditorModel;
-        Dispatcher.Dispatch(() =>
+        Dispatcher.DispatchLabelled("editor: new colours", () =>
         {
             if (model is not null && ReferenceEquals(model, _model))
             {
@@ -323,6 +323,12 @@ public sealed class EditorView : ContentView, IDisposable
 
     private void OnModelInvalidated(object? sender, EventArgs e)
     {
+        if (Dispatcher.IsDispatchRequired)
+        {
+            Dispatcher.DispatchLabelled("editor: redraw", () => OnModelInvalidated(sender, e));
+            return;
+        }
+
         if (_reclassifying)
         {
             // New colours only: the caret keeps its blink.
@@ -336,11 +342,20 @@ public sealed class EditorView : ContentView, IDisposable
         Invalidate();
     }
 
-    private void OnDrawn(object? sender, EventArgs e) => Dispatcher.Dispatch(RaisePainted);
+    private void OnDrawn(object? sender, EventArgs e) => Dispatcher.DispatchLabelled("editor: painted", RaisePainted);
 
     private void RaisePainted() => Painted?.Invoke(this, EventArgs.Empty);
 
-    private void OnModelCaretMoved(object? sender, EventArgs e) => CaretMoved?.Invoke(this, EventArgs.Empty);
+    private void OnModelCaretMoved(object? sender, EventArgs e)
+    {
+        if (Dispatcher.IsDispatchRequired)
+        {
+            Dispatcher.DispatchLabelled("editor: the caret moved", () => CaretMoved?.Invoke(this, EventArgs.Empty));
+            return;
+        }
+
+        CaretMoved?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnModelSaveRequested(object? sender, EventArgs e) => SaveRequested?.Invoke(this, EventArgs.Empty);
 
@@ -351,7 +366,7 @@ public sealed class EditorView : ContentView, IDisposable
         if (_drawable.IsDrawing)
         {
             // A line drawn wider than any before: resize after the frame, never inside it.
-            Dispatcher.Dispatch(UpdateContentSize);
+            Dispatcher.DispatchLabelled("editor: content size", UpdateContentSize);
         }
         else
         {
@@ -364,7 +379,7 @@ public sealed class EditorView : ContentView, IDisposable
         UpdateContentSize();
         double x = e.X;
         double y = e.Y;
-        Dispatcher.Dispatch(() => _ = _scroll.ScrollToAsync(x, y, false));
+        Dispatcher.DispatchLabelled("editor: scroll", () => _ = _scroll.ScrollToAsync(x, y, false));
     }
 
     private void OnStartInteraction(object? sender, TouchEventArgs e)
@@ -411,7 +426,18 @@ public sealed class EditorView : ContentView, IDisposable
 
     private void OnEndHoverInteraction(object? sender, EventArgs e) => _model?.PointerExited();
 
-    private void OnModelDiagnosticsChanged(object? sender, EventArgs e) => DiagnosticsChanged?.Invoke(this, EventArgs.Empty);
+    // A buffer changed off the UI thread (an edit applied from a worker) moves the diagnostics there: the page's Problems
+    // panel and status bar are WinUI objects, touched only on the UI thread (a fatal COM error otherwise).
+    private void OnModelDiagnosticsChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.IsDispatchRequired)
+        {
+            Dispatcher.DispatchLabelled("editor: the diagnostics changed", () => DiagnosticsChanged?.Invoke(this, EventArgs.Empty));
+            return;
+        }
+
+        DiagnosticsChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnModelDefinitionRequested(object? sender, DefinitionRequestedEventArgs e) => DefinitionRequested?.Invoke(this, e);
 

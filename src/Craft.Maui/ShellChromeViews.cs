@@ -450,7 +450,7 @@ public sealed class RailView : ContentView
     {
         if (Dispatcher.IsDispatchRequired)
         {
-            Dispatcher.Dispatch(Rebuild);
+            Dispatcher.DispatchLabelled("shell: rebuild the status items", Rebuild);
         }
         else
         {
@@ -675,6 +675,8 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly Action<int> _problemChosen;
     private ShellPalette _palette;
     private int _problemCount;
+    private int _shownCount = -1;
+    private List<ProblemRow>? _shownRows;
 
     /// <summary>The panel over <paramref name="host"/>; a problem's row moves the caret through <paramref name="problemChosen"/>.</summary>
     public BottomPanelView(EditorHost host, ShellPalette palette, Action<int> problemChosen)
@@ -769,7 +771,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
         if (model is null)
         {
             _problems.ItemsSource = null;
+            _shownRows = null;
             _problemCount = 0;
+            _shownCount = 0;
             RebuildTabs();
             return;
         }
@@ -807,8 +811,38 @@ public sealed class BottomPanelView : ContentView, IDisposable
             });
         }
 
-        _problems.ItemsSource = rows;
-        RebuildTabs();
+        // Every keystroke moves the diagnostics: the list is replaced only when what it shows changed (a WinUI list's items
+        // replaced while a row is clicked or measured is what the owner's error run may have hit), the strip only when
+        // the count did.
+        if (!SameRows(_shownRows, rows))
+        {
+            _shownRows = rows;
+            _problems.ItemsSource = rows;
+        }
+
+        if (_problemCount != _shownCount)
+        {
+            _shownCount = _problemCount;
+            RebuildTabs();
+        }
+    }
+
+    private static bool SameRows(List<ProblemRow>? shown, List<ProblemRow> rows)
+    {
+        if (shown is null || shown.Count != rows.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (shown[i] != rows[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
@@ -910,7 +944,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
             return;
         }
 
-        Dispatcher.Dispatch(() =>
+        Dispatcher.DispatchLabelled("problems: go to the problem", () =>
         {
             _problems.SelectedItem = null;
             _problemChosen(row.Position);
@@ -931,7 +965,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
 
         if (Dispatcher.IsDispatchRequired)
         {
-            Dispatcher.Dispatch(Add);
+            Dispatcher.DispatchLabelled("output: a log line", Add);
         }
         else
         {
@@ -948,7 +982,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
 
         if (Dispatcher.IsDispatchRequired)
         {
-            Dispatcher.Dispatch(() => Select(BottomTab.Telemetry));
+            Dispatcher.DispatchLabelled("telemetry: a measure", () => Select(BottomTab.Telemetry));
         }
         else
         {

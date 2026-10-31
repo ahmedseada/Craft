@@ -396,6 +396,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   event System.EventHandler<Craft.Editor.DefinitionRequestedEventArgs> DefinitionRequested
   event System.EventHandler<Craft.Editor.EditorScrollEventArgs> ScrollRequested
   event System.EventHandler<Craft.Editor.FindRequestedEventArgs> FindRequested
+  static Craft.Abstractions.EditorDiagnostic[] ClampTo(Craft.Abstractions.EditorDiagnostic[] diagnostics, System.Int32 length)
   static Craft.Abstractions.EditorDiagnostic[] MapThrough(System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> diagnostics, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits)
 struct Craft.Editor.EditorPoint : System.IEquatable<Craft.Editor.EditorPoint>
   System.Boolean Equals(Craft.Editor.EditorPoint other)
@@ -1072,6 +1073,7 @@ enum Craft.Editor.Shell.ShellPanel : System.IComparable, System.IConvertible, Sy
   Chat = 1
   Explorer = 0
 static class Craft.Editor.Shell.ShellText
+  static Craft.Abstractions.EditorDiagnostic? CurrentProblem(System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> current, Craft.Abstractions.EditorDiagnostic listed)
   static Craft.Editor.Shell.SemanticCard Semantic(Craft.Editor.EditorModel model)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> Breadcrumb(System.String filePath, System.String workspaceRoot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> scopes)
   static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ModelPick> ModelPicks(Craft.Abstractions.ModelProviderStatus status)

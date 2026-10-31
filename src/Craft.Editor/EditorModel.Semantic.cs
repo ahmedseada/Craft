@@ -146,7 +146,8 @@ public sealed partial class EditorModel
             return;
         }
 
-        EditorDiagnostic[] mapped = [.. set.Items];
+        // A span past its own snapshot (a language's slip) is clamped to it first, so no mapping or drawing reads past the end.
+        EditorDiagnostic[] mapped = ClampTo([.. set.Items], of.Length);
         bool known = of.Version == current;
         for (int i = 0; i < _history.Count && !known; i++)
         {
@@ -469,6 +470,13 @@ public sealed partial class EditorModel
             return;
         }
 
+        if (position > Snapshot.Length)
+        {
+            // The text under the pointer went while the hover waited: nothing to describe (the session would refuse it).
+            _hoverPosition = -1;
+            return;
+        }
+
         var problems = DiagnosticsAt(position);
         string problemText = problems.Count == 0 ? "" : string.Join('\n', problems.Select(p => $"{p.Id}: {p.Message}"));
         if (SemanticSession is not { } session)
@@ -538,8 +546,35 @@ public sealed partial class EditorModel
         Invalidate();
     }
 
+    /// <summary>
+    /// <paramref name="diagnostics"/> inside a text of <paramref name="length"/>: each start in [0, length], each end in
+    /// [start, length] (the same array when all already are; the order is kept, clamping keeps it).
+    /// </summary>
+    public static EditorDiagnostic[] ClampTo(EditorDiagnostic[] diagnostics, int length)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostics);
+        EditorDiagnostic[]? clamped = null;
+        for (int i = 0; i < diagnostics.Length; i++)
+        {
+            var d = diagnostics[i];
+            if (d.Start >= 0 && d.Length >= 0 && d.Start <= length - d.Length)
+            {
+                continue;
+            }
+
+            clamped ??= (EditorDiagnostic[])diagnostics.Clone();
+            int start = Math.Clamp(d.Start, 0, length);
+            int end = (int)Math.Clamp((long)d.Start + Math.Max(0, d.Length), start, length);
+            clamped[i] = d with { Start = start, Length = end - start };
+        }
+
+        return clamped ?? diagnostics;
+    }
+
     private void SetDiagnostics(EditorDiagnostic[] diagnostics)
     {
+        // The owner's crash report hunt (2026-10-31): whatever arrives, the diagnostics shown lie inside the current text.
+        diagnostics = ClampTo(diagnostics, Snapshot.Length);
         _diagnostics = diagnostics;
         int longest = 0;
         int errors = 0;
@@ -584,6 +619,11 @@ public sealed partial class EditorModel
             // A hover belongs to the text it described.
             Tooltip = null;
         }
+
+        // A hover still waiting for its pause belongs to the text before the edit: it is dropped, the pointer's next move asks again.
+        _hoverTimer?.Cancel();
+        _hoverRequest?.Cancel();
+        _hoverPosition = -1;
     }
 
     /// <summary>Inserts an accepted inline completion at <paramref name="position"/> as one undo step, the caret after it.</summary>

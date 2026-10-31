@@ -211,7 +211,14 @@ public sealed class AiSession : IDisposable
         CodeActionProviders.Register(Actions);
         _host.AddPanel(Chat);
         _host.AddPanel(Agent);
+        Completion.Unavailable += (_, reason) => _host.Dispatch("ai: completion's state", () => ShowUnavailable(reason));
         RefreshModels();
+        if (settings.LoadOnStart && settings.Model.Length > 0)
+        {
+            // Only when the user asked for it (loadOnStart); off by default: the model loads when it is picked or used.
+            _host.Dispatch("ai: load the model on start (loadOnStart)", () => _ = LoadModelAsync(CancellationToken.None));
+        }
+
         if (settings.McpOnStart)
         {
             _ = StartMcpAsync(CancellationToken.None);
@@ -312,43 +319,45 @@ public sealed class AiSession : IDisposable
         ? server.Describe()
         : $"The MCP server is off. Run 'AI: Serve the editor's tools over MCP'; it listens at {Settings.McpAddress} (CRAFT_PLUGIN_AI_MCPADDRESS).");
 
-    /// <summary>Loads the local model of the settings, its progress in the status bar, its state on the Models page.</summary>
+    /// <summary>
+    /// Loads the chat model of the settings (the load command, the composer's model chip), through the same leases the
+    /// chat, the agent and the code actions use (one copy, under one key): its progress and Cancel in the status bar (the
+    /// load's activity), its state on the Models page; a failure (an out-of-memory one says what to do) in the
+    /// notifications, never a modal message. The UI thread never waits on it.
+    /// </summary>
     public async Task LoadModelAsync(CancellationToken cancellationToken)
     {
         var settings = Settings;
         AiPlugin.Local.Settings = settings;
         if (settings.Model.Length == 0)
         {
-            await _host.ShowMessageAsync("AI: no model", "Set the model (CRAFT_PLUGIN_AI_MODEL) on the settings page: a folder, a .gguf file, store:NAME or a Hugging Face id.");
+            await _host.ShowMessageAsync("AI: no model", "Pick a model at the composer's model chip, or set the model (CRAFT_PLUGIN_AI_MODEL) on the settings page: a folder, a .gguf file, store:NAME or a Hugging Face id.");
             return;
         }
 
-        using var progress = _host.Activities.Start($"Loading {settings.Model}", ActivityKinds.ModelLoad, cancellable: true, cancellationToken);
-        cancellationToken = progress.CancellationToken;
-        // The provider reports from its worker; the activity takes it there, the host is reached on its UI thread.
-        var report = new Progress<ModelLoadStatus>(status => _host.Dispatch("ai: a model load's stage", () =>
-        {
-            progress.Report(status.Fraction is { } f && f < 1 ? f : null, status.Message);
-            _modelState = status.Message;
-            AiPlugin.Local.SetState(status.Message);
-            RefreshModels();
-        }));
+        Models.ForgetFailures();
         try
         {
-            using var lease = await ModelProviders.Get(ModelProviders.Local).AcquireAsync(new ModelRequest(settings.Model), report, cancellationToken);
+            var lease = await Task.Run(() => Models.ChatAsync(cancellationToken), cancellationToken).ConfigureAwait(true);
             _modelState = string.Create(CultureInfo.InvariantCulture,
                 $"loaded{(lease.Loaded ? $" in {lease.LoadDuration.TotalSeconds:F1} s" : "")} · context {lease.ContextLength} · {(lease.Chat is null ? "no chat template" : "chat")} · text");
-            _host.Record("ai.model.load", lease.LoadDuration.TotalMilliseconds, "ms");
+            if (lease.Loaded)
+            {
+                _host.Record("ai.model.load", lease.LoadDuration.TotalMilliseconds, "ms");
+            }
+
             AiPlugin.Local.SetState(_modelState);
-            progress.Complete(_modelState);
         }
-        catch (Exception error) when (error is not OperationCanceledException)
+        catch (OperationCanceledException)
         {
-            _modelState = "failed: " + error.Message;
+            _modelState = "not loaded (cancelled)";
+            AiPlugin.Local.SetState(_modelState);
+        }
+        catch (Exception error)
+        {
+            _modelState = "failed: " + AiErrors.Describe(error, settings);
             AiPlugin.Local.SetState(_modelState, isProblem: true);
             _host.Log(EditorLogLevel.Error, $"The model {settings.Model} did not load.", error);
-            // A failure is a notification with a toast and Retry (no modal message that stops the window).
-            progress.Fail($"The model {settings.Model} did not load: {error.Message}", error, () => _ = LoadModelAsync(CancellationToken.None));
         }
 
         RefreshModels();
@@ -392,6 +401,30 @@ public sealed class AiSession : IDisposable
         _modelState = status.Message;
         AiPlugin.Local.SetState(status.Message);
         RefreshModels();
+    }
+
+    // Completion has no model to use now (none loaded, its load failed): said once, quietly, in the status bar.
+    private void ShowUnavailable(string? reason)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (reason is null)
+        {
+            if (_completionStatus.Text.StartsWith("Completion: off", StringComparison.Ordinal))
+            {
+                _completionStatus.Text = "Completion: ready";
+                _completionStatus.Tooltip = null;
+            }
+
+            return;
+        }
+
+        _completionStatus.Text = "Completion: off — no model loaded";
+        _completionStatus.Tooltip = reason;
+        _completionShown ??= _host.AddStatusItem(_completionStatus);
     }
 
     // How completion lays its prompt out, said in the status bar (prefix-only is never silent).

@@ -115,6 +115,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private Window? _window;
     private EditorView? _shown;
     private bool _started;
+    private CraftOptions? _appliedOptions;
+    private ITheme? _appliedTheme;
     private string _lastQuery = "";
 
     /// <summary>The shell, opening <paramref name="path"/> when given (a folder as the workspace, a file in a tab; else an untitled document).</summary>
@@ -126,8 +128,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         ShellModel? shell = null;
         CodeFontPicker.DrawnFonts = startup.Platform.DrawnFonts;
         // The owner's note 10: every question, message and choice is Craft's dialog over the window (themed in ApplyTheme).
-        _dialog = new CraftDialog(new ShellPalette(EditorThemes.Get(EditorThemes.Dark), startup.Options), action => Dispatcher.Dispatch(action));
+        _dialog = new CraftDialog(new ShellPalette(EditorThemes.Get(EditorThemes.Dark), startup.Options), action => Dispatcher.DispatchLabelled("dialog: next", action));
         _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, _dialog, () => shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
+        UiDispatch.Labels = _host.Labels;                    // the views' dispatches run labelled (the watchdog names them)
         _keys = _dialog.Queue.Before(_host);
         _dialog.FallbackFocus = () => _shown;
         shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog));
@@ -337,9 +340,11 @@ public sealed class ShellPage : ContentPage, IDisposable
             page.View = null;
         };
         EditorMenus.Changed += OnMenusChanged;
-        SizeChanged += (_, _) => _shell.Layout.UpdateWidth(Width);
+        SizeChanged += (_, _) => UiDispatch.Run("shell: the window resized", () => _shell.Layout.UpdateWidth(Width));
         ShowActive();
         ApplyTheme();
+        _appliedOptions = _shell.Options;
+        _appliedTheme = _shell.Theme;
         ApplyLayout();
     }
 
@@ -418,41 +423,56 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _started = true;
         StartWatchdog();
-        HookPlatform();
-
-        // How each plug-in's load went (at start-up, before the window), kept in the notification centre; a failure toasts.
-        foreach (var plugin in _startup.Plugins)
+        // The owner's start-up stalls were "unlabelled UI work": this is a window event's handler, so each part of it
+        // runs under its own label (the watchdog names it), the awaits between them leaving the UI thread free.
+        using (UiDispatch.Enter("shell: hook the platform"))
         {
-            if (plugin.Disabled)
-            {
-                continue;
-            }
+            HookPlatform();
+        }
 
-            _host.Notifications.AddEnded(EditorHost.HostSource, $"Plug-in {plugin.Name}",
-                plugin.Loaded ? "loaded" + (plugin.Note is { } note ? " · " + note : "") : $"did not load ({plugin.Folder}): {plugin.Error}",
-                plugin.Loaded ? NotificationSeverity.Success : NotificationSeverity.Error, plugin.LoadTime);
-            if (!plugin.Loaded && plugin.Error is not null)
+        using (UiDispatch.Enter("shell: the plug-ins' load results"))
+        {
+            // How each plug-in's load went (at start-up, before the window), kept in the notification centre; a failure toasts.
+            foreach (var plugin in _startup.Plugins)
             {
-                _status.Notice.Text = $"Plug-in {plugin.Name} did not load";
-                _host.Log(EditorLogLevel.Error, $"Plug-in {plugin.Name} ({plugin.Folder}) did not load: {plugin.Error}");
+                if (plugin.Disabled)
+                {
+                    continue;
+                }
+
+                _host.Notifications.AddEnded(EditorHost.HostSource, $"Plug-in {plugin.Name}",
+                    plugin.Loaded ? "loaded" + (plugin.Note is { } note ? " · " + note : "") : $"did not load ({plugin.Folder}): {plugin.Error}",
+                    plugin.Loaded ? NotificationSeverity.Success : NotificationSeverity.Error, plugin.LoadTime);
+                if (!plugin.Loaded && plugin.Error is not null)
+                {
+                    _status.Notice.Text = $"Plug-in {plugin.Name} did not load";
+                    _host.Log(EditorLogLevel.Error, $"Plug-in {plugin.Name} ({plugin.Folder}) did not load: {plugin.Error}");
+                }
             }
         }
 
         // The plug-ins start first, so they see the first document open (the sample's word count counts it); a failure
-        // is a notification with a toast (Craft's own card), not the platform's message box.
-        foreach (var activation in _host.RefreshPlugins())
+        // is a notification with a toast (Craft's own card), not the platform's message box. Each activation is labelled
+        // by the host (its name), so a slow one is named.
+        using (UiDispatch.Enter("shell: start the plug-ins"))
         {
-            if (activation.Error is not null)
+            foreach (var activation in _host.RefreshPlugins())
             {
-                _status.Notice.Text = $"Plug-in {activation.Name} did not start";
-                _host.Notify($"Plug-in {activation.Name} did not start", activation.Error, NotificationSeverity.Error);
+                if (activation.Error is not null)
+                {
+                    _status.Notice.Text = $"Plug-in {activation.Name} did not start";
+                    _host.Notify($"Plug-in {activation.Name} did not start", activation.Error, NotificationSeverity.Error);
+                }
             }
         }
 
         // What the plug-ins registered: their rail items' commands, their menus, the model providers' status.
-        _rail.Rebuild();
-        _titleWide.RebuildMenus();
-        WatchModels();
+        using (UiDispatch.Enter("shell: the plug-ins' rail, menus and models"))
+        {
+            _rail.Rebuild();
+            _titleWide.RebuildMenus();
+            WatchModels();
+        }
 
         if (_initialPath is not null && Directory.Exists(_initialPath))
         {
@@ -463,16 +483,19 @@ public sealed class ShellPage : ContentPage, IDisposable
             await _shell.OpenFileAsync(_initialPath);
         }
 
-        if (_shell.Tabs.Tabs.Count == 0 && _shell.Workspace is null)
+        using (UiDispatch.Enter("shell: the first document"))
         {
-            _shell.NewFile();
-        }
+            if (_shell.Tabs.Tabs.Count == 0 && _shell.Workspace is null)
+            {
+                _shell.NewFile();
+            }
 
-        if (_startup.Problems.Count > 0 || _shell.OptionsProblems.Count > 0)
-        {
-            var problems = _startup.Problems.Concat(_shell.OptionsProblems).Distinct(StringComparer.Ordinal);
-            _host.Notify("A setting was not taken", string.Join("\n", problems) + "\nThe settings page (Ctrl+Comma) shows each one.", NotificationSeverity.Error,
-                [new NotificationAction("Open settings", _ => _host.ExecuteCommandAsync(ShellCommandIds.Settings), Primary: true)]);
+            if (_startup.Problems.Count > 0 || _shell.OptionsProblems.Count > 0)
+            {
+                var problems = _startup.Problems.Concat(_shell.OptionsProblems).Distinct(StringComparer.Ordinal);
+                _host.Notify("A setting was not taken", string.Join("\n", problems) + "\nThe settings page (Ctrl+Comma) shows each one.", NotificationSeverity.Error,
+                    [new NotificationAction("Open settings", _ => _host.ExecuteCommandAsync(ShellCommandIds.Settings), Primary: true)]);
+            }
         }
     }
 
@@ -626,7 +649,7 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         if (attempt < PlatformHookAttempts)
         {
-            Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(PlatformHookRetryMilliseconds), () => _host.Labels.Run("shell: hook the platform", () => HookPlatform(attempt + 1)));
+            Dispatcher.DispatchDelayedLabelled(TimeSpan.FromMilliseconds(PlatformHookRetryMilliseconds), "shell: hook the platform", () => HookPlatform(attempt + 1));
         }
         else
         {
@@ -770,10 +793,17 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     // A Problems row's Fix or Explain: the first action of that kind the registered providers offer for the diagnostic.
     // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
-    private void OnCodeActionRequested(EditorDiagnostic diagnostic, string kind)
+    private void OnCodeActionRequested(EditorDiagnostic row, string kind)
     {
-        if (_shell.Tabs.Active is not { } active)
+        if (_shell.Tabs.Active is not { } active || _shown?.Model is not { } model)
         {
+            return;
+        }
+
+        // The row was listed before the last edit: its problem is taken as the editor has it now (moved, or gone).
+        if (ShellText.CurrentProblem(model.Diagnostics, row) is not { } diagnostic)
+        {
+            _status.Notice.Text = "That problem is gone: the text changed since it was listed.";
             return;
         }
 
@@ -819,7 +849,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     {
         if (Dispatcher.IsDispatchRequired)
         {
-            Dispatcher.Dispatch(() => _host.Labels.Run("shell: rebuild the menus", _titleWide.RebuildMenus));
+            Dispatcher.DispatchLabelled("shell: rebuild the menus", _titleWide.RebuildMenus);
         }
         else
         {
@@ -1289,6 +1319,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     {
         if (_shown is { Model: { } model } view)
         {
+            position = Math.Clamp(position, 0, model.Snapshot.Length);   // a row listed before the text shrank
             model.Select(position, position);
             model.EnsureCaretVisible();
             view.Focus();
@@ -1340,6 +1371,7 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private void OnWorkspaceChanged()
     {
+        using var label = UiDispatch.Enter("shell: the workspace opened (tree, explorer, layout)");
         _tree.Tree = _shell.Tree;
         _explorer.SetFolder(_shell.Workspace?.Root);
         _status.Branch.Text = _shell.Branch ?? "";
@@ -1350,10 +1382,21 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private void OnOptionsChanged()
     {
+        using var label = UiDispatch.Enter("shell: the options changed");
         var options = _shell.Options;
+        // A folder opened with no setting of its own reloads options equal to the ones in use: nothing is rebuilt then
+        // (each editor's model and language session, the whole window's theme), which took the UI thread at start-up.
+        bool same = Equals(options, _appliedOptions) && ReferenceEquals(_shell.Theme, _appliedTheme);
+        _appliedOptions = options;
+        _appliedTheme = _shell.Theme;
+        if (same)
+        {
+            return;
+        }
+
         foreach (var tab in _shell.Tabs.Tabs)
         {
-            if (tab.View is EditorView view && !ReferenceEquals(view.Options, options))
+            if (tab.View is EditorView view && !ReferenceEquals(view.Options, options) && !Equals(view.Options, options))
             {
                 // A new model on the new options; the selection is kept.
                 var selection = view.Model?.Selection;

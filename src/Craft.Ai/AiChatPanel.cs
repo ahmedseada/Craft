@@ -53,6 +53,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     private string _modelName = "";
     private string _lastPrompt = "";
     private bool _disposed;
+    private int _keptGeneration;
 
     /// <summary>A chat panel in <paramref name="host"/>.</summary>
     public AiChatPanel(IEditorHost host, Func<AiSettings> settings, AiModels models)
@@ -282,7 +283,20 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         try
         {
             activity.Report(null, "waiting for the model");
+            if (!_models.IsChatLoaded)
+            {
+                // Loaded on the first message (never at start-up): the composer says so; the message goes once it is ready.
+                Post(() => Status = $"Loading {settings.Model}… the message is sent once it is loaded (its progress and Cancel are in the status bar).");
+            }
+
             var lease = await _models.ChatAsync(token).ConfigureAwait(false);
+            Post(() =>
+            {
+                if (Status is { } shown && shown.StartsWith("Loading ", StringComparison.Ordinal))
+                {
+                    Status = null;
+                }
+            });
             var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot chat.");
             Post(() =>
             {
@@ -332,12 +346,13 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         catch (Exception error)
 #pragma warning restore CA1031
         {
+            string said = AiErrors.Describe(error, settings);
             Post(() =>
             {
-                Finish(generation, user, null, error.Message);
+                Finish(generation, user, null, said);
                 Host.Log(EditorLogLevel.Error, "The chat reply failed.", error);       // the log is the UI thread's
             });
-            activity.Fail("the reply failed: " + error.Message, error);
+            activity.Fail("the reply failed: " + said, error);
         }
         finally
         {
@@ -663,6 +678,12 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         return settings.ChatKeep && Host.WorkspaceFolder is { } root ? Path.Combine(root, settings.ChatFile) : null;
     }
 
+    /// <summary>
+    /// Completes when the kept chat of the current folder has been read and shown (or there was none): it is read and
+    /// parsed on the thread pool, never on the UI thread (the owner's start-up stalls), and shown through the dispatcher.
+    /// </summary>
+    public Task KeptRead { get; private set; } = Task.CompletedTask;
+
     private void LoadIfNeeded()
     {
         if (string.Equals(_loadedFolder, Host.WorkspaceFolder, StringComparison.Ordinal))
@@ -672,35 +693,93 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
         _loadedFolder = Host.WorkspaceFolder;
         _history.Clear();
-        var entries = new List<ConversationEntry>();
+        ReplaceFrom(0, []);
+        int generation = ++_keptGeneration;
+        if (ChatPath() is not { } path)
+        {
+            KeptRead = Task.CompletedTask;
+            return;
+        }
+
+        var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        KeptRead = shown.Task;
+        _ = ShowKeptAsync(path, generation, shown);
+    }
+
+    // The kept chat read and parsed on the thread pool, then shown on the UI thread (only if nothing was written meanwhile).
+    private async Task ShowKeptAsync(string path, int generation, TaskCompletionSource shown)
+    {
+        KeptChat? kept = null;
+        Exception? failure = null;
         try
         {
-            if (ChatPath() is { } path && File.Exists(path) && JsonNode.Parse(File.ReadAllText(path)) is JsonObject kept)
+            kept = await Task.Run(() => ReadKept(path)).ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // A kept chat that cannot be read is logged; the chat starts empty.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            failure = error;
+        }
+
+        Post(() =>
+        {
+            try
             {
-                foreach (var node in kept["messages"] as JsonArray ?? [])
+                // Another folder meanwhile, or the user already wrote: what was read is not shown over it.
+                if (_disposed || generation != _keptGeneration || _history.Count > 0 || Entries.Count > 0)
                 {
-                    if (node?["role"]?.GetValue<string>() is { } role && node["content"]?.GetValue<string>() is { } content)
-                    {
-                        _history.Add(new ChatMessage(role, content));
-                    }
+                    return;
                 }
 
-                foreach (var node in kept["entries"] as JsonArray ?? [])
+                if (kept is not null)
                 {
-                    if (node?["role"]?.GetValue<string>() is { } role && Enum.TryParse<ConversationRole>(role, out var kind) && node["text"]?.GetValue<string>() is { } text)
-                    {
-                        string? language = node["language"]?.GetValue<string>();
-                        entries.Add(kind == ConversationRole.Code ? CodeEntry(text, language) : new ConversationEntry(kind, text) { Detail = node["detail"]?.GetValue<string>() });
-                    }
+                    _history.AddRange(kept.Messages);
+                    ReplaceFrom(0, [.. kept.Entries.Select(e => e.Role == ConversationRole.Code ? CodeEntry(e.Text, e.Language) : new ConversationEntry(e.Role, e.Text) { Detail = e.Detail })]);
+                }
+                else if (failure is not null)
+                {
+                    Host.Log(EditorLogLevel.Warning, "The kept chat could not be read; it starts empty.", failure);
                 }
             }
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or FormatException)
+            finally
+            {
+                shown.TrySetResult();
+            }
+        });
+    }
+
+    private sealed record KeptEntry(ConversationRole Role, string Text, string? Detail, string? Language);
+
+    private sealed record KeptChat(List<ChatMessage> Messages, List<KeptEntry> Entries);
+
+    // On the thread pool: the kept chat's file read and parsed (null when there is none); a broken one throws to be logged.
+    private static KeptChat? ReadKept(string path)
+    {
+        if (!File.Exists(path) || JsonNode.Parse(File.ReadAllText(path)) is not JsonObject kept)
         {
-            Host.Log(EditorLogLevel.Warning, "The kept chat could not be read; it starts empty.", error);
+            return null;
         }
 
-        ReplaceFrom(0, entries);
+        var messages = new List<ChatMessage>();
+        foreach (var node in kept["messages"] as JsonArray ?? [])
+        {
+            if (node?["role"]?.GetValue<string>() is { } role && node["content"]?.GetValue<string>() is { } content)
+            {
+                messages.Add(new ChatMessage(role, content));
+            }
+        }
+
+        var entries = new List<KeptEntry>();
+        foreach (var node in kept["entries"] as JsonArray ?? [])
+        {
+            if (node?["role"]?.GetValue<string>() is { } role && Enum.TryParse<ConversationRole>(role, out var kind) && node["text"]?.GetValue<string>() is { } text)
+            {
+                entries.Add(new KeptEntry(kind, text, node["detail"]?.GetValue<string>(), node["language"]?.GetValue<string>()));
+            }
+        }
+
+        return new KeptChat(messages, entries);
     }
 
     private void Save()

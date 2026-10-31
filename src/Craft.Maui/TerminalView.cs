@@ -62,7 +62,14 @@ public sealed class TerminalDrawable : IDrawable
             return;
         }
 
-        if (_picker.Ensure(canvas, Options.FontFamily, Options.FontFallback, Options.FontSize, _measurer))
+        using var label = UiDispatch.Enter("terminal: paint");
+        bool picked;
+        using (UiDispatch.Enter("terminal: pick and measure the code font"))
+        {
+            picked = _picker.Ensure(canvas, Options.FontFamily, Options.FontFallback, Options.FontSize, _measurer);
+        }
+
+        if (picked)
         {
             Measured?.Invoke(this, EventArgs.Empty);
         }
@@ -113,7 +120,7 @@ public sealed class TerminalView : ContentView, IDisposable
     {
         ArgumentNullException.ThrowIfNull(manager);
         _manager = manager;
-        _drawable.Measured += (_, _) => Dispatcher.Dispatch(UpdateSize);
+        _drawable.Measured += (_, _) => Dispatcher.DispatchLabelled("terminal: size", UpdateSize);
         _graphics = new GraphicsView { Drawable = _drawable, HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Start };
         _content = new Grid { HorizontalOptions = LayoutOptions.Fill, VerticalOptions = LayoutOptions.Start };
         _content.Children.Add(_graphics);

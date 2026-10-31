@@ -75,7 +75,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 Roles =
                 [
                     new ModelRole("Chat and agent", model, model is null ? "none set" : _state, model is not null && _stateIsProblem),
-                    new ModelRole("Inline completion", model, model is null ? "none set" : "the chat model (fill-in-the-middle when its family registers a format)"),
+                    CompletionRole(settings, model),
                 ],
                 Device = _device,
                 Loaded = [.. Loaded.Select(m => $"{m.Name.Split('\n')[0]} · {(m.ActiveUsers > 0 ? "in use" : "idle")}")],
@@ -90,6 +90,18 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 ],
             };
         }
+    }
+
+    // Inline completion's own model (a small one beside the chat model), else the chat model while it is loaded.
+    private ModelRole CompletionRole(AiSettings settings, string? chatModel)
+    {
+        if (settings.CompletionModel.Length > 0)
+        {
+            bool loaded = Loaded.Any(m => LoadKey.Parse(m.Name).Model.Equals(settings.CompletionModel, StringComparison.OrdinalIgnoreCase));
+            return new ModelRole("Inline completion", settings.CompletionModel, loaded ? "loaded" : settings.CompletionLoad ? "loads on the first completion" : "not loaded (completionLoad is off)");
+        }
+
+        return new ModelRole("Inline completion", chatModel, chatModel is null ? "none set" : "the chat model, while it is loaded");
     }
 
     // The composer's picker (the owner's note 11): the model set first, then those loaded and those used before, once each.
@@ -220,6 +232,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         ModelHost<LocalModel>.Lease lease;
         try
         {
+            LetIdleGo(host, key.Text);
             lease = host.Acquire(key.Text, _keepAlive);
         }
         catch (Exception error)
@@ -238,6 +251,29 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             ? string.Create(CultureInfo.InvariantCulture, $"{key.Model} loaded on {model.Device} in {lease.LoadDuration.TotalSeconds:F1} s, context {model.ContextLength}")
             : $"{key.Model} on {model.Device} (loaded already)"));
         return new ModelLease(key.Model, model.Chat, model.Text, model.ContextLength, lease.LoadDuration, lease) { Tokenizer = model.Tokenizer };
+    }
+
+    /// <summary>
+    /// Before a model is loaded (not one loaded already): the models no lease holds are unloaded first, so a model of other
+    /// settings (another device, weights, context or adapter: a key of its own), or one the user moved away from, is not
+    /// kept for its keep-alive beside the new one (the owner's Windows run: two copies of a 7B model on a 16 GB card).
+    /// One in use is never unloaded.
+    /// </summary>
+    private static void LetIdleGo(ModelHost<LocalModel> host, string key)
+    {
+        var loaded = host.Loaded;
+        if (loaded.Any(m => m.Name == key))
+        {
+            return;
+        }
+
+        foreach (var model in loaded)
+        {
+            if (model.ActiveUsers == 0)
+            {
+                host.Unload(model.Name);
+            }
+        }
     }
 
     private ModelHost<LocalModel> Host(AiSettings settings)

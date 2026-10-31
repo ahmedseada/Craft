@@ -237,7 +237,7 @@ public sealed class FolderTreeView : ContentView
         }
 
         // Acted on after the list finished its selection (the items may be replaced).
-        Dispatcher.Dispatch(() =>
+        Dispatcher.DispatchLabelled("explorer: open the chosen row", () =>
         {
             _list.SelectedItem = null;
             if (_tree is not { } tree || tree.IndexOf(item.Path) is not (>= 0 and var index))

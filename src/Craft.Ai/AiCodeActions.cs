@@ -176,8 +176,9 @@ public sealed class AiCodeActions : ICodeActionProvider
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
+            // A failure (a load that did not fit, an out-of-memory one saying what to do) is a notification, never a modal stop.
             _host.Log(EditorLogLevel.Error, $"AI: {title} failed.", error);
-            await _host.ShowMessageAsync($"AI: {title}", error.Message).ConfigureAwait(true);
+            _host.Notify($"AI: {title} failed", AiErrors.Describe(error, settings), NotificationSeverity.Error);
             return;
         }
 

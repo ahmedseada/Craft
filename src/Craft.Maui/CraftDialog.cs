@@ -182,12 +182,12 @@ public sealed class CraftDialog : Grid
         _card.WidthRequest = Math.Max(240, Math.Min(current.IsList ? 560 : 460, Width > 0 ? Width - 32 : 460));
         if (current.InputPlaceholder is not null)
         {
-            Dispatcher.Dispatch(() => _field.Focus());
+            Dispatcher.DispatchLabelled("dialog: focus the field", () => _field.Focus());
         }
         else
         {
             int focused = Queue.Focused;
-            Dispatcher.Dispatch(() => FocusAction(focused));
+            Dispatcher.DispatchLabelled("dialog: focus the action", () => FocusAction(focused));
         }
     }
 

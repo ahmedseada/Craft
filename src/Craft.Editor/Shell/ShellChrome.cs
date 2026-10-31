@@ -148,6 +148,31 @@ public static class ShellText
         return new SemanticCard(engine, "Ready", projects, Bytes(telemetry.MemoryBytes), true);
     }
 
+    /// <summary>
+    /// The diagnostic among <paramref name="current"/> (the editor's now, in the current text) that a Problems row listed
+    /// earlier as <paramref name="listed"/> stands for: the same id and message, the nearest to where it was; null when it
+    /// is gone. A row's code action then runs on the problem as it is, never on a span of an older text.
+    /// </summary>
+    public static EditorDiagnostic? CurrentProblem(ReadOnlySpan<EditorDiagnostic> current, EditorDiagnostic listed)
+    {
+        EditorDiagnostic? best = null;
+        long bestDistance = long.MaxValue;
+        foreach (var diagnostic in current)
+        {
+            if (diagnostic.Id == listed.Id && diagnostic.Message == listed.Message && diagnostic.Severity == listed.Severity)
+            {
+                long distance = Math.Abs((long)diagnostic.Start - listed.Start);
+                if (distance < bestDistance)
+                {
+                    best = diagnostic;
+                    bestDistance = distance;
+                }
+            }
+        }
+
+        return best;
+    }
+
     /// <summary>"⚠ 1" / "✕ 2 ⚠ 1": the errors and warnings, or "" with none.</summary>
     public static string Problems(int errors, int warnings)
     {

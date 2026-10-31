@@ -49,6 +49,7 @@ sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractio
   System.String Placeholder { get; }
   System.Threading.Tasks.Task AskAsync(System.String message, System.Threading.CancellationToken cancellationToken = null, System.String context = null)
   System.Threading.Tasks.Task Kept { get; }
+  System.Threading.Tasks.Task KeptRead { get; }
   System.Threading.Tasks.Task LastReply { get; }
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ApplyAsync(System.String code, System.Threading.CancellationToken cancellationToken = null)
@@ -68,6 +69,9 @@ sealed class Craft.Ai.AiCodeActions : Craft.Abstractions.ICodeActionProvider, Id
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models, Craft.Ai.AiChatPanel chat)
   static Craft.Abstractions.CodeActionContext AtSelection(Craft.Abstractions.IEditorHost host)
   static System.String FirstBlock(System.String reply)
+static class Craft.Ai.AiErrors
+  static System.Boolean IsOutOfMemory(System.Exception error)
+  static System.String Describe(System.Exception error, Craft.Ai.AiSettings settings, System.Boolean forCompletion = false)
 sealed class Craft.Ai.AiInlineCompletion : Craft.Abstractions.IInlineCompletionProvider, Idrak.Abstraction.IKind
   Craft.Abstractions.IEditorActivities Activities { get; set; }
   Craft.Ai.CompletionMode Mode { get; }
@@ -76,19 +80,25 @@ sealed class Craft.Ai.AiInlineCompletion : Craft.Abstractions.IInlineCompletionP
   System.Int32 DelayMilliseconds { get; }
   System.String Name { get; }
   System.String Summary { get; }
+  System.String UnavailableReason { get; }
   System.ValueTuple<System.String, System.Collections.Generic.IReadOnlyList<System.String>> Layout(Craft.Abstractions.InlineCompletionRequest request, Craft.Abstractions.ModelLease lease, Craft.Ai.AiSettings settings)
   const System.String ProviderName = ai
   ctor(System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models, System.Func<System.Boolean> active = null)
   event System.EventHandler<Craft.Ai.CompletionMode> ModeChanged
   event System.EventHandler<Idrak.Abstraction.Generation.GenerationStats> Completed
+  event System.EventHandler<System.String> Unavailable
   static System.Int32 PrefixStart(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 caret, System.Int32 budget)
 sealed class Craft.Ai.AiModels : System.IDisposable
   Craft.Abstractions.IEditorActivities Activities { get; set; }
   System.Boolean HasCompletionModel { get; }
+  System.Boolean IsChatLoaded { get; }
+  System.Boolean IsChatLoading { get; }
   System.IProgress<Craft.Abstractions.ModelLoadStatus> Progress { get; set; }
+  System.String CompletionUnavailable { get; }
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> ChatAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> CompletionAsync(System.Threading.CancellationToken cancellationToken)
   System.Void Dispose()
+  System.Void ForgetFailures()
   System.Void Release()
   ctor(System.Func<Craft.Ai.AiSettings> settings)
 sealed class Craft.Ai.AiPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
@@ -147,8 +157,10 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   Craft.Ai.AiSettings <Clone>$()
   System.Boolean ChatKeep { get; init; }
   System.Boolean Completion { get; init; }
+  System.Boolean CompletionLoad { get; init; }
   System.Boolean Equals(Craft.Ai.AiSettings other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean LoadOnStart { get; init; }
   System.Boolean McpOnStart { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentCopyIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentStops { get; init; }
@@ -187,6 +199,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.String Placement { get; init; }
   System.String ToString()
   System.String Weights { get; init; }
+  const System.String DefaultCompletionModel = Qwen/Qwen2.5-Coder-1.5B
   const System.String PluginName = ai
   ctor()
   static Craft.Ai.AiSettings From(Craft.Abstractions.IPluginSettings settings)

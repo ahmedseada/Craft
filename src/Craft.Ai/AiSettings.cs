@@ -26,7 +26,10 @@ public sealed record AiSettings
     /// <summary>Whether the MCP server starts with the editor (<c>mcpOnStart</c>); off: the command "ai.mcpStart" starts it.</summary>
     public bool McpOnStart { get; init; }
 
-    /// <summary>The local model's name, resolved by Idrak's model sources (<c>model</c>); empty for none.</summary>
+    /// <summary>
+    /// The chat model's name (<c>model</c>: the chat, the agent and the code actions), resolved by Idrak's model sources;
+    /// empty for none. It names the model; it does not load it (see <see cref="LoadOnStart"/>).
+    /// </summary>
     public string Model { get; init; } = "";
 
     /// <summary>The device the local model loads on (<c>device</c>): "auto" (the best found), "cpu", "vulkan:0" and the like.</summary>
@@ -59,8 +62,29 @@ public sealed record AiSettings
     /// <summary>Whether inline completion shows ghost text (<c>completion</c>).</summary>
     public bool Completion { get; init; } = true;
 
-    /// <summary>The model inline completion uses (<c>completionModel</c>); empty for <see cref="Model"/>.</summary>
-    public string CompletionModel { get; init; } = "";
+    /// <summary>
+    /// The model inline completion uses (<c>completionModel</c>): a small one, so it sits on the device beside the chat
+    /// model (<see cref="Model"/>, the big one) with room for the agent's cache. Empty: completion uses the chat model,
+    /// only while it is loaded (completion never loads it). The default is a setting's default, not a family's code: its
+    /// fill-in-the-middle format comes from the family's Idrak plug-in like any other model's.
+    /// </summary>
+    public string CompletionModel { get; init; } = DefaultCompletionModel;
+
+    /// <summary>The default of <see cref="CompletionModel"/>: a small coder model with a fill-in-the-middle format.</summary>
+    public const string DefaultCompletionModel = "Qwen/Qwen2.5-Coder-1.5B";
+
+    /// <summary>
+    /// Whether inline completion loads <see cref="CompletionModel"/> on its first request (<c>completionLoad</c>); off:
+    /// it uses a model already loaded (by the load command, or the chat model) and does nothing without one, said once in
+    /// the status bar. Nothing loads when the editor starts either way.
+    /// </summary>
+    public bool CompletionLoad { get; init; } = true;
+
+    /// <summary>
+    /// Whether the chat model loads when the editor starts (<c>loadOnStart</c>); off (the default): it loads when the
+    /// user picks or confirms it at the composer's model chip, sends the first message, or runs the load command.
+    /// </summary>
+    public bool LoadOnStart { get; init; }
 
     /// <summary>The pause after typing before a completion is asked for, ms (<c>completionDelayMs</c>).</summary>
     public int CompletionDelayMilliseconds { get; init; } = 300;
@@ -158,7 +182,9 @@ public sealed record AiSettings
         new("idrakPlugins", "Idrak.Text.Plugins", "Idrak plug-in packages (the model families) registered before the first local load; empty: none."),
         new("modelProvider", "local", "The model provider the AI plug-ins ask: local, or one a plug-in registers."),
         new("completion", "true", "Whether inline completion shows ghost text after a pause in typing."),
-        new("completionModel", "", "The model inline completion uses; empty: the model."),
+        new("completionModel", DefaultCompletionModel, "The model inline completion uses: a small one beside the chat model (model); empty: the chat model, only while it is loaded."),
+        new("completionLoad", "true", "Whether inline completion loads its model on its first request; off: it uses a model already loaded, else does nothing."),
+        new("loadOnStart", "false", "Whether the chat model loads when the editor starts; off: when you pick it at the composer, send a message or run 'AI: Load the local model'."),
         new("completionDelayMs", "300", "Milliseconds after typing before a completion is asked for."),
         new("completionMaxTokens", "64", "The most tokens one completion samples."),
         new("completionMaxLines", "8", "The most lines one completion shows."),
@@ -258,7 +284,9 @@ public sealed record AiSettings
             IdrakPlugins = List("idrakPlugins", defaults.IdrakPlugins),
             ModelProvider = Text("modelProvider") ?? defaults.ModelProvider,
             Completion = Flag("completion", defaults.Completion),
-            CompletionModel = Text("completionModel") ?? "",
+            CompletionModel = value("completionModel") is { } completionModel ? completionModel.Trim() : defaults.CompletionModel,
+            CompletionLoad = Flag("completionLoad", defaults.CompletionLoad),
+            LoadOnStart = Flag("loadOnStart", false),
             CompletionDelayMilliseconds = Whole("completionDelayMs", defaults.CompletionDelayMilliseconds, 0, 60_000),
             CompletionMaxTokens = Whole("completionMaxTokens", defaults.CompletionMaxTokens, 1, 100_000),
             CompletionMaxLines = Whole("completionMaxLines", defaults.CompletionMaxLines, 1, 10_000),

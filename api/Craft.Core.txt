@@ -54,8 +54,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean ReducedMotion { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
-  System.Boolean WordHighlight { get; init; }
   System.Boolean WelcomeAtStart { get; init; }
+  System.Boolean WordHighlight { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
   System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<System.String, System.String>> TerminalEnvironment { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
@@ -82,8 +82,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 DoubleClickMilliseconds { get; init; }
   System.Int32 FindBackgroundCharacters { get; init; }
   System.Int32 FindCountLimit { get; init; }
-  System.Int32 FoldingDelayMilliseconds { get; init; }
   System.Int32 FindRegexTimeoutMilliseconds { get; init; }
+  System.Int32 FoldingDelayMilliseconds { get; init; }
   System.Int32 GetHashCode()
   System.Int32 GutterPaddingCells { get; init; }
   System.Int32 HostLogLines { get; init; }

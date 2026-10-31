@@ -222,6 +222,9 @@ sealed class Craft.Editor.EditorFind
   System.Int32 ReplaceAll(System.String replacement)
   System.String Problem { get; }
   System.String Query { get; set; }
+  System.Threading.Tasks.Task<Craft.Editor.FindCount> CountInBackgroundAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> FindAsync(System.Boolean forward, System.Boolean fromSelectionStart = false, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> ReplaceAllInBackgroundAsync(System.String replacement, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.Editor.EditorFolding : System.IDisposable
   Craft.Editor.FoldMap Map { get; }
   System.Boolean Fold(System.Int32 line)
@@ -241,9 +244,6 @@ sealed class Craft.Editor.EditorFolding : System.IDisposable
   System.Void Dispose()
   System.Void SetRanges(System.Collections.Generic.IEnumerable<Craft.Abstractions.FoldingRange> ranges)
   event System.EventHandler RangesChanged
-  System.Threading.Tasks.Task<Craft.Editor.FindCount> CountInBackgroundAsync(System.Threading.CancellationToken cancellationToken = null)
-  System.Threading.Tasks.Task<System.Boolean> FindAsync(System.Boolean forward, System.Boolean fromSelectionStart = false, System.Threading.CancellationToken cancellationToken = null)
-  System.Threading.Tasks.Task<System.Int32> ReplaceAllInBackgroundAsync(System.String replacement, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Editor.Abstractions.IEditorKeyHandler, System.IDisposable
   Craft.Abstractions.IEditorActivities Activities { get; }
   Craft.Abstractions.IEditorDocument ActiveDocument { get; }

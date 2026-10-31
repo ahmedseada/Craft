@@ -1902,6 +1902,17 @@ the owner's machine, not only headless.
    scrolled up.
 6. **CUDA never shows in the status bar** (`local` only): the device in use is shown in the status bar and the model
    chip, and the GPU is used (`Idrak.Gpu` in every plug-in that loads a model).
+   **Fixed (2026-10-31).** Cause: Craft.Ai, Craft.Voice and the learning plug-in already carried Idrak.Gpu and included
+   it at start-up, but Idrak's `Device.Default` was chosen once and kept (`field ??= Best()`): a read before a plug-in's
+   Idrak.Gpu registered its providers fixed the CPU for the process, so "auto" never took the GPU; and the device was
+   shown only after a load. Fix: Idrak 5b5854d, the default is kept with the providers' list it was chosen among and
+   chosen again when that list changes (one reference comparison a read; a host's set default still wins; test "device
+   contracts: the default device is chosen again …"); `LocalModelProvider` lists this machine's devices and what "auto"
+   takes once on the thread pool (`ModelProviderStatus.Devices`, `AutoDevice`, `DeviceChoice`, `IsLoading`), so the
+   composer's chip and the status bar show "cuda:0 (auto)" before the first load and the device in use after it. Test
+   `LookAndFeel.EveryPluginThatLoadsAModelSeesTheGpuDevices`: Craft.Ai, the learning and the voice plug-in, each loaded
+   from a copied folder in a fresh process, list cuda, vulkan and hip. P2's StarCoder2 family loads through Craft.Ai.
+   The owner checks the GPU actually used on Windows.
 7. **The explorer button on the rail does nothing** when clicked: it toggles the explorer.
 8. **The folder and file pickers start with "Select folder" disabled**: the picker opens on a folder it can select
    (the workspace, else the user's), with the button enabled.
@@ -1949,15 +1960,52 @@ the owner's machine, not only headless.
 **Look and feel**
 10. **Custom dialogs**: the platform's message boxes look out of place; one Craft dialog (title, text, actions, the
     design's tokens) for questions, confirmations, consents and the About box.
+    **Fixed (2026-10-31).** Cause: the presenter, the shell's prompts, the command palette and narrow quick open called
+    MAUI's `DisplayAlertAsync`/`DisplayActionSheetAsync`/`DisplayPromptAsync` (WinUI's ContentDialog). Fix: one
+    `CraftDialog` (Craft.Maui) over `DialogQueue` (Craft.Editor, headless): an overlay in the window (dimmed backdrop
+    that takes the pointer, a card on the raised fill with the strong border, the title in Inter SemiBold, the text,
+    the details in the code font, an optional field, the actions: primary in the accent, a losing one in the error's
+    colour, a picker's rows as a list), one at a time and the rest waiting, a cancelled request taken away; Escape
+    answers the way out, Enter the focused or default action, Tab and Shift+Tab (the arrows in a list) move and wrap,
+    every other key is the dialog's; the focus goes to the default action and back to what had it. Used everywhere
+    through `MauiEditorPresenter` (messages, the plug-ins' questions: P5's approval, the learning consents) and
+    `MauiShellUi` (the unsaved-changes question, the About box, pickers), the command palette and narrow quick open.
+    The window's keys go through `DialogQueue.Before` (the Windows key route now forwards every unhandled key; the
+    filter keeps the old chords-and-function-keys rule when no dialog is open); on Windows the card cycles Tab inside
+    it. Test `LookAndFeel.NoPlatformMessageBoxIsLeft` scans `src` and `plugins` (allowed: the crash box in
+    `CrashDialog.cs`, Win32's own because the window may be what failed) and three behaviour tests.
 11. **The model chip belongs with the composer**: the model choice sits at the chat and agent input (pick a model there),
     not alone in the title bar.
+    **Fixed (2026-10-31).** Cause: D put the chip in the title bar. Fix: the title bar keeps the logo, the menus and the
+    search; the composer of the chat and the agent has a `ModelChip` under its input (the model, its device, a dot for
+    ready, loading or failed, hover states), whose tap opens a Craft picker of the provider's models (the one set, the
+    loaded, those used this session; the one in use marked), the devices ("Run on auto (the fastest found: cuda:0)",
+    cpu, each GPU) and "Another model… (Models and devices)". A pick writes the provider's model or device setting
+    (the model then loads as an activity); a setting fixed by the environment (`CRAFT_PLUGIN_AI_MODEL`) is said so, not
+    written. Test `LookAndFeel.TheModelChipShowsTheDeviceAndThePickerItsModelsAndDevices`.
 12. **The inputs look doubled** (a box inside a box: the search, the composer, the settings fields): one border, the
     design's input style.
+    **Fixed (2026-10-31).** Cause: WinUI's TextBox (MAUI's Entry and Editor) draws its own border, fill and focus
+    underline inside the frame Craft drew around some of them. Fix: one `CraftInput` (a single border, radius 6, 8 for
+    the composer, the raised fill, the strong border, the accent as the focus ring) around every text input (the search
+    box, the find bar, the composer, the settings page, the Plug-ins and Models pages' fields, the dialog's prompt), and
+    `WindowsControlStyles` (Platforms/Windows) takes the TextBox's border, fill and underline away in every state.
 13. **The settings page looks bad**: sections (Editor, C# and Roslyn, Models, Completion, Agent and sandbox, Plug-ins,
     Appearance, Keyboard), proper controls (switches, numbers, drop-downs, a font picker) instead of a text box and Set
     for each, search, and the variable shown small; the composer of the chat and the agent made as good as the design.
 14. **The editor's font**: the default code font looks wrong; JetBrains Mono must actually draw (the bundled font
     reaching the drawn surface), else a well-chosen monospaced fallback, with the line height and weight tuned.
+    **Fixed (2026-10-31).** Cause: the editor's canvas is Win2D through MAUI Graphics, whose text format takes a family
+    by the system's name; the MAUI font alias "JetBrains Mono" exists only for XAML controls, so the canvas drew its
+    default and the fallback check swapped in Cascadia Mono (or worse). Fix: Craft.App copies the JetBrains Mono files to
+    `fonts\` beside the program; `WindowsDrawnFonts` names each face by its file (`file:///…#JetBrains Mono`, then
+    `ms-appx:///fonts/…`), the bold and italic from their own files (no synthetic styles); `CodeFontPicker` (the editor
+    and the terminal) measures each candidate on the frame's canvas and takes the first whose cell is the file's own
+    advance (0.6 em, read from the font's `head`/`hhea`/`post` tables, `FontFileMetrics`) within 2%, else the family
+    by name, else `CRAFT_FONT_FALLBACK` (now a list, "Cascadia Mono, Consolas"), each only if monospaced; a face the
+    canvas refuses counts as not taken. Type as the design: 13 on 22-unit lines, regular weight. Test
+    `LookAndFeel.TheBundledCodeFontIsCheckedByItsGlyphWidths`. The owner checks the drawn glyphs on Windows (Output
+    names a fallback when one is taken).
 15. **More interactive and friendly** overall: hover states, focus rings, tooltips, empty states that say what to do,
     smooth scrolling, context menus in the editor and the tree.
 

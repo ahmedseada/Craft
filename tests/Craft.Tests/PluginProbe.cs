@@ -45,6 +45,9 @@ internal static class PluginProbe
         Console.WriteLine("chat parts: " + string.Join(", ", ChatParts.Names));
         Console.WriteLine("audio chat part from: " + (ChatParts.Find(ChatParts.Audio) is { } audio ? AssemblyLoadContext.GetLoadContext(audio.GetType().Assembly)?.Name : "(none)"));
         Console.WriteLine("device providers: " + string.Join(", ", DeviceProviders.All.Select(p => p.GetType().Name)));
+        Console.WriteLine("device provider names: " + string.Join(", ", DeviceProviders.All.Select(p => p.Name)));
+        Console.WriteLine("device providers from: " + string.Join(", ", DeviceProviders.All.Select(p => $"{p.Name}={AssemblyLoadContext.GetLoadContext(p.GetType().Assembly)?.Name}")));
+        Console.WriteLine("default device: " + Idrak.Abstraction.Device.Default);
         Console.WriteLine("commands: " + string.Join(", ", EditorCommands.Names));
         Console.WriteLine("key bindings: " + string.Join(", ", EditorKeyBindings.All.Select(b => $"{b.Name}={b.CommandId}")));
         return 0;

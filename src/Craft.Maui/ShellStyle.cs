@@ -216,18 +216,24 @@ public sealed class ShellPalette
         MinimumHeightRequest = height,
     };
 
-    /// <summary>An input on the raised fill with the strong border.</summary>
+    /// <summary>
+    /// A text field in the interface's (or the code's) font, drawn without a box of its own: shown inside a
+    /// <see cref="Field"/> (Craft's one input style, the owner's note 12), <paramref name="height"/> tall with its border.
+    /// </summary>
     public Entry Input(string placeholder, double height = 32, bool code = false) => new()
     {
         Placeholder = placeholder,
         PlaceholderColor = Secondary,
         TextColor = Text,
-        BackgroundColor = Raised,
+        BackgroundColor = Colors.Transparent,
         FontFamily = code ? Options.FontFamily : Font(),
         FontSize = FontSize,
-        HeightRequest = height,
-        MinimumHeightRequest = height,
+        HeightRequest = Math.Max(16, height - 2),
+        MinimumHeightRequest = Math.Max(16, height - 2),
     };
+
+    /// <summary>Craft's input style around <paramref name="input"/> (one border, the design's radius and fill, the accent's focus ring).</summary>
+    public CraftInput Field(InputView input, double radius = 6, bool multiline = false) => new(this, input, radius, multiline);
 
     /// <summary>A rounded box with the border (a card, a chip, a list).</summary>
     public Border Box(View content, double radius = 8, Thickness? padding = null, Color? fill = null, Color? stroke = null) => new()

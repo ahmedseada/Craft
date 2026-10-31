@@ -102,7 +102,7 @@ public interface IModelProvider : IKind
     Task<ModelLease> AcquireAsync(ModelRequest request, IProgress<ModelLoadStatus>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// What the provider holds now, for the shell (the title bar's model chip, the status bar's device, memory and speed,
+    /// What the provider holds now, for the shell (the composer's model chip, the status bar's device, memory and speed,
     /// the Models and devices page): <see cref="ModelProviderStatus.None"/> by default.
     /// </summary>
     ModelProviderStatus Status => ModelProviderStatus.None;
@@ -170,6 +170,27 @@ public sealed record ModelProviderStatus
 
     /// <summary>The models loaded now, each as the user reads it ("store:coder · in use"), for the Models page.</summary>
     public IReadOnlyList<string> Loaded { get; init; } = [];
+
+    /// <summary>
+    /// The models the user can pick at the composer's model chip (the owner's note 11), each a name the provider resolves
+    /// (the one set, those loaded, those picked before), the one set first; empty when it lists none.
+    /// </summary>
+    public IReadOnlyList<string> Models { get; init; } = [];
+
+    /// <summary>
+    /// The devices the provider can run on, as the device setting takes them ("auto", "cpu", "cuda:0", "vulkan:0"), found
+    /// off the UI thread on this machine; empty until they are found (or when the provider has no choice).
+    /// </summary>
+    public IReadOnlyList<string> Devices { get; init; } = [];
+
+    /// <summary>The device "auto" picks on this machine ("cuda:0"), or null until it is known.</summary>
+    public string? AutoDevice { get; init; }
+
+    /// <summary>The device the user set ("auto" when none is), or null when the provider has no device setting.</summary>
+    public string? DeviceChoice { get; init; }
+
+    /// <summary>Whether the chat model is loading now (the chip's dot says so).</summary>
+    public bool IsLoading { get; init; }
 
     /// <summary>The chat model's name, or null.</summary>
     public string? ChatModel => Roles.Count > 0 ? Roles[0].Model : null;

@@ -504,6 +504,95 @@ sealed class Craft.Editor.ProposalCheck : System.IEquatable<Craft.Editor.Proposa
   System.Void Deconstruct(out System.Int32 ErrorsBefore, out System.Int32 WarningsBefore, out System.Int32 ErrorsAfter, out System.Int32 WarningsAfter, out System.Collections.Generic.IReadOnlyList<System.String> FirstErrors)
   ctor(System.Int32 ErrorsBefore, System.Int32 WarningsBefore, System.Int32 ErrorsAfter, System.Int32 WarningsAfter, System.Collections.Generic.IReadOnlyList<System.String> FirstErrors)
   static System.Threading.Tasks.Task<Craft.Editor.ProposalCheck> RunAsync(Craft.Abstractions.ISemanticLanguageSession session, Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Threading.CancellationToken cancellationToken)
+sealed class Craft.Editor.Shell.CodeFontFaces : System.IEquatable<Craft.Editor.Shell.CodeFontFaces>
+  Craft.Editor.Shell.CodeFontFaces <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.CodeFontFaces other)
+  System.Boolean Equals(System.Object obj)
+  System.Double? AdvanceEm { get; init; }
+  System.Int32 GetHashCode()
+  System.String Bold { get; init; }
+  System.String BoldItalic { get; init; }
+  System.String Italic { get; init; }
+  System.String Regular { get; init; }
+  System.String Source { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Regular, out System.String Bold, out System.String Italic, out System.String BoldItalic, out System.String Source)
+  ctor(System.String Regular, System.String Bold, System.String Italic, System.String BoldItalic, System.String Source)
+  static Craft.Editor.Shell.CodeFontFaces Named(System.String family)
+static class Craft.Editor.Shell.CodeFonts
+  const System.Double AdvanceTolerance = 0.02
+  const System.Double MonospaceTolerance = 0.005
+  const System.String Folder = fonts
+  static Craft.Editor.Shell.CodeFontFaces BundledFaces(System.String folder, System.Func<System.String, System.String, System.String> fileFace)
+  static System.Boolean Accepts(System.Double wide, System.Double narrow, System.Int32 sample, System.Double size, System.Double? advanceEm)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.CodeFontFaces> Candidates(System.String family, System.String fallback, System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.CodeFontFaces> bundled)
+  static System.ValueTuple<System.String, System.String, System.String, System.String, System.String> Bundled { get; }
+sealed class Craft.Editor.Shell.DialogAction : System.IEquatable<Craft.Editor.Shell.DialogAction>
+  Craft.Editor.Shell.DialogAction <Clone>$()
+  Craft.Editor.Shell.DialogActionRole Role { get; init; }
+  System.Boolean Equals(Craft.Editor.Shell.DialogAction other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Label { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Label, out Craft.Editor.Shell.DialogActionRole Role)
+  ctor(System.String Label, Craft.Editor.Shell.DialogActionRole Role = Secondary)
+enum Craft.Editor.Shell.DialogActionRole : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Cancel = 3
+  Danger = 2
+  Primary = 1
+  Secondary = 0
+sealed class Craft.Editor.Shell.DialogQueue : Craft.Editor.Abstractions.IEditorKeyHandler
+  Craft.Editor.Abstractions.IEditorKeyHandler Before(Craft.Editor.Abstractions.IEditorKeyHandler inner)
+  Craft.Editor.Shell.DialogRequest Current { get; }
+  System.Boolean Answer(System.Int32 index, System.String text = null)
+  System.Boolean Cancel()
+  System.Boolean Confirm(System.String text = null)
+  System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
+  System.Boolean IsOpen { get; }
+  System.Int32 Focused { get; }
+  System.Int32 MoveFocus(System.Int32 step)
+  System.Int32 Waiting { get; }
+  System.Threading.Tasks.Task<Craft.Editor.Shell.DialogResult> ShowAsync(Craft.Editor.Shell.DialogRequest request, System.Threading.CancellationToken cancellationToken = null)
+  System.Void SetFocus(System.Int32 index)
+  ctor(System.Action<System.Action> dispatch)
+  event System.EventHandler Changed
+  event System.EventHandler FocusMoved
+sealed class Craft.Editor.Shell.DialogRequest : System.IEquatable<Craft.Editor.Shell.DialogRequest>
+  Craft.Editor.Shell.DialogRequest <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.DialogRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsList { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.DialogAction> Actions { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Details { get; init; }
+  System.Int32 CancelIndex { get; }
+  System.Int32 DefaultIndex { get; }
+  System.Int32 GetHashCode()
+  System.String InputPlaceholder { get; init; }
+  System.String InputText { get; init; }
+  System.String Text { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Title, out System.String Text, out System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.DialogAction> Actions)
+  ctor(System.String Title, System.String Text, System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.DialogAction> Actions)
+  static Craft.Editor.Abstractions.UnsavedChoice UnsavedAnswer(Craft.Editor.Shell.DialogResult result)
+  static Craft.Editor.Shell.DialogRequest Message(System.String title, System.String text)
+  static Craft.Editor.Shell.DialogRequest Pick(System.String title, System.Collections.Generic.IReadOnlyList<System.String> items, System.String text = "")
+  static Craft.Editor.Shell.DialogRequest Prompt(System.String title, System.String text, System.String placeholder, System.String ok = "OK", System.String initial = "")
+  static Craft.Editor.Shell.DialogRequest Question(Craft.Abstractions.EditorQuestion question, System.Int32 buttons = 3)
+  static Craft.Editor.Shell.DialogRequest Unsaved(System.String title)
+  static System.Int32 QuestionAnswer(Craft.Abstractions.EditorQuestion question, Craft.Editor.Shell.DialogResult result)
+sealed class Craft.Editor.Shell.DialogResult : System.IEquatable<Craft.Editor.Shell.DialogResult>
+  Craft.Editor.Shell.DialogResult <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.DialogResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Index { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Index, out System.String Text)
+  ctor(System.Int32 Index, System.String Text = null)
+  static Craft.Editor.Shell.DialogResult None { get; }
 sealed class Craft.Editor.Shell.DocumentTab
   Craft.Abstractions.IEditorDocument HostDocument { get; }
   Craft.Abstractions.ILanguage Language { get; }
@@ -571,6 +660,19 @@ sealed class Craft.Editor.Shell.FolderTreeWatch : System.IDisposable
   System.Void Dispose()
   System.Void Touch(System.String path)
   ctor(Craft.Editor.Shell.FolderTree tree, Craft.Abstractions.IFolderWatcher watcher, System.Int32 delayMilliseconds, System.Action<System.Action> dispatch)
+struct Craft.Editor.Shell.FontFileMetrics : System.IEquatable<Craft.Editor.Shell.FontFileMetrics>
+  System.Boolean Equals(Craft.Editor.Shell.FontFileMetrics other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsFixedPitch { get; init; }
+  System.Double AdvanceEm { get; }
+  System.Int32 AdvanceWidthMax { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 UnitsPerEm { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 UnitsPerEm, out System.Int32 AdvanceWidthMax, out System.Boolean IsFixedPitch)
+  ctor(System.Int32 UnitsPerEm, System.Int32 AdvanceWidthMax, System.Boolean IsFixedPitch)
+  static Craft.Editor.Shell.FontFileMetrics? Read(System.ReadOnlySpan<System.Byte> bytes)
+  static Craft.Editor.Shell.FontFileMetrics? ReadFile(System.String path)
 static class Craft.Editor.Shell.FuzzyMatch
   const System.Int32 None = -2147483648
   static System.Int32 Score(System.ReadOnlySpan<System.Char> query, System.ReadOnlySpan<System.Char> text)
@@ -590,6 +692,21 @@ sealed class Craft.Editor.Shell.MenuRow : System.IEquatable<Craft.Editor.Shell.M
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String Chord, out System.String CommandId, out System.Boolean StartsGroup, out System.Boolean Enabled)
   ctor(System.String Title, System.String Chord, System.String CommandId, System.Boolean StartsGroup, System.Boolean Enabled)
+sealed class Craft.Editor.Shell.ModelPick : System.IEquatable<Craft.Editor.Shell.ModelPick>
+  Craft.Editor.Shell.ModelPick <Clone>$()
+  Craft.Editor.Shell.ModelPickKind Kind { get; init; }
+  System.Boolean Equals(Craft.Editor.Shell.ModelPick other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Label { get; init; }
+  System.String ToString()
+  System.String Value { get; init; }
+  System.Void Deconstruct(out Craft.Editor.Shell.ModelPickKind Kind, out System.String Value, out System.String Label)
+  ctor(Craft.Editor.Shell.ModelPickKind Kind, System.String Value, System.String Label)
+enum Craft.Editor.Shell.ModelPickKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Device = 1
+  Model = 0
+  Page = 2
 sealed class Craft.Editor.Shell.PageTab
   System.Object View { get; set; }
   System.String Id { get; }
@@ -811,12 +928,14 @@ enum Craft.Editor.Shell.ShellPanel : System.IComparable, System.IConvertible, Sy
 static class Craft.Editor.Shell.ShellText
   static Craft.Editor.Shell.SemanticCard Semantic(Craft.Editor.EditorModel model)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> Breadcrumb(System.String filePath, System.String workspaceRoot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> scopes)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ModelPick> ModelPicks(Craft.Abstractions.ModelProviderStatus status)
   static System.String Bytes(System.Int64 bytes)
   static System.String EncodingName(System.Text.Encoding encoding, System.Boolean hasBom)
   static System.String Indentation(Craft.Core.CraftOptions options)
   static System.String LineEnding(System.String lineEnding)
   static System.String ModelChip(Craft.Abstractions.ModelProviderStatus status)
   static System.String ModelUsage(Craft.Abstractions.ModelProviderStatus status)
+  static System.String PlannedDevice(Craft.Abstractions.ModelProviderStatus status)
   static System.String Position(System.Int32 line, System.Int32 column)
   static System.String Problems(System.Int32 errors, System.Int32 warnings)
   static System.ValueTuple<Craft.Abstractions.IModelProvider, Craft.Abstractions.ModelProviderStatus>? ModelStatus()

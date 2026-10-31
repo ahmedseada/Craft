@@ -31,8 +31,11 @@ public sealed record CraftOptions
     /// <summary>A line's height as a multiple of the font's (<c>CRAFT_LINE_SPACING</c>; 1.69 gives the design's 22-unit lines at 13).</summary>
     public float LineSpacing { get; init; } = 1.69f;
 
-    /// <summary>The code font used when <see cref="FontFamily"/> does not draw monospaced on the platform (<c>CRAFT_FONT_FALLBACK</c>).</summary>
-    public string FontFallback { get; init; } = "Cascadia Mono";
+    /// <summary>
+    /// The code fonts tried, in order, when <see cref="FontFamily"/> does not draw monospaced on the platform
+    /// (<c>CRAFT_FONT_FALLBACK</c>, families separated by commas; the first that draws monospaced is taken).
+    /// </summary>
+    public string FontFallback { get; init; } = "Cascadia Mono, Consolas";
 
     /// <summary>The interface's font family (<c>CRAFT_INTERFACE_FONT</c>): Inter, bundled with the app.</summary>
     public string InterfaceFont { get; init; } = "Inter";
@@ -285,7 +288,7 @@ public sealed record CraftOptions
     public float TouchTarget { get; init; } = 44;
 
     /// <summary>
-    /// Where the title bar's row (the logo, the menus, the search box, the model chip) goes (<c>CRAFT_TITLE_BAR</c>):
+    /// Where the title bar's row (the logo, the menus, the search box) goes (<c>CRAFT_TITLE_BAR</c>):
     /// "window", in the window's own caption where the platform lets an app draw there, or "page", a row under the caption.
     /// </summary>
     public string TitleBar { get; init; } = "window";
@@ -365,7 +368,7 @@ public sealed record CraftOptions
         new("CRAFT_FONT", "JetBrains Mono", "The code font's family (bundled; one that does not draw monospaced gives way to CRAFT_FONT_FALLBACK)."),
         new("CRAFT_FONT_SIZE", "13", "The code font's size, in device-independent units."),
         new("CRAFT_LINE_SPACING", "1.69", "A line's height as a multiple of the font's height (1.69 at 13: 22-unit lines)."),
-        new("CRAFT_FONT_FALLBACK", "Cascadia Mono", "The code font used when CRAFT_FONT does not draw monospaced on this platform."),
+        new("CRAFT_FONT_FALLBACK", "Cascadia Mono, Consolas", "The code fonts tried in order (separated by commas) when CRAFT_FONT does not draw monospaced on this platform."),
         new("CRAFT_INTERFACE_FONT", "Inter", "The interface's font family (bundled)."),
         new("CRAFT_INTERFACE_FONT_SIZE", "13", "The interface's text size, in device-independent units."),
         new("CRAFT_ACCENT", "(the theme's)", "The accent: amber, teal, blue, rose, or #RRGGBB; moved until it reads at 4.5:1 on the theme."),

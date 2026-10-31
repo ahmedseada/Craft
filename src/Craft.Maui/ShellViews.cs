@@ -477,42 +477,19 @@ public sealed class TabStripView : ContentView, IDisposable
     }
 }
 
-/// <summary>The shell's prompts as a page's dialogs (MAUI's, no platform code); its pages open as tabs (<see cref="PageTabs"/>), not here.</summary>
-public sealed class MauiShellUi(Page page) : IShellUi
+/// <summary>The shell's prompts as Craft's dialogs (<see cref="CraftDialog"/>, no platform message box); its pages open as tabs (<see cref="PageTabs"/>), not here.</summary>
+public sealed class MauiShellUi(CraftDialog dialog) : IShellUi
 {
-    private const string CancelText = "Cancel";
-    private const string SaveText = "Save";
-    private const string DiscardText = "Don't save";
-    private readonly Page _page = page ?? throw new ArgumentNullException(nameof(page));
+    private readonly CraftDialog _dialog = dialog ?? throw new ArgumentNullException(nameof(dialog));
 
     /// <inheritdoc />
-    public async Task<UnsavedChoice> AskUnsavedAsync(string title, CancellationToken cancellationToken = default)
-    {
-        var picked = await _page.DisplayActionSheetAsync($"{title} has unsaved changes. Save them?", CancelText, null, SaveText, DiscardText);
-        return picked switch
-        {
-            SaveText => UnsavedChoice.Save,
-            DiscardText => UnsavedChoice.Discard,
-            _ => UnsavedChoice.Cancel,
-        };
-    }
+    public Task<UnsavedChoice> AskUnsavedAsync(string title, CancellationToken cancellationToken = default) => _dialog.AskUnsavedAsync(title, cancellationToken);
 
     /// <inheritdoc />
-    public async Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(items);
-        if (items.Count == 0)
-        {
-            return -1;
-        }
-
-        var shown = items.ToArray();
-        var picked = await _page.DisplayActionSheetAsync(title, CancelText, null, shown);
-        return picked is null ? -1 : Array.IndexOf(shown, picked);
-    }
+    public Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default) => _dialog.PickAsync(title, items, cancellationToken);
 
     /// <inheritdoc />
-    public Task ShowMessageAsync(string title, string message) => _page.DisplayAlertAsync(title, message, "OK");
+    public Task ShowMessageAsync(string title, string message) => _dialog.ShowMessageAsync(title, message);
 }
 
 /// <summary>
@@ -541,4 +518,7 @@ public interface IShellPlatform
 
     /// <summary>The platform's terminal host (phase T: ConPTY on Windows), registered while the shell runs; null when it has none (the library's "pipe" serves).</summary>
     ITerminalHost? TerminalHost => null;
+
+    /// <summary>The bundled code font as the platform's drawn surface reaches it (the owner's note 14: Windows names its files), or null.</summary>
+    IDrawnFonts? DrawnFonts => null;
 }

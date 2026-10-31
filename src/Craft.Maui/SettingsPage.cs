@@ -48,7 +48,7 @@ public sealed class SettingsPage : ContentView, IDisposable
             {
                 new Label { Text = "Settings", FontSize = 20, FontAttributes = FontAttributes.Bold, Margin = new Thickness(0, 0, 16, 0), VerticalTextAlignment = TextAlignment.Center },
                 _layer,
-                _search,
+                Field(_search),
                 close,
             },
         };
@@ -74,6 +74,18 @@ public sealed class SettingsPage : ContentView, IDisposable
         _shell.OptionsChanged -= OnShellChanged;
         _shell.WorkspaceChanged -= OnWorkspaceChanged;
         _shell.ThemeChanged -= OnThemeChanged;
+    }
+
+    // Craft's one input style (the owner's note 12), in the shell's theme.
+    private CraftInput Field(Entry entry)
+    {
+        var palette = new ShellPalette(_shell.Theme, _shell.Options);
+        entry.FontFamily = palette.Font();
+        entry.FontSize = palette.FontSize;
+        var field = palette.Field(entry);
+        field.HeightRequest = 34;
+        field.MinimumWidthRequest = entry.MinimumWidthRequest + 16;
+        return field;
     }
 
     private SettingLayer Layer => _layer.SelectedIndex == 0 && _shell.Settings.Workspace is not null ? SettingLayer.Workspace : SettingLayer.User;
@@ -184,7 +196,7 @@ public sealed class SettingsPage : ContentView, IDisposable
                 {
                     Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
                     AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Center,
-                    Children = { entry, set, clear },
+                    Children = { Field(entry), set, clear },
                 },
                 new Label { Text = effect, FontSize = 12, TextColor = row.Source == SettingSource.Environment ? _error : _muted },
                 error,

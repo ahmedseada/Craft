@@ -207,7 +207,69 @@ public static class ShellText
             return "no model";
         }
 
-        return status.Device is { } device ? $"{model} · {device}" : model;
+        return PlannedDevice(status) is { } device ? $"{model} · {device}" : model;
+    }
+
+    /// <summary>
+    /// The device to show for <paramref name="status"/>: the one in use once a model is loaded, else the one the setting
+    /// names ("cpu"), else what "auto" picks on this machine marked so ("cuda:0 (auto)"), else null (the owner's note 6:
+    /// the GPU shows before the first load).
+    /// </summary>
+    public static string? PlannedDevice(ModelProviderStatus? status)
+    {
+        if (status is null)
+        {
+            return null;
+        }
+
+        if (status.Device is { } device)
+        {
+            return device;
+        }
+
+        if (status.DeviceChoice is { Length: > 0 } choice && !choice.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return choice;
+        }
+
+        return status.AutoDevice is { } auto ? auto + " (auto)" : null;
+    }
+
+    /// <summary>
+    /// The composer's model picker for <paramref name="status"/> (the owner's note 11): its models (the one in use marked),
+    /// then the devices to run on (the one chosen marked, "auto" saying what it picks), then the Models and devices page.
+    /// </summary>
+    public static IReadOnlyList<ModelPick> ModelPicks(ModelProviderStatus? status)
+    {
+        var picks = new List<ModelPick>();
+        if (status is null)
+        {
+            picks.Add(new ModelPick(ModelPickKind.Page, "", "No model provider is installed: open Models and devices…"));
+            return picks;
+        }
+
+        string? model = status.ChatModel;
+        foreach (var name in status.Models)
+        {
+            bool current = model is not null && name.Equals(model, StringComparison.OrdinalIgnoreCase);
+            picks.Add(new ModelPick(ModelPickKind.Model, name, current ? $"✓ {name}" : name));
+        }
+
+        if (status.DeviceSetting is not null)
+        {
+            string choice = status.DeviceChoice is { Length: > 0 } set ? set : "auto";
+            foreach (var device in status.Devices)
+            {
+                bool chosen = device.Equals(choice, StringComparison.OrdinalIgnoreCase);
+                string label = device.Equals("auto", StringComparison.OrdinalIgnoreCase) && status.AutoDevice is { } auto
+                    ? $"Run on auto (the fastest found: {auto})"
+                    : $"Run on {device}";
+                picks.Add(new ModelPick(ModelPickKind.Device, device, chosen ? "✓ " + label : label));
+            }
+        }
+
+        picks.Add(new ModelPick(ModelPickKind.Page, "", status.Models.Count == 0 ? "Add a model… (Models and devices)" : "Another model… (Models and devices)"));
+        return picks;
     }
 
     /// <summary>The status bar's model text: "local · vulkan:0 · 3.1 GB in use · 41 tok/s", the parts it measured; "" with no model.</summary>
@@ -219,7 +281,7 @@ public static class ShellText
         }
 
         var parts = new List<string>(4) { status.Where.Length > 0 ? status.Where : "model" };
-        if (status.Device is { } device)
+        if (PlannedDevice(status) is { } device)
         {
             parts.Add(device);
         }
@@ -248,6 +310,25 @@ public static class ShellText
         return null;
     }
 }
+
+/// <summary>What a row of the composer's model picker does.</summary>
+public enum ModelPickKind
+{
+    /// <summary>Makes <see cref="ModelPick.Value"/> the chat model (the provider's model setting) and loads it.</summary>
+    Model,
+
+    /// <summary>Makes <see cref="ModelPick.Value"/> the device to run on (the provider's device setting).</summary>
+    Device,
+
+    /// <summary>Opens the Models and devices page.</summary>
+    Page,
+}
+
+/// <summary>A row of the composer's model picker (<see cref="ShellText.ModelPicks"/>).</summary>
+/// <param name="Kind">What it does.</param>
+/// <param name="Value">The model's or the device's name ("" for the page).</param>
+/// <param name="Label">Its text.</param>
+public sealed record ModelPick(ModelPickKind Kind, string Value, string Label);
 
 /// <summary>
 /// The branch of a folder's git repository, read from its <c>.git</c> folder as bytes (no git program): the folder or a

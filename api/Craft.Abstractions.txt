@@ -1037,14 +1037,19 @@ sealed class Craft.Abstractions.ModelProviderStatus : System.IEquatable<Craft.Ab
   Craft.Abstractions.ModelSettingField ModelSetting { get; init; }
   System.Boolean Equals(Craft.Abstractions.ModelProviderStatus other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean IsLoading { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ModelRole> Roles { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ModelSettingField> Limits { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Devices { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> Loaded { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Models { get; init; }
   System.Double? TokensPerSecond { get; init; }
   System.Int32 GetHashCode()
   System.Int64? DeviceMemoryBytes { get; init; }
+  System.String AutoDevice { get; init; }
   System.String ChatModel { get; }
   System.String Device { get; init; }
+  System.String DeviceChoice { get; init; }
   System.String LoadCommand { get; init; }
   System.String ToString()
   System.String Where { get; init; }

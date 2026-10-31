@@ -63,6 +63,25 @@ public sealed class MauiTextMeasurer : ITextMeasurer
         return true;
     }
 
+    /// <summary>
+    /// Takes a measure made elsewhere (<see cref="CodeFontPicker"/>: the cell's width and the text's height of the faces it
+    /// picked) for <paramref name="font"/>; nothing when the measure is not a positive size (the estimate stays).
+    /// </summary>
+    public void SetMeasured(EditorFont font, float cellWidth, float textHeight)
+    {
+        ArgumentNullException.ThrowIfNull(font);
+        if (!(cellWidth > 0) || !(textHeight > 0))
+        {
+            _measuredFont = null;
+            return;
+        }
+
+        _cellWidth = cellWidth;
+        _textHeight = textHeight;
+        _measuredFont = font;
+        IsMonospaced = true;
+    }
+
     /// <summary>Whether the last font measured draws monospaced (its "i" as wide as its "M").</summary>
     public bool IsMonospaced { get; private set; } = true;
 

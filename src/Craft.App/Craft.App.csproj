@@ -56,6 +56,21 @@
   </ItemGroup>
 
   <!--
+    The owner's note 14: the code font's files also beside the program, in fonts\ (Craft.Editor's CodeFonts.Folder), for the
+    drawn surfaces: Win2D's text format does not see a MAUI font by its alias, so Platforms/Windows' WindowsDrawnFonts names
+    these files. Copied by a target (not Content), so the MauiFont items stay as MAUI makes them.
+  -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <_CraftCodeFontFile Include="Resources\Fonts\JetBrainsMono-*.ttf" />
+  </ItemGroup>
+  <Target Name="CraftCopyCodeFonts" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftCodeFontFile)" DestinationFolder="$(OutDir)fonts" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CraftPublishCodeFonts" AfterTargets="Publish" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftCodeFontFile)" DestinationFolder="$(PublishDir)fonts" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
     The pre-installed C# plug-in: Craft.CSharp is built as a plain library (no runtime identifier, so its own output folder
     bin\<Configuration>\net10.0\), and that folder (Craft.CSharp.dll, Roslyn's assemblies, Craft.CSharp.deps.json, and the
     plugin.json that Craft.CSharp's own build copies there from src\Craft.CSharp\plugin.json; never the host's Craft.Abstractions, Craft.Core or

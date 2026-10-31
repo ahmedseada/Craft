@@ -192,14 +192,16 @@ public sealed class PanelView : ContentView, IDisposable
 }
 
 /// <summary>
-/// The host's questions as pages and dialogs: a proposed edit is shown as a diff (<see cref="ProposalDiffPage"/>) and
-/// applied only on Accept; a message is an alert.
+/// The host's questions as pages and Craft's dialogs: a proposed edit is shown as a diff (<see cref="ProposalDiffPage"/>)
+/// and applied only on Accept; a message and a question are a <see cref="CraftDialog"/> (never the platform's message box).
 /// </summary>
-/// <param name="page">The page the views are shown over.</param>
+/// <param name="page">The page the diff view is shown over.</param>
+/// <param name="dialog">The window's dialogs.</param>
 /// <param name="theme">The theme in use (the shell's), read each time a view opens; null: the light or dark built-in by the app's theme.</param>
-public sealed class MauiEditorPresenter(Page page, Func<ITheme>? theme = null) : IEditorPresenter
+public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<ITheme>? theme = null) : IEditorPresenter
 {
     private readonly Page _page = page ?? throw new ArgumentNullException(nameof(page));
+    private readonly CraftDialog _dialog = dialog ?? throw new ArgumentNullException(nameof(dialog));
 
     /// <inheritdoc />
     /// <remarks>
@@ -232,37 +234,24 @@ public sealed class MauiEditorPresenter(Page page, Func<ITheme>? theme = null) :
         ?? EditorThemes.Get(Application.Current?.RequestedTheme == AppTheme.Light ? EditorThemes.Light : EditorThemes.Dark);
 
     /// <inheritdoc />
-    public Task ShowMessageAsync(string title, string message) => _page.DisplayAlertAsync(title, message, "OK");
+    public Task ShowMessageAsync(string title, string message) => _dialog.ShowMessageAsync(title, message);
 
     /// <inheritdoc />
     /// <remarks>
-    /// An action sheet whose title holds the question, its message and its facts, one a line, and one button per answer;
-    /// dismissing it gives the question's <see cref="EditorQuestion.Dismissed"/>. (The Agent page's own card is phase A2's.)
+    /// A Craft dialog: the title, the message, the facts in the code font (a command's program, folder, limits: the
+    /// sandbox's approval), one button per answer (a list when there are more than three); Escape, or the request's
+    /// cancellation, gives the question's <see cref="EditorQuestion.Dismissed"/>.
     /// </remarks>
-    public async Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(question);
-        if (question.Choices.Count == 0)
-        {
-            return question.Dismissed;
-        }
-
-        var shown = question.Choices.ToArray();
-        string title = string.Join('\n', [question.Title, question.Message, .. question.Details]);
-        string? picked = await _page.DisplayActionSheetAsync(title, "Cancel", null, shown);
-        cancellationToken.ThrowIfCancellationRequested();
-        int index = picked is null ? -1 : Array.IndexOf(shown, picked);
-        return index >= 0 ? index : question.Dismissed;
-    }
+    public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken) => _dialog.AskAsync(question, cancellationToken);
 }
 
 /// <summary>The command palette: the commands that can run now, by title, in a list; the one picked runs.</summary>
 public static class CommandPalette
 {
-    /// <summary>Shows the palette on <paramref name="page"/> for <paramref name="host"/>; true when a command was picked and ran.</summary>
-    public static async Task<bool> ShowAsync(Page page, EditorHost host)
+    /// <summary>Shows the palette in <paramref name="dialog"/> for <paramref name="host"/>; true when a command was picked and ran.</summary>
+    public static async Task<bool> ShowAsync(CraftDialog dialog, EditorHost host)
     {
-        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(dialog);
         ArgumentNullException.ThrowIfNull(host);
         var commands = new List<IEditorCommand>();
         foreach (var command in host.Commands)
@@ -287,14 +276,13 @@ public static class CommandPalette
 
         if (commands.Count == 0)
         {
-            await page.DisplayAlertAsync("Commands", "No command can run now.", "OK");
+            await dialog.ShowMessageAsync("Commands", "No command can run now.");
             return false;
         }
 
         commands.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase));
         var titles = commands.Select(c => Chorded(c)).ToArray();
-        var picked = await page.DisplayActionSheetAsync("Commands", "Cancel", null, titles);
-        int index = picked is null ? -1 : Array.IndexOf(titles, picked);
+        int index = await dialog.PickAsync("Commands", titles);
         return index >= 0 && await host.ExecuteCommandAsync(commands[index].Name);
     }
 

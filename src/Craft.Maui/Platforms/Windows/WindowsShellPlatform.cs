@@ -26,8 +26,14 @@ public sealed class WindowsShellPlatform : IShellPlatform
     /// <inheritdoc />
     public IFileDialogs FileDialogs { get; } = new WindowsFileDialogs();
 
+    /// <summary>The platform, with Craft's control styles mapped (the owner's notes 10 and 12) before any control is made.</summary>
+    public WindowsShellPlatform() => WindowsControlStyles.Configure();
+
     /// <inheritdoc />
     public ITerminalHost? TerminalHost { get; } = new ConPtyTerminalHost();
+
+    /// <inheritdoc />
+    public IDrawnFonts? DrawnFonts { get; } = new WindowsDrawnFonts();
 
     /// <inheritdoc />
     public IDisposable RouteKeys(MauiWindow window, IEditorKeyHandler handler)
@@ -101,11 +107,11 @@ public sealed class WindowsShellPlatform : IShellPlatform
                 return;
             }
 
-            // Only chords and function keys: a plain key typed into a text box is that box's.
+            // Every key no control took goes to the handler, which decides (the shell's DialogQueue.Before: an open Craft
+            // dialog takes Escape, Enter, Tab and every other key; with none open only chords and function keys reach the
+            // key bindings, so a plain key typed into a text box stays that box's).
             var modifiers = WindowsTextInputAdapter.Modifiers();
-            bool chord = (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) != 0;
-            bool function = key is EditorKey.F3 || (key >= EditorKey.F1 && key <= EditorKey.F12);
-            if ((chord || function) && _handler.HandleKey(key, modifiers, null))
+            if (_handler.HandleKey(key, modifiers, null))
             {
                 e.Handled = true;
             }

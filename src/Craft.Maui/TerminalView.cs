@@ -19,7 +19,7 @@ public sealed class TerminalDrawable : IDrawable
     private readonly MauiTextMeasurer _measurer = new();
     private readonly TerminalRenderer _renderer = new();
     private MauiEditorCanvas? _canvas;
-    private string? _fellBackFrom;
+    private readonly CodeFontPicker _picker = new();
 
     /// <summary>The terminal drawn (nothing while null).</summary>
     public TerminalInstance? Terminal { get; set; }
@@ -62,25 +62,12 @@ public sealed class TerminalDrawable : IDrawable
             return;
         }
 
-        string family = string.Equals(_fellBackFrom, Options.FontFamily, StringComparison.Ordinal) ? Options.FontFallback : Options.FontFamily;
-        if (_canvas is null || _canvas.Font.Name != family || _canvas.FontSize != Options.FontSize)
+        if (_picker.Ensure(canvas, Options.FontFamily, Options.FontFallback, Options.FontSize, _measurer))
         {
-            _canvas = new MauiEditorCanvas(family, Options.FontSize);
-        }
-
-        if (_measurer.EnsureMeasured(canvas, Font, _canvas.Font))
-        {
-            if (!_measurer.IsMonospaced && family != Options.FontFallback)
-            {
-                _fellBackFrom = Options.FontFamily;
-                _canvas = new MauiEditorCanvas(Options.FontFallback, Options.FontSize);
-                _measurer.Reset();
-                _measurer.EnsureMeasured(canvas, Font, _canvas.Font);
-            }
-
             Measured?.Invoke(this, EventArgs.Empty);
         }
 
+        _canvas = _picker.Canvas!;
         var metrics = Metrics;
         _canvas.SetMetrics(metrics);
         _canvas.Target = canvas;

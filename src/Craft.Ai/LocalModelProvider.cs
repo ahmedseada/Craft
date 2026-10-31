@@ -47,6 +47,11 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     private string _state = "not loaded";
     private bool _stateIsProblem;
     private string? _device;
+    private volatile bool _loading;
+    private readonly List<string> _picked = [];
+    private IReadOnlyList<string> _devices = [];
+    private string? _autoDevice;
+    private int _devicesListed;
 
     /// <summary>
     /// What the provider holds (phase D's Models page and the model chip): the chat model of the settings and its state,
@@ -58,8 +63,14 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         {
             var settings = Settings;
             string? model = settings.Model.Length == 0 ? null : settings.Model;
+            ListDevicesOnce();
             return new ModelProviderStatus
             {
+                Models = Pickable(model),
+                Devices = _devices,
+                AutoDevice = _autoDevice,
+                DeviceChoice = settings.Device,
+                IsLoading = _loading,
                 Where = "local",
                 Roles =
                 [
@@ -79,6 +90,69 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 ],
             };
         }
+    }
+
+    // The composer's picker (the owner's note 11): the model set first, then those loaded and those used before, once each.
+    private string[] Pickable(string? model)
+    {
+        var names = new List<string>(4);
+        void Add(string? name)
+        {
+            if (!string.IsNullOrWhiteSpace(name) && !names.Contains(name.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                names.Add(name.Trim());
+            }
+        }
+
+        Add(model);
+        foreach (var loaded in Loaded)
+        {
+            Add(LoadKey.Parse(loaded.Name).Model);
+        }
+
+        lock (_picked)
+        {
+            foreach (var picked in _picked)
+            {
+                Add(picked);
+            }
+        }
+
+        return [.. names];
+    }
+
+    // The devices of this machine and the one "auto" takes (the owner's note 6: the GPU shows before a load), found once
+    // on the thread pool: listing them starts the GPU drivers (CUDA's, Vulkan's, HIP's), never on the UI thread.
+    private void ListDevicesOnce()
+    {
+        if (Interlocked.Exchange(ref _devicesListed, 1) != 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                IdrakLibraries.EnsureIncluded();
+                var devices = new List<string> { "auto" };
+                foreach (var device in Device.Available)
+                {
+                    devices.Add(device.ToString());
+                }
+
+                _devices = devices;
+                _autoDevice = Device.Default.ToString();
+            }
+#pragma warning disable CA1031 // A driver that fails to answer leaves the list empty; the device setting still takes a name.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                _devices = [];
+            }
+
+            StatusChanged?.Invoke(this, EventArgs.Empty);
+        });
     }
 
     /// <summary>Raised when <see cref="Status"/> changed (a load's stage, its end), on the reporting thread.</summary>
@@ -133,6 +207,15 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
         using var ticker = new Timer(_ => Report(new ModelLoadStatus("loading", null,
             string.Create(CultureInfo.InvariantCulture, $"loading {key.Model} on {key.Device}, {watch.Elapsed.TotalSeconds:F1} s"))), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+        lock (_picked)
+        {
+            if (!_picked.Contains(key.Model, StringComparer.OrdinalIgnoreCase))
+            {
+                _picked.Add(key.Model);
+            }
+        }
+
+        _loading = true;
         Report(new ModelLoadStatus("resolving", null, $"resolving {key.Model} (Idrak's model sources)"));
         ModelHost<LocalModel>.Lease lease;
         try
@@ -142,11 +225,13 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         catch (Exception error)
         {
             ticker.Dispose();
+            _loading = false;
             SetState("failed: " + error.Message, isProblem: true);
             throw;
         }
 
         ticker.Dispose();
+        _loading = false;
         var model = lease.Model;
         _device = model.Device;                    // the device in use, shown in the status bar and the chip
         Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero

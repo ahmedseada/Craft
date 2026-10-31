@@ -112,7 +112,7 @@ public sealed class PopupLayer : AbsoluteLayout
 
 /// <summary>
 /// The title bar's row (docs/design/Main.dc.html): the logo and "Craft", the menus (<see cref="EditorMenus"/>), the search
-/// box (quick open), the model chip. Narrow, it is the phone's top bar (docs/design/PhoneEditor.dc.html): the files
+/// box (quick open; the model chip is the composer's since the owner's note 11, <see cref="ModelChip"/>). Narrow, it is the phone's top bar (docs/design/PhoneEditor.dc.html): the files
 /// button, the file's title and place, undo, and the commands, each a touch target. It raises what the user asks; the page acts.
 /// </summary>
 public sealed class TitleBarView : ContentView
@@ -123,10 +123,7 @@ public sealed class TitleBarView : ContentView
     private readonly LogoDrawable _logoDrawable = new();
     private readonly Label _name;
     private readonly HorizontalStackLayout _menus = new() { Spacing = 4 };
-    private readonly Border _searchBox;
-    private readonly Border _chip;
-    private readonly Ellipse _chipDot = new() { WidthRequest = 8, HeightRequest = 8 };
-    private readonly Label _chipText;
+    private readonly CraftInput _searchBox;
     private readonly Label _narrowTitle;
     private readonly Label _narrowPlace;
     private readonly List<Button> _narrowButtons = [];
@@ -143,38 +140,16 @@ public sealed class TitleBarView : ContentView
         Search.TextChanged += (_, e) => SearchChanged?.Invoke(this, e.NewTextValue ?? "");
         Search.Completed += (_, _) => SearchSubmitted?.Invoke(this, EventArgs.Empty);
         Search.Focused += (_, _) => SearchFocused?.Invoke(this, EventArgs.Empty);
-        _searchBox = new Border
-        {
-            Content = Search,
-            StrokeShape = new RoundRectangle { CornerRadius = 6 },
-            StrokeThickness = 1,
-            Padding = new Thickness(6, 0),
-            MaximumWidthRequest = 460,
-            HorizontalOptions = LayoutOptions.Fill,
-            VerticalOptions = LayoutOptions.Center,
-            HeightRequest = 28,
-        };
-        _chipText = palette.Label("no model", size: palette.FontSize);
-        _chip = new Border
-        {
-            Content = new HorizontalStackLayout { Spacing = 6, Children = { _chipDot, _chipText } },
-            StrokeShape = new RoundRectangle { CornerRadius = 13 },
-            StrokeThickness = 1,
-            Padding = new Thickness(10, 0),
-            HeightRequest = 26,
-            VerticalOptions = LayoutOptions.Center,
-        };
-        _chipDot.VerticalOptions = LayoutOptions.Center;
-        var chipTap = new TapGestureRecognizer();
-        chipTap.Tapped += (_, _) => ChipTapped?.Invoke(this, EventArgs.Empty);
-        _chip.GestureRecognizers.Add(chipTap);
-        ToolTipProperties.SetText(_chip, "The model: Models and devices");
+        _searchBox = palette.Field(Search);
+        _searchBox.MaximumWidthRequest = 460;
+        _searchBox.HorizontalOptions = LayoutOptions.Fill;
+        _searchBox.VerticalOptions = LayoutOptions.Center;
+        _searchBox.HeightRequest = 28;
 
-        _wide.ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)];
+        _wide.ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)];
         _wide.Add(new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { _logo, _name } }, 0, 0);
         _wide.Add(_menus, 1, 0);
         _wide.Add(_searchBox, 2, 0);
-        _wide.Add(_chip, 3, 0);
 
         _narrowTitle = palette.Label("", weight: FontWeight.SemiBold);
         _narrowPlace = palette.Label("", palette.Secondary, palette.SmallSize);
@@ -204,9 +179,6 @@ public sealed class TitleBarView : ContentView
     /// <summary>Raised when the search box takes the focus.</summary>
     public event EventHandler? SearchFocused;
 
-    /// <summary>Raised when the model chip is tapped.</summary>
-    public event EventHandler? ChipTapped;
-
     /// <summary>Narrow: the files button.</summary>
     public event EventHandler? NarrowFilesTapped;
 
@@ -231,14 +203,6 @@ public sealed class TitleBarView : ContentView
     {
         _narrowTitle.Text = title;
         _narrowPlace.Text = place;
-    }
-
-    /// <summary>The model chip: its text and whether a model is set (the dot in the success colour, else the secondary).</summary>
-    public void SetModel(string text, bool hasModel, string? tooltip)
-    {
-        _chipText.Text = text;
-        _chipDot.Fill = new SolidColorBrush(hasModel ? _palette.Success : _palette.Secondary);
-        ToolTipProperties.SetText(_chip, tooltip ?? "The model: Models and devices");
     }
 
     /// <summary>Makes the menus' buttons again (a plug-in added a menu).</summary>
@@ -266,14 +230,7 @@ public sealed class TitleBarView : ContentView
         _logo.Invalidate();
         _name.TextColor = palette.Text;
         _name.FontFamily = palette.Font(FontWeight.SemiBold);
-        _searchBox.BackgroundColor = palette.Raised;
-        _searchBox.Stroke = palette.Border;
-        Search.BackgroundColor = palette.Raised;
-        Search.TextColor = palette.Text;
-        Search.PlaceholderColor = palette.Secondary;
-        _chip.BackgroundColor = palette.Raised;
-        _chip.Stroke = palette.Border;
-        _chipText.TextColor = palette.Text;
+        _searchBox.Apply(palette);
         _narrowTitle.TextColor = palette.Text;
         _narrowPlace.TextColor = palette.Secondary;
         foreach (var button in _narrowButtons)
@@ -296,6 +253,108 @@ public sealed class TitleBarView : ContentView
         _narrowButtons.Add(button);
         return button;
     }
+}
+
+/// <summary>
+/// The model chip (the owner's note 11): the chat model, its device and its state at the chat's and the agent's composer
+/// (docs/design/Main.dc.html's chip and the chat header's "model · local"): a dot in the success colour when a model is
+/// set and ready, the warning's while it loads, the error's when it failed, the secondary's with none; a tap opens the
+/// picker of the models and devices. Its hover and press show on the raised fills.
+/// </summary>
+public sealed class ModelChip : Border
+{
+    private readonly Ellipse _dot = new() { WidthRequest = 8, HeightRequest = 8, VerticalOptions = LayoutOptions.Center };
+    private readonly Label _text;
+    private readonly Label _caret;
+    private ShellPalette _palette;
+    private ModelChipState _state;
+    private bool _hover;
+
+    /// <summary>A chip in <paramref name="palette"/>'s colours.</summary>
+    public ModelChip(ShellPalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        _palette = palette;
+        _text = palette.Label("no model", size: palette.SmallSize);
+        _text.MaximumWidthRequest = 260;
+        _caret = palette.Label("▾", palette.Secondary, palette.SmallSize);
+        Content = new HorizontalStackLayout { Spacing = 6, Children = { _dot, _text, _caret } };
+        StrokeShape = new RoundRectangle { CornerRadius = 12 };
+        StrokeThickness = 1;
+        Padding = new Thickness(10, 0);
+        HeightRequest = 24;
+        HorizontalOptions = LayoutOptions.Start;
+        VerticalOptions = LayoutOptions.Center;
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += (_, _) => Tapped?.Invoke(this, EventArgs.Empty);
+        GestureRecognizers.Add(tap);
+        var pointer = new PointerGestureRecognizer();
+        pointer.PointerEntered += (_, _) => SetHover(true);
+        pointer.PointerExited += (_, _) => SetHover(false);
+        GestureRecognizers.Add(pointer);
+        SemanticProperties.SetDescription(this, "The model: pick a model and its device");
+        ToolTipProperties.SetText(this, "The model: pick a model and its device");
+        Apply(palette);
+    }
+
+    /// <summary>Raised when the chip is tapped.</summary>
+    public event EventHandler? Tapped;
+
+    /// <summary>Shows <paramref name="text"/> ("Qwen2.5-Coder-7B-Instruct · cuda:0") in <paramref name="state"/>, with <paramref name="tooltip"/>.</summary>
+    public void Set(string text, ModelChipState state, string? tooltip)
+    {
+        _text.Text = text;
+        _state = state;
+        ToolTipProperties.SetText(this, tooltip ?? "The model: pick a model and its device");
+        Paint();
+    }
+
+    /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
+    public void Apply(ShellPalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        _palette = palette;
+        _text.FontFamily = palette.Font();
+        _caret.TextColor = palette.Secondary;
+        Paint();
+    }
+
+    private void SetHover(bool hover)
+    {
+        _hover = hover;
+        Paint();
+    }
+
+    private void Paint()
+    {
+        var p = _palette;
+        BackgroundColor = _hover ? p.RaisedHigh : p.Raised;
+        Stroke = _hover ? p.BorderStrong : p.Border;
+        _text.TextColor = p.Text;
+        _dot.Fill = new SolidColorBrush(_state switch
+        {
+            ModelChipState.Ready => p.Success,
+            ModelChipState.Loading => p.Warning,
+            ModelChipState.Problem => p.Error,
+            _ => p.Secondary,
+        });
+    }
+}
+
+/// <summary>What the model chip's dot says.</summary>
+public enum ModelChipState
+{
+    /// <summary>No model set.</summary>
+    None,
+
+    /// <summary>A model is set (loaded, or loaded on first use).</summary>
+    Ready,
+
+    /// <summary>It is loading.</summary>
+    Loading,
+
+    /// <summary>Its load failed (or its family is not registered).</summary>
+    Problem,
 }
 
 /// <summary>

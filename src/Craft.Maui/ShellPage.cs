@@ -9,6 +9,7 @@ using Craft.Core.Plugins;
 using Craft.Core.Settings;
 using Craft.Core.Workspaces;
 using Craft.Editor;
+using Craft.Editor.Abstractions;
 using Craft.Editor.Activities;
 using Craft.Editor.Shell;
 using Craft.Editor.Terminal;
@@ -66,6 +67,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly FlexLayout _findBar;
     private readonly Entry _query;
     private readonly Entry _replacement;
+    private readonly CraftInput _queryBox;
+    private readonly CraftInput _replacementBox;
     private readonly CheckBox _matchCase;
     private readonly CheckBox _wholeWord;
     private readonly Label _matchCount;
@@ -76,6 +79,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly TitleBarView _titleNarrow;
     private readonly ContentView _titleRow = new();
     private readonly PopupLayer _popup = new();
+    private readonly CraftDialog _dialog;
+    private readonly IEditorKeyHandler _keys;
     private readonly RailView _rail;
     private readonly BottomPanelView _bottom;
     private readonly TerminalManager _terminals;
@@ -119,8 +124,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         _startup = startup;
         _initialPath = path;
         ShellModel? shell = null;
-        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, () => shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
-        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(this));
+        CodeFontPicker.DrawnFonts = startup.Platform.DrawnFonts;
+        // The owner's note 10: every question, message and choice is Craft's dialog over the window (themed in ApplyTheme).
+        _dialog = new CraftDialog(new ShellPalette(EditorThemes.Get(EditorThemes.Dark), startup.Options), action => Dispatcher.Dispatch(action));
+        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, _dialog, () => shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
+        _keys = _dialog.Queue.Before(_host);
+        _dialog.FallbackFocus = () => _shown;
+        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog));
         _shell = shell;
         _palette = new ShellPalette(_shell.Theme, _shell.Options);
         _editCommands = new ShellEditCommands(() => _shown?.Model);
@@ -133,6 +143,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _chatSplit.Panel = _conversations;
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
         _conversations.CloseRequested += (_, _) => CloseChat();
+        _conversations.ModelChip.Tapped += (_, _) => _ = PickModelAsync();
         _host.PanelShowRequested += OnPanelShowRequested;
         _host.PanelsChanged += OnHostPanelsChanged;
         _host.SelectionRequested += OnSelectionRequested;
@@ -146,10 +157,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         foreach (var bar in (ReadOnlySpan<TitleBarView>)[_titleWide, _titleNarrow])
         {
             bar.MenuRequested += (_, request) => ShowMenu(request.Menu, request.Anchor);
-            bar.ChipTapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.Models);
             bar.NarrowFilesTapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.ToggleTree);
             bar.NarrowUndoTapped += (_, _) => _shown?.Model?.OnKey(EditorKey.Z, KeyModifiers.Control);
-            bar.NarrowCommandsTapped += (_, _) => _ = CommandPalette.ShowAsync(this, _host);
+            bar.NarrowCommandsTapped += (_, _) => _ = CommandPalette.ShowAsync(_dialog, _host);
         }
 
         _titleWide.SearchChanged += (_, text) => ShowQuickOpen(text);
@@ -173,11 +183,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         _empty.Margin = new Thickness(24);
 
         _query = _palette.Input("Find", 30);
-        _query.WidthRequest = 220;
+        _queryBox = _palette.Field(_query);
+        _queryBox.WidthRequest = 220;
         _query.TextChanged += OnQueryChanged;
         _query.Completed += (_, _) => FindNext();
         _replacement = _palette.Input("Replace", 30);
-        _replacement.WidthRequest = 220;
+        _replacementBox = _palette.Field(_replacement);
+        _replacementBox.WidthRequest = 220;
         _matchCase = new CheckBox();
         _matchCase.CheckedChanged += OnFindOptionChanged;
         _wholeWord = new CheckBox();
@@ -193,7 +205,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         });
         var replaceAll = FindButton("Replace all", ReplaceAll);
         var close = FindButton("Close", CloseFind);
-        _replaceRow = new HorizontalStackLayout { Spacing = 6, Children = { _replacement, replaceOne, replaceAll } };
+        _replaceRow = new HorizontalStackLayout { Spacing = 6, Children = { _replacementBox, replaceOne, replaceAll } };
         _findBar = new FlexLayout
         {
             Wrap = FlexWrap.Wrap,
@@ -202,7 +214,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             IsVisible = false,
             Children =
             {
-                _query,
+                _queryBox,
                 new HorizontalStackLayout { Children = { _matchCase, FindLabel("Match case") } },
                 new HorizontalStackLayout { Children = { _wholeWord, FindLabel("Whole word") } },
                 previous,
@@ -298,6 +310,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         root.Add(_centre, 0, 2);
         root.Add(_popup, 0, 0);
         Grid.SetRowSpan(_popup, 5);
+        root.Add(_dialog, 0, 0);
+        Grid.SetRowSpan(_dialog, 5);
         Content = root;
 
         _shell.Tabs.TabsChanged += OnTabsChanged;
@@ -579,7 +593,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             try
             {
-                _platformHooks.Add(_startup.Platform.RouteKeys(_window, _host));
+                _platformHooks.Add(_startup.Platform.RouteKeys(_window, _keys));
                 _keysRouted = true;
             }
             catch (InvalidOperationException error)
@@ -619,7 +633,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     /// <summary>The app's own commands, on the same contracts as the plug-ins': the palette (Ctrl+Shift+P) and the Plug-ins page (the shell registers the rest).</summary>
     private void RegisterAppCommands()
     {
-        EditorCommands.Register(new EditorCommand(ShellCommandIds.CommandPalette, "View: Show all commands", (_, _) => CommandPalette.ShowAsync(this, _host)));
+        EditorCommands.Register(new EditorCommand(ShellCommandIds.CommandPalette, "View: Show all commands", (_, _) => CommandPalette.ShowAsync(_dialog, _host)));
         EditorCommands.Register(new EditorCommand(ShellCommandIds.Plugins, "Plug-ins: Show the installed plug-ins", (_, _) =>
         {
             _shell.Pages.Open(ShellPageIds.Plugins, "Plug-ins");
@@ -790,7 +804,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private async Task PickTabAsync()
     {
         var tabs = _shell.Tabs.Tabs.ToArray();
-        int picked = await new MauiShellUi(this).PickAsync("Tabs", [.. tabs.Select(TabStripView.TitleOf)]);
+        int picked = await _dialog.PickAsync("Tabs", [.. tabs.Select(TabStripView.TitleOf)]);
         if (picked >= 0 && picked < tabs.Length)
         {
             _shell.Tabs.Activate(tabs[picked]);
@@ -938,7 +952,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     // Narrow: a prompt for the name, then the matches as a list (the phone has no room for the box).
     private async Task QuickOpenNarrowAsync()
     {
-        string? text = await DisplayPromptAsync("Open", "A file's name, or '>' and a command", "Search", "Cancel");
+        string? text = await _dialog.PromptAsync("Open", "", "A file's name, or '>' and a command", "Search");
         if (text is null)
         {
             return;
@@ -947,13 +961,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         var items = _quickOpen.Query(text);
         if (items.Count == 0)
         {
-            await DisplayAlertAsync("Open", "Nothing matches.", "OK");
+            await _dialog.ShowMessageAsync("Open", "Nothing matches.");
             return;
         }
 
         var titles = items.Select(i => i.Detail is null ? i.Text : $"{i.Text}  ({i.Detail})").ToArray();
-        string? picked = await DisplayActionSheetAsync("Open", "Cancel", null, titles);
-        int index = picked is null ? -1 : Array.IndexOf(titles, picked);
+        int index = await _dialog.PickAsync("Open", titles);
         if (index >= 0)
         {
             _lastQuery = text;
@@ -1033,8 +1046,69 @@ public sealed class ShellPage : ContentPage, IDisposable
         var status = ShellText.ModelStatus()?.Status;
         string chip = ShellText.ModelChip(status);
         string? tooltip = status?.Roles is [{ } chat, ..] ? $"{chat.Role}: {chat.Model ?? "none set"} · {chat.State}" : "No model provider is installed (the AI plug-in brings \"local\").";
-        _titleWide.SetModel(chip, status?.ChatModel is not null, tooltip);
+        var state = status?.ChatModel is null ? ModelChipState.None
+            : status.Roles is [{ IsProblem: true }, ..] ? ModelChipState.Problem
+            : status.IsLoading ? ModelChipState.Loading
+            : ModelChipState.Ready;
+        // The owner's note 11: the model chip is the composer's (the chat's and the agent's), with its device (note 6).
+        _conversations.ModelChip.Set(chip, state, tooltip);
         _status.Model.Text = ShellText.ModelUsage(status);
+    }
+
+    // The composer's model chip: the provider's models and devices in a Craft dialog; a model picked becomes the model
+    // setting and loads (off the UI thread, as an activity), a device the device setting, the last row opens the page.
+    private async Task PickModelAsync()
+    {
+        var found = ShellText.ModelStatus();
+        var status = found?.Status;
+        var picks = ShellText.ModelPicks(status);
+        string text = status?.ChatModel is { } model ? $"In use: {model} · {ShellText.PlannedDevice(status) ?? "device not known yet"}" : "No model is set.";
+        int index = await _dialog.PickAsync("Model", [.. picks.Select(p => p.Label)], text: text);
+        if (index < 0)
+        {
+            return;
+        }
+
+        var pick = picks[index];
+        string? variable = pick.Kind switch
+        {
+            ModelPickKind.Model => status?.ModelSetting?.Variable,
+            ModelPickKind.Device => status?.DeviceSetting?.Variable,
+            _ => null,
+        };
+        if (variable is not null && Environment.GetEnvironmentVariable(variable) is { Length: > 0 } fixedValue)
+        {
+            // The environment overrides the settings files: say so rather than write a value that cannot take effect.
+            await _dialog.ShowMessageAsync("Set by the environment", $"{variable} is {fixedValue} in this process's environment, which overrides the settings. Clear it (or change it) and start Craft again to pick here.");
+            return;
+        }
+
+        switch (pick.Kind)
+        {
+            case ModelPickKind.Model when status?.ModelSetting is { } setting:
+                if (_shell.ApplySetting(SettingLayer.User, setting.Variable, pick.Value) is { } problem)
+                {
+                    await _dialog.ShowMessageAsync("The model was not set", problem);
+                }
+                else if (status.LoadCommand is { } load)
+                {
+                    await _host.ExecuteCommandAsync(load);
+                }
+
+                break;
+            case ModelPickKind.Device when status?.DeviceSetting is { } setting:
+                if (_shell.ApplySetting(SettingLayer.User, setting.Variable, pick.Value.Equals("auto", StringComparison.OrdinalIgnoreCase) ? null : pick.Value) is { } refused)
+                {
+                    await _dialog.ShowMessageAsync("The device was not set", refused);
+                }
+
+                break;
+            default:
+                await _host.ExecuteCommandAsync(ShellCommandIds.Models);
+                break;
+        }
+
+        UpdateModel();
     }
 
     // A tab added gets its editor view; a tab removed has its view disposed.
@@ -1072,7 +1146,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             Options = _shell.Options,
             Theme = _shell.Theme,
-            KeyHandler = _host,
+            KeyHandler = _keys,
             Labels = _host.Labels,
             Activities = _host.Activities,
             WorkspaceRoot = _shell.Workspace?.Root,
@@ -1341,6 +1415,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         var p = _palette;
         BackgroundColor = p.Ground;
         _titleWide.Apply(p);
+        _dialog.Apply(p);
+        _queryBox.Apply(p);
+        _replacementBox.Apply(p);
         _titleNarrow.Apply(p);
         if (_windowTitleBar is not null)
         {
@@ -1375,12 +1452,6 @@ public sealed class ShellPage : ContentPage, IDisposable
             button.BorderColor = p.BorderStrong;
         }
 
-        foreach (var entry in (ReadOnlySpan<Entry>)[_query, _replacement])
-        {
-            entry.TextColor = p.Text;
-            entry.BackgroundColor = p.Raised;
-            entry.PlaceholderColor = p.Secondary;
-        }
 
         foreach (var line in (ReadOnlySpan<BoxView>)[_railLine, _statusLine, _titleLine])
         {
@@ -1400,6 +1471,7 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _pluginStatus.TextColor = p.Secondary;
         _conversations.ApplyTheme(theme);
+        _conversations.ApplyPalette(p);
         _chatSplit.BackgroundColor = p.Surface;
         UpdateProblems();
         UpdateModel();

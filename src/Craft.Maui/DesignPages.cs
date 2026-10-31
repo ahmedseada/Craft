@@ -109,7 +109,8 @@ public sealed class PluginsPage : ContentView
         var p = _palette;
         BackgroundColor = p.Ground;
         _filterText = p.Input("Filter by name or registry", 32);
-        _filterText.WidthRequest = 320;
+        var filterBox = p.Field(_filterText);
+        filterBox.WidthRequest = 320;
         _filterText.TextChanged += (_, _) => Rebuild();
         var load = p.SecondaryButton("Load from folder…", 32);
         load.Clicked += async (_, _) => await LoadFolderAsync();
@@ -121,7 +122,7 @@ public sealed class PluginsPage : ContentView
             Wrap = FlexWrap.Wrap,
             AlignItems = FlexAlignItems.Center,
             Padding = new Thickness(22, 18),
-            Children = { _filters, _filterText, load, folders },
+            Children = { _filters, filterBox, load, folders },
         };
         foreach (var child in tools.Children.OfType<View>())
         {
@@ -483,7 +484,7 @@ public sealed class ModelsPage : ContentView, IDisposable
             var use = p.Primary(status.LoadCommand is null ? "Use" : "Use and load", 36);
             use.Clicked += async (_, _) => await UseModelAsync(modelSetting, name.Text, status.LoadCommand);
             var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 8 };
-            row.Add(name, 0, 0);
+            row.Add(p.Field(name), 0, 0);
             row.Add(use, 1, 0);
             var add = new VerticalStackLayout { Spacing = 6, Children = { p.Label(modelSetting.Label, p.Secondary, p.SmallSize), row } };
             foreach (var progress in _shell.Host.Progress)
@@ -605,7 +606,7 @@ public sealed class ModelsPage : ContentView, IDisposable
         };
         var label = p.Label(field.Label, p.Secondary, p.SmallSize);
         ToolTipProperties.SetText(label, field.Variable);
-        return new VerticalStackLayout { Spacing = 6, Children = { label, input, error } };
+        return new VerticalStackLayout { Spacing = 6, Children = { label, p.Field(input), error } };
     }
 
     private async Task UseModelAsync(ModelSettingField setting, string? name, string? loadCommand)

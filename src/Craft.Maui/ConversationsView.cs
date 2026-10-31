@@ -34,8 +34,9 @@ public sealed class ConversationsView : ContentView, IDisposable
     private readonly ScrollView _scroll;
     private readonly Label _status = new() { FontSize = 12, Padding = new Thickness(14, 0) };
     private readonly FlexLayout _chips = new() { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
-    private readonly Microsoft.Maui.Controls.Editor _input = new() { AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = 44 };
-    private readonly Button _send = new() { Text = "→", WidthRequest = 44, HeightRequest = 44, Padding = 0, FontAttributes = FontAttributes.Bold };
+    private readonly Microsoft.Maui.Controls.Editor _input = new() { AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = 40, MaximumHeightRequest = 200 };
+    private readonly Button _send = new() { Text = "→", WidthRequest = 36, HeightRequest = 36, Padding = 0, CornerRadius = 8, BorderWidth = 0, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.End };
+    private readonly CraftInput _inputBox;
     private readonly Button _close = new() { Text = "✕", WidthRequest = 32, HeightRequest = 32, Padding = 0, BackgroundColor = Colors.Transparent, BorderWidth = 0 };
     private bool _follow = true;
     private IConversationPanel? _shown;
@@ -49,6 +50,12 @@ public sealed class ConversationsView : ContentView, IDisposable
         _host = host;
         _codeFont = codeFont;
         _scroll = new ScrollView { Content = _entries };
+        // The composer (docs/design/Main.dc.html): the context chips, the input in Craft's one input style (the owner's
+        // note 12) with Send beside it, and under it the model chip (the owner's note 11: the model, its device and state,
+        // picked here; the shell feeds it and opens the picker on a tap).
+        var palette = new ShellPalette(EditorThemes.Get(EditorThemes.Dark), new Craft.Core.CraftOptions());
+        _inputBox = new CraftInput(palette, _input, radius: 8, multiline: true);
+        ModelChip = new ModelChip(palette);
         _send.Clicked += (_, _) => Send();
         _input.Completed += (_, _) => Send();
         SemanticProperties.SetDescription(_send, "Send");
@@ -73,9 +80,9 @@ public sealed class ConversationsView : ContentView, IDisposable
         _scroll.Scrolled += (_, e) => _follow = e.ScrollY >= _scroll.ContentSize.Height - _scroll.Height - FollowSlack;
         _entries.SizeChanged += (_, _) => ScrollToEnd();
         var inputRow = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 8 };
-        inputRow.Add(_input, 0, 0);
+        inputRow.Add(_inputBox, 0, 0);
         inputRow.Add(_send, 1, 0);
-        var footer = new VerticalStackLayout { Spacing = 8, Padding = new Thickness(12), Children = { _chips, inputRow } };
+        var footer = new VerticalStackLayout { Spacing = 8, Padding = new Thickness(12), Children = { _chips, inputRow, ModelChip } };
         var layout = new Grid
         {
             RowDefinitions =
@@ -92,6 +99,21 @@ public sealed class ConversationsView : ContentView, IDisposable
         Content = layout;
         host.PanelsChanged += OnPanelsChanged;
         OnPanelsChanged(this, EventArgs.Empty);
+    }
+
+    /// <summary>The composer's model chip (the shell sets its text and handles its tap).</summary>
+    public ModelChip ModelChip { get; }
+
+    /// <summary>Takes <paramref name="palette"/>'s colours and fonts for the composer (its input and its model chip).</summary>
+    public void ApplyPalette(ShellPalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        _inputBox.Apply(palette);
+        _input.FontFamily = palette.Font();
+        _input.FontSize = palette.FontSize;
+        ModelChip.Apply(palette);
+        _send.BackgroundColor = palette.Accent;
+        _send.TextColor = palette.AccentInk;
     }
 
     /// <summary>Whether the host has a conversation panel to show.</summary>
@@ -130,9 +152,6 @@ public sealed class ConversationsView : ContentView, IDisposable
         _title.TextColor = C(_colors.Foreground);
         _subtitle.TextColor = C(_colors.SecondaryText);
         _status.TextColor = C(_colors.SecondaryText);
-        _input.TextColor = C(_colors.Foreground);
-        _input.BackgroundColor = C(_colors.PopupBackground);
-        _input.PlaceholderColor = C(_colors.SecondaryText);
         _send.BackgroundColor = C(_colors.Accent);
         _send.TextColor = C(_colors.Ground);
         _close.TextColor = C(_colors.SecondaryText);

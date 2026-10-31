@@ -26,6 +26,9 @@ public sealed class MauiEditorCanvas : IEditorCanvas
     /// <summary>A canvas for the font <paramref name="family"/> at <paramref name="fontSize"/>.</summary>
     public MauiEditorCanvas(string family, float fontSize) => SetFont(family, fontSize);
 
+    /// <summary>A canvas drawing with <paramref name="faces"/> (the code font's four faces, by name or by file) at <paramref name="fontSize"/>.</summary>
+    public MauiEditorCanvas(Craft.Editor.Shell.CodeFontFaces faces, float fontSize) => SetFaces(faces, fontSize);
+
     /// <summary>The MAUI canvas of the frame being drawn (set before each draw).</summary>
     public ICanvas? Target { get; set; }
 
@@ -39,10 +42,21 @@ public sealed class MauiEditorCanvas : IEditorCanvas
     public void SetFont(string family, float fontSize)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(family);
-        _regular = new MauiFont(family, FontWeights.Normal, FontStyleType.Normal);
-        _bold = new MauiFont(family, FontWeights.Bold, FontStyleType.Normal);
-        _italic = new MauiFont(family, FontWeights.Normal, FontStyleType.Italic);
-        _boldItalic = new MauiFont(family, FontWeights.Bold, FontStyleType.Italic);
+        SetFaces(Craft.Editor.Shell.CodeFontFaces.Named(family), fontSize);
+    }
+
+    /// <summary>
+    /// Sets the faces the runs are drawn with: a face that names a file is that file's weight and style already, so it is
+    /// asked for as it is (no synthetic bold or slant on top); a face by family name asks the platform for the weight and style.
+    /// </summary>
+    public void SetFaces(Craft.Editor.Shell.CodeFontFaces faces, float fontSize)
+    {
+        ArgumentNullException.ThrowIfNull(faces);
+        bool files = faces.AdvanceEm is not null;
+        _regular = new MauiFont(faces.Regular, FontWeights.Normal, FontStyleType.Normal);
+        _bold = new MauiFont(faces.Bold, files ? FontWeights.Normal : FontWeights.Bold, FontStyleType.Normal);
+        _italic = new MauiFont(faces.Italic, FontWeights.Normal, files ? FontStyleType.Normal : FontStyleType.Italic);
+        _boldItalic = new MauiFont(faces.BoldItalic, files ? FontWeights.Normal : FontWeights.Bold, files ? FontStyleType.Normal : FontStyleType.Italic);
         _fontSize = fontSize;
     }
 

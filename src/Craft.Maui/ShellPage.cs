@@ -177,6 +177,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
         _conversations.CloseRequested += (_, _) => CloseChat();
         _conversations.ModelChip.Tapped += (_, _) => _ = PickModelAsync();
+        _conversations.ShownChanged += (_, _) => UpdateModel();                    // the chip shows the shown panel's role (note 25)
         _host.PanelShowRequested += OnPanelShowRequested;
         _host.PanelsChanged += OnHostPanelsChanged;
         _host.PendingChordChanged += OnPendingChordChanged;
@@ -381,6 +382,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
         _shell.WorkspaceChanged += (_, _) => OnWorkspaceChanged();
         _shell.OptionsChanged += (_, _) => OnOptionsChanged();
+        // A plug-in's setting changes no option: the model chip and the model item read the AI plug-in's settings again.
+        _shell.SettingApplied += (_, variable) =>
+        {
+            if (variable.StartsWith("CRAFT_PLUGIN_", StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateModel();
+            }
+        };
         _shell.ThemeChanged += (_, _) => ApplyTheme();
         _shell.ViewRequested += (_, view) => OnViewRequested(view);
         _shell.RevealRequested += (_, path) => _tree.ScrollTo(path);
@@ -1042,7 +1051,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         ToolTipProperties.SetText(_status.LineEnding, "The file's line breaks (kept when it is saved; CRAFT_LINE_ENDING for new files)");
         ToolTipProperties.SetText(_status.Language, "The file's language and the plug-in that brings it");
         ToolTipProperties.SetText(_status.Paint, "The last frame's paint time");
-        ToolTipProperties.SetText(_status.Model, "The model in use: pick another with the model chip under the chat's input");
+        ToolTipProperties.SetText(_status.Model, "The models in use: pick another with the model chip under the chat's or the agent's input");
     }
 
     // The search box's text, taken into the overlay (the box itself stays a button-like field).
@@ -1217,26 +1226,34 @@ public sealed class ShellPage : ContentPage, IDisposable
     private void UpdateModel()
     {
         var status = ShellText.ModelStatus()?.Status;
-        string chip = ShellText.ModelChip(status);
-        string? tooltip = status?.Roles is [{ } chat, ..] ? $"{chat.Role}: {chat.Model ?? "none set"} · {chat.State}" : "No model provider is installed (the AI plug-in brings \"local\").";
-        var state = status?.ChatModel is null ? ModelChipState.None
-            : status.Roles is [{ IsProblem: true }, ..] ? ModelChipState.Problem
-            : status.IsLoading ? ModelChipState.Loading
+        // Note 25: the chip is the shown panel's role (the chat's, the agent's), each with its own model and device.
+        string? role = _conversations.Shown?.ModelRoleKey;
+        var shown = status?.RoleOf(role);
+        string chip = ShellText.ModelChip(status, role);
+        string? tooltip = shown is { } r ? $"{r.Role}: {r.Model ?? "none set"} · {(r.Enabled ? r.State : "off")}" : "No model provider is installed (the AI plug-in brings \"local\").";
+        var state = shown?.Model is null || shown is { Enabled: false } ? ModelChipState.None
+            : shown.IsProblem ? ModelChipState.Problem
+            : shown.IsLoading || (shown.Key is null && status!.IsLoading) ? ModelChipState.Loading
             : ModelChipState.Ready;
         // The owner's note 11: the model chip is the composer's (the chat's and the agent's), with its device (note 6).
         _conversations.ModelChip.Set(chip, state, tooltip);
         _conversations.ModelChanged();                           // an empty chat says which model answers
         _status.Model.Text = ShellText.ModelUsage(status);
+        ToolTipProperties.SetText(_status.Model, ShellText.ModelRolesTooltip(status));   // each role's model and device
     }
 
-    // The composer's model chip: the provider's models and devices in a Craft dialog; a model picked becomes the model
-    // setting and loads (off the UI thread, as an activity), a device the device setting, the last row opens the page.
+    // The composer's model chip: the provider's models and devices in a Craft dialog; a model picked becomes the shown
+    // panel's role's model setting and loads (off the UI thread, as an activity), a device its device setting, the last
+    // row opens the page (note 25: the chat's chip writes the chat's settings, the agent's the agent's).
     private async Task PickModelAsync()
     {
         var found = ShellText.ModelStatus();
         var status = found?.Status;
-        var picks = ShellText.ModelPicks(status);
-        string text = status?.ChatModel is { } model ? $"In use: {model} · {ShellText.PlannedDevice(status) ?? "device not known yet"}" : "No model is set.";
+        string? role = _conversations.Shown?.ModelRoleKey;
+        var picks = ShellText.ModelPicks(status, role);
+        string text = status?.RoleOf(role) is { Model: { } model } shown
+            ? $"{shown.Role}: {model} · {ShellText.PlannedDevice(status, role) ?? "device not known yet"}"
+            : "No model is set.";
         int index = await _dialog.PickAsync("Model", [.. picks.Select(p => p.Label)], text: text);
         if (index < 0)
         {
@@ -1244,42 +1261,27 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         var pick = picks[index];
-        string? variable = pick.Kind switch
+        if (ShellText.WriteOf(status, role, pick) is not { } write)
         {
-            ModelPickKind.Model => status?.ModelSetting?.Variable,
-            ModelPickKind.Device => status?.DeviceSetting?.Variable,
-            _ => null,
-        };
-        if (variable is not null && Environment.GetEnvironmentVariable(variable) is { Length: > 0 } fixedValue)
-        {
-            // The environment overrides the settings files: say so rather than write a value that cannot take effect.
-            await _dialog.ShowMessageAsync("Set by the environment", $"{variable} is {fixedValue} in this process's environment, which overrides the settings. Clear it (or change it) and start Craft again to pick here.");
+            await _host.ExecuteCommandAsync(ShellCommandIds.Models);
+            UpdateModel();
             return;
         }
 
-        switch (pick.Kind)
+        if (Environment.GetEnvironmentVariable(write.Variable) is { Length: > 0 } fixedValue)
         {
-            case ModelPickKind.Model when status?.ModelSetting is { } setting:
-                if (_shell.ApplySetting(SettingLayer.User, setting.Variable, pick.Value) is { } problem)
-                {
-                    await _dialog.ShowMessageAsync("The model was not set", problem);
-                }
-                else if (status.LoadCommand is { } load)
-                {
-                    await _host.ExecuteCommandAsync(load);
-                }
+            // The environment overrides the settings files: say so rather than write a value that cannot take effect.
+            await _dialog.ShowMessageAsync("Set by the environment", $"{write.Variable} is {fixedValue} in this process's environment, which overrides the settings. Clear it (or change it) and start Craft again to pick here.");
+            return;
+        }
 
-                break;
-            case ModelPickKind.Device when status?.DeviceSetting is { } setting:
-                if (_shell.ApplySetting(SettingLayer.User, setting.Variable, pick.Value.Equals("auto", StringComparison.OrdinalIgnoreCase) ? null : pick.Value) is { } refused)
-                {
-                    await _dialog.ShowMessageAsync("The device was not set", refused);
-                }
-
-                break;
-            default:
-                await _host.ExecuteCommandAsync(ShellCommandIds.Models);
-                break;
+        if (_shell.ApplySetting(SettingLayer.User, write.Variable, write.Value) is { } problem)
+        {
+            await _dialog.ShowMessageAsync(pick.Kind == ModelPickKind.Model ? "The model was not set" : "The device was not set", problem);
+        }
+        else if (write.LoadCommand is { } load)
+        {
+            await _host.ExecuteCommandAsync(load);
         }
 
         UpdateModel();

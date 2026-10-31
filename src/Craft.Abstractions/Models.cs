@@ -23,6 +23,12 @@ public sealed record ModelRequest(string Model)
     /// null for none: what <see cref="ModelAdapters.For"/> names for the model (the learning plug-in's promoted adapter).
     /// </summary>
     public string? Adapter { get; init; }
+
+    /// <summary>
+    /// How long the model stays loaded once this lease is given back and no other holds it (the role's keep-alive);
+    /// null for the provider's setting, <see cref="TimeSpan.Zero"/> to unload it at once.
+    /// </summary>
+    public TimeSpan? KeepAlive { get; init; }
 }
 
 /// <summary>How far a model's load is: what it does now, and how far (0 to 1) when that is known.</summary>
@@ -115,12 +121,66 @@ public interface IModelProvider : IKind
     }
 }
 
-/// <summary>A model by its role ("Chat and agent", "Inline completion"): the name set for it and its state.</summary>
-/// <param name="Role">The role.</param>
+/// <summary>
+/// A model by its role ("Chat", "Agent", "Inline completion"): the name set for it, its state, and (when the provider
+/// gives them) the role's own settings the composer's chip writes, the device it runs on once loaded, and whether it
+/// takes another role's model when its own is empty (the agent: the chat's).
+/// </summary>
+/// <param name="Role">The role, as the user reads it.</param>
 /// <param name="Model">The model's name, or null when none is set.</param>
 /// <param name="State">Its state ("Loaded · chat · text", "not loaded").</param>
 /// <param name="IsProblem">Whether the state is a problem to show as one (a family not registered, a load that failed).</param>
-public sealed record ModelRole(string Role, string? Model, string State, bool IsProblem = false);
+public sealed record ModelRole(string Role, string? Model, string State, bool IsProblem = false)
+{
+    /// <summary>The role's key (<see cref="ModelRoleKeys"/>: "chat", "agent", "completion"), or null when the provider names none.</summary>
+    public string? Key { get; init; }
+
+    /// <summary>Whether the role is turned on (its setting); a role turned off loads nothing and its panel says so.</summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>The device the role's model runs on now ("cuda:0"), or null while it is not loaded.</summary>
+    public string? Device { get; init; }
+
+    /// <summary>The device the role's setting names ("auto", "cpu", "cuda:0"), as resolved (an inherited one is the other role's), or null.</summary>
+    public string? DeviceChoice { get; init; }
+
+    /// <summary>The setting that names the role's model (the chip writes it), or null.</summary>
+    public ModelSettingField? ModelSetting { get; init; }
+
+    /// <summary>The setting of the role's device (the chip writes it), or null.</summary>
+    public ModelSettingField? DeviceSetting { get; init; }
+
+    /// <summary>The command that loads the role's model (the chip runs it after a pick), or null.</summary>
+    public string? LoadCommand { get; init; }
+
+    /// <summary>The command that opens the role's settings (<see cref="SettingSections.CommandOf"/>), or null.</summary>
+    public string? SettingsCommand { get; init; }
+
+    /// <summary>The role whose model and device an empty setting takes ("Chat" for the agent), or null when none.</summary>
+    public string? Inherits { get; init; }
+
+    /// <summary>Whether the model is <see cref="Inherits"/>'s (its own setting is empty).</summary>
+    public bool InheritsModel { get; init; }
+
+    /// <summary>Whether the device is <see cref="Inherits"/>'s (its own setting is empty).</summary>
+    public bool InheritsDevice { get; init; }
+
+    /// <summary>Whether the role's model is loading now.</summary>
+    public bool IsLoading { get; init; }
+}
+
+/// <summary>The keys of the model roles (<see cref="ModelRole.Key"/>, <see cref="IConversationPanel.ModelRoleKey"/>).</summary>
+public static class ModelRoleKeys
+{
+    /// <summary>The chat (and the code actions).</summary>
+    public const string Chat = "chat";
+
+    /// <summary>The agent's run.</summary>
+    public const string Agent = "agent";
+
+    /// <summary>Inline completion.</summary>
+    public const string Completion = "completion";
+}
 
 /// <summary>A setting the Models page edits for the provider: its variable, its label, and a hint for an empty value.</summary>
 /// <param name="Variable">The setting's variable ("CRAFT_PLUGIN_AI_MODEL").</param>
@@ -194,6 +254,26 @@ public sealed record ModelProviderStatus
 
     /// <summary>The chat model's name, or null.</summary>
     public string? ChatModel => Roles.Count > 0 ? Roles[0].Model : null;
+
+    /// <summary>
+    /// The role of key <paramref name="key"/> (<see cref="ModelRoleKeys"/>); the first role (the chat's) when the key is
+    /// null or no role carries it; null when there is no role.
+    /// </summary>
+    public ModelRole? RoleOf(string? key)
+    {
+        if (key is not null)
+        {
+            foreach (var role in Roles)
+            {
+                if (string.Equals(role.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    return role;
+                }
+            }
+        }
+
+        return Roles.Count > 0 ? Roles[0] : null;
+    }
 }
 
 /// <summary>

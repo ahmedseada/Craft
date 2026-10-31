@@ -123,6 +123,12 @@ public interface IConversationPanel : IEditorPanel
     /// <summary>Whether it is working (a reply streams, a run goes on): the host shows the header's Stop.</summary>
     bool IsBusy { get; }
 
+    /// <summary>
+    /// The model role the panel answers with (<see cref="ModelRoleKeys"/>: "chat", "agent"), so the composer's model chip
+    /// shows and writes that role's model and device; null for the provider's first role (the chat's).
+    /// </summary>
+    string? ModelRoleKey => null;
+
     /// <summary>The header's buttons (New chat, Stop), in order.</summary>
     IReadOnlyList<PanelAction> HeaderActions { get; }
 

@@ -95,10 +95,20 @@ public static class ShellEmptyStates
     {
         ArgumentNullException.ThrowIfNull(panel);
         string does = panel.EmptyText ?? $"{panel.Title}: {panel.Placeholder}";
-        string answers = model?.ChatModel is { } name
-            ? $"{name} answers{(ShellText.PlannedDevice(model) is { } device ? " on " + device : "")}: pick another with the model chip under the input."
+        // Note 25: the panel's own role (the chat's, the agent's), each with its own model and device.
+        string? key = panel.ModelRoleKey;
+        var role = model?.RoleOf(key);
+        if (role is { Enabled: false })
+        {
+            IReadOnlyList<EmptyAction> open = role.SettingsCommand is { } command ? [new EmptyAction($"Open the {role.Role.ToLowerInvariant()}'s settings", command, Primary: true)] : [];
+            return new EmptyState(panel.Title, $"{role.Role} is turned off: it loads no model and answers nothing. Turn it on in its settings.", open);
+        }
+
+        string? name = role is null ? model?.ChatModel : role.Model;
+        string answers = name is not null
+            ? $"{name} answers{(ShellText.PlannedDevice(model, key) is { } device ? " on " + device : "")}{(role is { InheritsModel: true, Inherits: { } other } ? $" (the {other.ToLowerInvariant()}'s model)" : "")}: pick another with the model chip under the input."
             : "No model is set yet: pick one with the model chip under the input, or add one on the Models and devices page.";
-        IReadOnlyList<EmptyAction> actions = model?.ChatModel is null ? [new EmptyAction("Models and devices", ShellCommandIds.Models, Primary: true)] : [];
+        IReadOnlyList<EmptyAction> actions = name is null ? [new EmptyAction("Models and devices", ShellCommandIds.Models, Primary: true)] : [];
         return new EmptyState(panel.Title, $"{does}\n{answers}", actions);
     }
 

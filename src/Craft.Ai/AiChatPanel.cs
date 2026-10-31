@@ -80,6 +80,9 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     /// <inheritdoc />
     public override string Placeholder => "Ask about this file. @ adds context, / runs a code action.";
 
+    /// <summary>The chat's model role (note 25): the composer's chip shows and writes the chat's model and device.</summary>
+    public override string? ModelRoleKey => ModelRoleKeys.Chat;
+
     /// <inheritdoc />
     public override string? EmptyText =>
         "Ask about the open file or the selection: explain it, find a bug, write a test. @ adds a file to the context; /explain, /fix, /doc, /refactor and /tests run a code action, and every edit comes as a diff you accept.";
@@ -104,6 +107,13 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         string message = text.Trim();
         if (message.Length == 0 || IsBusy)
         {
+            return;
+        }
+
+        if (!_settings().ChatEnabled)
+        {
+            // Note 25: turned off, the chat loads nothing and says so, with a way to its settings.
+            Add(new ConversationEntry(ConversationRole.Error, AiModels.Off(ModelRoleKeys.Chat)) { Actions = [SettingsAction(Host, SettingSections.Chat, "Open the chat's settings")] });
             return;
         }
 
@@ -168,6 +178,10 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         LastReply = done.Task;
         return done.Task;
     }
+
+    /// <summary>A button that opens the settings page at <paramref name="section"/> (a role turned off links to its settings).</summary>
+    internal static PanelAction SettingsAction(IEditorHost host, string section, string label) =>
+        new(label, token => host.ExecuteCommandAsync(SettingSections.CommandOf(section), token), Primary: true);
 
     /// <summary>Stops the reply that streams (its text so far stays).</summary>
     public void Stop() => _running?.Cancel();
@@ -309,7 +323,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             });
             var observed = new ObservedTools(_tools, call => Post(() => ToolStarted(generation, call)), result => Post(() => ToolEnded(generation, result)));
             var model = chat.WithTools(observed, settings.ChatToolRounds);
-            var options = new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength, Stop = settings.ChatStops };
+            var options = new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength, Stop = settings.ChatStops, Temperature = settings.ChatTemperature };
             int lastGenerated = 0;
             string? reason = null;
             watch.Start();

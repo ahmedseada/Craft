@@ -169,7 +169,7 @@ public sealed class AiCodeActions : ICodeActionProvider
                     new ChatMessage("system", RewritePrompt),
                     new ChatMessage("user", string.Create(CultureInfo.InvariantCulture,
                         $"{instruction}\n\nThe file {DocumentName(document)} ({document.LanguageName}), lines {first + 1}-{last + 1} for context:\n```\n{around}\n```\n\nThe lines to rewrite ({lineStart + 1}-{snapshot.GetLineIndex(end) + 1}):\n```\n{original}\n```")),
-                ], Options: new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength });
+                ], Options: new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength, Temperature = settings.ChatTemperature });
                 var final = await chat.ChatAsync(request, token).ConfigureAwait(false);
                 return (final.Message?.Content ?? "", lease.Model);
             }, token).ConfigureAwait(true);

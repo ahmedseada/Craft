@@ -3,12 +3,18 @@
 
 using System.Globalization;
 using Craft.Abstractions;
+using Idrak.Abstraction.Generation;
 
 namespace Craft.Ai;
 
 /// <summary>
-/// The AI plug-in's settings (plug-in "ai"; each a variable <c>CRAFT_PLUGIN_AI_&lt;KEY&gt;</c> on the settings page): the
-/// MCP server's address and token, the local model and its limits (the editor tools' own are Craft.Plugins.Tools'). Inside the app they come from the
+/// The AI plug-in's settings (plug-in "ai"; each a variable <c>CRAFT_PLUGIN_AI_&lt;KEY&gt;</c> on the settings page and a
+/// key of <c>.craft/settings.json</c>): the MCP server's address and token, and three model roles (note 25), each with the
+/// same set (enabled, model, device, weights, context, keep-alive, temperature, most reply tokens): the chat's (the
+/// unprefixed <c>model</c>, <c>device</c>, <c>weights</c>, <c>context</c>, <c>keepAliveMinutes</c>, kept from before),
+/// inline completion's (<c>completion*</c>) and the agent's (<c>agent*</c>, an empty one taking the chat's, so by default
+/// the two share one copy on the device); <see cref="ChatRole"/>, <see cref="AgentRole"/> and
+/// <see cref="CompletionRole"/> resolve them. The library's limits (the editor tools' own are Craft.Plugins.Tools'). Inside the app they come from the
 /// host's settings (environment, the workspace's and the user's settings.json); in another process (the folder backing
 /// under the idrak tool) from the environment.
 /// </summary>
@@ -26,23 +32,54 @@ public sealed record AiSettings
     /// <summary>Whether the MCP server starts with the editor (<c>mcpOnStart</c>); off: the command "ai.mcpStart" starts it.</summary>
     public bool McpOnStart { get; init; }
 
+    /// <summary>Whether the chat answers (<c>chatEnabled</c>; the chat panel and the code actions); off: it loads no model and its panel says so.</summary>
+    public bool ChatEnabled { get; init; } = true;
+
     /// <summary>
-    /// The chat model's name (<c>model</c>: the chat, the agent and the code actions), resolved by Idrak's model sources;
-    /// empty for none. It names the model; it does not load it (see <see cref="LoadOnStart"/>).
+    /// The chat model's name (<c>model</c>: the chat and the code actions, and the agent's when <see cref="AgentModel"/>
+    /// is empty), resolved by Idrak's model sources; empty for none. It names the model; it does not load it (see
+    /// <see cref="LoadOnStart"/>).
     /// </summary>
     public string Model { get; init; } = "";
 
-    /// <summary>The device the local model loads on (<c>device</c>): "auto" (the best found), "cpu", "vulkan:0" and the like.</summary>
+    /// <summary>The device the chat model loads on (<c>device</c>): "auto" (the best found), "cpu", "vulkan:0" and the like.</summary>
     public string Device { get; init; } = "auto";
 
-    /// <summary>The local model's context window in tokens (<c>context</c>); 0 for the model's own (its MaxPositions).</summary>
+    /// <summary>The chat model's context window in tokens (<c>context</c>); 0 for the model's own (its MaxPositions).</summary>
     public int Context { get; init; }
 
-    /// <summary>The local model's projections once loaded (<c>weights</c>): "int8", "int4", "bfloat16", or empty for float32.</summary>
+    /// <summary>The chat model's projections once loaded (<c>weights</c>): "int8", "int4", "bfloat16", or empty for float32.</summary>
     public string Weights { get; init; } = "";
 
-    /// <summary>Minutes an unused local model stays loaded (<c>keepAliveMinutes</c>); 0 unloads it when the last lease ends.</summary>
+    /// <summary>Minutes the chat model stays loaded once unused (<c>keepAliveMinutes</c>); 0 unloads it when the last lease ends.</summary>
     public int KeepAliveMinutes { get; init; } = 10;
+
+    /// <summary>The chat's sampling temperature (<c>chatTemperature</c>); 0 takes the likeliest token. The default is the library's.</summary>
+    public float ChatTemperature { get; init; } = DefaultTemperature;
+
+    /// <summary>The library's default sampling temperature (Idrak's <see cref="GenerationOptions.Temperature"/>), the chat's default.</summary>
+    public static float DefaultTemperature { get; } = new GenerationOptions().Temperature;
+
+    /// <summary>Whether the agent runs (<c>agentEnabled</c>); off: it loads no model and its panel says so.</summary>
+    public bool AgentEnabled { get; init; } = true;
+
+    /// <summary>The agent's model (<c>agentModel</c>); empty: the chat's (<see cref="Model"/>), one copy shared on the device.</summary>
+    public string AgentModel { get; init; } = "";
+
+    /// <summary>The device the agent's model loads on (<c>agentDevice</c>); empty: the chat's (<see cref="Device"/>).</summary>
+    public string AgentDevice { get; init; } = "";
+
+    /// <summary>The agent's model's weights once loaded (<c>agentWeights</c>: "float32", "int8", "int4", "bfloat16"); empty: the chat's.</summary>
+    public string AgentWeights { get; init; } = "";
+
+    /// <summary>The agent's model's context window in tokens (<c>agentContext</c>; 0: the model's own); null (empty): the chat's.</summary>
+    public int? AgentContext { get; init; }
+
+    /// <summary>Minutes the agent's model stays loaded once unused (<c>agentKeepAliveMinutes</c>); null (empty): the chat's.</summary>
+    public int? AgentKeepAliveMinutes { get; init; }
+
+    /// <summary>The agent's sampling temperature (<c>agentTemperature</c>); null (empty): the chat's.</summary>
+    public float? AgentTemperature { get; init; }
 
     /// <summary>The CPU threads the library may use (<c>threads</c>); 0 for every core (Idrak's ComputeResources.MaxCpuThreads).</summary>
     public int Threads { get; init; }
@@ -72,6 +109,21 @@ public sealed record AiSettings
 
     /// <summary>The default of <see cref="CompletionModel"/>: a small coder model with a fill-in-the-middle format.</summary>
     public const string DefaultCompletionModel = "Qwen/Qwen2.5-Coder-1.5B";
+
+    /// <summary>The device completion's own model loads on (<c>completionDevice</c>); empty: auto (the best found).</summary>
+    public string CompletionDevice { get; init; } = "";
+
+    /// <summary>
+    /// Completion's own model's weights once loaded (<c>completionWeights</c>: "float32", "int8", "int4", "bfloat16");
+    /// empty: the chat's (<see cref="Weights"/>), as before note 25, so a small model sits beside the big one as it did.
+    /// </summary>
+    public string CompletionWeights { get; init; } = "";
+
+    /// <summary>Completion's own model's context window in tokens (<c>completionContext</c>; 0: the model's own); null (empty): the chat's.</summary>
+    public int? CompletionContext { get; init; }
+
+    /// <summary>Minutes completion's own model stays loaded once unused (<c>completionKeepAliveMinutes</c>); null (empty): the chat's.</summary>
+    public int? CompletionKeepAliveMinutes { get; init; }
 
     /// <summary>
     /// Whether inline completion loads <see cref="CompletionModel"/> on its first request (<c>completionLoad</c>); off:
@@ -168,24 +220,76 @@ public sealed record AiSettings
     /// <summary>The folder names the agent's working copy leaves out (<c>agentCopyIgnore</c>; obj stays, so a restore is not needed).</summary>
     public IReadOnlyList<string> AgentCopyIgnore { get; init; } = ["bin", ".git", ".vs", "node_modules", "test-output"];
 
+    /// <summary>The chat's model settings, resolved (note 25).</summary>
+    public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens);
+
+    /// <summary>The agent's model settings, resolved: an empty model, device, weights, context, keep-alive or temperature is the chat's.</summary>
+    public AiRoleSettings AgentRole => new(ModelRoleKeys.Agent, AgentEnabled,
+        AgentModel.Trim() is { Length: > 0 } model ? model : Model.Trim(),
+        AgentDevice.Trim() is { Length: > 0 } device ? DeviceOf(device) : DeviceOf(Device),
+        AgentContext ?? Context,
+        AgentWeights.Trim() is { Length: > 0 } weights ? WeightsOf(weights) : WeightsOf(Weights),
+        AgentKeepAliveMinutes ?? KeepAliveMinutes,
+        AgentTemperature ?? ChatTemperature,
+        AgentMaxTokens)
+    {
+        InheritsModel = AgentModel.Trim().Length == 0,
+        InheritsDevice = AgentDevice.Trim().Length == 0,
+    };
+
+    /// <summary>
+    /// Inline completion's model settings, resolved: its own model (empty: none of its own, the chat model while loaded),
+    /// its device (empty: auto), and weights, context and keep-alive that are the chat's when empty.
+    /// </summary>
+    public AiRoleSettings CompletionRole => new(ModelRoleKeys.Completion, Completion, CompletionModel.Trim(), DeviceOf(CompletionDevice),
+        CompletionContext ?? Context,
+        CompletionWeights.Trim() is { Length: > 0 } weights ? WeightsOf(weights) : WeightsOf(Weights),
+        CompletionKeepAliveMinutes ?? KeepAliveMinutes,
+        CompletionTemperature, CompletionMaxTokens);
+
+    /// <summary>The role of key <paramref name="key"/> (<see cref="ModelRoleKeys"/>).</summary>
+    /// <exception cref="ArgumentException">No role has that key.</exception>
+    public AiRoleSettings RoleOf(string key) => key switch
+    {
+        ModelRoleKeys.Chat => ChatRole,
+        ModelRoleKeys.Agent => AgentRole,
+        ModelRoleKeys.Completion => CompletionRole,
+        _ => throw new ArgumentException($"No model role '{key}': the roles are {ModelRoleKeys.Chat}, {ModelRoleKeys.Agent} and {ModelRoleKeys.Completion}.", nameof(key)),
+    };
+
+    // An empty device is auto; one name for float32 (empty), so equal settings make equal keys and share one copy.
+    private static string DeviceOf(string device) => device.Trim() is { Length: > 0 } named ? named : "auto";
+
+    private static string WeightsOf(string weights)
+    {
+        string named = weights.Trim();
+        return named.Equals("float32", StringComparison.OrdinalIgnoreCase) || named.Equals("f32", StringComparison.OrdinalIgnoreCase) ? "" : named;
+    }
+
     /// <summary>The settings the plug-in declares, with their defaults and meanings (the settings page lists them).</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
         new("mcpAddress", "127.0.0.1:0", "Where the MCP server of the live tools listens (host:port; port 0 picks one); loopback only."),
         new("mcpToken", "", "The bearer token MCP clients send; empty: a new random one each start; 'none': no token."),
         new("mcpOnStart", "false", "Whether the MCP server starts with the editor (else the command 'AI: Serve the editor's tools over MCP')."),
-        new("model", "", "The local model: a folder, a .gguf file, store:NAME or a Hugging Face id (Idrak's model sources)."),
-        new("device", "auto", "The device the local model loads on: auto, cpu, vulkan:0, cuda:0."),
-        new("context", "0", "The local model's context window in tokens; 0: the model's own."),
-        new("weights", "", "The local model's projections once loaded: int8, int4, bfloat16; empty: float32."),
-        new("keepAliveMinutes", "10", "Minutes an unused local model stays loaded; 0 unloads it when no plug-in uses it."),
+        new("chatEnabled", "true", "Whether the chat answers (the chat panel and the code actions); off: it loads no model."),
+        new("model", "", "The chat's model (and the agent's when agentModel is empty): a folder, a .gguf file, store:NAME or a Hugging Face id (Idrak's model sources)."),
+        new("device", "auto", "The device the chat's model loads on: auto, cpu, cuda:0, vulkan:0."),
+        new("weights", "", "The chat's model's projections once loaded: int8, int4, bfloat16; empty: float32."),
+        new("context", "0", "The chat's model's context window in tokens; 0: the model's own."),
+        new("keepAliveMinutes", "10", "Minutes the chat's model stays loaded once unused; 0 unloads it when no plug-in uses it."),
+        new("chatTemperature", DefaultTemperature.ToString(CultureInfo.InvariantCulture), "The chat's sampling temperature; 0 takes the likeliest token."),
         new("threads", "0", "CPU threads the library may use (Idrak's ComputeResources); 0: every core."),
         new("cpuMemoryMb", "0", "CPU memory the library may hold, MiB; 0: no limit."),
         new("gpuMemoryMb", "0", "GPU memory the library may hold per device, MiB; 0: no limit."),
         new("idrakPlugins", "Idrak.Text.Plugins", "Idrak plug-in packages (the model families) registered before the first local load; empty: none."),
         new("modelProvider", "local", "The model provider the AI plug-ins ask: local, or one a plug-in registers."),
-        new("completion", "true", "Whether inline completion shows ghost text after a pause in typing."),
+        new("completion", "true", "Whether inline completion shows ghost text after a pause in typing; off: it asks for nothing and loads nothing."),
         new("completionModel", DefaultCompletionModel, "The model inline completion uses: a small one beside the chat model (model); empty: the chat model, only while it is loaded."),
+        new("completionDevice", "", "The device completion's model loads on: auto, cpu, cuda:0, vulkan:0; empty: auto."),
+        new("completionWeights", "", "Completion's model's projections once loaded: float32, int8, int4, bfloat16; empty: the chat's (weights)."),
+        new("completionContext", "", "Completion's model's context window in tokens (0: the model's own); empty: the chat's (context)."),
+        new("completionKeepAliveMinutes", "", "Minutes completion's model stays loaded once unused; empty: the chat's (keepAliveMinutes)."),
         new("completionLoad", "true", "Whether inline completion loads its model on its first request; off: it uses a model already loaded, else does nothing."),
         new("loadOnStart", "false", "Whether the chat model loads when the editor starts; off: when you pick it at the composer, send a message or run 'AI: Load the local model'."),
         new("completionDelayMs", "600", "The pause after the last keystroke before a completion is asked for, ms; each keystroke starts the wait again."),
@@ -204,6 +308,13 @@ public sealed record AiSettings
         new("chatFileLines", "2000", "The most lines of a file a chat context chip sends to the model."),
         new("placement", "semi-global", "The Idrak text matcher that places a model's snippet in a document."),
         new("placementMaxError", "0.35", "The largest share of a snippet's characters its placed span may differ in; more: it goes at the selection or caret."),
+        new("agentEnabled", "true", "Whether the agent runs; off: it loads no model."),
+        new("agentModel", "", "The agent's model; empty: the chat's (model), so one copy is shared on the device."),
+        new("agentDevice", "", "The device the agent's model loads on: auto, cpu, cuda:0, vulkan:0; empty: the chat's (device)."),
+        new("agentWeights", "", "The agent's model's projections once loaded: float32, int8, int4, bfloat16; empty: the chat's (weights)."),
+        new("agentContext", "", "The agent's model's context window in tokens (0: the model's own); empty: the chat's (context)."),
+        new("agentKeepAliveMinutes", "", "Minutes the agent's model stays loaded once unused; empty: the chat's (keepAliveMinutes)."),
+        new("agentTemperature", "", "The agent's sampling temperature (0 takes the likeliest token); empty: the chat's (chatTemperature)."),
         new("agentSandbox", "approve-each", "The command sandbox the agent's commands run in; none registered under it: the agent runs no command."),
         new("agentMaxTurns", "20", "The agent's most turns."),
         new("agentMinutes", "20", "The agent's time limit in minutes."),
@@ -257,6 +368,8 @@ public sealed record AiSettings
                 : throw new ArgumentException(string.Create(CultureInfo.InvariantCulture, $"{PluginSetting.VariableName(PluginName, key)} is '{text}': it takes a number from {min} to {max}."), key);
         }
 
+        int? Inherited(string key, int min, int max) => Text(key) is null ? null : Whole(key, 0, min, max);
+
         bool Flag(string key, bool fallback) => Text(key) switch
         {
             null => fallback,
@@ -276,11 +389,24 @@ public sealed record AiSettings
             McpAddress = Text("mcpAddress") ?? defaults.McpAddress,
             McpToken = Text("mcpToken") ?? "",
             McpOnStart = Flag("mcpOnStart", false),
+            ChatEnabled = Flag("chatEnabled", defaults.ChatEnabled),
             Model = Text("model") ?? "",
             Device = Text("device") ?? defaults.Device,
             Context = Whole("context", 0, 0, 16_777_216),
             Weights = Text("weights") ?? "",
             KeepAliveMinutes = Whole("keepAliveMinutes", defaults.KeepAliveMinutes, 0, 1_000_000),
+            ChatTemperature = (float)Real("chatTemperature", DefaultTemperature, 0, 10),
+            AgentEnabled = Flag("agentEnabled", defaults.AgentEnabled),
+            AgentModel = Text("agentModel") ?? "",
+            AgentDevice = Text("agentDevice") ?? "",
+            AgentWeights = Text("agentWeights") ?? "",
+            AgentContext = Inherited("agentContext", 0, 16_777_216),
+            AgentKeepAliveMinutes = Inherited("agentKeepAliveMinutes", 0, 1_000_000),
+            AgentTemperature = Text("agentTemperature") is null ? null : (float)Real("agentTemperature", 0, 0, 10),
+            CompletionDevice = Text("completionDevice") ?? "",
+            CompletionWeights = Text("completionWeights") ?? "",
+            CompletionContext = Inherited("completionContext", 0, 16_777_216),
+            CompletionKeepAliveMinutes = Inherited("completionKeepAliveMinutes", 0, 1_000_000),
             Threads = Whole("threads", 0, 0, 1_000_000),
             CpuMemoryMegabytes = Whole("cpuMemoryMb", 0, 0, int.MaxValue),
             GpuMemoryMegabytes = Whole("gpuMemoryMb", 0, 0, int.MaxValue),
@@ -315,4 +441,27 @@ public sealed record AiSettings
             AgentCopyIgnore = List("agentCopyIgnore", defaults.AgentCopyIgnore),
         };
     }
+}
+
+/// <summary>
+/// One model role's settings, resolved (note 25: <see cref="AiSettings.ChatRole"/>, <see cref="AiSettings.AgentRole"/>,
+/// <see cref="AiSettings.CompletionRole"/>): what its lease is kept under (the model, the device, the context, the weights;
+/// two roles equal in those share one copy) and how it samples.
+/// </summary>
+/// <param name="Key">The role (<see cref="ModelRoleKeys"/>).</param>
+/// <param name="Enabled">Whether it is on.</param>
+/// <param name="Model">The model's name; empty for none.</param>
+/// <param name="Device">The device ("auto", "cpu", "cuda:0").</param>
+/// <param name="Context">The context window in tokens; 0 for the model's own.</param>
+/// <param name="Weights">The weights once loaded ("int8", "int4", "bfloat16"); empty for float32.</param>
+/// <param name="KeepAliveMinutes">Minutes its model stays loaded once unused.</param>
+/// <param name="Temperature">Its sampling temperature.</param>
+/// <param name="MaxTokens">The most tokens one reply samples.</param>
+public sealed record AiRoleSettings(string Key, bool Enabled, string Model, string Device, int Context, string Weights, int KeepAliveMinutes, float Temperature, int MaxTokens)
+{
+    /// <summary>Whether the model is the chat's (the agent's own setting is empty).</summary>
+    public bool InheritsModel { get; init; }
+
+    /// <summary>Whether the device is the chat's (the agent's own setting is empty).</summary>
+    public bool InheritsDevice { get; init; }
 }

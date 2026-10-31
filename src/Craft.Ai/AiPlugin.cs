@@ -64,8 +64,11 @@ public sealed class AiPlugin : IEditorPlugin
     /// <summary>Shows its address and token.</summary>
     public const string McpShowCommand = "ai.mcpShow";
 
-    /// <summary>Loads the local model of the setting <c>model</c>.</summary>
+    /// <summary>Loads the chat's local model (the setting <c>model</c>).</summary>
     public const string LoadModelCommand = "ai.loadModel";
+
+    /// <summary>Loads the agent's local model (the setting <c>agentModel</c>; empty: the chat's, shared).</summary>
+    public const string LoadAgentModelCommand = "ai.loadAgentModel";
 
     /// <summary>Explains the selection in the chat.</summary>
     public const string ExplainCommand = "ai.explainSelection";
@@ -126,7 +129,9 @@ public sealed class AiPlugin : IEditorPlugin
         new EditorCommand(McpShowCommand, "AI: Show the MCP address and token", (_, _) => Current!.ShowMcpAsync(),
             _ => Current is not null, "Shows where MCP clients connect, the token and the idrak command line"),
         new EditorCommand(LoadModelCommand, "AI: Load the local model", (_, token) => Current!.LoadModelAsync(token),
-            _ => Current is not null, "Loads the model of the setting CRAFT_PLUGIN_AI_MODEL, with its progress"),
+            _ => Current is not null, "Loads the chat's model (CRAFT_PLUGIN_AI_MODEL), with its progress"),
+        new EditorCommand(LoadAgentModelCommand, "AI: Load the agent's model", (_, token) => Current!.LoadModelAsync(ModelRoleKeys.Agent, token),
+            _ => Current is not null, "Loads the agent's model (CRAFT_PLUGIN_AI_AGENTMODEL; empty: the chat's, one copy shared), with its progress"),
         new EditorCommand(ExplainCommand, "AI: Explain the selection", (_, token) => Current!.RunActionAsync(CodeActionKinds.Explain, token),
             _ => Current?.HasSelection == true, "Explains the selected code in the chat"),
         new EditorCommand(DocumentCommand, "AI: Add doc comments to the selection", (_, token) => Current!.RunActionAsync(CodeActionKinds.Document, token),
@@ -192,13 +197,14 @@ public sealed class AiSession : IDisposable
         _closed = closed;
         var settings = Settings;
         AiPlugin.Local.Settings = settings;
+        AiPlugin.Local.SettingsSource = () => Settings;        // the chip and the status bar follow the settings page (note 25)
         Models = new AiModels(() => Settings)
         {
             Progress = new Progress<ModelLoadStatus>(status => _host.Dispatch("ai: a model load's stage", () => OnLoad(status))),
             Activities = host.Activities,
         };
         // Phase U: the model's state as a status line of the notification centre (U2 moves the side panel's content there).
-        _modelStatus = host.ShowStatus("Chat and agent model", _modelState);
+        _modelStatus = host.ShowStatus("Models", _modelState);
         Chat = new AiChatPanel(host, () => Settings, Models);
         Agent = new AiAgentPanel(host, () => Settings, Models);
         Completion = new AiInlineCompletion(() => Settings, Models, () => !_disposed) { Activities = host.Activities };
@@ -222,7 +228,7 @@ public sealed class AiSession : IDisposable
         _host.AddPanel(Agent);
         Completion.Unavailable += (_, reason) => _host.Dispatch("ai: completion's state", () => ShowUnavailable(reason));
         RefreshModels();
-        if (settings.LoadOnStart && settings.Model.Length > 0)
+        if (settings.LoadOnStart && settings.ChatEnabled && settings.Model.Length > 0)
         {
             // Only when the user asked for it (loadOnStart); off by default: the model loads when it is picked or used.
             _host.Dispatch("ai: load the model on start (loadOnStart)", () => _ = LoadModelAsync(CancellationToken.None));
@@ -334,11 +340,25 @@ public sealed class AiSession : IDisposable
     /// load's activity), its state on the Models page; a failure (an out-of-memory one says what to do) in the
     /// notifications, never a modal message. The UI thread never waits on it.
     /// </summary>
-    public async Task LoadModelAsync(CancellationToken cancellationToken)
+    public Task LoadModelAsync(CancellationToken cancellationToken) => LoadModelAsync(ModelRoleKeys.Chat, cancellationToken);
+
+    /// <summary>
+    /// Loads the model of the role <paramref name="role"/> (<see cref="ModelRoleKeys.Chat"/>, <see cref="ModelRoleKeys.Agent"/>)
+    /// as <see cref="LoadModelAsync(CancellationToken)"/> does the chat's: the agent's chip runs it for the agent's model
+    /// (the chat's lease itself when they name the same). A role turned off says so and loads nothing.
+    /// </summary>
+    public async Task LoadModelAsync(string role, CancellationToken cancellationToken)
     {
         var settings = Settings;
         AiPlugin.Local.Settings = settings;
-        if (settings.Model.Length == 0)
+        var resolved = settings.RoleOf(role);
+        if (!resolved.Enabled)
+        {
+            await _host.ShowMessageAsync("AI: turned off", AiModels.Off(role));
+            return;
+        }
+
+        if (resolved.Model.Length == 0)
         {
             await _host.ShowMessageAsync("AI: no model", "Pick a model at the composer's model chip, or set the model (CRAFT_PLUGIN_AI_MODEL) on the settings page: a folder, a .gguf file, store:NAME or a Hugging Face id.");
             return;
@@ -347,7 +367,7 @@ public sealed class AiSession : IDisposable
         Models.ForgetFailures();
         try
         {
-            var lease = await Task.Run(() => Models.ChatAsync(cancellationToken), cancellationToken).ConfigureAwait(true);
+            var lease = await Task.Run(() => Models.RoleAsync(role, cancellationToken), cancellationToken).ConfigureAwait(true);
             _modelState = string.Create(CultureInfo.InvariantCulture,
                 $"loaded{(lease.Loaded ? $" in {lease.LoadDuration.TotalSeconds:F1} s" : "")} · context {lease.ContextLength} · {(lease.Chat is null ? "no chat template" : "chat")} · text");
             if (lease.Loaded)
@@ -366,7 +386,7 @@ public sealed class AiSession : IDisposable
         {
             _modelState = "failed: " + AiErrors.Describe(error, settings);
             AiPlugin.Local.SetState(_modelState, isProblem: true);
-            _host.Log(EditorLogLevel.Error, $"The model {settings.Model} did not load.", error);
+            _host.Log(EditorLogLevel.Error, $"The model {resolved.Model} did not load.", error);
         }
 
         RefreshModels();
@@ -461,6 +481,9 @@ public sealed class AiSession : IDisposable
     {
         var settings = Settings;
         AiPlugin.Local.Changed();
-        _modelStatus.Update($"{(settings.Model.Length == 0 ? "(none set)" : settings.Model)} · {_modelState} · device {settings.Device}");
+        // Each role's model and device (note 25); the agent's "same as chat" when it takes the chat's.
+        var agent = settings.AgentRole;
+        string Name(AiRoleSettings role) => !role.Enabled ? "off" : role.Model.Length == 0 ? "(none set)" : $"{role.Model} · {role.Device}";
+        _modelStatus.Update($"Chat: {Name(settings.ChatRole)} · {_modelState}; agent: {(agent.Enabled && agent.InheritsModel && agent.InheritsDevice ? "same as chat" : Name(agent))}; completion: {Name(settings.CompletionRole)}");
     }
 }

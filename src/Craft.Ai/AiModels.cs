@@ -8,14 +8,16 @@ namespace Craft.Ai;
 
 /// <summary>
 /// The models the AI plug-ins use, through the provider of the setting <c>modelProvider</c> (Craft's
-/// <see cref="ModelProviders"/>; names resolved by Idrak's model sources, never here). Two roles, each its own setting:
-/// the chat model (<c>model</c>: the chat, the agent, the code actions, the load command) and inline completion's
-/// (<c>completionModel</c>, a small one). Nothing loads by itself: the chat model loads when the user asks for it (a
-/// message sent, an action picked, the composer's model chip, the load command); completion's on its first request when
-/// <c>completionLoad</c> allows it. A lease is kept under everything its load depends on (the provider, the name, the
-/// adapter, the device, the context, the weights), so a role whose settings change lets its old copy go before the
-/// next is loaded (the owner's Windows run: a second copy of a 7B model beside the first filled a 16 GB card); the two
-/// roles share one lease when they name the same. A failed load is not kept: the user's next request tries again,
+/// <see cref="ModelProviders"/>; names resolved by Idrak's model sources, never here). Three roles, each with its own
+/// settings (note 25, <see cref="AiSettings.ChatRole"/>, <see cref="AiSettings.AgentRole"/>,
+/// <see cref="AiSettings.CompletionRole"/>): the chat's (the chat, the code actions, the load command), the agent's (by
+/// default the chat's model and device) and inline completion's (a small one). Nothing loads by itself: the chat's and
+/// the agent's model load when the user asks for them (a message sent, an action picked, the composer's model chip, the
+/// load command); completion's on its first request when <c>completionLoad</c> allows it. A role turned off loads
+/// nothing. Each role's lease is kept under everything its load depends on (the provider, the name, the adapter, the
+/// device, the context, the weights, the keep-alive), so a role whose settings change lets its old copy go before the
+/// next is loaded (the owner's Windows run: a second copy of a 7B model beside the first filled a 16 GB card), and two
+/// roles that name the same share one lease, one copy. A failed load is not kept: the user's next request tries again,
 /// but completion does not (a failure on every pause in typing), until its settings change or the model is loaded
 /// on purpose. Any thread.
 /// </summary>
@@ -25,8 +27,7 @@ public sealed class AiModels : IDisposable
     private readonly Lock _gate = new();
     private readonly Dictionary<string, Task<ModelLease>> _leases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _failed = new(StringComparer.Ordinal);
-    private string? _chatKey;
-    private string? _completionKey;
+    private readonly Dictionary<string, string> _roles = new(StringComparer.Ordinal);   // role key → its lease's key
     private bool _disposed;
 
     /// <summary>Models read through the settings <paramref name="settings"/> gives at each request.</summary>
@@ -46,54 +47,111 @@ public sealed class AiModels : IDisposable
     public IEditorActivities Activities { get; set; } = NoActivities.Instance;
 
     /// <summary>
-    /// The chat model's lease (the setting <c>model</c>), loading it when it is not loaded: only for what the user asked
-    /// for (a message, an action, the chip, the load command). A failure of an earlier load of it is forgotten (this is
-    /// the try again).
+    /// The chat model's lease (the chat's settings: <c>model</c>, <c>device</c>…), loading it when it is not loaded: only
+    /// for what the user asked for (a message, an action, the chip, the load command). A failure of an earlier load of it
+    /// is forgotten (this is the try again).
     /// </summary>
-    /// <exception cref="InvalidOperationException">No model is set.</exception>
-    public Task<ModelLease> ChatAsync(CancellationToken cancellationToken)
+    /// <exception cref="InvalidOperationException">No model is set, or the chat is turned off (<c>chatEnabled</c>).</exception>
+    public Task<ModelLease> ChatAsync(CancellationToken cancellationToken) => RoleAsync(ModelRoleKeys.Chat, cancellationToken);
+
+    /// <summary>
+    /// The agent's lease (its settings: <c>agentModel</c>, <c>agentDevice</c>…, each empty one the chat's), loading it
+    /// when it is not loaded; the chat's lease itself when they name the same.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No model is set, or the agent is turned off (<c>agentEnabled</c>).</exception>
+    public Task<ModelLease> AgentAsync(CancellationToken cancellationToken) => RoleAsync(ModelRoleKeys.Agent, cancellationToken);
+
+    /// <summary>
+    /// The lease of the role <paramref name="role"/> (<see cref="ModelRoleKeys.Chat"/> or <see cref="ModelRoleKeys.Agent"/>),
+    /// loading it when it is not loaded; its earlier failure forgotten.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No model is set for it, or it is turned off.</exception>
+    public Task<ModelLease> RoleAsync(string role, CancellationToken cancellationToken)
     {
         var settings = _settings();
-        var (key, request) = KeyOf(settings, settings.Model);
+        var resolved = settings.RoleOf(role);
+        if (!resolved.Enabled)
+        {
+            LetGo(role);
+            return Task.FromException<ModelLease>(new InvalidOperationException(Off(role)));
+        }
+
+        var (key, request) = KeyOf(settings, resolved, resolved.Model);
         lock (_gate)
         {
             _failed.Remove(key);
-            Retarget(ref _chatKey, key);
+            Retarget(role, key);
         }
 
         return LeaseAsync(settings, key, request, cancellationToken);
     }
 
+    /// <summary>What a role turned off says, with the setting that turns it on.</summary>
+    public static string Off(string role) => role switch
+    {
+        ModelRoleKeys.Chat => "The chat is turned off (chatEnabled, CRAFT_PLUGIN_AI_CHATENABLED): turn it on in Settings › Chat.",
+        ModelRoleKeys.Agent => "The agent is turned off (agentEnabled, CRAFT_PLUGIN_AI_AGENTENABLED): turn it on in Settings › Agent and sandbox.",
+        _ => "Inline completion is turned off (completion, CRAFT_PLUGIN_AI_COMPLETION): turn it on in Settings › Completion.",
+    };
+
     /// <summary>Whether the chat model of the settings now is loaded (its lease is ready).</summary>
-    public bool IsChatLoaded => IsReady(_settings().Model);
+    public bool IsChatLoaded => IsLoaded(ModelRoleKeys.Chat);
+
+    /// <summary>Whether the agent's model of the settings now is loaded (its lease, or the chat's when the same, is ready).</summary>
+    public bool IsAgentLoaded => IsLoaded(ModelRoleKeys.Agent);
 
     /// <summary>Whether the chat model of the settings now is loading.</summary>
-    public bool IsChatLoading
-    {
-        get
-        {
-            var settings = _settings();
-            if (settings.Model.Length == 0)
-            {
-                return false;
-            }
+    public bool IsChatLoading => IsLoading(ModelRoleKeys.Chat);
 
-            var (key, _) = KeyOf(settings, settings.Model);
-            lock (_gate)
-            {
-                return _leases.TryGetValue(key, out var lease) && !lease.IsCompleted;
-            }
+    /// <summary>Whether the model of the role <paramref name="role"/> (its settings now) is loaded.</summary>
+    public bool IsLoaded(string role)
+    {
+        var settings = _settings();
+        var resolved = settings.RoleOf(role);
+        if (resolved.Model.Length == 0)
+        {
+            return false;
+        }
+
+        var (key, _) = KeyOf(settings, resolved, resolved.Model);
+        lock (_gate)
+        {
+            return _leases.TryGetValue(key, out var lease) && lease.IsCompletedSuccessfully;
+        }
+    }
+
+    /// <summary>Whether the model of the role <paramref name="role"/> (its settings now) is loading.</summary>
+    public bool IsLoading(string role)
+    {
+        var settings = _settings();
+        var resolved = settings.RoleOf(role);
+        if (resolved.Model.Length == 0)
+        {
+            return false;
+        }
+
+        var (key, _) = KeyOf(settings, resolved, resolved.Model);
+        lock (_gate)
+        {
+            return _leases.TryGetValue(key, out var lease) && !lease.IsCompleted;
         }
     }
 
     /// <summary>
-    /// Inline completion's lease, or null when it has none to use now (<see cref="CompletionUnavailable"/> says why):
-    /// <c>completionModel</c>, loaded on this request when <c>completionLoad</c> allows it and its last load did not fail;
-    /// else the chat model, only when it is loaded already (completion never loads the chat model).
+    /// Inline completion's lease, or null when it has none to use now (<see cref="CompletionUnavailable"/> says why;
+    /// turned off, it leases nothing and gives back what it held): <c>completionModel</c> on its own settings, loaded on
+    /// this request when <c>completionLoad</c> allows it and its last load did not fail; else the chat's (or the agent's)
+    /// model, only when it is loaded already (completion never loads it).
     /// </summary>
     public async Task<ModelLease?> CompletionAsync(CancellationToken cancellationToken)
     {
         var settings = _settings();
+        if (!settings.Completion)
+        {
+            LetGo(ModelRoleKeys.Completion);
+            return null;
+        }
+
         if (CompletionPlan(settings) is not { } plan)
         {
             return null;
@@ -101,7 +159,7 @@ public sealed class AiModels : IDisposable
 
         lock (_gate)
         {
-            Retarget(ref _completionKey, plan.Key);
+            Retarget(ModelRoleKeys.Completion, plan.Key);
         }
 
         try
@@ -121,22 +179,28 @@ public sealed class AiModels : IDisposable
     }
 
     /// <summary>
-    /// Why inline completion cannot answer now (no model set, its model not loaded and not to be loaded by it, its last
-    /// load failed), in words for the status bar; null when it can.
+    /// Why inline completion cannot answer now (turned off, no model set, its model not loaded and not to be loaded by
+    /// it, its last load failed), in words for the status bar; null when it can.
     /// </summary>
     public string? CompletionUnavailable
     {
         get
         {
             var settings = _settings();
+            if (!settings.Completion)
+            {
+                return Off(ModelRoleKeys.Completion);
+            }
+
             if (CompletionPlan(settings) is not null)
             {
                 return null;
             }
 
-            if (settings.CompletionModel.Length > 0)
+            var own = settings.CompletionRole;
+            if (own.Model.Length > 0)
             {
-                var (key, _) = KeyOf(settings, settings.CompletionModel);
+                var (key, _) = KeyOf(settings, own, own.Model);
                 lock (_gate)
                 {
                     if (_failed.TryGetValue(key, out var failure))
@@ -145,7 +209,7 @@ public sealed class AiModels : IDisposable
                     }
                 }
 
-                return $"{settings.CompletionModel} is not loaded, and completion does not load it (completionLoad is off): run 'AI: Load the local model' or turn completionLoad on.";
+                return $"{own.Model} is not loaded, and completion does not load it (completionLoad is off): run 'AI: Load the local model' or turn completionLoad on.";
             }
 
             return settings.Model.Length == 0
@@ -160,7 +224,28 @@ public sealed class AiModels : IDisposable
         get
         {
             var settings = _settings();
-            return settings.CompletionModel.Length > 0 || settings.Model.Length > 0;
+            return settings.Completion && (settings.CompletionModel.Length > 0 || settings.Model.Length > 0);
+        }
+    }
+
+    /// <summary>
+    /// Gives back the lease the role <paramref name="role"/> holds (a role turned off), unless another role holds the same;
+    /// the provider then keeps the model for its keep-alive and unloads it.
+    /// </summary>
+    public void LetGo(string role)
+    {
+        Task<ModelLease>? dropped = null;
+        lock (_gate)
+        {
+            if (_roles.Remove(role, out var old) && !_roles.ContainsValue(old) && _leases.Remove(old, out var lease))
+            {
+                dropped = lease;
+            }
+        }
+
+        if (dropped is not null)
+        {
+            DisposeWhenLoaded(dropped);
         }
     }
 
@@ -181,8 +266,7 @@ public sealed class AiModels : IDisposable
         {
             held = [.. _leases.Values];
             _leases.Clear();
-            _chatKey = null;
-            _completionKey = null;
+            _roles.Clear();
         }
 
         foreach (var lease in held)
@@ -199,13 +283,14 @@ public sealed class AiModels : IDisposable
         Release();
     }
 
-    // What completion would lease now: its own model (when it may load it, or it is loaded), else the chat model's lease
-    // when that is ready; null when none.
+    // What completion would lease now: its own model (when it may load it, or it is loaded), else the chat's or the
+    // agent's lease when that is ready; null when none.
     private (string Key, ModelRequest Request)? CompletionPlan(AiSettings settings)
     {
-        if (settings.CompletionModel.Length > 0)
+        var role = settings.CompletionRole;
+        if (role.Model.Length > 0)
         {
-            var own = KeyOf(settings, settings.CompletionModel);
+            var own = KeyOf(settings, role, role.Model);
             lock (_gate)
             {
                 bool ready = _leases.TryGetValue(own.Key, out var lease) && lease.IsCompletedSuccessfully;
@@ -216,14 +301,19 @@ public sealed class AiModels : IDisposable
             }
         }
 
-        if (settings.Model.Length > 0)
+        foreach (var other in (ReadOnlySpan<AiRoleSettings>)[settings.ChatRole, settings.AgentRole])
         {
-            var chat = KeyOf(settings, settings.Model);
+            if (other.Model.Length == 0)
+            {
+                continue;
+            }
+
+            var loaded = KeyOf(settings, other, other.Model);
             lock (_gate)
             {
-                if (_leases.TryGetValue(chat.Key, out var lease) && lease.IsCompletedSuccessfully)
+                if (_leases.TryGetValue(loaded.Key, out var lease) && lease.IsCompletedSuccessfully)
                 {
-                    return chat;
+                    return loaded;
                 }
             }
         }
@@ -231,41 +321,35 @@ public sealed class AiModels : IDisposable
         return null;
     }
 
-    private bool IsReady(string model)
-    {
-        if (model.Length == 0)
-        {
-            return false;
-        }
-
-        var (key, _) = KeyOf(_settings(), model);
-        lock (_gate)
-        {
-            return _leases.TryGetValue(key, out var lease) && lease.IsCompletedSuccessfully;
-        }
-    }
-
-    // The lease's key and request: everything its load depends on, so changed settings mean another lease.
-    private static (string Key, ModelRequest Request) KeyOf(AiSettings settings, string model)
+    // The lease's key and request: everything its load depends on (the role's own settings), so changed settings mean
+    // another lease, and two roles equal in them one.
+    private static (string Key, ModelRequest Request) KeyOf(AiSettings settings, AiRoleSettings role, string model)
     {
         string name = model.Trim();
         string? adapter = name.Length == 0 ? null : ModelAdapters.For(name);
-        var request = new ModelRequest(name) { Adapter = adapter, Device = settings.Device, Context = settings.Context, Weights = settings.Weights };
-        string key = string.Join('\n', settings.ModelProvider, name, adapter ?? "", settings.Device, settings.Context.ToString(System.Globalization.CultureInfo.InvariantCulture), settings.Weights);
+        var request = new ModelRequest(name)
+        {
+            Adapter = adapter,
+            Device = role.Device,
+            Context = role.Context,
+            Weights = role.Weights,
+            KeepAlive = TimeSpan.FromMinutes(role.KeepAliveMinutes),
+        };
+        string key = string.Join('\n', settings.ModelProvider, name, adapter ?? "", role.Device, role.Context.ToString(System.Globalization.CultureInfo.InvariantCulture), role.Weights,
+            role.KeepAliveMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture));
         return (key, request);
     }
 
     // Called holding the gate: a role moves to `key`; the lease it held goes when no role holds it any more.
-    private void Retarget(ref string? role, string key)
+    private void Retarget(string role, string key)
     {
-        if (string.Equals(role, key, StringComparison.Ordinal))
+        if (_roles.TryGetValue(role, out var old) && string.Equals(old, key, StringComparison.Ordinal))
         {
             return;
         }
 
-        string? old = role;
-        role = key;
-        if (old is not null && old != _chatKey && old != _completionKey && _leases.Remove(old, out var dropped))
+        _roles[role] = key;
+        if (old is not null && !_roles.ContainsValue(old) && _leases.Remove(old, out var dropped))
         {
             DisposeWhenLoaded(dropped);
         }
@@ -357,7 +441,7 @@ public sealed class AiModels : IDisposable
         lock (_gate)
         {
             _failed.Remove(key);
-            if (key != _chatKey && key != _completionKey)
+            if (!_roles.ContainsValue(key))
             {
                 return;                                          // the settings moved on: the next request loads what they name
             }
@@ -438,11 +522,13 @@ public static class AiErrors
             return error.Message;
         }
 
-        string model = forCompletion && settings.CompletionModel.Length > 0 ? settings.CompletionModel : settings.Model;
+        var role = forCompletion && settings.CompletionModel.Length > 0 ? settings.CompletionRole : settings.ChatRole;
+        string model = role.Model;
         string smaller = forCompletion
             ? "set a smaller completionModel on the settings page"
             : "pick a smaller model at the composer's model chip";
-        string weights = settings.Weights is "int4" ? "" : $", load it with smaller weights (weights {(settings.Weights is "int8" ? "int4" : "int8")})";
+        string variable = role.Key == ModelRoleKeys.Completion ? "completionWeights" : "weights";
+        string weights = role.Weights is "int4" ? "" : $", load it with smaller weights ({variable} {(role.Weights is "int8" ? "int4" : "int8")})";
         return $"The device ran out of memory for {model}: {smaller}{weights}, or close other programs that use the GPU, then try again. "
                + "(To keep what does not fit in system memory, slower, set IDRAK_OFFLOAD=1 yourself.) " + error.Message;
     }

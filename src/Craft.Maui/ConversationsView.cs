@@ -134,6 +134,9 @@ public sealed class ConversationsView : ContentView, IDisposable
     /// <summary>Raised when <see cref="HasPanels"/> may have changed.</summary>
     public event EventHandler? PanelsChanged;
 
+    /// <summary>Raised when another panel is shown (its model role may differ: the chip follows it).</summary>
+    public event EventHandler? ShownChanged;
+
     /// <summary>Raised when the column's close button is clicked (the shell closes the column and keeps that per workspace).</summary>
     public event EventHandler? CloseRequested;
 
@@ -219,6 +222,7 @@ public sealed class ConversationsView : ContentView, IDisposable
             _shown.ConversationChanged -= OnConversationChanged;
         }
 
+        bool changed = !ReferenceEquals(_shown, panel);
         _shown = panel;
         if (panel is not null)
         {
@@ -227,6 +231,10 @@ public sealed class ConversationsView : ContentView, IDisposable
 
         RebuildTabs();
         RebuildAll();
+        if (changed)
+        {
+            ShownChanged?.Invoke(this, EventArgs.Empty);      // the model chip shows the shown panel's role (note 25)
+        }
     }
 
     private void OnConversationChanged(object? sender, ConversationChangedEventArgs e)

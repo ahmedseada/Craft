@@ -2154,6 +2154,46 @@ the owner's machine, not only headless.
     - The settings page shows the Completion, Chat and Agent sections; each composer's chip writes its own panel's
       model and device; every one a `CRAFT_PLUGIN_AI_*` variable and a `.craft/settings.json` key; the lease per role
       (d260816) keys on the role's own settings, so two roles on one model and settings share one copy.
+    **Built (2026-11-01).** `AiSettings` holds the three sets, resolved by `ChatRole`, `AgentRole` and `CompletionRole`
+    (`AiRoleSettings`: enabled, model, device, context, weights, keep-alive, temperature, most reply tokens):
+    - Chat: `chatEnabled` and `chatTemperature` are new (default the library's `GenerationOptions.Temperature`, as
+      before); `model`, `device`, `weights`, `context`, `keepAliveMinutes` are the chat's, their variables unchanged.
+    - Completion: `completionDevice` (empty: auto), `completionWeights`, `completionContext`,
+      `completionKeepAliveMinutes`. An empty weights, context or keep-alive is the chat's, as it was before (so the
+      1.5B keeps the weights the owner runs it with). Turned off, completion asks for nothing, loads nothing, and gives
+      back the copy it held.
+    - Agent: `agentEnabled`, `agentModel`, `agentDevice`, `agentWeights`, `agentContext`, `agentKeepAliveMinutes`,
+      `agentTemperature`. Every empty one is the chat's, so by default the agent's lease *is* the chat's (one copy).
+    - Leases: `AiModels` keeps a lease per role (`ChatAsync`, `AgentAsync`, `CompletionAsync`, `RoleAsync`), keyed on
+      the provider, the name, the adapter, the device, the context, the weights and the keep-alive. Two roles with equal
+      keys share one lease. A role whose key changes gives back its old lease unless another role holds it. A role
+      turned off throws "turned off" (`AiModels.Off`, naming the variable) and loads nothing.
+    - The provider: the request's new `KeepAlive` (`ModelRequest.KeepAlive`) is the role's keep-alive on Idrak's
+      `ModelHost` lease. The provider's status lists Chat, Agent and Inline completion (`ModelRole` gained `Key`,
+      `Enabled`, `Device` in use, `DeviceChoice`, the role's model and device settings, its load and settings
+      commands, `Inherits`/`InheritsModel`/`InheritsDevice` and `IsLoading`). It reads the host's settings live
+      (`LocalModelProvider.SettingsSource`), so the chip and the status bar follow the settings page.
+    - Settings page: new Chat section (`SettingSections.Chat`). Completion, Chat and Agent and sandbox each show their
+      set: the device as a choice from the "devices" source (others typed), the weights as a choice, and the context
+      (tokens), keep-alive (min), temperature (0-2, step 0.05), reply tokens (tokens) and the delay (ms) with ranges and
+      steps. The shell registers a "Settings: SECTION" command per section (`SettingSections.CommandOf`, "craft.settings.chat").
+    - Panels: a disabled chat or agent says so with an "Open its settings" button. Its empty state says so with the
+      same link (`ShellEmptyStates.Conversation` reads the panel's `IConversationPanel.ModelRoleKey`).
+    - Chips: the composer's chip shows the shown panel's role (`ShellText.ModelChip`/`ModelPicks`/`WriteOf` take a
+      role). The chat's chip writes `model`/`device` and runs `ai.loadModel`. The agent's chip writes
+      `agentModel`/`agentDevice` and runs the new `ai.loadAgentModel`, with "Same as chat" (clears the setting) first,
+      and "same as chat: …" on the chip while it inherits. A plug-in setting written anywhere refreshes the chip
+      (`ShellModel.SettingApplied`).
+    - Status bar: the model item's tooltip lists each role's model, the device it runs on once loaded (else the one it
+      would take) and its state (`ShellText.ModelRolesTooltip`); the notification centre's "Models" line names all three.
+    - Tests: `ModelLoading.EachRoleReadsItsOwnSettingsAndTheChatKeepsItsOldNames`,
+      `ModelLoading.TheAgentSharesTheChatsCopyUntilItsOwnSettingsDiffer`, `ModelLoading.ARoleTurnedOffLoadsNothing`,
+      `ModelLoading.ATurnedOffPanelSaysSoWithALinkToItsSettings`, `Settings.EachRolesSectionShowsItsSetWithShapes`,
+      `Ui.EachChipWritesItsOwnRoleAndTheTooltipShowsEveryRole`, and `Ai.TheSettingsReadEveryVariable` extended.
+    - Left: the Models page (DesignPages) still edits only the chat's model and device fields; a role's device in use
+      shows once a load ran in this session (a copy loaded before is matched by its settings). The code actions follow
+      the chat's role (and `chatEnabled`). The owner's Windows run should confirm the 7B and the 1.5B as one copy each
+      and the agent sharing the chat's copy.
 
 26. **The bottom panel's text is one read-only text surface, not a list with checkboxes** (the owner, 2026-11-01: "the
     checkbox is so gross, why didn't you add a multi-line editor and append to it"; "I can only select one line, and

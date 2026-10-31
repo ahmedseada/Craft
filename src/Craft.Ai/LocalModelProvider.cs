@@ -41,6 +41,13 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     /// <summary>The settings a request does not override (the plug-in sets the host's when it activates); the environment's until then.</summary>
     public AiSettings Settings { get; set; } = AiSettings.FromEnvironment();
 
+    /// <summary>
+    /// Where <see cref="Status"/> reads the settings now (the session sets the host's, so the chip and the status bar
+    /// follow a setting changed on the settings page); null: <see cref="Settings"/>. A value that does not parse keeps
+    /// <see cref="Settings"/>.
+    /// </summary>
+    public Func<AiSettings>? SettingsSource { get; set; }
+
     /// <summary>The models loaded now.</summary>
     public IReadOnlyList<LoadedModel> Loaded => _models?.Loaded ?? [];
 
@@ -52,6 +59,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     private IReadOnlyList<string> _devices = [];
     private string? _autoDevice;
     private int _devicesListed;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _deviceOf = new(StringComparer.Ordinal);   // load key → device in use
 
     /// <summary>
     /// What the provider holds (phase D's Models page and the model chip): the chat model of the settings and its state,
@@ -61,9 +69,10 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     {
         get
         {
-            var settings = Settings;
+            var settings = Current();
             string? model = settings.Model.Length == 0 ? null : settings.Model;
             ListDevicesOnce();
+            var loaded = Loaded;
             return new ModelProviderStatus
             {
                 Models = Pickable(model),
@@ -74,11 +83,12 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 Where = "local",
                 Roles =
                 [
-                    new ModelRole("Chat and agent", model, model is null ? "none set" : _state, model is not null && _stateIsProblem),
-                    CompletionRole(settings, model),
+                    ChatRole(settings, loaded),
+                    AgentRole(settings, loaded),
+                    CompletionRole(settings, loaded),
                 ],
                 Device = _device,
-                Loaded = [.. Loaded.Select(m => $"{m.Name.Split('\n')[0]} · {(m.ActiveUsers > 0 ? "in use" : "idle")}")],
+                Loaded = [.. loaded.Select(m => $"{m.Name.Split('\n')[0]} · {(m.ActiveUsers > 0 ? "in use" : "idle")}")],
                 LoadCommand = AiPlugin.LoadModelCommand,
                 ModelSetting = new ModelSettingField(Variable("model"), "Model name: a folder, store:name, a .gguf file, a Hugging Face id"),
                 DeviceSetting = new ModelSettingField(Variable("device"), "Run on", "auto (the fastest found)"),
@@ -92,16 +102,125 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         }
     }
 
-    // Inline completion's own model (a small one beside the chat model), else the chat model while it is loaded.
-    private ModelRole CompletionRole(AiSettings settings, string? chatModel)
+    private AiSettings Current()
     {
-        if (settings.CompletionModel.Length > 0)
+        if (SettingsSource is { } source)
         {
-            bool loaded = Loaded.Any(m => LoadKey.Parse(m.Name).Model.Equals(settings.CompletionModel, StringComparison.OrdinalIgnoreCase));
-            return new ModelRole("Inline completion", settings.CompletionModel, loaded ? "loaded" : settings.CompletionLoad ? "loads on the first completion" : "not loaded (completionLoad is off)");
+            try
+            {
+                return source();
+            }
+            catch (ArgumentException)
+            {
+                // A value that does not parse: the settings page says so; the status keeps the last good settings.
+            }
         }
 
-        return new ModelRole("Inline completion", chatModel, chatModel is null ? "none set" : "the chat model, while it is loaded");
+        return Settings;
+    }
+
+    // The device the role's model runs on now: the loaded copy under the role's settings (any adapter), or null.
+    private string? RunningOn(AiRoleSettings role, IReadOnlyList<LoadedModel> loaded)
+    {
+        if (role.Model.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var model in loaded)
+        {
+            var key = LoadKey.Parse(model.Name);
+            if (key.Model.Equals(role.Model, StringComparison.OrdinalIgnoreCase) && key.Device.Equals(role.Device, StringComparison.OrdinalIgnoreCase)
+                && key.Context == role.Context && string.Equals(key.Weights, role.Weights, StringComparison.OrdinalIgnoreCase))
+            {
+                return _deviceOf.TryGetValue(model.Name, out var device) ? device : role.Device;
+            }
+        }
+
+        return null;
+    }
+
+    private ModelRole ChatRole(AiSettings settings, IReadOnlyList<LoadedModel> loaded)
+    {
+        var role = settings.ChatRole;
+        string? model = role.Model.Length == 0 ? null : role.Model;
+        string? device = RunningOn(role, loaded);
+        string state = !role.Enabled ? "off (chatEnabled)" : model is null ? "none set" : device is not null ? "loaded" : _state;
+        return new ModelRole("Chat", model, state, role.Enabled && model is not null && device is null && _stateIsProblem)
+        {
+            Key = ModelRoleKeys.Chat,
+            Enabled = role.Enabled,
+            Device = device,
+            DeviceChoice = role.Device,
+            ModelSetting = new ModelSettingField(Variable("model"), "Chat model"),
+            DeviceSetting = new ModelSettingField(Variable("device"), "Chat runs on", "auto (the fastest found)"),
+            LoadCommand = AiPlugin.LoadModelCommand,
+            SettingsCommand = SettingSections.CommandOf(SettingSections.Chat),
+            IsLoading = _loading && device is null && model is not null,
+        };
+    }
+
+    private ModelRole AgentRole(AiSettings settings, IReadOnlyList<LoadedModel> loaded)
+    {
+        var role = settings.AgentRole;
+        string? model = role.Model.Length == 0 ? null : role.Model;
+        string? device = RunningOn(role, loaded);
+        string state = !role.Enabled ? "off (agentEnabled)" : model is null ? "none set" : device is not null ? "loaded" : "loads on the agent's first task";
+        return new ModelRole("Agent", model, state)
+        {
+            Key = ModelRoleKeys.Agent,
+            Enabled = role.Enabled,
+            Device = device,
+            DeviceChoice = role.Device,
+            ModelSetting = new ModelSettingField(Variable("agentModel"), "Agent model (empty: the chat's)"),
+            DeviceSetting = new ModelSettingField(Variable("agentDevice"), "Agent runs on", "the chat's device"),
+            LoadCommand = AiPlugin.LoadAgentModelCommand,
+            SettingsCommand = SettingSections.CommandOf(SettingSections.Agent),
+            Inherits = "Chat",
+            InheritsModel = role.InheritsModel,
+            InheritsDevice = role.InheritsDevice,
+            IsLoading = _loading && device is null && model is not null,
+        };
+    }
+
+    // Inline completion's own model (a small one beside the chat model), else the chat model while it is loaded.
+    private ModelRole CompletionRole(AiSettings settings, IReadOnlyList<LoadedModel> loaded)
+    {
+        var role = settings.CompletionRole;
+        var shared = new ModelRole("Inline completion", null, "")
+        {
+            Key = ModelRoleKeys.Completion,
+            Enabled = role.Enabled,
+            DeviceChoice = role.Device,
+            ModelSetting = new ModelSettingField(Variable("completionModel"), "Completion model"),
+            DeviceSetting = new ModelSettingField(Variable("completionDevice"), "Completion runs on", "auto (the fastest found)"),
+            SettingsCommand = SettingSections.CommandOf(SettingSections.Completion),
+        };
+        if (!role.Enabled)
+        {
+            return shared with { Model = role.Model.Length == 0 ? null : role.Model, State = "off (completion)" };
+        }
+
+        if (role.Model.Length > 0)
+        {
+            string? device = RunningOn(role, loaded);
+            return shared with
+            {
+                Model = role.Model,
+                State = device is not null ? "loaded" : settings.CompletionLoad ? "loads on the first completion" : "not loaded (completionLoad is off)",
+                Device = device,
+            };
+        }
+
+        var chat = settings.ChatRole;
+        string? chatModel = chat.Model.Length == 0 ? null : chat.Model;
+        return shared with
+        {
+            Model = chatModel,
+            State = chatModel is null ? "none set" : "the chat model, while it is loaded",
+            Device = RunningOn(chat, loaded),
+            DeviceChoice = chat.Device,
+        };
     }
 
     // The composer's picker (the owner's note 11): the model set first, then those loaded and those used before, once each.
@@ -191,7 +310,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         var settings = Settings;
         var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
             request.Adapter is { Length: > 0 } adapter ? Path.GetFullPath(adapter) : "");
-        return Task.Run(() => Acquire(key, settings, progress, cancellationToken), cancellationToken);
+        return Task.Run(() => Acquire(key, request.KeepAlive, settings, progress, cancellationToken), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -204,7 +323,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         }
     }
 
-    private ModelLease Acquire(LoadKey key, AiSettings settings, IProgress<ModelLoadStatus>? progress, CancellationToken cancellationToken)
+    private ModelLease Acquire(LoadKey key, TimeSpan? keepAlive, AiSettings settings, IProgress<ModelLoadStatus>? progress, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var host = Host(settings);
@@ -233,7 +352,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         try
         {
             LetIdleGo(host, key.Text);
-            lease = host.Acquire(key.Text, _keepAlive);
+            lease = host.Acquire(key.Text, keepAlive ?? _keepAlive);        // the role's keep-alive (note 25), else the chat's
         }
         catch (Exception error)
         {
@@ -247,6 +366,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         _loading = false;
         var model = lease.Model;
         _device = model.Device;                    // the device in use, shown in the status bar and the chip
+        _deviceOf[key.Text] = model.Device;        // and per copy, so each role shows its own (note 25)
         Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
             ? string.Create(CultureInfo.InvariantCulture, $"{key.Model} loaded on {model.Device} in {lease.LoadDuration.TotalSeconds:F1} s, context {model.ContextLength}")
             : $"{key.Model} on {model.Device} (loaded already)"));

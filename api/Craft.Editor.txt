@@ -1047,6 +1047,17 @@ enum Craft.Editor.Shell.ModelPickKind : System.IComparable, System.IConvertible,
   Device = 1
   Model = 0
   Page = 2
+sealed class Craft.Editor.Shell.ModelPickWrite : System.IEquatable<Craft.Editor.Shell.ModelPickWrite>
+  Craft.Editor.Shell.ModelPickWrite <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.ModelPickWrite other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String LoadCommand { get; init; }
+  System.String ToString()
+  System.String Value { get; init; }
+  System.String Variable { get; init; }
+  System.Void Deconstruct(out System.String Variable, out System.String Value, out System.String LoadCommand)
+  ctor(System.String Variable, System.String Value, System.String LoadCommand)
 sealed class Craft.Editor.Shell.OverlaySelection
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Int32 Count { get; }
@@ -1497,6 +1508,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   event System.EventHandler ThemeChanged
   event System.EventHandler WorkspaceChanged
   event System.EventHandler<System.String> RevealRequested
+  event System.EventHandler<System.String> SettingApplied
   event System.EventHandler<System.String> ViewRequested
   static System.Collections.Generic.IReadOnlySet<System.String> AppliedAtStart { get; }
   static System.String SideViewCommand(System.String panelId)
@@ -1511,16 +1523,18 @@ enum Craft.Editor.Shell.ShellPanel : System.IComparable, System.IConvertible, Sy
   Explorer = 0
 static class Craft.Editor.Shell.ShellText
   static Craft.Abstractions.EditorDiagnostic? CurrentProblem(System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> current, Craft.Abstractions.EditorDiagnostic listed)
+  static Craft.Editor.Shell.ModelPickWrite WriteOf(Craft.Abstractions.ModelProviderStatus status, System.String role, Craft.Editor.Shell.ModelPick pick)
   static Craft.Editor.Shell.SemanticCard Semantic(Craft.Editor.EditorModel model)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> Breadcrumb(System.String filePath, System.String workspaceRoot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> scopes)
-  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ModelPick> ModelPicks(Craft.Abstractions.ModelProviderStatus status)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ModelPick> ModelPicks(Craft.Abstractions.ModelProviderStatus status, System.String role = null)
   static System.String Bytes(System.Int64 bytes)
   static System.String EncodingName(System.Text.Encoding encoding, System.Boolean hasBom)
   static System.String Indentation(Craft.Core.CraftOptions options)
   static System.String LineEnding(System.String lineEnding)
-  static System.String ModelChip(Craft.Abstractions.ModelProviderStatus status)
+  static System.String ModelChip(Craft.Abstractions.ModelProviderStatus status, System.String role = null)
+  static System.String ModelRolesTooltip(Craft.Abstractions.ModelProviderStatus status)
   static System.String ModelUsage(Craft.Abstractions.ModelProviderStatus status)
-  static System.String PlannedDevice(Craft.Abstractions.ModelProviderStatus status)
+  static System.String PlannedDevice(Craft.Abstractions.ModelProviderStatus status, System.String role = null)
   static System.String Position(System.Int32 line, System.Int32 column)
   static System.String Problems(System.Int32 errors, System.Int32 warnings)
   static System.ValueTuple<Craft.Abstractions.IModelProvider, Craft.Abstractions.ModelProviderStatus>? ModelStatus()

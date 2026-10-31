@@ -898,8 +898,15 @@ public sealed partial class ShellModel : IDisposable
         }
 
         ReloadOptions();
+        SettingApplied?.Invoke(this, variable);
         return null;
     }
+
+    /// <summary>
+    /// Raised after <see cref="ApplySetting"/> wrote a variable (its name): a plug-in's setting too, which changes no
+    /// option (the composer's model chip and the status bar's model item read the AI plug-in's settings again).
+    /// </summary>
+    public event EventHandler<string>? SettingApplied;
 
     /// <summary>Builds the options from the settings again; raises <see cref="OptionsChanged"/> (and <see cref="ThemeChanged"/>) when they changed.</summary>
     public void ReloadOptions()
@@ -1183,6 +1190,16 @@ public sealed partial class ShellModel : IDisposable
         Command(ShellCommandIds.PreviousTab, "Tab: Previous", (_, _) => { Tabs.Previous(); return Task.CompletedTask; }, _ => Tabs.Tabs.Count > 1, "Ctrl+Shift+Tab");
         Command(ShellCommandIds.Settings, "Settings: Open", (_, _) => { ShowSettings(); return Task.CompletedTask; }, null, "Ctrl+Comma");
         Command(ShellCommandIds.KeyboardShortcuts, "Settings: Keyboard shortcuts", (_, _) => { ShowSettings(SettingSections.Keyboard); return Task.CompletedTask; }, null, "Ctrl+K Ctrl+S");
+        // Note 25: a command per section ("craft.settings.chat"), so a plug-in links to its settings ("the chat is off").
+        foreach (var (section, sectionTitle) in SettingSections.All)
+        {
+            if (section != SettingSections.Keyboard)
+            {
+                string id = section;
+                Command(SettingSections.CommandOf(section), "Settings: " + sectionTitle, (_, _) => { ShowSettings(id); return Task.CompletedTask; }, null, null);
+            }
+        }
+
         Command(ShellCommandIds.SaveAll, "File: Save all", (_, token) => SaveAllAsync(token), _ => Tabs.HasUnsaved, "Ctrl+K S");
         Command(ShellCommandIds.ReopenClosedTab, "Tab: Reopen the closed tab", (_, token) => ReopenClosedTabAsync(token), _ => _closedFiles.Count > 0, "Ctrl+Shift+T");
         Command(ShellCommandIds.ZoomIn, "View: Zoom in", (_, _) => ZoomCommandAsync(1), null, "Ctrl+=");

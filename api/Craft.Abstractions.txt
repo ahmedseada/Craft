@@ -758,6 +758,7 @@ interface Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPane
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationEntry> Entries { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
   System.String EmptyText { get; }
+  System.String ModelRoleKey { get; }
   System.String Placeholder { get; }
   System.String Status { get; }
   System.String Subtitle { get; }
@@ -1175,6 +1176,7 @@ sealed class Craft.Abstractions.ModelLoadStatus : System.IEquatable<Craft.Abstra
   ctor(System.String Stage, System.Double? Fraction, System.String Message)
 sealed class Craft.Abstractions.ModelProviderStatus : System.IEquatable<Craft.Abstractions.ModelProviderStatus>
   Craft.Abstractions.ModelProviderStatus <Clone>$()
+  Craft.Abstractions.ModelRole RoleOf(System.String key)
   Craft.Abstractions.ModelSettingField DeviceSetting { get; init; }
   Craft.Abstractions.ModelSettingField ModelSetting { get; init; }
   System.Boolean Equals(Craft.Abstractions.ModelProviderStatus other)
@@ -1217,20 +1219,37 @@ sealed class Craft.Abstractions.ModelRequest : System.IEquatable<Craft.Abstracti
   System.String Model { get; init; }
   System.String ToString()
   System.String Weights { get; init; }
+  System.TimeSpan? KeepAlive { get; init; }
   System.Void Deconstruct(out System.String Model)
   ctor(System.String Model)
 sealed class Craft.Abstractions.ModelRole : System.IEquatable<Craft.Abstractions.ModelRole>
   Craft.Abstractions.ModelRole <Clone>$()
+  Craft.Abstractions.ModelSettingField DeviceSetting { get; init; }
+  Craft.Abstractions.ModelSettingField ModelSetting { get; init; }
+  System.Boolean Enabled { get; init; }
   System.Boolean Equals(Craft.Abstractions.ModelRole other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean InheritsDevice { get; init; }
+  System.Boolean InheritsModel { get; init; }
+  System.Boolean IsLoading { get; init; }
   System.Boolean IsProblem { get; init; }
   System.Int32 GetHashCode()
+  System.String Device { get; init; }
+  System.String DeviceChoice { get; init; }
+  System.String Inherits { get; init; }
+  System.String Key { get; init; }
+  System.String LoadCommand { get; init; }
   System.String Model { get; init; }
   System.String Role { get; init; }
+  System.String SettingsCommand { get; init; }
   System.String State { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String Role, out System.String Model, out System.String State, out System.Boolean IsProblem)
   ctor(System.String Role, System.String Model, System.String State, System.Boolean IsProblem = false)
+static class Craft.Abstractions.ModelRoleKeys
+  const System.String Agent = agent
+  const System.String Chat = chat
+  const System.String Completion = completion
 sealed class Craft.Abstractions.ModelSettingField : System.IEquatable<Craft.Abstractions.ModelSettingField>
   Craft.Abstractions.ModelSettingField <Clone>$()
   System.Boolean Equals(Craft.Abstractions.ModelSettingField other)
@@ -1453,6 +1472,8 @@ static class Craft.Abstractions.SettingSections
   const System.String Agent = agent
   const System.String Appearance = appearance
   const System.String CSharp = csharp
+  const System.String Chat = chat
+  const System.String CommandPrefix = craft.settings.
   const System.String Completion = completion
   const System.String Editor = editor
   const System.String Files = files
@@ -1463,6 +1484,7 @@ static class Craft.Abstractions.SettingSections
   const System.String Terminal = terminal
   const System.String Voice = voice
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> All { get; }
+  static System.String CommandOf(System.String id)
   static System.String TitleOf(System.String id)
 sealed class Craft.Abstractions.SettingShape : System.IEquatable<Craft.Abstractions.SettingShape>
   Craft.Abstractions.SettingKind Kind { get; init; }

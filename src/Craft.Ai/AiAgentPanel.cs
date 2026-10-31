@@ -77,6 +77,9 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             ? "Follow up: the agent keeps this run's conversation and its copy of the folder (Clear starts afresh)"
             : "Describe a task for the agent (it works on a copy of the folder; you review every change)";
 
+    /// <summary>The agent's model role (note 25): the composer's chip shows and writes the agent's model and device.</summary>
+    public override string? ModelRoleKey => ModelRoleKeys.Agent;
+
     /// <summary>Whether the next message continues the last run (its conversation and working copy) rather than starting a new one.</summary>
     public bool Continues => _conversation is not null && _copy is { } copy && Host.WorkspaceFolder is { } root
         && string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(copy.Workspace)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), StringComparison.Ordinal)
@@ -281,6 +284,13 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private async Task StartAsync(string task, CancellationToken cancellationToken)
     {
         var settings = _settings();
+        if (!settings.AgentEnabled)
+        {
+            // Note 25: turned off, the agent loads nothing and says so, with a way to its settings.
+            Log(new ConversationEntry(ConversationRole.Error, AiModels.Off(ModelRoleKeys.Agent)) { Actions = [AiChatPanel.SettingsAction(Host, SettingSections.Agent, "Open the agent's settings")] });
+            return;
+        }
+
         if (Host.WorkspaceFolder is not { } workspace)
         {
             Log(new ConversationEntry(ConversationRole.Error, "Open a folder first: the agent works on a copy of the open folder."));
@@ -373,11 +383,11 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         activity.Report(null, "waiting for the model (its download and load show on their own)");
         // The owner's Windows run: the model loads when the agent is first used, never at start-up. The composer says
         // "loading…" until it is ready, and the task goes to the model once it is.
-        if (!_models.IsChatLoaded)
+        if (!_models.IsAgentLoaded)
         {
             Post(() =>
             {
-                _loadingModel = settings.Model;
+                _loadingModel = settings.AgentRole.Model;
                 UpdateStatus();
             });
         }
@@ -385,7 +395,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         ModelLease lease;
         try
         {
-            lease = await _models.ChatAsync(token).ConfigureAwait(false);
+            lease = await _models.AgentAsync(token).ConfigureAwait(false);   // the agent's own settings (note 25; empty ones the chat's)
         }
         finally
         {
@@ -435,7 +445,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         {
             MaxRounds = settings.AgentMaxTurns,
             TimeLimit = TimeSpan.FromMinutes(settings.AgentMinutes),
-            Sampling = new GenerationOptions { NumPredict = settings.AgentMaxTokens, NumCtx = lease.ContextLength, Stop = settings.AgentStops },
+            Sampling = new GenerationOptions { NumPredict = settings.AgentMaxTokens, NumCtx = lease.ContextLength, Stop = settings.AgentStops, Temperature = settings.AgentRole.Temperature },
             Tools = new CodingToolOptions { Sandbox = inner.Name },
         };
         var tools = new CodingTools(copy.Copy, options.Tools, sandbox);

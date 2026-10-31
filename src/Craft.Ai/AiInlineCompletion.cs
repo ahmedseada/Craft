@@ -88,8 +88,14 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
     {
         ArgumentNullException.ThrowIfNull(request);
         var settings = _settings();
-        if (!_active() || !settings.Completion)
+        if (!_active())
         {
+            return false;
+        }
+
+        if (!settings.Completion)
+        {
+            _models.LetGo(ModelRoleKeys.Completion);              // turned off: nothing asked, nothing loaded, its copy given back
             return false;
         }
 
@@ -229,8 +235,13 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
     }
 
     // What a generation failure is kept for: the completion settings of the model (another model, device or weights asks again).
-    private static string FailureKey(AiSettings settings) =>
-        string.Join('\n', settings.CompletionModel, settings.Model, settings.Device, settings.Weights, settings.Context.ToString(CultureInfo.InvariantCulture));
+    private static string FailureKey(AiSettings settings)
+    {
+        var own = settings.CompletionRole;
+        var chat = settings.ChatRole;
+        return string.Join('\n', own.Model, own.Device, own.Weights, own.Context.ToString(CultureInfo.InvariantCulture),
+            chat.Model, chat.Device, chat.Weights, chat.Context.ToString(CultureInfo.InvariantCulture));
+    }
 
     /// <summary>
     /// The prompt for <paramref name="request"/> and its stops: the model's fill-in-the-middle format over the prefix and

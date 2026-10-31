@@ -309,6 +309,10 @@ public static class AiTests
             ["agentFolder"] = "/copies", ["agentCopyIgnore"] = "bin", ["chatStops"] = "END|<x;y>", ["agentStops"] = "DONE",
             // The owner's Windows run: the model loads only when asked; completion's own small model.
             ["completionLoad"] = "false", ["loadOnStart"] = "true",
+            // Note 25: each model role's own set (the chat's keeps model, device, weights, context, keepAliveMinutes).
+            ["chatEnabled"] = "false", ["chatTemperature"] = "0.3", ["completionDevice"] = "cpu", ["completionWeights"] = "int4", ["completionContext"] = "1024",
+            ["completionKeepAliveMinutes"] = "2", ["agentEnabled"] = "false", ["agentModel"] = "store:agent", ["agentDevice"] = "vulkan:0", ["agentWeights"] = "bfloat16",
+            ["agentContext"] = "8192", ["agentKeepAliveMinutes"] = "3", ["agentTemperature"] = "0.1",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -323,6 +327,12 @@ public static class AiTests
             AgentMaxTokens: 500, AgentFolder: "/copies", CompletionLoad: false, LoadOnStart: true,
         } && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && settings.ChatStops.SequenceEqual(["END", "<x;y>"]) && settings.AgentStops.SequenceEqual(["DONE"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
             "each value is read");
+        Check.True(settings is
+        {
+            ChatEnabled: false, CompletionDevice: "cpu", CompletionWeights: "int4", CompletionContext: 1024, CompletionKeepAliveMinutes: 2,
+            AgentEnabled: false, AgentModel: "store:agent", AgentDevice: "vulkan:0", AgentWeights: "bfloat16", AgentContext: 8192, AgentKeepAliveMinutes: 3,
+        } && Math.Abs(settings.ChatTemperature - 0.3f) < 1e-6 && settings.AgentTemperature is { } agentTemperature && Math.Abs(agentTemperature - 0.1f) < 1e-6,
+            "each role's own set is read (note 25)");
         var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "threads" ? "many" : null), "a bad value");
         Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_THREADS", StringComparison.Ordinal), "the error names the variable");
     }

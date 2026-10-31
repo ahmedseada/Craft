@@ -226,35 +226,51 @@ public static class ShellText
         return parts;
     }
 
-    /// <summary>The model chip's text: "store:coder-q4 · vulkan:0", or "no model" when no provider has a chat model.</summary>
-    public static string ModelChip(ModelProviderStatus? status)
+    /// <summary>
+    /// The model chip's text for the role <paramref name="role"/> (<see cref="ModelRoleKeys"/>; null: the chat's):
+    /// "store:coder-q4 · vulkan:0", "same as chat: store:coder-q4 · vulkan:0" when the agent takes the chat's model and
+    /// device, or "no model" when the role has none.
+    /// </summary>
+    public static string ModelChip(ModelProviderStatus? status, string? role = null)
     {
-        if (status?.ChatModel is not { } model)
+        var found = status?.RoleOf(role);
+        string? model = found is null ? status?.ChatModel : found.Model;
+        if (model is null)
         {
             return "no model";
         }
 
-        return PlannedDevice(status) is { } device ? $"{model} · {device}" : model;
+        string text = PlannedDevice(status, role) is { } device ? $"{model} · {device}" : model;
+        if (found is { Inherits: { } other, InheritsModel: true })
+        {
+            return found.InheritsDevice ? $"same as {other.ToLowerInvariant()}: {text}" : $"{model} (same as {other.ToLowerInvariant()}) · {PlannedDevice(status, role)}".TrimEnd(' ', '·');
+        }
+
+        return found is { Enabled: false } ? text + " · off" : text;
     }
 
     /// <summary>
-    /// The device to show for <paramref name="status"/>: the one in use once a model is loaded, else the one the setting
-    /// names ("cpu"), else what "auto" picks on this machine marked so ("cuda:0 (auto)"), else null (the owner's note 6:
-    /// the GPU shows before the first load).
+    /// The device to show for the role <paramref name="role"/> of <paramref name="status"/> (null: the chat's): the one
+    /// its model runs on once loaded, else the one its setting names ("cpu"), else what "auto" picks on this machine marked
+    /// so ("cuda:0 (auto)"), else null (the owner's note 6: the GPU shows before the first load). A provider that gives no
+    /// roles' devices answers with its own (the device in use, its device setting).
     /// </summary>
-    public static string? PlannedDevice(ModelProviderStatus? status)
+    public static string? PlannedDevice(ModelProviderStatus? status, string? role = null)
     {
         if (status is null)
         {
             return null;
         }
 
-        if (status.Device is { } device)
+        var found = status.RoleOf(role);
+        bool own = found?.Key is not null;
+        if ((own ? found!.Device : status.Device) is { } device)
         {
             return device;
         }
 
-        if (status.DeviceChoice is { Length: > 0 } choice && !choice.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        string? choice = own ? found!.DeviceChoice : status.DeviceChoice;
+        if (choice is { Length: > 0 } && !choice.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
             return choice;
         }
@@ -263,10 +279,11 @@ public static class ShellText
     }
 
     /// <summary>
-    /// The composer's model picker for <paramref name="status"/> (the owner's note 11): its models (the one in use marked),
-    /// then the devices to run on (the one chosen marked, "auto" saying what it picks), then the Models and devices page.
+    /// The composer's model picker for the role <paramref name="role"/> of <paramref name="status"/> (the owner's notes 11
+    /// and 25; null: the chat's): "Same as chat" first for a role that inherits (the agent), the models (the role's marked),
+    /// then the devices to run on (the role's choice marked, "auto" saying what it picks), then the Models and devices page.
     /// </summary>
-    public static IReadOnlyList<ModelPick> ModelPicks(ModelProviderStatus? status)
+    public static IReadOnlyList<ModelPick> ModelPicks(ModelProviderStatus? status, string? role = null)
     {
         var picks = new List<ModelPick>();
         if (status is null)
@@ -275,19 +292,34 @@ public static class ShellText
             return picks;
         }
 
-        string? model = status.ChatModel;
+        var found = status.RoleOf(role);
+        bool own = found?.Key is not null;
+        string? model = found is null ? status.ChatModel : found.Model;
+        string? inherits = found?.Inherits;
+        if (inherits is not null)
+        {
+            string label = $"Same as {inherits.ToLowerInvariant()}";
+            picks.Add(new ModelPick(ModelPickKind.Model, "", found!.InheritsModel ? "✓ " + label : label));
+        }
+
         foreach (var name in status.Models)
         {
-            bool current = model is not null && name.Equals(model, StringComparison.OrdinalIgnoreCase);
+            bool current = model is not null && name.Equals(model, StringComparison.OrdinalIgnoreCase) && found is not { InheritsModel: true };
             picks.Add(new ModelPick(ModelPickKind.Model, name, current ? $"✓ {name}" : name));
         }
 
-        if (status.DeviceSetting is not null)
+        if ((own ? found!.DeviceSetting : status.DeviceSetting) is not null)
         {
-            string choice = status.DeviceChoice is { Length: > 0 } set ? set : "auto";
+            if (inherits is not null)
+            {
+                string label = $"Run on the {inherits.ToLowerInvariant()}'s device";
+                picks.Add(new ModelPick(ModelPickKind.Device, "", found!.InheritsDevice ? "✓ " + label : label));
+            }
+
+            string choice = (own ? found!.DeviceChoice : status.DeviceChoice) is { Length: > 0 } set ? set : "auto";
             foreach (var device in status.Devices)
             {
-                bool chosen = device.Equals(choice, StringComparison.OrdinalIgnoreCase);
+                bool chosen = device.Equals(choice, StringComparison.OrdinalIgnoreCase) && found is not { InheritsDevice: true };
                 string label = device.Equals("auto", StringComparison.OrdinalIgnoreCase) && status.AutoDevice is { } auto
                     ? $"Run on auto (the fastest found: {auto})"
                     : $"Run on {device}";
@@ -297,6 +329,61 @@ public static class ShellText
 
         picks.Add(new ModelPick(ModelPickKind.Page, "", status.Models.Count == 0 ? "Add a model… (Models and devices)" : "Another model… (Models and devices)"));
         return picks;
+    }
+
+    /// <summary>
+    /// What picking <paramref name="pick"/> at the chip of the role <paramref name="role"/> writes (note 25: each chip its
+    /// own role's settings): the variable, its value (null clears it: the default, or for a role that inherits the other
+    /// role's), and the command that loads the role's model after a model pick; null for a pick that writes nothing (the page).
+    /// </summary>
+    public static ModelPickWrite? WriteOf(ModelProviderStatus? status, string? role, ModelPick pick)
+    {
+        ArgumentNullException.ThrowIfNull(pick);
+        if (status is null)
+        {
+            return null;
+        }
+
+        var found = status.RoleOf(role);
+        bool own = found?.Key is not null;
+        bool inherits = found?.Inherits is not null;
+        switch (pick.Kind)
+        {
+            case ModelPickKind.Model when (own ? found!.ModelSetting : status.ModelSetting) is { } setting:
+                return new ModelPickWrite(setting.Variable, pick.Value.Length == 0 ? null : pick.Value, own ? found!.LoadCommand ?? status.LoadCommand : status.LoadCommand);
+            case ModelPickKind.Device when (own ? found!.DeviceSetting : status.DeviceSetting) is { } setting:
+                // "auto" is the default of a role's own device; for a role that inherits, an empty one is the other's, so
+                // auto is written as such.
+                string? value = pick.Value.Length == 0 || (!inherits && pick.Value.Equals("auto", StringComparison.OrdinalIgnoreCase)) ? null : pick.Value;
+                return new ModelPickWrite(setting.Variable, value, null);
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// The status bar's model item's tooltip (note 25): each role's model, the device it runs on once loaded (else what
+    /// it would take), and its state, one line each; what to do when no provider is installed.
+    /// </summary>
+    public static string ModelRolesTooltip(ModelProviderStatus? status)
+    {
+        if (status is null)
+        {
+            return "No model provider is installed (the AI plug-in brings \"local\").";
+        }
+
+        var lines = new List<string>(status.Roles.Count + 1);
+        foreach (var role in status.Roles)
+        {
+            string device = role.Device is { } running ? " on " + running
+                : role.Key is not null && role.Model is not null && PlannedDevice(status, role.Key) is { } planned ? " · " + planned
+                : "";
+            lines.Add(!role.Enabled ? $"{role.Role}: off"
+                : $"{role.Role}: {role.Model ?? "none set"}{device} · {role.State}{(role.InheritsModel && role.Inherits is { } other ? $" (same as {other.ToLowerInvariant()})" : "")}");
+        }
+
+        lines.Add("Pick a model with the chip under the chat's or the agent's input; each role's settings are on the settings page.");
+        return string.Join(Environment.NewLine, lines);
     }
 
     /// <summary>The status bar's model text: "local · vulkan:0 · 3.1 GB in use · 41 tok/s", the parts it measured; "" with no model.</summary>
@@ -341,15 +428,21 @@ public static class ShellText
 /// <summary>What a row of the composer's model picker does.</summary>
 public enum ModelPickKind
 {
-    /// <summary>Makes <see cref="ModelPick.Value"/> the chat model (the provider's model setting) and loads it.</summary>
+    /// <summary>Makes <see cref="ModelPick.Value"/> the role's model (the role's model setting; empty: the other role's) and loads it.</summary>
     Model,
 
-    /// <summary>Makes <see cref="ModelPick.Value"/> the device to run on (the provider's device setting).</summary>
+    /// <summary>Makes <see cref="ModelPick.Value"/> the role's device to run on (its device setting; empty: the other role's).</summary>
     Device,
 
     /// <summary>Opens the Models and devices page.</summary>
     Page,
 }
+
+/// <summary>What a pick at the composer's model chip writes (<see cref="ShellText.WriteOf"/>).</summary>
+/// <param name="Variable">The setting's variable ("CRAFT_PLUGIN_AI_AGENTMODEL").</param>
+/// <param name="Value">Its new value, or null to clear it (its default; for a role that inherits, the other role's).</param>
+/// <param name="LoadCommand">The command that loads the role's model after the write, or null.</param>
+public sealed record ModelPickWrite(string Variable, string? Value, string? LoadCommand);
 
 /// <summary>A row of the composer's model picker (<see cref="ShellText.ModelPicks"/>).</summary>
 /// <param name="Kind">What it does.</param>

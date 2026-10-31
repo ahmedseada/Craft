@@ -55,6 +55,9 @@ public static class SettingSections
     /// <summary>The completion list and inline completion.</summary>
     public const string Completion = "completion";
 
+    /// <summary>The chat's model and its replies.</summary>
+    public const string Chat = "chat";
+
     /// <summary>The agent and its sandbox, proposals and the diff view.</summary>
     public const string Agent = "agent";
 
@@ -82,6 +85,7 @@ public static class SettingSections
         (CSharp, "C# and Roslyn"),
         (Models, "Models and AI"),
         (Completion, "Completion"),
+        (Chat, "Chat"),
         (Agent, "Agent and sandbox"),
         (Terminal, "Terminal"),
         (Voice, "Voice"),
@@ -89,6 +93,19 @@ public static class SettingSections
         (Plugins, "Plug-ins"),
         (Keyboard, "Keyboard"),
     ];
+
+    /// <summary>The prefix of the commands that open the settings page at a section (<see cref="CommandOf"/>).</summary>
+    public const string CommandPrefix = "craft.settings.";
+
+    /// <summary>
+    /// The command that opens the settings page at section <paramref name="id"/> ("craft.settings.chat"): the shell
+    /// registers one per section, so a plug-in links to its settings ("the chat is off: open its settings").
+    /// </summary>
+    public static string CommandOf(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        return CommandPrefix + id;
+    }
 
     /// <summary>The title of section <paramref name="id"/> (the id itself for one not listed).</summary>
     public static string TitleOf(string id)

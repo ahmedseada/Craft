@@ -30,6 +30,10 @@ public static class MauiProgram
             optionsError = e.Message;
         }
 
+#if WINDOWS
+        WinUI.CrashDialog.Options = options;
+#endif
+
         // The pre-installed plug-ins (plugins/<Name>/<Name>.dll beside the program; C# is one, removable): a plug-in that
         // fails is reported on the page, never a crash.
         var plugins = CraftPlugins.LoadInstalled(options);

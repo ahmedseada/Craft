@@ -46,6 +46,9 @@ public sealed record CraftOptions
     /// <summary>Where recovery copies are kept; null for the user's local application data folder, under "Craft/recovery" (<c>CRAFT_RECOVERY_FOLDER</c>).</summary>
     public string? RecoveryFolder { get; init; }
 
+    /// <summary>Where crash reports are written; null for the user's local application data folder, under "Craft/crashes" (<c>CRAFT_CRASH_FOLDER</c>).</summary>
+    public string? CrashFolder { get; init; }
+
     /// <summary>The characters of each block a text buffer's add buffer grows by (<c>CRAFT_BUFFER_CHUNK</c>).</summary>
     public int BufferChunkCharacters { get; init; } = 64 * 1024;
 
@@ -133,6 +136,7 @@ public sealed record CraftOptions
         new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off."),
         new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step."),
         new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept."),
+        new("CRAFT_CRASH_FOLDER", "(local app data)/Craft/crashes", "Where crash reports are written (the crash dialog names the file)."),
         new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by."),
         new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's)."),
         new("CRAFT_PLUGIN_FOLDERS", "(none)", "Folders of user plug-ins (a Name/Name.dll folder each), loaded after the app's own; separated by ';'."),
@@ -210,6 +214,11 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_RECOVERY_FOLDER") is { } recovery)
         {
             options = options with { RecoveryFolder = recovery };
+        }
+
+        if (Text(read, "CRAFT_CRASH_FOLDER") is { } crashes)
+        {
+            options = options with { CrashFolder = crashes };
         }
 
         if (Text(read, "CRAFT_BUFFER_CHUNK") is { } chunk)

@@ -28,6 +28,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Single DoubleClickDistance { get; init; }
   System.Single FontSize { get; init; }
   System.Single LineSpacing { get; init; }
+  System.String CrashFolder { get; init; }
   System.String FontFamily { get; init; }
   System.String NewLine { get; init; }
   System.String RecoveryFolder { get; init; }
@@ -49,6 +50,10 @@ sealed class Craft.Core.CraftVariable : System.IEquatable<Craft.Core.CraftVariab
   System.String ToString()
   System.Void Deconstruct(out System.String Name, out System.String Default, out System.String Meaning)
   ctor(System.String Name, System.String Default, System.String Meaning)
+static class Craft.Core.Diagnostics.CrashReports
+  static System.String Folder(Craft.Core.CraftOptions options)
+  static System.String Format(System.Exception error, System.String source, System.String extra = null)
+  static System.String Write(Craft.Core.CraftOptions options, System.Exception error, System.String source, System.String extra = null)
 sealed class Craft.Core.Documents.RecoveryEntry : System.IEquatable<Craft.Core.Documents.RecoveryEntry>
   Craft.Core.Documents.RecoveryEntry <Clone>$()
   System.Boolean Equals(Craft.Core.Documents.RecoveryEntry other)

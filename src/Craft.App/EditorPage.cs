@@ -177,15 +177,7 @@ public sealed class EditorPage : ContentPage
         }
 
         _started = true;
-        if (_initialPath is not null)
-        {
-            await OpenAsync(_initialPath);
-        }
-        else
-        {
-            Show(TextDocument.Create("", _startup.Options), EditorLanguages.Find("csharp"));
-        }
-
+        // The plug-ins start first, so they see the first document open (the sample's word count counts it).
         foreach (var activation in _host.RefreshPlugins())
         {
             if (activation.Error is not null)
@@ -193,6 +185,15 @@ public sealed class EditorPage : ContentPage
                 _notice.Text = $"Plug-in {activation.Name} did not start";
                 await DisplayAlertAsync("Craft: a plug-in did not start", $"{activation.Name}: {activation.Error}", "OK");
             }
+        }
+
+        if (_initialPath is not null)
+        {
+            await OpenAsync(_initialPath);
+        }
+        else
+        {
+            Show(TextDocument.Create("", _startup.Options), EditorLanguages.Find("csharp"));
         }
 
         if (_startup.OptionsError is { } error)

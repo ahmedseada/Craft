@@ -7,7 +7,11 @@ namespace Craft.App.WinUI;
 public partial class App : MauiWinUIApplication
 {
     /// <summary>The WinUI application, its XAML loaded.</summary>
-    public App() => InitializeComponent();
+    public App()
+    {
+        CrashDialog.Install(this);
+        InitializeComponent();
+    }
 
     /// <inheritdoc />
     protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();

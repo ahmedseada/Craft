@@ -1,7 +1,7 @@
 {
   "name": "Craft.CSharp",
   "version": "0.1.0",
-  "summary": "C# on Roslyn: syntactic classification of .cs and .csx files",
+  "summary": "C# on Roslyn: colours (syntactic and semantic), errors and warnings, completion, signature help, hover, go to definition and format for .cs files; colours for .csx",
   "contractVersion": "1.0",
   "capabilities": []
 }

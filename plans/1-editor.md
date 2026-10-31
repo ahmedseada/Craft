@@ -2841,5 +2841,10 @@ follows this list; until then no project carries the Android target, and the cod
 The owner, going to sleep (2026-11-01): every decision takes the recommended option, written here in one line; a free
 slot starts the next ready work at once; the owner tests later.
 
+Craft is a stress test of Idrak (the owner, 2026-11-01: "all these apps are here to stress test the lib; test and fix
+weak points"): a slot that finds the cause in Idrak (an error, a missing contract, memory that grows, a slow path, a
+message that misleads) fixes it in Idrak on its `main` by Idrak's rules (`IDRAK_DEVICES=cpu`, an `IDRAK_FILTER` for the
+code changed, its API dump), pushes it first, then uses it from Craft; never a workaround in Craft.
+
 Every slot follows Craft's new build-and-test rule (`CLAUDE.md`): all the work, one build, all the tests, one run,
 fixes as a batch, the full filter once, then push.

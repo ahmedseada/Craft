@@ -302,11 +302,14 @@ Phases are a dependency order, not a barrier. At most two agents work at a time.
 Given per phase with the exact project names, in the shape of `CLAUDE.md`: one pull, one build, then the targeted runs
 with `--no-build`, outputs under `test-output\`.
 
-## Open items for the owner
+## Decisions taken on the recommendation (2026-10-31)
 
-1. E3 now includes a minimal window so the editor is run before E4; say no to keep E4 as the first run.
-2. Whether `Idrak.Tests.Library` becomes packable so Craft reuses the runner instead of copying its shape.
-3. A3's items: which, if any, come forward.
+1. **E3 includes a minimal window** in `Craft.App` that opens one file, so the owner runs the editor control before the
+   shell of E4.
+2. **The test runner is copied in shape, not referenced**: `Craft.Tests` gets its own small runner with Idrak's flags
+   (`--progress`, `--failures-only`, `--failures-file`) and `CRAFT_FILTER`; `Idrak.Tests.Library` stays unpackaged.
+3. **A3 stays held**: the remote model provider, the `kestrel` MCP transport, screen-reader access, iOS and macOS wait
+   for the owner.
 
 ## The owner's answers (2026-10-31)
 
@@ -321,3 +324,4 @@ with `--no-build`, outputs under `test-output\`.
 6. **Model names:** resolved by Idrak's `ModelSources`; Craft's own contract (`IModelProvider`) only chooses local or
    remote.
 7. **MCP first:** the Idrak.Mcp gap (serving from a running app) is fixed before the editor starts (S0).
+8. **Rules:** Idrak's working rules apply to Craft, written into this repository's `CLAUDE.md` for every later session.

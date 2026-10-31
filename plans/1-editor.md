@@ -1,7 +1,29 @@
 # Plan 1: Craft, a code editor (C# first) with AI plug-ins on Idrak's contracts
 
-**Status:** planned 2026-10-31 against Idrak `main` d01a3b1 and Craft `main` 39f26ab; reviewed and verified against
-Idrak's code the same day (the "Verified" section). Nothing is built. The owner's answers (2026-10-31): the editor lives
+**Status (2026-11-01, Craft `main` c3cfaed, Idrak `main` 5b5854d):** E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2, the
+owner's notes 1-26 and X slices 1-3 are built (see "Now" below). Next, in this order: the bugs B1-B5 of the third
+Windows run, then the X restart (note 27, X parts 4 and 5, the rest of X), then phase W (the web languages), then P
+batch 2. See "The owner's third Windows run (2026-11-01)" at the end.
+
+## Now (2026-11-01)
+
+| # | Phase or item | Status |
+|---|---|---|
+| 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
+| 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
+| 3 | B1-B5: paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe | Next (planned below) |
+| 4 | Note 27, X part 4, X part 5 | Lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
+| 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
+| 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
+| 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | After W starts, the owner's word ("resume the Idrak plug-ins from phase P") |
+| 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
+| 9 | M (Android), A3 (remote models) | Held for the owner's word |
+| 10 | Does voice dictation go through the diff view? | The owner's call |
+
+## The original status (2026-10-31)
+
+Planned 2026-10-31 against Idrak `main` d01a3b1 and Craft `main` 39f26ab; reviewed and verified against
+Idrak's code the same day (the "Verified" section). The owner's answers (2026-10-31): the editor lives
 in Craft; .NET MAUI with Craft's own drawn editor control; Windows only until the owner has a good Windows version and
 says "compile Android" (the Android target, builds and runs are phase M; the code Android-ready from E0); Roslyn from
 the start; the plug-ins of phase P test Idrak's plug-in
@@ -704,7 +726,8 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | R0 | **Built (2026-10-31, Idrak f419399).** Idrak: preference learning from episodes ("Idrak library gaps", R0): `PreferencePairSources` ("group", "verdict"), the preference losses by name ("dpo", "orpo", "simpo") over the existing `FineTuningLosses`, iterative preference training usable by `idrak reinforce`, the suite and the bench. | Pairs from a scored rollout train a tiny model with the DPO loss falling and the margin rising; memory flat over many rounds; `idrak reinforce --pairs group --loss dpo` runs. | A0 (a slot in Idrak); before R |
 | R | **Built (2026-10-31, "R as built" below); left: the owner's training on a real model on Windows, and the plug-in under `idrak reinforce`.** Learning in the editor on Idrak's reinforcement learning ("Learning in the editor" above): episodes from the editor, the editor-verdict reward with `csharp-build`/`csharp-tests`, tasks from the workspace's tests, background adapter training, promotion and rollback, the Learning panel; and the plug-in as the test of Idrak's reinforcement stack through its C# environment. | A fixture workspace's failing test becomes a task the "csharp" environment rewards; recorded episodes replay; an adapter trains with flat memory and is promoted only when better; the same assembly runs under `idrak reinforce`; the owner trains on a real model on Windows. | A2 (the episodes come from its plug-ins), P5 (the sandbox), R0 |
 | M | Android, when the owner says "compile Android": the `net10.0-android` target added to every project in one step; `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | Every project builds for Android; the owner edits a file on a phone; the numbers are written here. | the owner's word, after a good Windows version |
-| L | Held, far later: more languages, each its own pre-installed, removable plug-in like C# (an `ILanguage` in `EditorLanguages`, loaded from `plugins/`): TypeScript, JavaScript, HTML, CSS. The parser for each is chosen when the phase starts, measured against the keystroke budget; nothing native (no tree-sitter binaries), so a C# incremental parser or lexer per language. | Each opens, colours and matches brackets like C#; removing its folder turns its files to plain text. | the owner's word, after a good Windows version |
+| W | **Planned 2026-11-01, starts the moment X is done (the owner's word; it replaces L for these languages).** The web languages, each a pre-installed, removable plug-in on the public contracts: HTML, CSS (and .scss, .less), JavaScript, TypeScript, Angular, each with its colours (the latest syntax, the project's version read where it is set), brackets, folding and file icons for its files and related files; npm (package.json scripts through the sandbox, install as an activity); ESLint 9 (flat config) as the linter, TSLint where a project still has `tslint.json`. See "The owner's third Windows run". | Each opens, colours and matches brackets like C#; random edits equal a fresh session; the keystroke and paint numbers written here; removing its folder turns its files to plain text; the owner's check on a web project on Windows. | X done |
+| L | Replaced for HTML, CSS, JavaScript and TypeScript by W (2026-11-01); held for any other language. Held, far later: more languages, each its own pre-installed, removable plug-in like C# (an `ILanguage` in `EditorLanguages`, loaded from `plugins/`): TypeScript, JavaScript, HTML, CSS. The parser for each is chosen when the phase starts, measured against the keystroke budget; nothing native (no tree-sitter binaries), so a C# incremental parser or lexer per language. | Each opens, colours and matches brackets like C#; removing its folder turns its files to plain text. | the owner's word, after a good Windows version |
 | A3 | Held: the "remote" model provider, the `kestrel` MCP transport in Idrak.AspNetCore, screen-reader access to the drawn editor, iOS and macOS. | the owner's call | the owner |
 
 ## E3 as built (2026-10-31)
@@ -2714,3 +2737,81 @@ terminal) and every item above holds; the measured numbers are written here.
   hits; the measured input-to-response numbers of each interaction on the owner's machine (the 10,000-file number on
   Windows among them); the rest of X's items belong to slices 1 and 2 or are not started (sticky scroll, the minimap, the
   chat's markdown and steps).
+
+## The owner's third Windows run (2026-11-01): bugs first, then X, W and P batch 2
+
+The owner's run on `c3cfaed` (the trail `trail-45356-20261101-022524`, its ticket and 34 stall reports, from
+`CRAFT_CRASH_FOLDER`) and the owner's messages, in their order: phase W after X; the sample plug-in that did not load;
+learning's failed training ("why does learning need Idrak.Audio or Vision?"); a long C# file that scrolls with lag, inline
+completion off too; then resume P; and Craft's new build-and-test rule (in `CLAUDE.md`, Craft only). Analysed with no
+code changed; every fix below follows Idrak's `docs/optimization.md` (the rule numbers named).
+
+**Decisions (the owner, 2026-11-01: "1a 2a 3a 4a")**: this plan approved, and three planning agents (no code) write
+the X restart, W and P batch 2 in detail below; ESLint 9 as W's linter, TSLint only where a project has `tslint.json`;
+the bugs before the X restart; the full paint fix (a cached layout per line, the caret drawn alone). Every language
+supports its latest syntax (the owner: "in every language of course use latest support").
+
+### The bugs (B1-B5)
+
+**B1, paint and scroll lag (found).** The trail holds 501 frames, each 53-68 ms ("editor: paint" to "editor: painted"),
+one every 0.5 s while idle (the caret's blink) and one per step while scrolling, so a scroll runs at 15-18 frames a
+second whatever completion does; the watchdog's 0.2-0.4 s "editor: paint" stalls are runs of them. Cause:
+`EditorRenderer` calls `IEditorCanvas.DrawText` once per coloured run of every visible line, and `MauiEditorCanvas`
+draws each with MAUI Graphics' `DrawString` (a box, alignment and overflow), which on Windows makes a new text format
+and layout per call; every frame draws every visible line again, and the blink invalidates the whole view. Not the
+cause: the code font (`CodeFontPicker.Ensure` returns at once after the first pick; it does build a key string every
+frame, rule 75, removed too). Fix (the owner's 4a):
+- The Windows canvas (`Platforms/Windows`, behind `IEditorCanvas`, nothing outside `Platforms/` changes platform) draws
+  straight on Win2D's drawing session: one layout per shown line with its runs' colours and styles set on ranges, kept
+  in a cache keyed by the line's text version, the theme and the font (rule 75), bounded to the lines on screen and a
+  margin and dropped on memory pressure (rule 77); a scroll lays out only the lines it brings in. Check first that Win2D
+  comes with MAUI already (rule 0: no package added).
+- The caret, and the blink, drawn on a layer of their own: a blink invalidates the caret's cell only.
+- Proven unchanged (rule 71): the tests' fixed-metric canvas records the same runs, places and colours before and after;
+  on Windows a frame's pixels hashed before and after on a fixed file. Measured (rules 76, 78): cold and warm frames apart,
+  through the telemetry table; a warm frame allocates nothing (rule 63). Target: a warm frame of a full screen of C#
+  well under one frame (16 ms), written here with the owner's number.
+- The same for the gutter's numbers and `PanelListView` (its "panel list: paint" stalls of 0.2-0.3 s, Output and
+  telemetry) and the terminal, which draw through the same canvas.
+
+**B2, the crash (0xc000027b, a stowed exception in `Microsoft.UI.Xaml.dll`, 02:28:51; not proven).** The trail's last
+line is a paint that never reached "painted". Fix: a frame that throws is caught, logged with its type and step
+(rule 90) and skipped, never let out into WinUI; the trail writes the inner exception. The next run's ticket names
+the frame if it is not that.
+
+**B3, the sample plug-in did not load (found).** `TypeInitializationException` from `SampleRegistration.Binding`:
+`KeyBinding` gained two parameters (`Then`, `When`; notes 16 and the composer keys) while the plug-in contract stayed
+"1.0", and the sample's DLL in `test-output\plugins` was built before (it is built outside the solution), so its call to
+the old three-parameter constructor fails. Fix: the old constructor kept beside the new (no binary break); the API guard
+marks a changed or removed public member of `Craft.Abstractions` as needing a contract version step; the loader shows
+the inner exception ("MissingMethodException: KeyBinding..ctor(KeyChord, string, bool)") instead of the type
+initializer's; a test loads a plug-in compiled against the older contract.
+
+**B4, learning: "No architecture 'Qwen2ForCausalLM' is registered" (found).** `LearningLibraries.EnsureIncluded`
+loads the plain Idrak libraries and registers only `csharp-coding`; it skips the plug-in packages, so
+`Idrak.Text.Plugins` (Qwen2's family) is registered only by Craft.Ai, at its first model load. Since note 23 nothing
+loads at start, so a training round before any chat load finds no Qwen2. Fix: learning registers the model families
+itself before its first load, through the same `idrakPlugins` setting as Craft.Ai (one registration a process, rule 75);
+test: a training round in a fresh process with no chat load finds the family. Also checked:
+`LearningTrainer.Rewards`'s `GetAwaiter().GetResult()` never runs on the UI thread (rule 50).
+
+**B5, "why does learning need Idrak.Audio or Vision?" (found: it does not).** Three things made it look so: Idrak's
+message for a missing family suggests `Idrak.Vision.Plugins` to every caller; `IdrakAudioForConditionalGeneration` in
+the list is the voice plug-in's; and Idrak's `LibraryDefaults.Find` probes every Idrak library by name at start (13
+first-chance `FileNotFoundException`s in the trail: Audio, Vision, Diffusion, Cluster, Network, Onnx.Runtime, Mcp, ...).
+Fix in Idrak (on its `main`, by its rules, `IDRAK_DEVICES=cpu` and an `IDRAK_FILTER`): probe only the libraries present
+beside the program, once; the missing-family message names the package that holds the family asked for.
+
+Also in the trail, for the slots: `WindowsShellPlatform.RouteKeys` threw "The window has no WinUI content yet" at start
+(hook the keys once the page appeared), a WinRT `InvalidOperationException` at start, and three 0.2-0.3 s "unlabelled UI
+work" stalls at start-up (the plug-ins' rail, menus and models; the window's resize) still to label and move off.
+
+### The order and the slots
+
+1. B1-B5, three slots: B1 and B2 (the canvas), B3 and B4 (the plug-ins), B5 (Idrak, then Craft's use of it).
+2. The X restart: note 27, X part 4, X part 5, then the rest of X (planned below by its agent).
+3. W, the moment X is done (planned below by its agent).
+4. P batch 2 (planned below by its agent).
+
+Every slot follows Craft's new build-and-test rule (`CLAUDE.md`): all the work, one build, all the tests, one run,
+fixes as a batch, the full filter once, then push.

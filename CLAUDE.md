@@ -78,10 +78,15 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
 - **Tests.** Never run the full test suite, anywhere, by anyone but the owner. Only targeted runs: always with a
   `CRAFT_FILTER` group or name for the code changed (Idrak's tests with `IDRAK_DEVICES=cpu` and `IDRAK_FILTER`). The
   window, Android, GPU and model runs are the owner's: give the exact commands.
-- **The fix workflow (the owner's, in this order).** 1. Fix every error of the task first; never run tests between
-  fixes. 2. Update the tests the fixes touch (expectations, and failure messages that name the cause). 3. Build once,
-  only the projects that changed. 4. Run the targeted filtered tests once with `--no-build`. 5. Merge and push; a merge
-  without conflicts gets no build and no tests. 6. Hand the owner one targeted command list for only what changed: the
+- **The fix workflow (the owner's, in this order; Craft's own rule, 2026-11-01, not Idrak's).** An agent builds and
+  tests its work as a whole, never per feature or per fix. 1. Write all of the agent's work first (every feature and
+  fix of its slot), with no build in between. 2. Build once, only the projects that changed; fix every build error, then
+  build again only until it compiles. 3. Write all of the work's tests at once (new tests, and the expectations and
+  failure messages that name the cause in the tests the work touches). 4. Build once, then run those tests once with
+  `--no-build`. 5. If tests fail: fix all of them, build once, and run only the failed tests again; repeat until they
+  pass. 6. When they pass, run the agent's full filter once (every `CRAFT_FILTER` group its work touches) to check
+  nothing else broke, then push; a merge without conflicts gets no build and no tests. 7. Hand the owner one targeted
+  command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it
   needs with `--no-build`, and no second pull. At most three agents at a time (the owner's limit for Craft and every phase of its plan, including the phases that change Idrak, such as S0 and A0; Idrak's own work outside this plan keeps Idrak's limit of two), so builds do not compete for the machine.
   A slot never idles while work is ready: the moment an agent finishes, the slot takes the next piece of work whose

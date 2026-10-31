@@ -59,6 +59,38 @@ public sealed record CraftOptions
 
     /// <summary>The folder names a workspace skips by default.</summary>
     public static IReadOnlyList<string> DefaultWorkspaceIgnore { get; } = ["bin", "obj", ".git", ".vs", "node_modules", "test-output"];
+    /// <summary>Milliseconds between the caret's blinks; 0 shows it solid (<c>CRAFT_CARET_BLINK_MS</c>).</summary>
+    public int CaretBlinkMilliseconds { get; init; } = 530;
+
+    /// <summary>The caret bar's width in device-independent units (<c>CRAFT_CARET_WIDTH</c>).</summary>
+    public float CaretWidth { get; init; } = 2;
+
+    /// <summary>Clicks closer in time than this many milliseconds count as a double or triple click (<c>CRAFT_DOUBLE_CLICK_MS</c>).</summary>
+    public int DoubleClickMilliseconds { get; init; } = 500;
+
+    /// <summary>Clicks farther apart than this, in device-independent units, start a new click count (<c>CRAFT_DOUBLE_CLICK_DISTANCE</c>).</summary>
+    public float DoubleClickDistance { get; init; } = 4;
+
+    /// <summary>The lines a bracket match scans each way from the caret before giving up (<c>CRAFT_BRACKET_SCAN_LINES</c>).</summary>
+    public int BracketScanLines { get; init; } = 5000;
+
+    /// <summary>The lines kept between the caret and the viewport's top or bottom edge when it is scrolled into view (<c>CRAFT_SCROLL_MARGIN_LINES</c>).</summary>
+    public int ScrollMarginLines { get; init; } = 2;
+
+    /// <summary>The columns kept between the caret and the viewport's left or right edge when it is scrolled into view (<c>CRAFT_SCROLL_MARGIN_COLUMNS</c>).</summary>
+    public int ScrollMarginColumns { get; init; } = 4;
+
+    /// <summary>The empty lines the editor can scroll past the last line (<c>CRAFT_BOTTOM_MARGIN_LINES</c>).</summary>
+    public int BottomMarginLines { get; init; } = 3;
+
+    /// <summary>The empty cells of the line-number gutter beside the widest number (<c>CRAFT_GUTTER_PADDING</c>).</summary>
+    public int GutterPaddingCells { get; init; } = 2;
+
+    /// <summary>Whether typing an opening bracket inserts its closing one too (<c>CRAFT_AUTO_CLOSE_BRACKETS</c>).</summary>
+    public bool AutoCloseBrackets { get; init; }
+
+    /// <summary>Find stops counting matches at this many (the count then shows as "at least") (<c>CRAFT_FIND_COUNT_LIMIT</c>).</summary>
+    public int FindCountLimit { get; init; } = 100_000;
 
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
@@ -75,6 +107,17 @@ public sealed record CraftOptions
         new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by."),
         new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's)."),
         new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','."),
+        new("CRAFT_CARET_BLINK_MS", "530", "Milliseconds between the caret's blinks; 0 shows it solid."),
+        new("CRAFT_CARET_WIDTH", "2", "The caret bar's width, in device-independent units."),
+        new("CRAFT_DOUBLE_CLICK_MS", "500", "Clicks closer in time than this count as a double or triple click."),
+        new("CRAFT_DOUBLE_CLICK_DISTANCE", "4", "Clicks farther apart than this (device-independent units) start a new click count."),
+        new("CRAFT_BRACKET_SCAN_LINES", "5000", "The lines a bracket match scans each way before giving up."),
+        new("CRAFT_SCROLL_MARGIN_LINES", "2", "Lines kept between the caret and the viewport's top or bottom when scrolled into view."),
+        new("CRAFT_SCROLL_MARGIN_COLUMNS", "4", "Columns kept between the caret and the viewport's left or right when scrolled into view."),
+        new("CRAFT_BOTTOM_MARGIN_LINES", "3", "Empty lines the editor can scroll past the last line."),
+        new("CRAFT_GUTTER_PADDING", "2", "Empty cells of the line-number gutter beside the widest number."),
+        new("CRAFT_AUTO_CLOSE_BRACKETS", "false", "Whether typing an opening bracket inserts its closing one too."),
+        new("CRAFT_FIND_COUNT_LIMIT", "100000", "Find stops counting matches at this many."),
     ];
 
     /// <summary>
@@ -154,6 +197,62 @@ public sealed record CraftOptions
         {
             options = options with { WorkspaceIgnore = ignore.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
         }
+
+        if (Text(read, "CRAFT_CARET_BLINK_MS") is { } blink)
+        {
+            options = options with { CaretBlinkMilliseconds = Whole(blink, "CRAFT_CARET_BLINK_MS", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_CARET_WIDTH") is { } caretWidth)
+        {
+            options = options with { CaretWidth = Positive(caretWidth, "CRAFT_CARET_WIDTH", 0.5f, 50) };
+        }
+
+        if (Text(read, "CRAFT_DOUBLE_CLICK_MS") is { } doubleClick)
+        {
+            options = options with { DoubleClickMilliseconds = Whole(doubleClick, "CRAFT_DOUBLE_CLICK_MS", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_DOUBLE_CLICK_DISTANCE") is { } distance)
+        {
+            options = options with { DoubleClickDistance = Positive(distance, "CRAFT_DOUBLE_CLICK_DISTANCE", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_BRACKET_SCAN_LINES") is { } scan)
+        {
+            options = options with { BracketScanLines = Whole(scan, "CRAFT_BRACKET_SCAN_LINES", 0, 100_000_000) };
+        }
+
+        if (Text(read, "CRAFT_SCROLL_MARGIN_LINES") is { } marginLines)
+        {
+            options = options with { ScrollMarginLines = Whole(marginLines, "CRAFT_SCROLL_MARGIN_LINES", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_SCROLL_MARGIN_COLUMNS") is { } marginColumns)
+        {
+            options = options with { ScrollMarginColumns = Whole(marginColumns, "CRAFT_SCROLL_MARGIN_COLUMNS", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_BOTTOM_MARGIN_LINES") is { } bottom)
+        {
+            options = options with { BottomMarginLines = Whole(bottom, "CRAFT_BOTTOM_MARGIN_LINES", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_GUTTER_PADDING") is { } gutter)
+        {
+            options = options with { GutterPaddingCells = Whole(gutter, "CRAFT_GUTTER_PADDING", 0, 100) };
+        }
+
+        if (Text(read, "CRAFT_AUTO_CLOSE_BRACKETS") is { } autoClose)
+        {
+            options = options with { AutoCloseBrackets = Flag(autoClose, "CRAFT_AUTO_CLOSE_BRACKETS") };
+        }
+
+        if (Text(read, "CRAFT_FIND_COUNT_LIMIT") is { } findLimit)
+        {
+            options = options with { FindCountLimit = Whole(findLimit, "CRAFT_FIND_COUNT_LIMIT", 1, int.MaxValue) };
+        }
+
 
         return options;
     }

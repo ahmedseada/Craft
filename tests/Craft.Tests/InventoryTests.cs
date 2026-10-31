@@ -57,14 +57,19 @@ public static class InventoryTests
             ["CRAFT_FONT"] = "Consolas", ["CRAFT_FONT_SIZE"] = "16.5", ["CRAFT_LINE_SPACING"] = "1.5", ["CRAFT_TAB_SIZE"] = "2",
             ["CRAFT_INSERT_SPACES"] = "false", ["CRAFT_THEME"] = "light", ["CRAFT_AUTOSAVE_SECONDS"] = "0", ["CRAFT_UNDO_GROUP_MS"] = "250",
             ["CRAFT_RECOVERY_FOLDER"] = "rec", ["CRAFT_BUFFER_CHUNK"] = "4096", ["CRAFT_LINE_ENDING"] = "crlf",
-            ["CRAFT_WORKSPACE_IGNORE"] = "bin; out,dist",
+            ["CRAFT_WORKSPACE_IGNORE"] = "bin; out,dist", ["CRAFT_CARET_BLINK_MS"] = "0", ["CRAFT_CARET_WIDTH"] = "1.5",
+            ["CRAFT_DOUBLE_CLICK_MS"] = "300", ["CRAFT_DOUBLE_CLICK_DISTANCE"] = "6", ["CRAFT_BRACKET_SCAN_LINES"] = "100",
+            ["CRAFT_SCROLL_MARGIN_LINES"] = "1", ["CRAFT_SCROLL_MARGIN_COLUMNS"] = "3", ["CRAFT_BOTTOM_MARGIN_LINES"] = "0",
+            ["CRAFT_GUTTER_PADDING"] = "1", ["CRAFT_AUTO_CLOSE_BRACKETS"] = "true", ["CRAFT_FIND_COUNT_LIMIT"] = "50",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
         {
             FontFamily = "Consolas", FontSize = 16.5f, LineSpacing = 1.5f, TabSize = 2, InsertSpaces = false, Theme = "light",
             AutosaveSeconds = 0, UndoGroupMilliseconds = 250, RecoveryFolder = "rec", BufferChunkCharacters = 4096, NewLine = "\r\n",
-            WorkspaceIgnore = options.WorkspaceIgnore,
+            WorkspaceIgnore = options.WorkspaceIgnore, CaretBlinkMilliseconds = 0, CaretWidth = 1.5f, DoubleClickMilliseconds = 300,
+            DoubleClickDistance = 6, BracketScanLines = 100, ScrollMarginLines = 1, ScrollMarginColumns = 3, BottomMarginLines = 0,
+            GutterPaddingCells = 1, AutoCloseBrackets = true, FindCountLimit = 50,
         }, options, "options read from every variable");
         Check.SequenceEqual(["bin", "out", "dist"], options.WorkspaceIgnore, "CRAFT_WORKSPACE_IGNORE split at ';' and ','");
         Check.Equal(values.Count, CraftOptions.Variables.Count, "every variable is listed in CraftOptions.Variables");

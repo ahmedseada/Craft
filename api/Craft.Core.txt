@@ -1,14 +1,25 @@
 sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions>
   Craft.Core.CraftOptions <Clone>$()
+  System.Boolean AutoCloseBrackets { get; init; }
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
   System.Boolean InsertSpaces { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
   System.Int32 AutosaveSeconds { get; init; }
+  System.Int32 BottomMarginLines { get; init; }
+  System.Int32 BracketScanLines { get; init; }
   System.Int32 BufferChunkCharacters { get; init; }
+  System.Int32 CaretBlinkMilliseconds { get; init; }
+  System.Int32 DoubleClickMilliseconds { get; init; }
+  System.Int32 FindCountLimit { get; init; }
   System.Int32 GetHashCode()
+  System.Int32 GutterPaddingCells { get; init; }
+  System.Int32 ScrollMarginColumns { get; init; }
+  System.Int32 ScrollMarginLines { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 UndoGroupMilliseconds { get; init; }
+  System.Single CaretWidth { get; init; }
+  System.Single DoubleClickDistance { get; init; }
   System.Single FontSize { get; init; }
   System.Single LineSpacing { get; init; }
   System.String FontFamily { get; init; }

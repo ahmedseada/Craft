@@ -1,0 +1,121 @@
+interface Craft.Editor.Abstractions.IEditorClipboard
+  System.Threading.Tasks.Task SetTextAsync(System.String text)
+  System.Threading.Tasks.Task<System.String> GetTextAsync()
+struct Craft.Editor.BracketMatch : System.IEquatable<Craft.Editor.BracketMatch>
+  System.Boolean Equals(Craft.Editor.BracketMatch other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Close { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Open { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Open, out System.Int32 Close)
+  ctor(System.Int32 Open, System.Int32 Close)
+sealed class Craft.Editor.ClipboardFailedEventArgs : System.EventArgs
+  System.Exception Error { get; }
+  ctor(System.Exception error)
+sealed class Craft.Editor.EditorFind
+  Craft.Editor.FindCount CountMatches()
+  System.Boolean FindNext()
+  System.Boolean FindPrevious()
+  System.Boolean IsHighlighting { get; set; }
+  System.Boolean LastWrapped { get; }
+  System.Boolean MatchCase { get; set; }
+  System.Boolean ReplaceOne(System.String replacement)
+  System.Boolean WholeWord { get; set; }
+  System.Int32 ReplaceAll(System.String replacement)
+  System.String Query { get; set; }
+sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, System.IDisposable
+  Craft.Abstractions.FontMetrics Metrics { get; }
+  Craft.Abstractions.ILanguage Language { get; }
+  Craft.Abstractions.ILanguageSession LanguageSession { get; }
+  Craft.Abstractions.ITextDocument Document { get; }
+  Craft.Abstractions.ITextSnapshot Snapshot { get; }
+  Craft.Abstractions.ITheme Theme { get; set; }
+  Craft.Abstractions.LanguageRules Rules { get; }
+  Craft.Abstractions.SelectionState Selection { get; }
+  Craft.Core.CraftOptions Options { get; }
+  Craft.Editor.BracketMatch? MatchingBrackets { get; }
+  Craft.Editor.EditorFind Find { get; }
+  Craft.Editor.EditorPoint PointFromPosition(System.Int32 position)
+  Craft.Editor.LineRange VisibleLines(System.Single scrollY, System.Single viewportHeight)
+  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Boolean Overwrite { get; }
+  System.Double LastInputToPaintMilliseconds { get; }
+  System.Double MaxInputToPaintMilliseconds { get; }
+  System.Int32 CaretColumn { get; }
+  System.Int32 CaretLine { get; }
+  System.Int32 ClickCount { get; }
+  System.Int32 ColumnOf(System.Int32 position)
+  System.Int32 PositionFromPoint(System.Single x, System.Single y)
+  System.Single ContentHeight { get; }
+  System.Single ContentWidth { get; }
+  System.Single GutterWidth { get; }
+  System.Single ScrollX { get; }
+  System.Single ScrollY { get; }
+  System.Single TextLeft { get; }
+  System.Single ViewportHeight { get; }
+  System.Single ViewportWidth { get; }
+  System.String LanguageName { get; }
+  System.Void Dispose()
+  System.Void EnsureCaretVisible()
+  System.Void NoteLineColumns(System.Int32 columns)
+  System.Void NotePainted()
+  System.Void OnText(System.String text)
+  System.Void PointerMoved(System.Single viewX, System.Single viewY)
+  System.Void PointerPressed(System.Single viewX, System.Single viewY, Craft.Abstractions.KeyModifiers modifiers)
+  System.Void PointerReleased()
+  System.Void Remeasure()
+  System.Void ResetTelemetry()
+  System.Void Select(System.Int32 anchor, System.Int32 caret)
+  System.Void UpdateViewport(System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight)
+  ctor(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, Craft.Core.CraftOptions options, Craft.Abstractions.ITheme theme, Craft.Abstractions.ITextMeasurer measurer, Craft.Editor.Abstractions.IEditorClipboard clipboard, System.TimeProvider time = null)
+  event System.EventHandler CaretMoved
+  event System.EventHandler ContentSizeChanged
+  event System.EventHandler Invalidated
+  event System.EventHandler SaveRequested
+  event System.EventHandler<Craft.Editor.ClipboardFailedEventArgs> ClipboardFailed
+  event System.EventHandler<Craft.Editor.EditorScrollEventArgs> ScrollRequested
+  event System.EventHandler<Craft.Editor.FindRequestedEventArgs> FindRequested
+struct Craft.Editor.EditorPoint : System.IEquatable<Craft.Editor.EditorPoint>
+  System.Boolean Equals(Craft.Editor.EditorPoint other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Single X { get; init; }
+  System.Single Y { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Single X, out System.Single Y)
+  ctor(System.Single X, System.Single Y)
+sealed class Craft.Editor.EditorRenderer : System.IDisposable
+  Craft.Editor.LineRange LastVisible { get; }
+  System.Int32 LinesDrawn { get; }
+  System.Int64 RunStringsBuilt { get; }
+  System.Void Dispose()
+  System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Editor.EditorModel model, System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight, System.Boolean caretVisible)
+  ctor()
+sealed class Craft.Editor.EditorScrollEventArgs : System.EventArgs
+  System.Single X { get; }
+  System.Single Y { get; }
+  ctor(System.Single x, System.Single y)
+struct Craft.Editor.FindCount : System.IEquatable<Craft.Editor.FindCount>
+  System.Boolean Capped { get; init; }
+  System.Boolean Equals(Craft.Editor.FindCount other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Count { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Count, out System.Boolean Capped)
+  ctor(System.Int32 Count, System.Boolean Capped)
+sealed class Craft.Editor.FindRequestedEventArgs : System.EventArgs
+  System.Boolean Replace { get; }
+  System.String InitialQuery { get; }
+  ctor(System.Boolean replace, System.String initialQuery)
+struct Craft.Editor.LineRange : System.IEquatable<Craft.Editor.LineRange>
+  System.Boolean Equals(Craft.Editor.LineRange other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Count { get; }
+  System.Int32 First { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Last { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 First, out System.Int32 Last)
+  ctor(System.Int32 First, System.Int32 Last)

@@ -655,7 +655,7 @@ public sealed record ProblemRow(string Text, string Place, Color Color, string M
 /// The bottom panel (docs/design/Main.dc.html): the tabs Problems (with the count), Terminal (the terminals, <see cref="TerminalContent"/>), Output (the host's
 /// log, live) and Idrak telemetry (the measures recorded through the host), the active one in the text colour over the
 /// accent's line. Each list is a virtualized list (only the rows on screen are made). Phase U2: the chevron at the strip's
-/// end and a click on the active tab ask the shell to collapse it (<see cref="CollapseRequested"/>, as Ctrl+J does); its
+/// end asks the shell to collapse it (<see cref="CollapseRequested"/>, as Ctrl+J does); its
 /// height is its <see cref="SplitPanel"/>'s (a drag of the splitter above it, kept per workspace).
 /// </summary>
 public sealed class BottomPanelView : ContentView, IDisposable
@@ -853,19 +853,17 @@ public sealed class BottomPanelView : ContentView, IDisposable
             cell.Add(new BoxView { Color = active ? _palette.Accent : Colors.Transparent, HeightRequest = 1 }, 0, 1);
             var tap = new TapGestureRecognizer();
             var chosen = tab;
+            // A click only selects; the active tab clicked again does nothing (the owner: a click must not hide the panel).
+            // The chevron and Ctrl+J fold it.
             tap.Tapped += (_, _) =>
             {
-                if (chosen == Tab)
-                {
-                    CollapseRequested?.Invoke(this, EventArgs.Empty);   // the active tab again: the panel folds away
-                }
-                else
+                if (chosen != Tab)
                 {
                     Select(chosen);
                 }
             };
             cell.GestureRecognizers.Add(tap);
-            ToolTipProperties.SetText(cell, active ? "Click again to hide the panel (Ctrl+J)" : title);
+            ToolTipProperties.SetText(cell, title);
             _tabs.Children.Add(cell);
         }
     }

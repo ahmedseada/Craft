@@ -2,8 +2,9 @@
 
 **Status:** planned 2026-10-31 against Idrak `main` d01a3b1 and Craft `main` 39f26ab; reviewed and verified against
 Idrak's code the same day (the "Verified" section). Nothing is built. The owner's answers (2026-10-31): the editor lives
-in Craft; .NET MAUI with Craft's own drawn editor control; Windows built and run first, with every project compiling for
-Android from E0 (the Android runs are phase M); Roslyn from the start; the plug-ins of phase P test Idrak's plug-in
+in Craft; .NET MAUI with Craft's own drawn editor control; Windows only until the owner has a good Windows version and
+says "compile Android" (the Android target, builds and runs are phase M; the code Android-ready from E0); Roslyn from
+the start; the plug-ins of phase P test Idrak's plug-in
 points; the Idrak.Mcp gap (serving MCP from a running app) is fixed first, phase S0. Next: S0, when the owner
 says.
 
@@ -67,8 +68,8 @@ Every Idrak capability this plan leans on, checked in the source. A claim that d
 | `Craft.Core` | Text buffer, documents, undo, autosave and recovery, workspace, the classification layers, themes, the plug-in host. No UI, `net10.0`, AOT-compatible, tested on any machine. |
 | `Craft.CSharp` | C# on Roslyn (`Microsoft.CodeAnalysis.CSharp.Workspaces` and `.Features`): syntactic and semantic classification, diagnostics, completion, signature help, hover, go to definition, formatting. Registered as the "csharp" language on both platforms. Not AOT-compatible (Roslyn's MEF uses reflection): `IsAotCompatible` false, its assemblies rooted for the trimmer; Craft never uses NativeAOT. |
 | `Craft.Ai` | The AI plug-ins on Idrak's contracts: inline completion, chat panel, code actions, agent, and the editor's tools. |
-| `Craft.Maui` | The editor control and the pages: the drawn surface behind `IEditorCanvas`, the input adapters per platform, features registered into Idrak.Maui. Targets `net10.0` (headless, for tests), `net10.0-android` and the Windows target on Windows, as Idrak.Maui does. |
-| `Craft.App` | The app: Windows first, Android compiled alongside from E0 and run in phase M. It makes the registrations (Idrak's plug-in packages, Craft's plug-ins) and hosts the models. |
+| `Craft.Maui` | The editor control and the pages: the drawn surface behind `IEditorCanvas`, the input adapters per platform, features registered into Idrak.Maui. Targets `net10.0` (headless, for tests) and the Windows target; `net10.0-android` is added in M. |
+| `Craft.App` | The app: Windows only until the owner says "compile Android" (M). It makes the registrations (Idrak's plug-in packages, Craft's plug-ins) and hosts the models. |
 | `Craft.Plugins.*` | The plug-ins of phase P, each its own assembly. Each implements `IIdrakPlugin` too, so one loader (`IdrakPlugins.Load`) serves Idrak's and Craft's registries alike. |
 | `Craft.Tests` | Targeted groups (`CRAFT_FILTER`), with the same runner flags as Idrak's tests (see "Tests and benches"). |
 | `Craft.Benches` | The measurements of "Speed and memory", results under `test-output\`. |
@@ -194,17 +195,18 @@ documents, or any app's) are unreachable. The owner's order: fix this before the
 
 ### Windows first, Android-ready code
 
-Windows is built and run first. The code never shuts out Android:
+Windows is built and run first; the Android target is added only when the owner has a good Windows version and says
+"compile Android" (M). Until then no project carries `net10.0-android` and no Android build is run. The code never shuts
+Android out:
 
-- Every project builds for `net10.0-android` from E0, beside `net10.0` and the Windows target. A build that breaks the
-  Android target is a broken build.
-- Platform code lives only under `Platforms/Windows` and `Platforms/Android`, behind `IEditorCanvas`,
+- Platform code lives only under `Platforms/Windows` (and later `Platforms/Android`), behind `IEditorCanvas`,
   `ITextInputAdapter`, the file picker and the window or screen size. Windows implementations in E3, Android in M.
 - The layout is chosen from the measured window width, not the platform, so a narrow Windows window already shows the
   phone layout, built and checked on Windows before M.
 - Nothing calls a Windows-only API outside `Platforms/Windows`; the agent's need for a shell is a registered
   `CommandSandboxes` entry, not an assumption.
-- Every library added is AOT- and trim-checked for Android when it is added. Roslyn is the known exception, rooted.
+- Every library added is noted for its Android AOT and trim state when it is added, so M finds no surprise. Roslyn is
+  the known exception, to be rooted.
 
 ### Speed and memory (docs/optimization.md applies to every phase)
 
@@ -284,17 +286,17 @@ Phases are a dependency order, not a barrier. At most two agents work at a time.
 | Phase | What | Done when | Needs |
 |---|---|---|---|
 | S0 | Idrak.Mcp served from a running app: `IMcpServerTransport` and `McpServerTransports` (`stdio`, `http`), `McpHost`, the CLI's `mcp serve` and `serve --mcp` on it with `--transport` and the variables, the `Mcp` test group, the API dump. | `IDRAK_FILTER=Mcp` passes on the CPU; the owner's two-window check (`mcp serve --transport http`, `chat --mcp http://127.0.0.1:PORT`) lists and calls a tool; the `http` overhead against `stdio` is written here. | the owner's go (first) |
-| E0 | Craft skeleton: solution, `Directory.Build.props/targets` with Idrak's settings and the `IdrakFromSource` switch, `MauiVersion`, every project with its Android target, `Craft.Abstractions` with the registries, the inventory test, the API guard per package, the test runner, `Craft.Benches` empty. | `dotnet build` passes for `net10.0` and `net10.0-android`; the inventory and API-guard tests pass. | the owner's go |
+| E0 | Craft skeleton: solution, `Directory.Build.props/targets` with Idrak's settings and the `IdrakFromSource` switch, `MauiVersion`, `Craft.Abstractions` with the registries, the inventory test, the API guard per package, the test runner, `Craft.Benches` empty. Windows and `net10.0` targets only. | `dotnet build` passes; the inventory and API-guard tests pass. | the owner's go |
 | E1 | `Craft.Core`: piece table, snapshots, edits, undo and redo (grouped by typing pause), file open and save (encodings and line endings kept), autosave and recovery, workspace folder. | Random-edit equivalence against a plain string; a 100,000-line file opens and edits in the bench with memory ≈ text + pieces. | E0 |
 | E2 | `Craft.CSharp`, syntactic layer: the snapshot as `SourceText`, the incremental parse, classified spans for a line range, Roslyn's classification names mapped to theme classes, light and dark themes. | Spans of fixed C# 14 files (every string kind, comments, preprocessor lines, contextual keywords) match; spans after random edits equal a fresh parse; the snapshot-`SourceText` equals `SourceText.From` on random edits. | E1 |
-| E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows; Android compiles. | E2 |
+| E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows. | E2 |
 | E4 | `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | A1 | `Craft.Ai` host: `IEditorPlugin`, `IEditorHost`, the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, A0, S0 |
 | A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P7 and P8; P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
-| M | Android: `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | The owner edits a file on a phone; the numbers are written here. | E5, A2 |
+| M | Android, when the owner says "compile Android": the `net10.0-android` target added to every project in one step; `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | Every project builds for Android; the owner edits a file on a phone; the numbers are written here. | the owner's word, after a good Windows version |
 | A3 | Held: the "remote" model provider, the `kestrel` MCP transport in Idrak.AspNetCore, screen-reader access to the drawn editor, iOS and macOS. | the owner's call | the owner |
 
 ## Commands for the owner (once a phase is built)
@@ -316,8 +318,8 @@ with `--no-build`, outputs under `test-output\`.
 1. **Where:** the Craft repository, referencing Idrak as packages, with a switch to a local clone.
 2. **UI stack:** .NET MAUI with Craft's own drawn editor control. Avalonia and a Monaco web view were weighed and set
    aside.
-3. **Platforms first:** Windows built and run first; the code compiles for Android from E0 and the Android runs are
-   phase M; iOS and macOS are held (A3).
+3. **Platforms first:** Windows only, until the owner has a good Windows version and says "compile Android"; then
+   M adds the Android target, builds and runs. The code is Android-ready from E0. iOS and macOS are held (A3).
 4. **C# intelligence:** Roslyn from the start, on both platforms. There is no hand-written lexer unless a measurement
    asks for one.
 5. **Plug-ins:** the phase P set, to test Idrak's plug-in points.

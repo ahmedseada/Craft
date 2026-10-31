@@ -38,10 +38,13 @@ file is corrected.
   the public API guard (`api/<package>.txt`) passing; regenerate a dump when a public API changes.
 - **Idrak gaps are fixed in Idrak.** Something Craft needs that the library lacks (a contract, a transport, a format) is
   added to Idrak on Idrak's `main` by Idrak's rules, then used from Craft; never reimplemented in Craft.
-- **Android compiles from the first phase.** Every project builds for `net10.0-android` beside `net10.0` and the Windows
-  target. A build that breaks the Android target is a broken build. Platform code lives only under `Platforms/Windows`
-  and `Platforms/Android`, behind Craft's contracts (`IEditorCanvas`, `ITextInputAdapter`, the file picker). Every
-  library added is AOT- and trim-checked for Android when it is added; Roslyn is the known exception, rooted.
+- **Windows first; Android only when the owner says.** Until the owner has a good Windows version and says "compile
+  Android", no project carries the `net10.0-android` target and no Android build is run or asked for. The code still
+  stays Android-ready: platform code lives only under `Platforms/Windows` (and later `Platforms/Android`), behind
+  Craft's contracts (`IEditorCanvas`, `ITextInputAdapter`, the file picker); nothing outside `Platforms/` calls a
+  Windows-only API; the layout follows the measured width; every library added is noted for its Android AOT and trim
+  state when it is added (Roslyn is the known exception, to be rooted). When the owner says so, the target is added to
+  every project in one step (phase M).
 - **No silent edit.** A model's or a plug-in's change to a document is always a diff the user accepts, one undo step;
   a command the agent wants to run is approved through a registered sandbox. There is no code path that edits or runs
   without the user.

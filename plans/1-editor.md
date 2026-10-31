@@ -430,6 +430,34 @@ phrase; a spoken command runs the matching command; a spoken-code phrase arrives
 back stops on a key; the owner speaks into the microphone on Windows. Idrak gaps met on the way (a phrase-grammar or
 keyword biasing contract for the recognizer, if the measured accuracy on code words needs one) are fixed in Idrak first.
 
+## The approved design (phase D, added 2026-10-31)
+
+The owner approved the design screens shown on 2026-10-31 ("Craft design screens"); their sources are in
+`docs/design/` (one `.dc.html` per screen). They are the look of the whole app, and the spec of every screen still to
+come:
+
+| Screen | `docs/design/` | Built in |
+|---|---|---|
+| Editor: title bar with menus (File, Edit, View, Run, Plug-ins, Help), the search box (Ctrl+P), the model chip; the activity rail (Explorer, Search, Source control, Agent, Plug-ins, Settings); the explorer with the Roslyn card (workspace state, projects, memory); tabs with the accent line; the breadcrumb; the bottom panel (Problems, Terminal, Output, Idrak telemetry); the chat column; the status bar (branch, problems, Roslyn state, position, indentation, encoding, line ending, language, the model's device, memory and tokens per second) | `Main.dc.html` | D (the shell), A2 (chat, inline completion's hint bar) |
+| Diff review: per-hunk Accept and Reject, how the edit was placed, Roslyn's result before accepting, one undo step | `Diff.dc.html` | A1 (the diff-and-accept view) |
+| Agent run: turns, tokens, the approve-each-command card, changed files, the sandbox's terminal | `Agent.dc.html` | A2 (agent), P5 (the sandbox) |
+| Plug-ins and Idrak registries | `Plugins.dc.html` | D (the page over K's list), P (the registries' checks) |
+| Models and devices | `Models.dc.html` | A1 ("local" provider), D (the page) |
+| Android editor and chat sheet | `PhoneEditor.dc.html`, `PhoneChat.dc.html` | E4's narrow layout now; M on a phone |
+
+The look, as theme tokens (the dark theme the design's; a light theme derived with the same contrast checks): ground
+`#101217`, surface `#16181D`, raised `#1A1D23`/`#1F232B`, selection `#252A33`, border `#2A2E37`/`#343944`, text `#D5D9E0`,
+secondary `#9AA2B1`, accent `#E5A54B` (the design's alternatives `#5FC9B4`, `#82AAFF`, `#E58BA0`: `CRAFT_ACCENT`), success
+`#5FC9B4`, warning `#E3B27A`, error `#F07178`; code colours as in `Main.dc.html` (keyword `#82AAFF`, type `#5FC9B4`,
+string `#E3B27A`, comment `#8790A0` italic, method `#E8D58A`, variable `#B8C7DC`); Inter for the interface and JetBrains
+Mono for code (both SIL Open Font License, bundled as MAUI fonts; `CRAFT_FONT` still overrides the code font); 13 px
+interface text, 22 px code lines; 44 px touch targets in the narrow layout.
+
+Phase D builds the shell's look and layout from `Main.dc.html` on E4's shell and K's contracts (the menus and the rail
+are commands, so plug-ins add to them), the Plug-ins and Models pages, and the theme tokens; each later screen follows
+its design file. Checks: the Windows window beside the design at 1440x900 and at the narrow width, the owner the judge;
+every colour pair meets 4.5:1 (3:1 for large text and lines); the keystroke and paint numbers measured again, unchanged.
+
 ## Learning in the editor: reinforcement learning on Idrak (phase R, added 2026-10-31 at the owner's request)
 
 The owner asked that the editor learn, through Idrak's reinforcement learning, and that it test that library through
@@ -499,6 +527,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows. | E2 |
 | E4 | **Built (2026-10-31, "E4 as built" below).** `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below; semantic colours not yet).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
+| D | The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |

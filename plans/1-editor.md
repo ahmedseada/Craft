@@ -18,9 +18,9 @@ Windows run (2026-11-01)" at the end.
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
 | 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
-| 9 | M (Android) | Tested once the Windows version is done (the owner, 2026-11-01) |
-| 9b | A3 (remote models) | Held for the owner's word |
-| 10 | Does voice dictation go through the diff view? | The owner's call |
+| 9 | M (Android) | Only on the owner's clear decision (2026-11-01: "needs my clear decision, don't start"); never on a recommendation |
+| 9b | A3 (remote models) | Only on the owner's clear decision; never on a recommendation |
+| 10 | Does voice dictation go through the diff view? | Only on the owner's clear decision; never on a recommendation |
 
 ## The original status (2026-10-31)
 
@@ -3095,7 +3095,9 @@ The target is Windows; Android (phase M) is tested once the Windows version is d
 follows this list; until then no project carries the Android target, and the code stays Android-ready.
 
 The owner, going to sleep (2026-11-01): every decision takes the recommended option, written here in one line; a free
-slot starts the next ready work at once; the owner tests later.
+slot starts the next ready work at once; the owner tests later. Except M (Android), A3 (remote models) and whether voice
+dictation goes through the diff view: those wait for the owner's clear decision, never a recommendation, and no agent
+starts them (the owner, 2026-11-01).
 
 Craft is a stress test of Idrak (the owner, 2026-11-01: "all these apps are here to stress test the lib; test and fix
 weak points"): a slot that finds the cause in Idrak (an error, a missing contract, memory that grows, a slow path, a

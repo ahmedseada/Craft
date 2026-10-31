@@ -12,7 +12,7 @@ Windows run (2026-11-01)" at the end.
 |---|---|---|
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
-| 3 | B1-B6: paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
+| 3 | B1-B7: learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
 | 4 | Note 27, X part 4, X part 5 | Lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
@@ -2812,14 +2812,24 @@ end, the proposal, the diff view, accept, the file on disk; and the same through
 drives a scripted model that writes a new file and a changed file, accepts both, and finds them in the workspace, on a
 workspace path with spaces and a Windows-style drive path where the code allows.
 
+**B7, a learning run always fails (the owner, 2026-11-01: "whenever I try to run it there is an error, out of memory
+or any").** Beyond B4's missing family: a training round must run end to end on the owner's 16 GB card beside the
+loaded models. The slot runs a round headless on a tiny model (fresh process, no chat load) and fixes every failure on
+the way, then plans memory: the trainer takes the role's lease (one copy of a model already loaded, never a second,
+note 22's rule), lets idle models go before it loads, sizes its batch and sequence from the device's free memory
+measured at run time (card-agnostic; options for each, `CRAFT_PLUGIN_LEARNING_*`), and on an out-of-memory error steps
+the batch down and tries again, said in the activity, before it fails with `AiErrors.Describe`'s plain words and what to
+change. Every failure names its stage (load, episodes, pairs, step, evaluate, promote). Device memory measured before
+and after a round does not grow over several rounds (rule 77).
+
 Also in the trail, for the slots: `WindowsShellPlatform.RouteKeys` threw "The window has no WinUI content yet" at start
 (hook the keys once the page appeared), a WinRT `InvalidOperationException` at start, and three 0.2-0.3 s "unlabelled UI
 work" stalls at start-up (the plug-ins' rail, menus and models; the window's resize) still to label and move off.
 
 ### The order and the slots
 
-1. B1-B6, three slots: B1 and B2 (the canvas), B3, B4 and B6 (the plug-ins and the agent), B5 (Idrak, then Craft's
-   use of it).
+1. B1-B7, three slots: B1 and B2 (the canvas), B3, B4, B6 and B7 (the plug-ins, the agent and learning), B5
+   (Idrak, then Craft's use of it).
 2. The X restart: note 27, X part 4, X part 5, then the rest of X (planned below by its agent).
 3. W, the moment X is done (planned below by its agent).
 4. P batch 2, last: only once W is done (the owner, 2026-11-01: "make Idrak's plug-ins in the editor a later

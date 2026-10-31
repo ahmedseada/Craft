@@ -103,6 +103,12 @@ public interface IEditorHost
     /// <summary>The folder open in the editor (its full path), or null when none is.</summary>
     string? WorkspaceFolder => null;
 
+    /// <summary>
+    /// The integrated terminals (phase T): a plug-in opens one and writes to it, never reads what the user types; null when
+    /// the host has none.
+    /// </summary>
+    IEditorTerminals? Terminals => null;
+
     /// <summary>A document opened.</summary>
     event EventHandler<EditorDocumentEventArgs>? DocumentOpened;
 

@@ -125,6 +125,10 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     }
 
     /// <inheritdoc />
+    /// <remarks>Set by the shell to its terminals (phase T); null while the app has none.</remarks>
+    public IEditorTerminals? Terminals { get; set; }
+
+    /// <inheritdoc />
     public IReadOnlyList<IEditorCommand> Commands => EditorCommands.All;
 
     /// <inheritdoc />

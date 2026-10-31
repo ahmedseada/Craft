@@ -17,6 +17,8 @@ public sealed partial class EditorHost
         private readonly List<Action> _undo = [];
         private bool _closed;
 
+        public bool IsClosed => _closed;
+
         public IReadOnlyList<IEditorDocument> Documents => host.Documents;
 
         public IEditorDocument? ActiveDocument => host.ActiveDocument;
@@ -24,6 +26,8 @@ public sealed partial class EditorHost
         public SelectionState Selection => host.Selection;
 
         public string? WorkspaceFolder => host.WorkspaceFolder;
+
+        public IEditorTerminals? Terminals => host.Terminals is { } terminals ? new ScopedTerminals(terminals, this) : null;
 
         public IReadOnlyList<IEditorCommand> Commands => host.Commands;
 
@@ -169,6 +173,36 @@ public sealed partial class EditorHost
             var handle = add();
             _undo.Add(handle.Dispose);
             return handle;
+        }
+    }
+
+    /// <summary>The terminals as one plug-in reaches them: what it writes stops once it is deactivated (the terminal stays the user's).</summary>
+    private sealed class ScopedTerminals(IEditorTerminals terminals, PluginScope scope) : IEditorTerminals
+    {
+        public IReadOnlyList<IEditorTerminal> All => [.. terminals.All.Select(t => (IEditorTerminal)new ScopedTerminal(t, scope))];
+
+        public IEditorTerminal? Active => terminals.Active is { } active ? new ScopedTerminal(active, scope) : null;
+
+        public IEditorTerminal Open(EditorTerminalRequest request) =>
+            scope.IsClosed ? throw new InvalidOperationException("The plug-in is not active: it cannot open a terminal.") : new ScopedTerminal(terminals.Open(request), scope);
+    }
+
+    private sealed class ScopedTerminal(IEditorTerminal terminal, PluginScope scope) : IEditorTerminal
+    {
+        public string Title => terminal.Title;
+
+        public string WorkingDirectory => terminal.WorkingDirectory;
+
+        public Task<int> Exited => terminal.Exited;
+
+        public bool Write(string text) => !scope.IsClosed && terminal.Write(text);
+
+        public void Show()
+        {
+            if (!scope.IsClosed)
+            {
+                terminal.Show();
+            }
         }
     }
 

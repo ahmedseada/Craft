@@ -561,7 +561,7 @@ public enum BottomTab
     /// <summary>The active document's problems.</summary>
     Problems,
 
-    /// <summary>The terminal (phase T).</summary>
+    /// <summary>The terminals (phase T).</summary>
     Terminal,
 
     /// <summary>The host's log.</summary>
@@ -591,7 +591,7 @@ public sealed record ProblemRow(string Text, string Place, Color Color, string M
 }
 
 /// <summary>
-/// The bottom panel (docs/design/Main.dc.html): the tabs Problems (with the count), Terminal (phase T), Output (the host's
+/// The bottom panel (docs/design/Main.dc.html): the tabs Problems (with the count), Terminal (the terminals, <see cref="TerminalContent"/>), Output (the host's
 /// log, live) and Idrak telemetry (the measures recorded through the host), the active one in the text colour over the
 /// accent's line. Each list is a virtualized list (only the rows on screen are made).
 /// </summary>
@@ -606,6 +606,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly CollectionView _measures;
     private readonly ObservableCollection<TextRow> _outputLines = [];
     private readonly Label _terminal;
+    private View? _terminalView;
     private readonly Label _noMeasures;
     private readonly Action<int> _problemChosen;
     private ShellPalette _palette;
@@ -625,7 +626,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _problems.SelectionChanged += OnProblemSelected;
         _output = new CollectionView { ItemsSource = _outputLines, ItemTemplate = new DataTemplate(MakeTextRow), ItemsUpdatingScrollMode = ItemsUpdatingScrollMode.KeepLastItemInView };
         _measures = new CollectionView { ItemTemplate = new DataTemplate(MakeTextRow) };
-        _terminal = palette.Label("The terminal comes in phase T: your shell, started in the open folder.", palette.Secondary);
+        _terminal = palette.Label("No terminal host is available here.", palette.Secondary);
         _terminal.Margin = new Thickness(16, 8);
         _noMeasures = palette.Label("Nothing recorded yet: the plug-ins' and the library's measures (IEditorHost.Record) show here.", palette.Secondary);
         _noMeasures.Margin = new Thickness(16, 8);
@@ -654,6 +655,20 @@ public sealed class BottomPanelView : ContentView, IDisposable
     /// </summary>
     public Action<EditorDiagnostic, string>? CodeActionRequested { get; set; }
 
+    /// <summary>The Terminal tab's content (phase T's terminals); null shows that there is none.</summary>
+    public View? TerminalContent
+    {
+        get => _terminalView;
+        set
+        {
+            _terminalView = value;
+            if (Tab == BottomTab.Terminal)
+            {
+                _body.Content = value ?? _terminal;
+            }
+        }
+    }
+
     /// <summary>Shows <paramref name="tab"/>.</summary>
     public void Select(BottomTab tab)
     {
@@ -661,7 +676,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _body.Content = tab switch
         {
             BottomTab.Problems => _problems,
-            BottomTab.Terminal => _terminal,
+            BottomTab.Terminal => _terminalView ?? _terminal,
             BottomTab.Output => _output,
             _ => _telemetry.Rows.Count == 0 ? _noMeasures : _measures,
         };

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using Craft.Abstractions;
 using Craft.Editor.Abstractions;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
@@ -133,7 +134,10 @@ public sealed class FolderTreeView : ContentView
     /// <summary>Raised with a file's full path when its row is picked.</summary>
     public event EventHandler<string>? FileActivated;
 
-    private static ContentView MakeRow()
+    /// <summary>Raised with a folder's full path (a file's row gives its folder) when "Open in terminal" is chosen on its row.</summary>
+    public event EventHandler<string>? OpenInTerminalRequested;
+
+    private ContentView MakeRow()
     {
         var label = new Label { FontSize = 13, LineBreakMode = LineBreakMode.TailTruncation, Padding = new Thickness(0, 4) };
         label.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Text);
@@ -142,6 +146,20 @@ public sealed class FolderTreeView : ContentView
         label.SetBinding(Label.FontFamilyProperty, static (FolderTreeItem item) => item.FontFamily);
         var row = new ContentView { Content = label };
         row.SetBinding(BackgroundColorProperty, static (FolderTreeItem item) => item.Background);
+        var openInTerminal = new MenuFlyoutItem { Text = "Open in terminal" };
+        openInTerminal.Clicked += (_, _) =>
+        {
+            if (row.BindingContext is FolderTreeItem item && _tree is { } tree && item.Index < tree.Rows.Count)
+            {
+                var entry = tree.Rows[item.Index].Entry;
+                var folder = entry.IsFolder ? entry.FullPath : System.IO.Path.GetDirectoryName(entry.FullPath);
+                if (!string.IsNullOrEmpty(folder))
+                {
+                    OpenInTerminalRequested?.Invoke(this, folder);
+                }
+            }
+        };
+        FlyoutBase.SetContextFlyout(row, new MenuFlyout { openInTerminal });
         return row;
     }
 
@@ -425,4 +443,7 @@ public interface IShellPlatform
     /// platform view.
     /// </summary>
     IDisposable GuardClose(Window window, Func<bool> hasUnsaved, Func<Task<bool>> confirm);
+
+    /// <summary>The platform's terminal host (phase T: ConPTY on Windows), registered while the shell runs; null when it has none (the library's "pipe" serves).</summary>
+    ITerminalHost? TerminalHost => null;
 }

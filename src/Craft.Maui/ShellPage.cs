@@ -10,6 +10,7 @@ using Craft.Core.Settings;
 using Craft.Core.Workspaces;
 using Craft.Editor;
 using Craft.Editor.Shell;
+using Craft.Editor.Terminal;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
@@ -72,6 +73,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly PopupLayer _popup = new();
     private readonly RailView _rail;
     private readonly BottomPanelView _bottom;
+    private readonly TerminalManager _terminals;
+    private readonly TerminalPanelView _terminalPanel;
     private readonly StatusItemsView _pluginStatus;
     private readonly StatusBarView _status;
     private readonly PanelsView _panels;
@@ -200,6 +203,19 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
 
         _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested };
+
+        // Phase T: the terminals in the Terminal tab, on the platform's host (ConPTY on Windows) when it has one.
+        if (startup.Platform.TerminalHost is { } terminalHost)
+        {
+            TerminalHosts.Register(terminalHost);
+        }
+
+        _terminals = new TerminalManager(_host, () => _shell.Options, new MauiEditorClipboard());
+        _host.Terminals = _terminals;
+        _terminalPanel = new TerminalPanelView(_terminals, _palette);
+        _bottom.TerminalContent = _terminalPanel;
+        _terminals.ViewRequested += (_, request) => OnTerminalView(request);
+        _tree.OpenInTerminalRequested += (_, folder) => _terminals.OpenInFolder(folder);
         _status = new StatusBarView(_palette, _pluginStatus);
         _status.ProblemsTapped += (_, _) => ShowBottom(BottomTab.Problems);
 
@@ -314,6 +330,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         _bottom.Dispose();
+        _host.Terminals = null;
+        _terminalPanel.Dispose();
+        _terminals.Dispose();
+        if (_startup.Platform.TerminalHost is { } terminalHost)
+        {
+            TerminalHosts.Unregister(terminalHost.Name);
+        }
+
         _editCommands.Dispose();
         _shell.Dispose();
     }
@@ -782,6 +806,19 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
+    private void OnTerminalView(TerminalViewRequest request)
+    {
+        if (request == TerminalViewRequest.Toggle && _bottomVisible && _bottom.Tab == BottomTab.Terminal)
+        {
+            _bottomVisible = false;
+            ApplyLayout();
+            return;
+        }
+
+        ShowBottom(BottomTab.Terminal);
+        Dispatcher.Dispatch(_terminalPanel.FocusTerminal);
+    }
+
     private void ShowBottom(BottomTab tab)
     {
         _bottomVisible = true;
@@ -1091,6 +1128,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _tabStrip.Apply(p);
         _breadcrumb.Apply(p);
         _bottom.Apply(p);
+        _terminalPanel.Apply(p);
         _status.Apply(p);
         _center.BackgroundColor = p.Surface;
         _editorArea.BackgroundColor = p.Surface;

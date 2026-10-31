@@ -25,6 +25,9 @@ public sealed class WindowsShellPlatform : IShellPlatform
     public IFileDialogs FileDialogs { get; } = new WindowsFileDialogs();
 
     /// <inheritdoc />
+    public ITerminalHost? TerminalHost { get; } = new ConPtyTerminalHost();
+
+    /// <inheritdoc />
     public IDisposable RouteKeys(MauiWindow window, IEditorKeyHandler handler)
     {
         ArgumentNullException.ThrowIfNull(window);

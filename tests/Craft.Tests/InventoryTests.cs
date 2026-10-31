@@ -39,6 +39,7 @@ public static class InventoryTests
         Check.Throws<NotRegisteredException>(() => EditorThemes.Get("no-such-theme"), "EditorThemes.Get of an unknown name");
         Check.Throws<NotRegisteredException>(() => EditorPlugins.Get("no-such-plugin"), "EditorPlugins.Get of an unknown name");
         Check.Throws<NotRegisteredException>(() => EditorCommands.Get("no.such.command"), "EditorCommands.Get of an unknown id");
+        Check.Throws<NotRegisteredException>(() => TerminalHosts.Get("no-such-host"), "TerminalHosts.Get of an unknown name");
         Check.True(EditorKeyBindings.Find(new KeyChord(EditorKey.F12, KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Alt)) is null, "an unbound chord finds no binding");
         Check.True(EditorLanguages.ForFile("readme.no-such-extension") is null, "a file of no registered language opens as plain text");
     }
@@ -81,6 +82,10 @@ public static class InventoryTests
             ["CRAFT_TITLE_BAR"] = "page",
             // Phase A2: inline completion's provider, the chat column.
             ["CRAFT_INLINE_COMPLETION_PROVIDER"] = "ai", ["CRAFT_CHAT_WIDTH"] = "400",
+            // Phase T: the terminal.
+            ["CRAFT_TERMINAL_SHELL"] = "bash", ["CRAFT_TERMINAL_ARGS"] = "-l", ["CRAFT_TERMINAL_ENV"] = "A=1|B=2", ["CRAFT_TERMINAL_CWD"] = "start",
+            ["CRAFT_TERMINAL_SCROLLBACK"] = "200", ["CRAFT_TERMINAL_HOST"] = "pipe", ["CRAFT_TERMINAL_LINE_SPACING"] = "1.5",
+            ["CRAFT_TERMINAL_EDITOR_COMMANDS"] = "craft.quickOpen, craft.settings",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -100,7 +105,11 @@ public static class InventoryTests
             FontFallback = "Consolas", InterfaceFont = "Segoe UI", InterfaceFontSize = 14, Accent = AccentColors.Blue, BottomPanelHeight = 200,
             QuickOpenFiles = 1000, QuickOpenRows = 8, TouchTarget = 48, TitleBar = "page",
             InlineCompletionProvider = "ai", ChatWidth = 400,
+            TerminalShell = "bash", TerminalArguments = "-l", TerminalEnvironment = options.TerminalEnvironment, TerminalWorkingDirectory = "start",
+            TerminalScrollback = 200, TerminalHost = "pipe", TerminalLineSpacing = 1.5f, TerminalEditorCommands = options.TerminalEditorCommands,
         }, options, "options read from every variable");
+        Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
+        Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");
         Check.SequenceEqual(["loose", "csproj"], options.WorkspaceReaders, "CRAFT_WORKSPACE_READERS split at ','");
         var settings = options.ToLanguageSettings();
         Check.True(settings is { DiagnosticsDelayMilliseconds: 250, SemanticMaxCharacters: 1000, Configuration: "Release", TabSize: 2, InsertSpaces: false, SourceGenerators: false, SemanticColorsDelayMilliseconds: -1 }

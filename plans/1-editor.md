@@ -623,7 +623,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E4 | **Built (2026-10-31, "E4 as built" below).** `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below), semantic colours and source generators included; Craft's own solution compiles with 0 errors in the reader's model (the bench and the `Semantic` tests). Left: the window on Windows (the owner's run).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | D | **Built (2026-10-31, "D as built" below); left: the window beside the design on Windows (the owner's run).** The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
-| T | The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
+| T | **Built (2026-10-31, "T as built" below); left: the owner's run on Windows (ConPTY: `dotnet build` in it, a resize, two terminals, a file-only start in the home folder).** The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | **Built (2026-10-31, "A1 as built" below).** `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
@@ -1243,6 +1243,126 @@ its own load context, and check it only through the registry its consumer reads.
   after the rebase onto A2 and D; the API dumps of the five plug-ins added. A2's chat now offers `EditorToolSets.Live`
   (every registered set) and its file chip has its own limit, `CRAFT_PLUGIN_AI_CHATFILELINES` (2000). **Not yet**: the Plug-ins page of the design (registry, slot, guard, cost columns) is phase D's; the
   list the Plug-ins button shows names each plug-in's registry in its summary; the real StarCoder2 on the owner's machine.
+## T as built (2026-10-31)
+
+- **Contracts** (`Craft.Abstractions/Terminals.cs`, all additive, contracts still 1.0): `TerminalSize`, `TerminalShell`
+  (program and arguments as one command line), `TerminalStartInfo` (shell, folder, size, the whole environment);
+  `ITerminalSession` (`ReadAsync` of the output bytes, 0 at the end; `Write` of input bytes; `Resize`; `Exited` with the
+  exit code; `Dispose` ends the shell); `ITerminalHost : IKind` (`DefaultShell`, `Start`, `Unavailable` for a platform with
+  no shell) in `TerminalHosts` (a `KindTable`; the library's "pipe": System.Diagnostics.Process with redirected pipes, any
+  platform, stdout and stderr merged in arrival order through a bounded channel of pooled chunks, Enter's CR given to the
+  shell as LF and its LF drawn as CR LF, as a tty's line discipline does; `Resolve("auto")` takes the last registered host
+  other than "pipe" that is available, else "pipe"; an unknown name fails with "not registered"). For plug-ins:
+  `IEditorHost.Terminals` (a default member, null without terminals) → `IEditorTerminals` (`All`, `Active`,
+  `Open(EditorTerminalRequest)`: folder, name, shell, environment additions, show) → `IEditorTerminal` (`Title`,
+  `WorkingDirectory`, `Exited`, `Write(text)`, `Show()`): writing and showing only, never the user's keys; the plug-in's
+  scope (`EditorHost.PluginScope`) wraps them so a deactivated plug-in's handles write nothing and open nothing, the
+  terminal staying the user's. `EditorKey.Backquote` added at the enum's end ("`" in a chord's text).
+- **Screen and parser** (`Craft.Editor.Terminal`, UI-free, AOT-compatible, tested headless; Decision: in Craft.Editor, not a
+  new library, so no new project, dump or reference): `TerminalCell` (12 bytes: a scalar, wide/tail bits and the
+  renditions in one `uint`, two packed colours: default, 256 indexed, or true colour, resolved only when drawn so a theme
+  change recolours the screen); `TerminalRow` (cells, wrapped flag, a version per write); `TerminalScreen`: the screen is
+  the last rows of a ring of `CRAFT_TERMINAL_SCROLLBACK` + rows lines, so a full-screen scroll moves the ring's start and,
+  once full, reuses the oldest line's row (0 bytes per line, memory flat); a scroll region rotates its rows; the alternate
+  screen has its own rows and no scrollback. The parser (Paul Williams' states over bytes): printable ASCII found with a
+  `SearchValues<byte>` and written a row stretch at a time; UTF-8 kept across reads, bad or cut sequences as U+FFFD;
+  `TerminalCharWidth` (Unicode 15's East Asian W/F and emoji presentation ranges, a binary search; marks, ZWJ and
+  variation selectors zero-width); C0; ESC 7/8/D/E/M/H/c/=/>, G0/G1 with DEC line drawing, DECALN; CSI @ A B C D E F G H I J
+  K L M P S T X Z ` a b c d e f g h l m n r s u, DECSET/DECRST 1, 6, 7, 25, 47, 1047, 1048, 1049, 1000-1003 (kept), 2004,
+  SGR (bold, faint, italic, underline incl. 4:0, blink, inverse, hidden, strike, 30-37/90-97/40-47/100-107, 38/48 in ';'
+  and ':' forms incl. a colour space, 58 read and dropped), DSR 5/6 and DA/DA2 answered through `Respond`, DECSTBM,
+  SCOSC/SCORC, DECSCUSR, DECSTR; OSC 0/2 title, 7 (file URI) and 9;9 working folder; DCS/SOS/PM/APC skipped. OSC strings are
+  capped at 4 KB and titles at 256 characters. Resize: narrower rows are cut (no reflow: ConPTY repaints); fewer rows drop
+  the blank rows under the cursor first, then move the top rows into the scrollback; more rows bring lines back from it.
+  Not done (recorded): combining marks are dropped rather than joined to their base; mouse reporting is kept as a mode,
+  not sent; no reflow.
+- **Drawing** (`TerminalRenderer`, `TerminalPalette`): only the visible rows, through `IEditorCanvas`: the ground, each
+  row's background runs, its text runs (one string per change of colour or rendition, blanks inside a run kept, a wide
+  character its own run at its cell), underline and strike lines, the selection, the cursor (block, underline or bar;
+  hollow without the keyboard). A row's runs are kept on the row while its version and the palette are the same, and
+  dropped when the row leaves the view (memory follows the screen, not the scrollback). The palette is the theme's
+  tokens: ground the panel's surface, text the interface's text, cursor the caret, selection the theme's; red/green/yellow
+  the error/success/warning tokens, blue the keyword's colour, magenta and cyan the design's hues; each basic colour moved
+  to 4.5:1 on the ground (checked for both themes in the tests); bold basic colours drawn bright, faint half-way to the
+  ground. The code font (`CRAFT_FONT`, its fallback) at `CRAFT_TERMINAL_LINE_SPACING` (1.3).
+- **Sessions and keys** (`TerminalInstance`): the output read on the thread pool (64 KB reads) and parsed in 16 KB slices
+  under the screen's lock, so a frame never waits long; one redraw request per burst through the host's dispatch; the
+  replies written back; the exit shown on the screen ("[the shell ended with exit code N]") and in the tab. Scrolled back,
+  the view keeps its text while output arrives; a key or typed text returns to the bottom. `TerminalKeys`: arrows,
+  Home/End (application form after DECCKM), Insert, Delete, Page Up/Down, F1-F12 with xterm's modifier parameter;
+  Enter, Tab, Shift+Tab, Backspace (Ctrl: BS), Escape; Ctrl+letter as its control character, Ctrl+Space NUL; Alt as ESC
+  before the key (the platform's echo of the same character is dropped once); Ctrl+Alt+letter left to the text (AltGr).
+  Paste: line breaks as CR, inside ESC[200~/ESC[201~ when the shell asked (2004), an ESC[201~ inside taken out.
+- **Start folder, shell, environment** (`TerminalLaunch`, the owner's rule, pure and tested): the folder chosen (the
+  explorer's "Open in terminal", a plug-in's request) first, then `CRAFT_TERMINAL_CWD`, then the open folder's root, else
+  (only files open, or nothing) the home folder, the shell's own default; a folder that does not exist is passed over and
+  logged. Shell: `CRAFT_TERMINAL_SHELL` with `CRAFT_TERMINAL_ARGS`, else the host's default (ConPTY: pwsh on the PATH with
+  PATHEXT, else Windows PowerShell, else `%ComSpec%`, each with `-NoLogo` for the PowerShells; pipe: `%ComSpec%`, else
+  `$SHELL`, else /bin/sh), `CRAFT_TERMINAL_ARGS` replacing the default's arguments. Environment: the app's, then
+  `CRAFT_TERMINAL_ENV` (`NAME=value|...`, `${NAME}` the app's value, an empty value removes), with `TERM_PROGRAM=Craft` and
+  `COLORTERM=truecolor`; names ignore case on Windows. Decision: a workspace's `.craft/settings.json` sets none of
+  `CRAFT_TERMINAL_SHELL`, `_ARGS`, `_ENV`, `_HOST` (what runs is code), as with the plug-in folders; it may set `_CWD`.
+- **Commands and keys** (`TerminalManager`, on K's contracts, taken back on dispose): `terminal.new` (Ctrl+Shift+`),
+  `terminal.toggle` (Ctrl+`: shows the Terminal tab, opening a terminal if none; hides the panel when it shows),
+  `terminal.next`, `terminal.previous`, `terminal.kill` (ends the shell, closes its tab), `terminal.clear` (scrollback and
+  screen, the prompt's row kept at the top), `terminal.copy` (Ctrl+Shift+C), `terminal.paste` (Ctrl+Shift+V),
+  `terminal.runSelection` (the selection, or the caret's line, sent with Enter to the active terminal, opening one if
+  none); in the View and Run menus. The terminal view's keys go through `EditorHost.HandleKey` with the terminal as the
+  "editor": the user's bindings first; the chords of the `terminal.*` commands and of `CRAFT_TERMINAL_EDITOR_COMMANDS`
+  (default the palette, quick open, the panel, settings) run their commands; every other key goes to the shell (so Ctrl+R,
+  Ctrl+W, Ctrl+N are the shell's while it has the keyboard).
+- **Windows** (`src/Craft.Maui/Platforms/Windows/ConPtyTerminalHost.cs`, "conpty", `LibraryImport`, `AllowUnsafeBlocks`
+  in Craft.Maui): two anonymous pipes, `CreatePseudoConsole` at the terminal's size, `InitializeProcThreadAttributeList`
+  and `UpdateProcThreadAttribute(PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE)`, `CreateProcessW` with `EXTENDED_STARTUPINFO_PRESENT`
+  and a sorted Unicode environment block, `STARTF_USESTDHANDLES` with no handles (the child takes the pseudo-console's, never
+  one this process holds); the program looked up on the PATH with PATHEXT; the pseudo-console's ends of the pipes closed
+  after the start; the exit waited on by the thread pool (`RegisterWaitForSingleObject`), then `ClosePseudoConsole` while
+  the reader drains the output; dispose terminates the shell and closes the pseudo-console (which ends what is attached to
+  it). `WindowsShellPlatform.TerminalHost` gives it; `IShellPlatform.TerminalHost` (a default member, null) is how the
+  shell registers the platform's host while it runs. The Windows key map gained VK_OEM_3 as `Backquote`.
+- **MAUI** (`Craft.Maui/TerminalView.cs`, built here on net10.0): `TerminalDrawable` (the font measured inside the first
+  frame as the editor's, drawn under the screen's lock), `TerminalView` (a ScrollView over a spacer of the scrollback and
+  the screen, so the platform's scroll bar and wheel scroll back, the GraphicsView kept over the viewport; the size in cells
+  from the measured viewport, sent to the screen and the session; a drag selects; the keyboard through the platform's
+  `ITextInputAdapter` into `TerminalManager.Input`; the cursor blinks at `CRAFT_CARET_BLINK_MS`), `TerminalPanelView` (the
+  Terminal tab: the terminals' tabs, each its title, "(ended N)" once it ended, ✕ to kill; "+"; with none open, where the
+  next one starts and why). D's placeholder in `BottomPanelView` gave way to `TerminalContent`; `ShellPage` makes the
+  manager, sets `EditorHost.Terminals`, shows and focuses the tab on the commands; the explorer's rows have a context
+  menu "Open in terminal" (a file's row opens its folder).
+- **Settings added** (each a `CRAFT_*` variable, on the settings page): `CRAFT_TERMINAL_SHELL`, `CRAFT_TERMINAL_ARGS`,
+  `CRAFT_TERMINAL_ENV`, `CRAFT_TERMINAL_CWD`, `CRAFT_TERMINAL_SCROLLBACK` (5,000), `CRAFT_TERMINAL_HOST` (auto),
+  `CRAFT_TERMINAL_LINE_SPACING` (1.3), `CRAFT_TERMINAL_EDITOR_COMMANDS`. Each is read when a terminal opens.
+- **Measured** (`dotnet run -c Release --project benches/Craft.Benches -- terminal`, the same 4-core container; a million
+  lines of build-like output, 82.2 MB with colours, a progress line rewritten with CR and CJK names, fed in 64 KB reads to a
+  120x30 screen with 5,000 lines of scrollback): first read (cold) 21 ms; warm 108.6 MB/s, 1.32 M lines/s; 6.4 MB allocated
+  in all, every byte of it the scrollback's rows made once as the ring fills, 0 bytes after the first 100,000 lines; the
+  screen's managed memory 7.36 MB after 100,000 lines and 7.38 MB after the million. Frames on a counting canvas, 30 rows:
+  still frame median 0.9 us, p99 1.9 us, 0 strings, 0 bytes; a frame after one new line (feed and draw) 4.3 us, p99 12.5
+  us, 3 run strings, 352 bytes; a full repaint (a new palette) 55 us, p99 143 us, 87 run strings. The editor bench
+  (`-- editor`): keystroke to render median 6.8 us, p99 25.2 us, 1,032 bytes and 1 run string per keystroke (D: 6.6 us,
+  24.2 us, 1,028 bytes, 1); blink 5.1 us, 0 bytes (D: 5.0); scroll 5.5 us (D: 5.3): unchanged within the container's noise
+  (the editor's path is untouched; only an `EditorKey` value was added).
+- **Tests** (group `Terminal`, 15): SGR colours and renditions in both forms; cursor moves and both saved cursors; erase,
+  insert and delete of characters and lines, the erase's background; wide characters (CJK, emoji, the last column, a half
+  written over, UTF-8 split byte by byte, bad bytes, a combining mark); the alternate screen (1049, 47); scroll regions, RI,
+  SU, SD and the scrollback; wrap, tabs (HTS, CBT, TBC), DECAWM off and the selection's text across a wrap; titles, folders
+  (OSC 7 incl. a Windows path, 9;9), modes, DECSTR, DSR/DA replies, BEL, skipped strings, DEC line drawing; the scrollback
+  cap with 0 bytes over 100,000 lines once full, the oldest kept line, ED 3 and Clear; resize both ways and narrower; the
+  renderer (only the visible rows, a still frame making no string, the selection's fill, a wide character's run, both
+  palettes' contrast); the keys' bytes and paste; the start folder in its cases (a folder open, files only, the variable,
+  the explorer's folder, a missing one passed over); the settings, the environment, the workspace's refusal, the hosts'
+  registry, PATH and PATHEXT lookup; a session through "pipe" that reads typed input, answers and reports exit code 3; the
+  manager (commands and chords, the start in the open folder, a plug-in opening and writing through `IEditorHost.Terminals`,
+  previous, run selection, copy, kill, everything taken back). With `Shell`, `Editor`, `PluginKit`, `ApiGuard`, `Inventory`,
+  `Design`: 79 passed here on the first run, and 81 after the rebase onto A2 and P (their new tests in those groups).
+- **Not compiled here** (Windows only): `src/Craft.Maui/Platforms/Windows/ConPtyTerminalHost.cs` (compile-checked here in a
+  scratch net10.0 project with `WINDOWS` defined, nullable analysis, warnings as errors and the LibraryImport generator;
+  not run), the `TerminalHost` property in `WindowsShellPlatform.cs`, the `Backquote` line in `WindowsTextInputAdapter.cs`,
+  and the `#if WINDOWS` block of `TerminalView.OnGraphicsHandlerChanged`. Craft.App is unchanged.
+- **Not yet**: split terminals; reflow on resize; mouse reporting to full-screen programs; combining marks joined to their
+  base; a hyperlink (OSC 8) or clipboard (OSC 52) from the shell; Windows' "win32-input-mode" (ConPTY translates VT keys);
+  find in the terminal; the narrow (phone) layout has no terminal (phase M decides: a phone may report it has no shell
+  through `ITerminalHost.Unavailable`).
 
 ## Commands for the owner (once a phase is built)
 

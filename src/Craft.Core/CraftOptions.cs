@@ -275,6 +275,44 @@ public sealed record CraftOptions
     /// </summary>
     public string TitleBar { get; init; } = "window";
 
+    // Phase T: the integrated terminal. Each is read when a terminal opens, so a change applies to the next one.
+
+    /// <summary>
+    /// The terminal's shell (<c>CRAFT_TERMINAL_SHELL</c>): a program on the PATH or a full path; null for the terminal
+    /// host's default (on Windows pwsh when on the PATH, else Windows PowerShell, else cmd; elsewhere $SHELL, else /bin/sh).
+    /// </summary>
+    public string? TerminalShell { get; init; }
+
+    /// <summary>The shell's arguments, as one command line (<c>CRAFT_TERMINAL_ARGS</c>); null for the host's default ones.</summary>
+    public string? TerminalArguments { get; init; }
+
+    /// <summary>
+    /// Variables added to the terminal's environment over the app's own (<c>CRAFT_TERMINAL_ENV</c>: <c>NAME=value</c>
+    /// entries separated by '|'; <c>${NAME}</c> in a value is the app's value of NAME; an empty value removes the variable).
+    /// </summary>
+    public IReadOnlyList<KeyValuePair<string, string>> TerminalEnvironment { get; init; } = [];
+
+    /// <summary>
+    /// The folder every terminal starts in (<c>CRAFT_TERMINAL_CWD</c>), over the rule (the open folder's root, else the
+    /// shell's home); null keeps the rule. A folder chosen in the explorer ("Open in terminal") still starts there.
+    /// </summary>
+    public string? TerminalWorkingDirectory { get; init; }
+
+    /// <summary>The lines a terminal keeps above its screen (<c>CRAFT_TERMINAL_SCROLLBACK</c>); its memory stays flat at that many.</summary>
+    public int TerminalScrollback { get; init; } = 5000;
+
+    /// <summary>The terminal host (<c>CRAFT_TERMINAL_HOST</c>): auto (the platform's: conpty on Windows; else pipe), or a registered one.</summary>
+    public string TerminalHost { get; init; } = "auto";
+
+    /// <summary>A terminal row's height as a multiple of the code font's height (<c>CRAFT_TERMINAL_LINE_SPACING</c>).</summary>
+    public float TerminalLineSpacing { get; init; } = 1.3f;
+
+    /// <summary>
+    /// The commands whose key bindings still run while a terminal has the keyboard (<c>CRAFT_TERMINAL_EDITOR_COMMANDS</c>,
+    /// separated by ','); every other chord goes to the shell. The terminal's own commands always keep theirs.
+    /// </summary>
+    public IReadOnlyList<string> TerminalEditorCommands { get; init; } = ["craft.commandPalette", "craft.quickOpen", "craft.togglePanel", "craft.settings"];
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -343,6 +381,14 @@ public sealed record CraftOptions
         new("CRAFT_SOURCE_GENERATORS", "true", "Whether the projects' source generators run in the semantic model (their generated code counts, as in the build)."),
         new("CRAFT_SEMANTIC_COLORS_DELAY_MS", "30", "Milliseconds after a change before the visible lines are coloured by meaning (off the UI thread); -1 turns semantic colours off."),
         new("CRAFT_MEMORY_MONITOR", "gc", "What tells the editor memory runs low, so the languages free what they can build again: gc (the runtime's memory load), none, or a registered one."),
+        new("CRAFT_TERMINAL_SHELL", "(the host's: pwsh, else Windows PowerShell, else cmd on Windows)", "The terminal's shell: a program on the PATH or a full path. A workspace cannot set it."),
+        new("CRAFT_TERMINAL_ARGS", "(the host's)", "The shell's arguments, as one command line. A workspace cannot set it."),
+        new("CRAFT_TERMINAL_ENV", "(none)", "Variables added to the terminal's environment: NAME=value entries separated by '|'; ${NAME} is the app's value; an empty value removes it. A workspace cannot set it."),
+        new("CRAFT_TERMINAL_CWD", "(the open folder, else the home folder)", "The folder every new terminal starts in, over the rule (the explorer's Open in terminal still starts in its folder)."),
+        new("CRAFT_TERMINAL_SCROLLBACK", "5000", "The lines a terminal keeps above its screen; its memory stays flat at that many."),
+        new("CRAFT_TERMINAL_HOST", "auto", "What runs the shell: auto (conpty on Windows, else pipe), pipe (plain redirected pipes), or a registered host. A workspace cannot set it."),
+        new("CRAFT_TERMINAL_LINE_SPACING", "1.3", "A terminal row's height as a multiple of the code font's height."),
+        new("CRAFT_TERMINAL_EDITOR_COMMANDS", "craft.commandPalette,craft.quickOpen,craft.togglePanel,craft.settings", "Commands whose keys still run while a terminal has the keyboard (every other chord goes to the shell), separated by ','."),
     ];
 
     /// <summary>
@@ -677,6 +723,46 @@ public sealed record CraftOptions
             options = options with { MemoryMonitor = monitor };
         }
 
+        if (Text(read, "CRAFT_TERMINAL_SHELL") is { } terminalShell)
+        {
+            options = options with { TerminalShell = terminalShell };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_ARGS") is { } terminalArgs)
+        {
+            options = options with { TerminalArguments = terminalArgs };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_ENV") is { } terminalEnv)
+        {
+            options = options with { TerminalEnvironment = ParseEnvironment(terminalEnv, "CRAFT_TERMINAL_ENV") };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_CWD") is { } terminalCwd)
+        {
+            options = options with { TerminalWorkingDirectory = terminalCwd };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_SCROLLBACK") is { } scrollback)
+        {
+            options = options with { TerminalScrollback = Whole(scrollback, "CRAFT_TERMINAL_SCROLLBACK", 0, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_HOST") is { } terminalHost)
+        {
+            options = options with { TerminalHost = terminalHost };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_LINE_SPACING") is { } terminalSpacing)
+        {
+            options = options with { TerminalLineSpacing = Positive(terminalSpacing, "CRAFT_TERMINAL_LINE_SPACING", 0.8f, 4) };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_EDITOR_COMMANDS") is { } terminalCommands)
+        {
+            options = options with { TerminalEditorCommands = terminalCommands.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
+        }
+
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)
         {
             options = options with { PluginFolders = folders.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
@@ -688,6 +774,30 @@ public sealed record CraftOptions
         }
 
         return options;
+    }
+
+    /// <summary>"A=1|B=two" as its entries in order; an entry without '=' or with an empty name throws, naming the variable.</summary>
+    private static KeyValuePair<string, string>[] ParseEnvironment(string value, string name)
+    {
+        var entries = new List<KeyValuePair<string, string>>();
+        foreach (var range in value.AsSpan().Split('|'))
+        {
+            var entry = value.AsSpan()[range].Trim();
+            if (entry.IsEmpty)
+            {
+                continue;
+            }
+
+            int equals = entry.IndexOf('=');
+            if (equals <= 0)
+            {
+                throw new ArgumentException($"{name} is '{value}': it takes NAME=value entries separated by '|' ('{entry}' has no name or no '=').", name);
+            }
+
+            entries.Add(new(entry[..equals].Trim().ToString(), entry[(equals + 1)..].ToString()));
+        }
+
+        return [.. entries];
     }
 
     private static string? Text(Func<string, string?> read, string name) => read(name) is { Length: > 0 } value ? value.Trim() : null;

@@ -8,8 +8,10 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean InsertSpaces { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<System.String, System.String>> TerminalEnvironment { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> PluginFolders { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> TerminalEditorCommands { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceReaders { get; init; }
   System.Int32 AutosaveSeconds { get; init; }
@@ -39,6 +41,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SemanticColorsDelayMilliseconds { get; init; }
   System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 TabSize { get; init; }
+  System.Int32 TerminalScrollback { get; init; }
   System.Int32 UndoGroupMilliseconds { get; init; }
   System.Single BottomPanelHeight { get; init; }
   System.Single CaretWidth { get; init; }
@@ -49,6 +52,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Single LineSpacing { get; init; }
   System.Single NarrowWidth { get; init; }
   System.Single PanelWidth { get; init; }
+  System.Single TerminalLineSpacing { get; init; }
   System.Single TouchTarget { get; init; }
   System.Single TreeIndent { get; init; }
   System.Single TreeWidth { get; init; }
@@ -62,6 +66,10 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String NewLine { get; init; }
   System.String RecoveryFolder { get; init; }
   System.String ResolveDataFolder()
+  System.String TerminalArguments { get; init; }
+  System.String TerminalHost { get; init; }
+  System.String TerminalShell { get; init; }
+  System.String TerminalWorkingDirectory { get; init; }
   System.String Theme { get; init; }
   System.String TitleBar { get; init; }
   System.String ToString()

@@ -257,6 +257,11 @@ public enum EditorKey
 
     /// <summary>The comma key of the main keyboard.</summary>
     Comma,
+
+    // Phase T: the backquote, for the terminal's Ctrl+` and Ctrl+Shift+` (added at the end, so the values above keep theirs).
+
+    /// <summary>The backquote (grave accent) key of the main keyboard; "`" in a chord's text.</summary>
+    Backquote,
 }
 
 /// <summary>Where the platform's input goes: the editor implements it, a <see cref="ITextInputAdapter"/> calls it.</summary>

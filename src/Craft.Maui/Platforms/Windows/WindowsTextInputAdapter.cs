@@ -125,6 +125,7 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
         VirtualKey.F11 => EditorKey.F11,
         VirtualKey.F12 => EditorKey.F12,
         (VirtualKey)0xBC => EditorKey.Comma, // VK_OEM_COMMA, which VirtualKey does not name
+        (VirtualKey)0xC0 => EditorKey.Backquote, // VK_OEM_3, the key left of 1 (` on US keyboards), for the terminal's Ctrl+`
         _ => EditorKey.None,
     };
 

@@ -461,6 +461,34 @@ are commands, so plug-ins add to them), the Plug-ins and Models pages, and the t
 its design file. Checks: the Windows window beside the design at 1440x900 and at the narrow width, the owner the judge;
 every colour pair meets 4.5:1 (3:1 for large text and lines); the keystroke and paint numbers measured again, unchanged.
 
+## The terminal (phase T, added 2026-10-31 at the owner's request)
+
+An integrated terminal in the bottom panel's Terminal tab (`docs/design/Main.dc.html`), the user's own shell, several
+at once (one tab each, named by the shell and its folder; new, split later, close, kill).
+
+- **Where it starts (the owner's rule):** in the open folder's root when a folder is open; when only files are open and
+  no folder, in the terminal's default path (the shell's own start folder: the user's home); `CRAFT_TERMINAL_CWD`
+  overrides both. A terminal opened from the explorer's context menu ("Open in terminal") starts in that folder.
+- **Which shell:** `CRAFT_TERMINAL_SHELL` (default on Windows: `pwsh` when on the PATH, else Windows PowerShell, else
+  `cmd`), its arguments `CRAFT_TERMINAL_ARGS`, the environment the app's plus `CRAFT_TERMINAL_ENV`; the font and colours
+  the editor's theme (the design's tokens), the scrollback `CRAFT_TERMINAL_SCROLLBACK` lines.
+- **How:** a contract in `Craft.Abstractions` (`ITerminalHost`, `ITerminalSession`: start with a folder, a size and an
+  environment; write input; output as a byte stream; resize; exit code), registered in a `TerminalHosts` table; the
+  Windows implementation over ConPTY under `Platforms/Windows`; the screen is Craft's own drawn grid over
+  `IEditorCanvas` (a VT parser for the sequences shells use: colours, cursor moves, erase, alternate screen, bracketed
+  paste, OSC titles), so nothing Windows-only leaks out and phase M can add Android's (or report that a phone has no
+  shell). Output is parsed off the UI thread; only the visible rows are drawn; memory stays flat with the scrollback cap.
+- **Commands and keys (on K's contracts):** New terminal (Ctrl+Shift+`), Toggle panel (Ctrl+`), Next/previous
+  terminal, Kill, Clear, Copy and paste (Ctrl+Shift+C / Ctrl+Shift+V), Run selection in terminal; plug-ins can open a
+  terminal and write to it through the host (`IEditorHost.Terminals`), never read the user's keystrokes.
+- **The agent's terminal stays apart:** P5's sandbox terminal (`docs/design/Agent.dc.html`) runs only approved commands;
+  the user's terminal is never driven by a model.
+
+Checks: headless VT parser tests (colours, cursor, erase, wide characters, alternate screen) against fixed byte
+streams; a session starts in the right folder in the three cases (folder open, file only, the variable); the owner
+runs `dotnet build` in the terminal on Windows, resizes it, and opens two; output of a million lines keeps memory flat
+and the keystroke budget unchanged.
+
 ## Learning in the editor: reinforcement learning on Idrak (phase R, added 2026-10-31 at the owner's request)
 
 The owner asked that the editor learn, through Idrak's reinforcement learning, and that it test that library through
@@ -531,6 +559,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E4 | **Built (2026-10-31, "E4 as built" below).** `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below; semantic colours not yet).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | D | The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
+| T | The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Craft phone chat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#101217}
+a{color:#7FB2F0}a:hover{color:#A9CBF5}
+.code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:19px;white-space:pre}
+.k{color:#82AAFF}.t{color:#5FC9B4}.m{color:#E8D58A}.v{color:#B8C7DC}.p{color:#D5D9E0}
+</style>
+</helmet>
+<div style="width:390px;height:844px;display:flex;flex-direction:column;background:#0B0C10;color:#D5D9E0;font-family:'Inter',system-ui,sans-serif;font-size:14px;overflow:hidden">
+
+  <div style="height:96px;background:#16181D;opacity:.5;padding:16px;box-sizing:border-box;color:#9AA2B1;font-size:13px">EditorTools.cs</div>
+
+  <div style="flex:1;display:flex;flex-direction:column;background:#16181D;border-radius:16px 16px 0 0;border-top:1px solid #343944;margin-top:-16px;min-height:0">
+    <div style="display:flex;justify-content:center;padding-top:8px"><span style="width:40px;height:4px;border-radius:2px;background:#4A505C"></span></div>
+    <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 8px 0 16px">
+      <span style="font-weight:600;font-size:16px">Chat</span>
+      <span style="color:#9AA2B1;font-size:12px">store:coder-q4 · local</span>
+      <button aria-label="Close chat" style="margin-left:auto;width:48px;height:48px;background:none;border:0;color:#B5BCC8"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"></path></svg></button>
+    </div>
+
+    <div style="flex:1;padding:4px 16px 12px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+      <div style="align-self:flex-end;max-width:85%;background:#252A33;padding:10px 12px;border-radius:12px 12px 2px 12px;line-height:1.5">Pass the cancellation token through and stop early.</div>
+      <div style="line-height:1.55">Check it before the call, then hand it to the host:</div>
+      <div style="border:1px solid #2A2E37;border-radius:10px;overflow:hidden">
+        <div class="code" style="padding:10px 12px;background:#101217"><span class="v">cancellationToken</span><span class="p">.</span><span class="m">ThrowIfCancellation…</span><span class="p">();</span>
+<span class="k">var</span> <span class="v">items</span><span class="p"> = </span><span class="k">await</span> <span class="v">host</span><span class="p">.</span><span class="m">DiagnosticsAsync</span><span class="p">(</span>
+<span class="p">    </span><span class="v">doc</span><span class="p">, </span><span class="v">cancellationToken</span><span class="p">);</span></div>
+        <div style="display:flex;gap:8px;padding:8px;border-top:1px solid #2A2E37">
+          <button style="flex:1;height:44px;border-radius:8px;border:0;background:{{accent}};color:#1A1206;font:inherit;font-weight:600">Apply as diff</button>
+          <button style="flex:1;height:44px;border-radius:8px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Copy</button>
+        </div>
+      </div>
+      <div style="color:#9AA2B1;font-size:12px">146 tokens · 22 tok/s on this phone</div>
+    </div>
+
+    <div style="padding:10px 12px 16px;border-top:1px solid #2A2E37;display:flex;flex-direction:column;gap:10px;background:#16181D">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px">
+        <span style="padding:4px 10px;border-radius:12px;background:#1F232B;border:1px solid #2A2E37">EditorTools.cs</span>
+        <span style="padding:4px 10px;border-radius:12px;background:#1F232B;border:1px solid #2A2E37">Line 22</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-end">
+        <button aria-label="Speak (voice dictation)" style="width:44px;height:44px;border-radius:22px;border:1px solid #343944;background:#1F232B;color:#D5D9E0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button>
+        <button aria-label="Photo to code" style="width:44px;height:44px;border-radius:22px;border:1px solid #343944;background:#1F232B;color:#D5D9E0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg></button>
+        <label style="flex:1;display:flex">
+          <span style="position:absolute;left:-9999px">Message</span>
+          <textarea rows="1" placeholder="Ask about this file" style="flex:1;min-height:44px;resize:none;border-radius:22px;border:1px solid #343944;background:#1A1D23;color:#D5D9E0;font:inherit;padding:11px 14px;box-sizing:border-box"></textarea>
+        </label>
+        <button aria-label="Send" style="width:44px;height:44px;border-radius:22px;border:0;background:{{accent}};color:#1A1206"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg></button>
+      </div>
+      <div style="color:#9AA2B1;font-size:12px">Voice needs a speech model. The photo needs a chat model that takes images.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#E5A54B","options":["#E5A54B","#5FC9B4","#82AAFF","#E58BA0"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#E5A54B' };
+  }
+}
+</script>
+</body>
+</html>

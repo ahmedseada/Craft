@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Craft plug-ins</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#101217}
+a{color:#7FB2F0}a:hover{color:#A9CBF5}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px}
+.ok{padding:2px 8px;border-radius:10px;background:#173430;color:#BFF0E6;font-size:12px;white-space:nowrap}
+.ov{padding:2px 8px;border-radius:10px;background:#1C2A45;color:#BFD4FA;font-size:12px;white-space:nowrap}
+.no{padding:2px 8px;border-radius:10px;background:#3A1E24;color:#FFC4C9;font-size:12px;white-space:nowrap}
+.off{padding:2px 8px;border-radius:10px;background:#252A33;color:#B5BCC8;font-size:12px;white-space:nowrap}
+</style>
+</helmet>
+<div style="width:100%;height:900px;display:flex;flex-direction:column;background:#101217;color:#D5D9E0;font-family:'Inter',system-ui,sans-serif;font-size:13px;overflow:hidden">
+
+  <div style="height:40px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #2A2E37">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5" fill="{{accent}}"></rect><path d="M13 6.5a4.5 4.5 0 1 0 0 7" fill="none" stroke="#1A1206" stroke-width="2.2" stroke-linecap="round"></path></svg>
+    <span style="font-weight:600">Craft</span><span style="color:#9AA2B1">Plug-ins</span>
+  </div>
+
+  <div style="flex:1;display:flex;flex-wrap:wrap;min-height:0">
+
+    <div style="flex:999 1 700px;min-width:0;background:#16181D;display:flex;flex-direction:column">
+      <div style="padding:18px 22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #2A2E37">
+        <div style="display:flex;gap:4px;padding:3px;border-radius:8px;background:#101217;border:1px solid #2A2E37">
+          <button style="height:28px;padding:0 12px;border-radius:6px;border:0;background:#252A33;color:#FFFFFF;font:inherit">All 10</button>
+          <button style="height:28px;padding:0 12px;border-radius:6px;border:0;background:none;color:#B5BCC8;font:inherit">Overrides 2</button>
+          <button style="height:28px;padding:0 12px;border-radius:6px;border:0;background:none;color:#B5BCC8;font:inherit">Problems 1</button>
+        </div>
+        <label style="flex:1 1 200px"><span style="position:absolute;left:-9999px">Filter</span><input placeholder="Filter by name or registry" style="width:100%;max-width:320px;height:32px;border-radius:6px;border:1px solid #343944;background:#1A1D23;color:#D5D9E0;font:inherit;padding:0 10px;box-sizing:border-box"></label>
+        <button style="height:32px;padding:0 14px;border-radius:6px;border:1px solid #343944;background:#1F232B;color:#D5D9E0;font:inherit">Load from folder…</button>
+        <span class="mono" style="color:#9AA2B1">plugins\</span>
+      </div>
+
+      <div style="flex:1;overflow:hidden;padding:0 22px">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="text-align:left;color:#9AA2B1;font-size:12px">
+              <th style="padding:12px 8px 8px 0;font-weight:500">Plug-in</th>
+              <th style="padding:12px 8px 8px;font-weight:500">Idrak registry</th>
+              <th style="padding:12px 8px 8px;font-weight:500">Source</th>
+              <th style="padding:12px 0 8px 8px;font-weight:500">State</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P1</b> Editor tools</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">IToolProvider</td><td style="padding:11px 8px;color:#B5BCC8">Built in</td><td style="padding:11px 0 11px 8px"><span class="ok">Active · also in idrak mcp serve</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P2</b> Coder model family</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">IdrakPlugins · FillInMiddleFormats</td><td style="padding:11px 8px;color:#B5BCC8">Folder</td><td style="padding:11px 0 11px 8px"><span class="no">Not registered · completion is prefix-only</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37;background:#1E222B"><td style="padding:11px 8px 11px 0;border-left:2px solid {{accent}};padding-left:8px"><b>P3</b> Bracket-balanced sampler</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">TokenSamplers</td><td style="padding:11px 8px;color:#B5BCC8">Folder</td><td style="padding:11px 0 11px 8px"><span class="ov">Shadows library default</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P4</b> C#-aware edit placement</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">TextMatchers</td><td style="padding:11px 8px;color:#B5BCC8">Built in</td><td style="padding:11px 0 11px 8px"><span class="ok">Active · new kind</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P5</b> Approve-each sandbox</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">CommandSandboxes</td><td style="padding:11px 8px;color:#B5BCC8">Built in</td><td style="padding:11px 0 11px 8px"><span class="ok">Active · new kind</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P6</b> Code search</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">KeywordIndexes · PretrainedEncoders</td><td style="padding:11px 8px;color:#B5BCC8">Built in</td><td style="padding:11px 0 11px 8px"><span class="ok">Active · index 1,204 chunks</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P7</b> Voice dictation</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">SpeechFamilies · AudioCaptures</td><td style="padding:11px 8px;color:#B5BCC8">Folder</td><td style="padding:11px 0 11px 8px"><span class="off">Off · no speech model chosen</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P8</b> Photo to code</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">VisionFamilies · PartKinds</td><td style="padding:11px 8px;color:#B5BCC8">Folder</td><td style="padding:11px 0 11px 8px"><span class="off">Off · chat model takes text only</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P9</b> Status-bar progress</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">ProgressReporters</td><td style="padding:11px 8px;color:#B5BCC8">Built in</td><td style="padding:11px 0 11px 8px"><span class="ov">Shadows library default</span></td></tr>
+            <tr style="border-top:1px solid #2A2E37;border-bottom:1px solid #2A2E37"><td style="padding:11px 8px 11px 0"><b>P10</b> Workspace model names</td><td class="mono" style="padding:11px 8px;color:#B5BCC8">ModelSources</td><td style="padding:11px 8px;color:#B5BCC8">Built in</td><td style="padding:11px 0 11px 8px"><span class="ok">Active · craft: names</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="flex:1 1 360px;max-width:420px;background:#16181D;border-left:1px solid #2A2E37;padding:20px;display:flex;flex-direction:column;gap:18px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:16px;font-weight:600">Bracket-balanced sampler</div>
+        <div style="color:#9AA2B1;line-height:1.5">Masks tokens that would close a brace, a parenthesis or a string the prefix never opened.</div>
+      </div>
+      <dl style="margin:0;display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));row-gap:10px;column-gap:12px">
+        <dt style="color:#9AA2B1">Registry</dt><dd class="mono" style="margin:0">TokenSamplers</dd>
+        <dt style="color:#9AA2B1">Slot</dt><dd class="mono" style="margin:0">default</dd>
+        <dt style="color:#9AA2B1">Shadows</dt><dd style="margin:0">Library default, version 1</dd>
+        <dt style="color:#9AA2B1">Guard</dt><dd style="margin:0">Report</dd>
+        <dt style="color:#9AA2B1">Assembly</dt><dd class="mono" style="margin:0">Craft.Plugins.Sampler</dd>
+        <dt style="color:#9AA2B1">Cost</dt><dd style="margin:0">41 → 40 tok/s (measured)</dd>
+      </dl>
+      <div style="border:1px solid #2F5E57;background:#132522;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#5FC9B4" stroke-width="1.6" aria-hidden="true"><path d="M3 8l3 3 7-7"></path></svg><b>Conformance check passed</b></div>
+        <div style="color:#BFD9D3;font-size:12px">Idrak.Abstraction.Testing · sampler · 48 of 48 cases match the library default where no bracket is open</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button style="height:34px;border-radius:6px;border:1px solid #343944;background:#1F232B;color:#D5D9E0;font:inherit">Run conformance check again</button>
+        <button style="height:34px;border-radius:6px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Unregister (brings the default back)</button>
+      </div>
+      <div style="height:1px;background:#2A2E37"></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:11px;letter-spacing:.06em;color:#9AA2B1;font-weight:600">P2 PROBLEM</div>
+        <div style="line-height:1.5;color:#FFC4C9">FillInMiddleFormats: "coder-q4" is not registered.</div>
+        <div style="line-height:1.5;color:#B5BCC8">Load the family's plug-in from the folder to get fill-in-the-middle completion.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#E5A54B","options":["#E5A54B","#5FC9B4","#82AAFF","#E58BA0"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#E5A54B' };
+  }
+}
+</script>
+</body>
+</html>

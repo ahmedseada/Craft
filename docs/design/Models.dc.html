@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Craft models</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#101217}
+a{color:#7FB2F0}a:hover{color:#A9CBF5}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px}
+</style>
+</helmet>
+<div style="width:100%;height:900px;display:flex;flex-direction:column;background:#101217;color:#D5D9E0;font-family:'Inter',system-ui,sans-serif;font-size:13px;overflow:hidden">
+
+  <div style="height:40px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #2A2E37">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5" fill="{{accent}}"></rect><path d="M13 6.5a4.5 4.5 0 1 0 0 7" fill="none" stroke="#1A1206" stroke-width="2.2" stroke-linecap="round"></path></svg>
+    <span style="font-weight:600">Craft</span><span style="color:#9AA2B1">Settings › Models and devices</span>
+  </div>
+
+  <div style="flex:1;display:flex;flex-wrap:wrap;min-height:0;background:#16181D">
+
+    <nav aria-label="Settings sections" style="flex:1 1 200px;max-width:220px;border-right:1px solid #2A2E37;padding:16px 10px;display:flex;flex-direction:column;gap:2px">
+      <a href="#" style="padding:8px 12px;border-radius:6px;color:#B5BCC8;text-decoration:none">Editor</a>
+      <a href="#" style="padding:8px 12px;border-radius:6px;color:#B5BCC8;text-decoration:none">C# and Roslyn</a>
+      <a href="#" style="padding:8px 12px;border-radius:6px;background:#252A33;color:#FFFFFF;text-decoration:none">Models and devices</a>
+      <a href="#" style="padding:8px 12px;border-radius:6px;color:#B5BCC8;text-decoration:none">Completion</a>
+      <a href="#" style="padding:8px 12px;border-radius:6px;color:#B5BCC8;text-decoration:none">Agent and sandbox</a>
+      <a href="#" style="padding:8px 12px;border-radius:6px;color:#B5BCC8;text-decoration:none">Plug-ins</a>
+      <a href="#" style="padding:8px 12px;border-radius:6px;color:#B5BCC8;text-decoration:none">Appearance</a>
+    </nav>
+
+    <div style="flex:999 1 560px;min-width:0;padding:24px 32px;display:flex;flex-direction:column;gap:24px;overflow:hidden">
+
+      <section style="display:flex;flex-direction:column;gap:12px">
+        <h2 style="margin:0;font-size:15px;font-weight:600">Where models run</h2>
+        <div style="display:flex;gap:4px;padding:3px;border-radius:8px;background:#101217;border:1px solid #2A2E37;align-self:flex-start">
+          <button style="height:32px;padding:0 16px;border-radius:6px;border:0;background:#252A33;color:#FFFFFF;font:inherit">Local (this machine)</button>
+          <button disabled style="height:32px;padding:0 16px;border-radius:6px;border:0;background:none;color:#8C94A3;font:inherit">Remote endpoint · later (A3)</button>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:12px">
+        <h2 style="margin:0;font-size:15px;font-weight:600">Models by role</h2>
+        <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:12px">
+          <div style="border:1px solid #2A2E37;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px">
+            <div style="color:#9AA2B1;font-size:12px">Chat and agent</div>
+            <div class="mono" style="font-size:13px;color:#FFFFFF">store:coder-q4</div>
+            <div style="color:#B5BCC8;font-size:12px">Loaded · tool calls · text only</div>
+          </div>
+          <div style="border:1px solid #2A2E37;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px">
+            <div style="color:#9AA2B1;font-size:12px">Inline completion</div>
+            <div class="mono" style="font-size:13px;color:#FFFFFF">store:coder-q4</div>
+            <div style="color:#FFC4C9;font-size:12px">Fill-in-the-middle: not registered</div>
+          </div>
+          <div style="border:1px solid #2A2E37;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px">
+            <div style="color:#9AA2B1;font-size:12px">Code search embeddings</div>
+            <div class="mono" style="font-size:13px;color:#FFFFFF">craft:embed</div>
+            <div style="color:#B5BCC8;font-size:12px">From .craft/model.json</div>
+          </div>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:10px">
+        <h2 style="margin:0;font-size:15px;font-weight:600">Add a model</h2>
+        <label style="display:flex;flex-direction:column;gap:6px">
+          <span style="color:#9AA2B1;font-size:12px">Model name: a folder, store:name, a .gguf file, a Hugging Face id, or craft:name</span>
+          <div style="display:flex;gap:8px">
+            <input value="owner/coder-model" style="flex:1;height:36px;border-radius:6px;border:1px solid #343944;background:#1A1D23;color:#D5D9E0;font-family:'JetBrains Mono',monospace;font-size:13px;padding:0 12px">
+            <button style="height:36px;padding:0 16px;border-radius:6px;border:0;background:{{accent}};color:#1A1206;font:inherit;font-weight:600">Pull</button>
+          </div>
+        </label>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span>Pulling owner/coder-model · model-00002-of-00003.safetensors</span><span style="color:#B5BCC8">1.2 of 4.4 GB · 38 MB/s · 1:24 left</span></div>
+          <div style="height:6px;border-radius:3px;background:#252A33"><div style="width:27%;height:6px;border-radius:3px;background:{{accent}}"></div></div>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:10px">
+        <h2 style="margin:0;font-size:15px;font-weight:600">How a name is resolved</h2>
+        <div style="color:#B5BCC8">Idrak's ModelSources list, asked in order. The same names work in the idrak tool.</div>
+        <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;border:1px solid #2A2E37;border-radius:10px;overflow:hidden">
+          <li style="display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid #2A2E37"><span class="mono" style="width:120px;color:#FFFFFF">craft:</span><span style="color:#B5BCC8">The project's .craft/model.json (plug-in P10)</span></li>
+          <li style="display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid #2A2E37"><span class="mono" style="width:120px;color:#FFFFFF">owner/name</span><span style="color:#B5BCC8">Hugging Face (Idrak.Data)</span><span style="margin-left:auto;color:#7FD8C6;font-size:12px">resolves "owner/coder-model"</span></li>
+          <li style="display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid #2A2E37"><span class="mono" style="width:120px;color:#FFFFFF">*.gguf</span><span style="color:#B5BCC8">A GGUF file</span></li>
+          <li style="display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid #2A2E37"><span class="mono" style="width:120px;color:#FFFFFF">store:</span><span style="color:#B5BCC8">The local model store</span></li>
+          <li style="display:flex;gap:12px;padding:10px 14px"><span class="mono" style="width:120px;color:#FFFFFF">folder</span><span style="color:#B5BCC8">An existing model folder</span></li>
+        </ol>
+      </section>
+    </div>
+
+    <div style="flex:1 1 320px;max-width:360px;border-left:1px solid #2A2E37;padding:24px;display:flex;flex-direction:column;gap:16px">
+      <h2 style="margin:0;font-size:15px;font-weight:600">Device</h2>
+      <label style="display:flex;flex-direction:column;gap:6px">
+        <span style="color:#9AA2B1;font-size:12px">Run on</span>
+        <select style="height:36px;border-radius:6px;border:1px solid #343944;background:#1A1D23;color:#D5D9E0;font:inherit;padding:0 8px">
+          <option>auto (fastest measured)</option><option>vulkan:0</option><option>cuda:0</option><option>cpu</option>
+        </select>
+      </label>
+      <div style="display:flex;flex-direction:column;gap:8px;border:1px solid #2A2E37;border-radius:10px;padding:14px">
+        <div style="display:flex;justify-content:space-between"><span style="color:#9AA2B1">In use</span><span>Vulkan 0</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#9AA2B1">Device memory used</span><span>3.1 GB</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#9AA2B1">Roslyn workspace</span><span>412 MB</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#9AA2B1">Completion, last</span><span>86 ms first token</span></div>
+      </div>
+      <h2 style="margin:8px 0 0;font-size:15px;font-weight:600">Limits</h2>
+      <div style="color:#B5BCC8;line-height:1.5">None set: Craft uses what the device has. A limit here sets Idrak's ComputeResources.</div>
+      <label style="display:flex;flex-direction:column;gap:6px">
+        <span style="color:#9AA2B1;font-size:12px">Device memory cap (empty: none)</span>
+        <input placeholder="e.g. 4 GB" style="height:36px;border-radius:6px;border:1px solid #343944;background:#1A1D23;color:#D5D9E0;font:inherit;padding:0 12px">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:6px">
+        <span style="color:#9AA2B1;font-size:12px">CPU threads (empty: all cores)</span>
+        <input placeholder="all" style="height:36px;border-radius:6px;border:1px solid #343944;background:#1A1D23;color:#D5D9E0;font:inherit;padding:0 12px">
+      </label>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#E5A54B","options":["#E5A54B","#5FC9B4","#82AAFF","#E58BA0"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#E5A54B' };
+  }
+}
+</script>
+</body>
+</html>

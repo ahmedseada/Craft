@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Craft phone editor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#101217}
+a{color:#7FB2F0}a:hover{color:#A9CBF5}
+.code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:22px;white-space:pre}
+.k{color:#82AAFF}.t{color:#5FC9B4}.s{color:#E3B27A}.c{color:#8790A0;font-style:italic}.m{color:#E8D58A}.v{color:#B8C7DC}.p{color:#D5D9E0}.g{color:#717A8A;font-style:italic}
+</style>
+</helmet>
+<div style="width:390px;height:844px;display:flex;flex-direction:column;background:#16181D;color:#D5D9E0;font-family:'Inter',system-ui,sans-serif;font-size:14px;overflow:hidden">
+
+  <div style="height:56px;display:flex;align-items:center;gap:4px;padding:0 4px;background:#101217;border-bottom:1px solid #2A2E37">
+    <button aria-label="Files" style="width:48px;height:48px;background:none;border:0;color:#D5D9E0"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">EditorTools.cs</span>
+      <span style="font-size:12px;color:#9AA2B1">Craft.Plugins.Tools · edited</span>
+    </div>
+    <button aria-label="Undo" style="width:48px;height:48px;background:none;border:0;color:#D5D9E0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button>
+    <button aria-label="Chat" style="width:48px;height:48px;background:none;border:0;color:{{accent}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg></button>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0;position:relative">
+    <div class="code" style="width:36px;text-align:right;padding:8px 8px 0 0;color:#7D8696;box-sizing:border-box">17
+18
+
+19
+
+20
+21
+<span style="color:#D5D9E0">22</span>
+
+23
+24</div>
+    <div style="flex:1;min-width:0;padding-top:8px;overflow:hidden"><div class="code"><span class="p"> </span>
+<span class="p">[</span><span class="t">Tool</span><span class="p">(</span><span class="s">"get_diagnostics"</span><span class="p">,</span>
+<span class="s">  "Errors and warnings…"</span><span class="p">)]</span>
+<span class="k">public async</span> <span class="t">Task</span><span class="p">&lt;</span><span class="k">string</span><span class="p">&gt;</span>
+<span class="p">  </span><span class="m">GetDiagnosticsAsync</span><span class="p">(…)</span>
+<span class="p">{</span>
+<span class="k">  var</span> <span class="v">items</span><span class="p"> = </span><span class="k">await</span> <span class="v">host</span><span class="p">.…;</span>
+<span style="background:#1E222B;display:inline-block;min-width:100%"><span class="k">  return string</span><span class="p">.</span><span class="m">Join</span><span class="p">(</span><span class="s">'\n'</span><span class="p">,</span><span style="border-left:2px solid {{accent}}"></span></span>
+<span class="g">    items.Select(d =&gt; …));</span>
+<span class="p">}</span>
+<span class="p">}</span></div></div>
+
+    <div style="position:absolute;left:12px;right:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;background:#232730;border:1px solid #343944;border-radius:10px">
+      <span style="font-size:13px;color:#C3CAD5;flex:1">Suggestion · 41 tok/s</span>
+      <button style="height:44px;padding:0 14px;border-radius:8px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Dismiss</button>
+      <button style="height:44px;padding:0 16px;border-radius:8px;border:0;background:{{accent}};color:#1A1206;font:inherit;font-weight:600">Accept</button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;padding:6px 8px;background:#1F232B;border-top:1px solid #2A2E37;overflow:hidden">
+    <button style="min-width:52px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0;font-family:'JetBrains Mono',monospace;font-size:13px">Tab</button>
+    <button style="min-width:44px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0;font-family:'JetBrains Mono',monospace;font-size:15px">{ }</button>
+    <button style="min-width:44px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0;font-family:'JetBrains Mono',monospace;font-size:15px">( )</button>
+    <button style="min-width:44px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0;font-family:'JetBrains Mono',monospace;font-size:15px">;</button>
+    <button style="min-width:44px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0;font-family:'JetBrains Mono',monospace;font-size:15px">=&gt;</button>
+    <button style="min-width:44px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0;font-family:'JetBrains Mono',monospace;font-size:15px">"</button>
+    <button aria-label="Cursor left" style="min-width:44px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3L5 8l5 5"></path></svg></button>
+    <button aria-label="Cursor right" style="min-width:44px;height:44px;border-radius:8px;border:0;background:#2A2F39;color:#D5D9E0"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3l5 5-5 5"></path></svg></button>
+  </div>
+
+  <div style="height:270px;background:#22252C;display:flex;align-items:center;justify-content:center;color:#9AA2B1;font-size:13px;border-top:1px solid #2A2E37">The phone's own keyboard</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#E5A54B","options":["#E5A54B","#5FC9B4","#82AAFF","#E58BA0"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#E5A54B' };
+  }
+}
+</script>
+</body>
+</html>

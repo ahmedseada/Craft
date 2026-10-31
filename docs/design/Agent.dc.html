@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Craft agent run</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#101217}
+a{color:#7FB2F0}a:hover{color:#A9CBF5}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px}
+</style>
+</helmet>
+<div style="width:100%;height:900px;display:flex;flex-direction:column;background:#101217;color:#D5D9E0;font-family:'Inter',system-ui,sans-serif;font-size:13px;overflow:hidden">
+
+  <div style="height:40px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #2A2E37">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5" fill="{{accent}}"></rect><path d="M13 6.5a4.5 4.5 0 1 0 0 7" fill="none" stroke="#1A1206" stroke-width="2.2" stroke-linecap="round"></path></svg>
+    <span style="font-weight:600">Craft</span><span style="color:#9AA2B1">Agent</span>
+  </div>
+
+  <div style="flex:1;display:flex;flex-wrap:wrap;min-height:0">
+
+    <div style="flex:999 1 620px;min-width:0;background:#16181D;display:flex;flex-direction:column">
+      <div style="padding:18px 22px;border-bottom:1px solid #2A2E37;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:16px;font-weight:600">Add a find_symbol tool and a test for it</span>
+          <span style="padding:2px 8px;border-radius:10px;background:#3A2E18;color:#F0C98A;font-size:12px">Waiting for you</span>
+          <button style="margin-left:auto;height:30px;padding:0 12px;border-radius:6px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Stop</button>
+        </div>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;color:#9AA2B1;font-size:12px">
+          <span>Turn <b style="color:#D5D9E0">4</b> of 20</span><span><b style="color:#D5D9E0">4,812</b> tokens</span><span><b style="color:#D5D9E0">31</b> tok/s</span><span>Elapsed <b style="color:#D5D9E0">1:12</b></span><span>Sandbox <b style="color:#D5D9E0">approve-each</b> (plug-in P5)</span>
+        </div>
+        <div style="height:4px;border-radius:2px;background:#252A33"><div style="width:20%;height:4px;border-radius:2px;background:{{accent}}"></div></div>
+      </div>
+
+      <ol style="list-style:none;margin:0;padding:18px 22px;display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden">
+        <li style="display:flex;gap:12px">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#5FC9B4" stroke-width="1.6" role="img" aria-label="Done"><circle cx="8" cy="8" r="6.5"></circle><path d="M5 8l2 2 4-4"></path></svg>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px"><div><b>read_file</b> <span class="mono" style="color:#9AA2B1">src/Craft.Plugins.Tools/EditorTools.cs</span></div><div style="color:#9AA2B1;font-size:12px">Turn 1 · 24 lines</div></div>
+        </li>
+        <li style="display:flex;gap:12px">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#5FC9B4" stroke-width="1.6" role="img" aria-label="Done"><circle cx="8" cy="8" r="6.5"></circle><path d="M5 8l2 2 4-4"></path></svg>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px"><div><b>search</b> <span class="mono" style="color:#9AA2B1">"ILanguageService" in src/</span></div><div style="color:#9AA2B1;font-size:12px">Turn 2 · 3 matches</div></div>
+        </li>
+        <li style="display:flex;gap:12px">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#5FC9B4" stroke-width="1.6" role="img" aria-label="Done"><circle cx="8" cy="8" r="6.5"></circle><path d="M5 8l2 2 4-4"></path></svg>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px"><div><b>edit_file</b> <span class="mono" style="color:#9AA2B1">EditorTools.cs</span> <span style="color:#5FC9B4">+14</span> <span style="color:#F07178">−0</span>, <span class="mono" style="color:#9AA2B1">EditorToolsTests.cs</span> <span style="color:#5FC9B4">+31</span></div><div style="color:#9AA2B1;font-size:12px">Turn 3 · held as a diff until you accept it</div></div>
+        </li>
+        <li style="display:flex;gap:12px">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="{{accent}}" stroke-width="1.6" role="img" aria-label="Waiting"><circle cx="8" cy="8" r="6.5"></circle><path d="M8 4.5V8l2.5 1.5"></path></svg>
+          <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+            <div><b>run_command</b> <span style="color:#9AA2B1;font-size:12px">Turn 4</span></div>
+            <div style="border:1px solid #5E4B2A;background:#1E1A12;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;max-width:640px">
+              <div style="font-weight:600">The agent wants to run a command</div>
+              <div class="mono" style="padding:10px 12px;background:#101217;border-radius:6px;border:1px solid #2A2E37;color:#E8EBF0">dotnet test tests/Craft.Tests --no-restore -- --filter EditorTools</div>
+              <div style="display:flex;gap:18px;flex-wrap:wrap;color:#C3CAD5;font-size:12px"><span>Program: dotnet (allowed for C#)</span><span>Time limit 120 s</span><span>Network: off</span><span>Folder: the workspace</span></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button style="height:32px;padding:0 14px;border-radius:6px;border:0;background:{{accent}};color:#1A1206;font:inherit;font-weight:600">Allow once</button>
+                <button style="height:32px;padding:0 14px;border-radius:6px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Allow dotnet for this run</button>
+                <button style="height:32px;padding:0 14px;border-radius:6px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Deny and tell the agent</button>
+              </div>
+            </div>
+          </div>
+        </li>
+      </ol>
+
+      <div style="padding:12px 22px;border-top:1px solid #2A2E37">
+        <label style="display:flex;gap:8px;align-items:center">
+          <span style="position:absolute;left:-9999px">Steer the agent</span>
+          <input placeholder="Add a note for the next turn (it reads it before its next step)" style="flex:1;height:36px;border-radius:8px;border:1px solid #343944;background:#1A1D23;color:#D5D9E0;font:inherit;padding:0 12px">
+          <button style="height:36px;padding:0 14px;border-radius:8px;border:1px solid #343944;background:#1F232B;color:#D5D9E0;font:inherit">Send</button>
+        </label>
+      </div>
+    </div>
+
+    <div style="flex:1 1 360px;max-width:420px;background:#16181D;border-left:1px solid #2A2E37;display:flex;flex-direction:column">
+      <div style="padding:16px 18px;border-bottom:1px solid #2A2E37;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:11px;letter-spacing:.06em;color:#9AA2B1;font-weight:600">CHANGED FILES</div>
+        <div style="display:flex;justify-content:space-between"><span>EditorTools.cs</span><span><span style="color:#5FC9B4">+14</span> <span style="color:#F07178">−0</span></span></div>
+        <div style="display:flex;justify-content:space-between"><span>EditorToolsTests.cs <span style="color:#9AA2B1;font-size:12px">new</span></span><span style="color:#5FC9B4">+31</span></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button style="height:30px;padding:0 12px;border-radius:6px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Review diff</button>
+          <button style="height:30px;padding:0 12px;border-radius:6px;border:1px solid #343944;background:none;color:#D5D9E0;font:inherit">Discard all</button>
+        </div>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;flex:1">
+        <div style="font-size:11px;letter-spacing:.06em;color:#9AA2B1;font-weight:600">TERMINAL (SANDBOX)</div>
+        <div class="mono" style="flex:1;background:#101217;border:1px solid #2A2E37;border-radius:8px;padding:12px;line-height:19px;color:#B8C0CC;white-space:pre-wrap">$ dotnet build -c Release --no-restore
+  Craft.Abstractions -&gt; bin/Release/net10.0/…
+  Craft.Plugins.Tools -&gt; bin/Release/net10.0/…
+<span style="color:#5FC9B4">Build succeeded. 0 warnings, 0 errors.</span>
+Elapsed 00:00:07.41
+
+<span style="color:#9AA2B1">Waiting for approval of the next command…</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#E5A54B","options":["#E5A54B","#5FC9B4","#82AAFF","#E58BA0"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#E5A54B' };
+  }
+}
+</script>
+</body>
+</html>

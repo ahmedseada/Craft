@@ -177,7 +177,7 @@ public static class DesignTests
         await quick.IndexAsync(workspace);
         Check.Equal(4, quick.Files.Count, "the workspace's files, bin left out");
         var found = quick.Query("edtool");
-        Check.True(found.Count >= 1 && found[0].Text == "EditorTools.cs" && found[0].Detail == Path.Combine("src", "Craft.Ai") && found[0].Path == folder.File("src/Craft.Ai/EditorTools.cs"),
+        Check.True(found.Count >= 1 && found[0].Text == "EditorTools.cs" && found[0].Detail == Path.Combine("src", "Craft.Ai") && found[0].Path == Path.GetFullPath(folder.File("src/Craft.Ai/EditorTools.cs")),
             "the best match first, with its folder and full path");
         Check.True(quick.Query("ehost")[0].Text == "EditorHost.cs", "another name");
 

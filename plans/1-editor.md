@@ -353,7 +353,7 @@ check five things:
 | P4 | **C#-aware edit placement**: places a model's snippet by Roslyn tokens, ignoring whitespace | `TextMatchers` | 1, 2 against `SemiGlobal` | `TextMatcherSuite` |
 | P5 | **Approve-each-command sandbox**: the agent's commands run in the editor's terminal panel, each approved | `CommandSandboxes` | 1, 3 | none in Idrak; Craft's own |
 | P6 | **Code search**: Roslyn-shaped chunks (type, member), camelCase-split identifiers, BM25 plus embeddings in `VectorIndex` | `KeywordIndexes`, `PretrainedEncoders`, `SequencePoolers` | 1 in retrieval; feeds the chat's context | `KeywordIndexSuite` |
-| P7 | **Voice dictation and commands** ("go to line 40", "rename this") | `SpeechFamilies`, `AudioCaptures` | another domain through the same host | `SpeechRecognizerSuite` |
+| P7 | **Voice dictation and commands**: built as phase V's first plug-in ("Voice coding" below) | `SpeechFamilies`, `AudioCaptures`, `LiveTranscriber` | another domain through the same host | `SpeechRecognizerSuite` |
 | P8 | **Photo or screenshot to code** | `VisionFamilies`, `IChatModel.PartKinds` "image" | a text-only model refuses, never ignores the picture | `ChatPartKindSuite`, `VisionEncoderSuite` |
 | P9 | **Status-bar progress and telemetry**: pull and load progress, tokens per second, device memory | `ProgressReporters`, telemetry | 1 on a registry without a guard | `ProgressReporterSuite` |
 | P10 | **Workspace model names**: `craft:` names from the project's `.craft/model.json` | `ModelSources` | 1 on name resolution | Craft's own |
@@ -365,6 +365,32 @@ conformance suite named.
 On Android, whether an assembly loaded at run time works under the app's ahead-of-time setting (`IdrakAndroidAot`), and
 whether trimming removes what a plug-in needs, is measured in M. If it does not work, Android plug-ins are compiled into
 the app and registered through `RegisterAll()`, and loading from a folder stays a desktop feature.
+
+## Voice coding on Idrak.Audio (phase V, added 2026-10-31 at the owner's request)
+
+The owner asked that Craft support coding by voice, through Idrak.Audio. It is built as plug-ins on K's contracts and
+A1's host, like every AI feature; Craft's libraries reference no audio package, and a family (Whisper, a TTS voice) is
+whatever Idrak.Audio's plug-ins register, never named in Craft.
+
+| Piece | What it does | Idrak.Audio contract |
+|---|---|---|
+| Capture | The microphone, opened on a key (push to talk) or toggled; the level shown in the status bar; the device a setting. | `AudioCaptures` (`ForThisMachine`, `Devices`: "winmm" on Windows, "aaudio" ready for phase M), `IAudioInput` |
+| Live transcription | Words as they are spoken, the open words greyed, the committed ones final; a pause ends a phrase. | `LiveTranscriber`, `LiveTranscriptionOptions`, `LiveCommitPolicies` ("agreement"), `SpeechFamilies`, `ISpeechRecognizer` |
+| Dictation | Committed text inserted at the caret, one undo step per phrase; spoken punctuation and symbols ("open paren", "semicolon", "arrow") mapped by a table per language the language plug-in may extend. | the transcript; Craft's document edit |
+| Voice commands | A phrase that matches a registered command's spoken name ("go to line 40", "save", "find", "next error") runs it; the command palette's names are the vocabulary, so every plug-in's commands are speakable. | K's `EditorCommands` |
+| Spoken code | "make a method that returns the sum of the list": the phrase, the selection and the file's context go to the chat model (A1), the answer arrives as a diff the user accepts (no silent edit); a model that hears takes the sound itself. | `IChatModel`, `ChatAudio` / `AudioPartKind` ("audio" part kind), else the transcript as text |
+| Read back | The selection, a diagnostic, a hover or a chat reply spoken, stoppable by any key. | `SpeechSynthesisFamilies`, `ISpeechSynthesizer`, `AudioPlaybacks`, `VoicedSynthesizer` |
+
+Settings (each `CRAFT_VOICE_*` and in Settings): the recognizer and the synthesizer model names (through `ModelSources`),
+the capture device, push-to-talk or toggle and its key, the language, the live step and window seconds, the commit
+policy, and whether spoken code goes as sound or as text. Speed: the first words on screen within the recognizer's step
+of speaking, measured and written here; nothing on the UI thread but the insert. Privacy: the sound never leaves the
+machine unless the model the user chose is a served one, and the status bar says when the microphone is open.
+
+Checks: a recorded WAV played through `PcmStreamInput` dictates the expected text into a document as one undo step per
+phrase; a spoken command runs the matching command; a spoken-code phrase arrives as a diff from a fake chat model; read
+back stops on a key; the owner speaks into the microphone on Windows. Idrak gaps met on the way (a phrase-grammar or
+keyword biasing contract for the recognizer, if the measured accuracy on code words needs one) are fixed in Idrak first.
 
 ## Phases
 
@@ -383,7 +409,8 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | K | The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
 | A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
-| P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P7 and P8; P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
+| P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
+| V | Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
 | M | Android, when the owner says "compile Android": the `net10.0-android` target added to every project in one step; `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | Every project builds for Android; the owner edits a file on a phone; the numbers are written here. | the owner's word, after a good Windows version |
 | L | Held, far later: more languages, each its own pre-installed, removable plug-in like C# (an `ILanguage` in `EditorLanguages`, loaded from `plugins/`): TypeScript, JavaScript, HTML, CSS. The parser for each is chosen when the phase starts, measured against the keystroke budget; nothing native (no tree-sitter binaries), so a C# incremental parser or lexer per language. | Each opens, colours and matches brackets like C#; removing its folder turns its files to plain text. | the owner's word, after a good Windows version |
 | A3 | Held: the "remote" model provider, the `kestrel` MCP transport in Idrak.AspNetCore, screen-reader access to the drawn editor, iOS and macOS. | the owner's call | the owner |

@@ -37,6 +37,8 @@
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
     <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
     <ProjectReference Include="..\Craft.Maui\Craft.Maui.csproj" />
+    <!-- The app's icon: MAUI makes the .exe's and the window's icon from it (and Android's launcher icon in phase M). -->
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" Color="#14182B" />
     <!-- C# is a pre-installed plug-in, not part of the app: built first, never referenced, copied to plugins\Craft.CSharp\. -->
     <ProjectReference Include="..\Craft.CSharp\Craft.CSharp.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>

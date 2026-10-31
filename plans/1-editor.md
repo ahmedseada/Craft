@@ -2740,6 +2740,145 @@ terminal) and every item above holds; the measured numbers are written here.
   Windows among them); the rest of X's items belong to slices 1 and 2 or are not started (sticky scroll, the minimap, the
   chat's markdown and steps).
 
+## The X restart (planned 2026-11-01): note 27, parts 4 and 5, the rest
+
+Planned by a read-only agent against Craft `main` and Idrak `main` (2026-11-01); "(seen)" was read in the code, "(guess)"
+is for the slot to confirm. Starts after B1-B7 merge. Every new drawing layer draws only through `IEditorCanvas`, so it
+takes B1's line-layout cache and caret layer; no layer asks for a full redraw on the blink; each layer is its own class
+the renderer calls, as `FindHighlightLayer` is.
+
+**Decisions (the owner: "go with the recommendations, noted"):** the tolerant read is a helper after the turn, used by
+`CodingAgent` and the CLI; the reinforcement environment is unchanged (it trains the template's format); sticky scroll
+reads the folding ranges; the minimap is off by default with the overview ruler on, until the owner's Windows frame
+number is in; peek is an overlay under the line; a rename's unopened files are opened in the background, shown in the
+diff and saved on accept; split right and down, up to 4 groups; one contract step to the next minor version for the
+whole restart, taken by the first slot that merges an addition (after B3's step); a tree drag moves with an Undo bar,
+Ctrl copies; the chat's `File.ReadAllText` on the UI thread (found) is fixed in 1b; completion at several carets applies
+where the text before the caret matches the primary's, the rest said.
+
+### Note 27: tool calls written as text (Idrak first, then Craft)
+- Cause (seen): the JSON parser reads calls only between the template's markers (`ToolCallParsers.cs` ~219-224), a bare
+  answer only when it starts with `{` or `[`; `CodingAgent.LoopAsync` ends the run on the first reply with no call; the
+  CLI's `agent` has its own loop (`AgentCommand.cs`).
+- Idrak: `ToolCallText.CallsInText(text, ToolCallContext)` in `Idrak.Abstraction/Generation/ToolCallParsers.cs`: fenced
+  blocks first, then bare text; the first complete JSON value from the first `{` or `[` (the existing `JsonValueEnd`),
+  trailing junk ignored; each value `{name, arguments}` or a list; every name an offered tool, else the value stays text;
+  sync span parsing once per turn (rules 8, 17, 74). `AgentOptions.CallsInText` (true), `AgentOptions.Nudges` (2): a turn
+  with no call but call-like text gets a correction in the template's own format and the run goes on; out of nudges, the
+  new `CodingAgentEnd.CallsNotRead` with a note. `CodingAgentRun.Nudges` an init property. CLI: `--nudges N`,
+  `--strict-calls`. Tests: the owner's reply verbatim gives three calls; an example naming no tool stays text; fenced
+  calls run; a nudged model writes the file; the limit ends with `CallsNotRead`; public API, inventory.
+- Craft: `agentNudges` (2, 0-20) and `agentCallsInText` (true) in `AiSettings` (Agent section,
+  `CRAFT_PLUGIN_AI_AGENTNUDGES`, `CRAFT_PLUGIN_AI_AGENTCALLSINTEXT`), read in `AiAgentPanel.RunAgentAsync`; the end note
+  says "The model wrote no tool calls; nothing was changed." or how many nudges were given. Tests (`AiPlugins`): fenced
+  calls end in a diff of one undo step; a run with no calls says nothing changed; the setting reaches the agent.
+
+### X part 4
+- **Document symbols**: a default member `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by default) and
+  `DocumentSymbol(Name, Kind, Start, Length, NameStart, NameLength, Detail, Children)`; `ScopeKind` gains Property, Field,
+  Event, EnumMember. C#: `CSharpLanguageSession.Symbols.cs` walks the last parse once per version on the pool, cached.
+- **`@` in quick open**: `QuickOpenMode.Symbols`, Ctrl+Shift+O; fuzzy over a name array made once per version (rule 15);
+  `@:` groups by kind; Up/Down preview, Escape goes back; off the UI thread over the background threshold.
+- **Breadcrumb**: the path in the workspace, the file, the scopes; middle parts fold to "…" by measured width; each part
+  clickable (a folder lists its entries in the overlay, a symbol opens `@` on its siblings).
+- **Sticky scroll**: `StickyScrollLayer` over `EditorFolding`'s sorted ranges, a binary search a frame, no allocation;
+  `CRAFT_STICKY_SCROLL` (on), `CRAFT_STICKY_SCROLL_LINES` (5); a click moves to the header.
+- **Overview ruler**: `OverviewRuler` at the viewport's right edge, `CRAFT_OVERVIEW_RULER` (on),
+  `CRAFT_OVERVIEW_RULER_WIDTH` (14); errors, warnings, search hits, carets bucketed in one pass into a pooled array,
+  rebuilt only when they change (rules 73, 75); tokens `RulerError`, `RulerWarning`, `RulerFind`, `RulerCaret`; click
+  and drag scroll. (guess) beside or under WinUI's scroll bar: the owner's check.
+- **F2 rename**: default `ISemanticLanguageSession.PrepareRenameAsync` / `RenameAsync` returning a `WorkspaceEdit`; C#
+  through Roslyn's `Renamer`; `RenameOverlay` over the name; the edit computed off the UI thread as the activity
+  "Rename"; a new default `IEditorHost.ProposeWorkspaceAsync(WorkspaceEdit, title)`: the diff lists every file, Accept
+  all, each open document one undo step, the undo bar "Renamed in N files"; F2 (and Ctrl+R Ctrl+R in the Visual Studio
+  keymap).
+- **Hover cards that stay**: the pointer inside the card keeps it; leaving closes after `CRAFT_HOVER_HIDE_MS` (300);
+  select, copy, wheel inside; "Go to definition"; the fold's preview of `CRAFT_FOLD_PREVIEW_LINES` (12) lines.
+- **Faster typing at many carets**: `PieceTableBuffer` splits once before the first and after the last edit, flattens
+  the middle into a pooled array, appends all inserted text in one run, joins continuing pieces, coalesces small adds
+  under `CRAFT_PIECE_COALESCE_CHARS` (64), rebuilds the middle balanced; from `CRAFT_PIECE_BATCH_MIN_EDITS` (8) edits.
+  Proven by random multi-edit equivalence (rule 71); measured against slice 2's 191 us / 314 KB.
+- Tests: `DocSymbols`, `Inline` (extended), `Breadcrumb`, `StickyScroll`, `OverviewRuler`, `SymbolRename`,
+  `HoverCards`, `Buffer` and `MultiCaret` (extended), `ApiGuard`, `Inventory`.
+
+### X part 5
+- **Split editor**: `EditorGroups` (each its own `DocumentTabs`, one focused); find, breadcrumb, quick open, status bar
+  and the agent's active document follow the focus; a document in two groups keeps one text and one language session
+  (shared, counted); drop zones from the drag position; Split right (Ctrl+\), Split down, Move to next group, Close
+  group, Ctrl+1/2/3; `CRAFT_EDITOR_GROUPS_MAX` (4); only the focused view blinks.
+- **Tree move by drag**: folder rows are drop targets; the move off the UI thread; clean tabs follow; Undo bar; Ctrl
+  copies; a cross-volume folder move refused and said.
+- **Drop onto the chat**: default `IConversationPanel.AcceptDropAsync(paths, ct)`; text files become `path:` chips,
+  images `image:` chips read off the UI thread up to `chatImageMaxMb`; a model without images greys the chip with the
+  reason; the agent takes dropped files as `@path`. Fix found: `AskAsync` reads extra files on the UI thread.
+- **Models page per role**: each role's card edits its own enabled, model, device, "Same as chat", state, settings link;
+  `ModelRole.EnabledSetting` added.
+- **More folding**: `RazorFolding`, `SolutionFolding`, `EditorConfigFolding` in `Craft.CSharp/Project/ProjectFolding.cs`;
+  `FoldingRangeProviders.Changed` so a provider registered later applies without reopening.
+- Tests: `EditorGroups`, `TreeMove`, `ChatDrop`, `ModelsPage`, `MoreFolding`.
+
+### X rest
+- **Minimap** (`MinimapRenderer`, `MinimapView`): `CRAFT_MINIMAP` (off), `CRAFT_MINIMAP_SCALE` (2), `CRAFT_MINIMAP_MAX_COLUMNS`
+  (120); a rect per coloured run from a bounded per-line cache; redrawn on scroll, edit or theme only.
+- **Completion and ghost text at several carets**: one request at the primary; accept applies at every caret whose text
+  before it matches, the rest said; one undo step; `CRAFT_COMPLETION_ALL_CARETS` (on).
+- **Peek definition** (Alt+F12): an overlay under the line holding a read-only editor; a closed file read off the UI
+  thread with syntactic colours only (no workspace built).
+- **Input-to-response times**: `InteractionClock` stamps inputs and closes them at the next painted frame into the
+  telemetry table; `CRAFT_INTERACTION_LOG` writes `test-output\timings\interactions.txt`; the command "Craft: Measure
+  interactions" replays a fixed script and writes p50, p95, max per kind.
+- Tests: `Minimap`, `CaretCompletion`, `PeekDefinition`, `InteractionTimes`.
+
+### Slots and merge order
+- Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; 1c (last) the interaction
+  times.
+- Slot 2, the surface: 2a batched build, hover cards and fold preview, ruler, sticky scroll; 2b minimap, completion at
+  several carets.
+- Slot 3, language and shell: 3a symbols, `@`, breadcrumb, F2 rename; 3b split editor, tree move, peek.
+- Merge: 1a, then 2a, 3a, 1b as they finish, then 2b and 3b, then 1c. Shared files (`CraftOptions.cs`, the API dumps,
+  `StandardShortcuts.cs`, `MenuModel.cs`): a dump that conflicts is regenerated, built once, `ApiGuard|Inventory` run.
+- Windows-only (not compiled here): the wheel inside a hover card (guess), `IInputTimestamps`, Ctrl+\ if the adapter
+  lacks the key (guess), Ctrl+1/2/3 and Alt+F12 checked in the adapter.
+
+## P batch 2 resumed (planned 2026-11-01; last, once W is done)
+
+Planned by a read-only agent from `wip/p-batch-2` (`74a5c21` on `e04652c`; `main` 47 commits ahead). The WIP holds P6
+code search, P9 progress and telemetry, P10 workspace model names, P8 screenshot to code: 28 new files, 23 edited, never
+built, no tests, no dumps. About 20 of its 23 edited files conflict with `main`, most of them duplicates `main` now has
+(`IdrakInPlugins`, `IEditorHost.DataFolder`, `ModelRoleKeys`, `AiModels.AgentAsync`, U2's side views).
+
+**Decisions (recommended, noted):** re-apply plug-in by plug-in on fresh `main` (copy each plug-in's folder from
+`74a5c21`, rewrite the host side from its diff), never a rebase; P batch 2 starts once W is done; P10's role defaults
+come from `.craft/settings.json` (no second mechanism; `ModelRoleSources` dropped); P9's figures go to a status item and
+`host.Record` (no new static); the chat model's pull reports through the lease's `ModelLoadStatus` (one activity); P6
+watches files through `IFolderWatcher` with content changes added as a default member; the rail's Search shows the first
+query side view, else quick open; P6 chunks other languages by line windows with W's extensions now, folding ranges
+later; `wip/p-batch-2` is deleted after the last slot merges; P8 is checked on a Hugging Face vision-language folder of a
+family Idrak.Vision.Plugins has; P11 (Idrak's text shaper drawing the editor's lines) starts only if, after B1, a warm
+full screen of C# has p95 above `CRAFT_P11_FRAME_MS` (8 ms) with line layout at least half of it, or the platform draws
+a text wrong that Idrak's shaper draws right.
+
+- **Shared**: `Craft.Abstractions` gains only `EditorImage`, `EditorImageSource`, `IEditorHost.ReadImageAsync`,
+  `IConversationPanel.AttachImage`, `IQueryPanel : IEditorPanel` (default bodies): one minor contract step; P6 and P8
+  state it, P9 and P10 the earlier one. Each slot adds its `api/Craft.Plugins.*.txt`; the last regenerates the inventory.
+- **P10** (slot A): the "craft" `ModelSources` source from `.craft/model.json` (read on the pool at open and on the
+  watcher's change, kept; no stat on the UI thread); the Models page's "Workspace names"; `craft:NAME` at the chip; the
+  resolved target in the lease key. `CRAFT_PLUGIN_WORKSPACEMODELS_FILE`, `_WORKSPACE`. Group `WorkspaceModels`.
+- **P9** (slot B, first): the "editor" `ProgressReporters` kind as an `IActivity` (counts only with no host); model
+  measures (`model.tokensPerSecond`, `model.firstTokenMs`, `model.deviceMemory`) into the metrics table.
+  `ProgressReporterSuite`. Group `ProgressBridge` (also the activities' items and messages).
+- **P8** (slot B, second): pictures from the clipboard, a picker or a drop on the chat (on X's drop); `Idrak.Vision.Plugins`
+  registered when the plug-in loads, not on the UI thread at activation; a text-only model refuses and keeps the picture.
+  `ChatPartKindSuite("image")`, `VisionEncoderSuite`. Group `VisionChat`.
+- **P6** (slot C): Roslyn chunks, camelCase terms, "code-bm25" keyword index (`KeywordIndexSuite` with `bm25` as the
+  reference on prose, rule 71), optional embeddings fused by reciprocal rank, the index on disk updated per changed file;
+  the Search view as an `IQueryPanel`; indexing as a cancellable activity; `FileIcons` on rows; Ctrl+Shift+F;
+  `search_code` for the chat and the agent; the 21 `CRAFT_PLUGIN_SEARCH_*` settings in a Search section; bench `search`
+  (cold and warm apart, p50/p99, memory over 1,000 updates). Group `CodeSearch`.
+- **Merge order**: A, then B, then C. No Idrak change planned (`ExtraTools`, `ModelImages`, `ProgressReporters` are on
+  Idrak `main`).
+
+
 ## The owner's third Windows run (2026-11-01): bugs first, then X, W and P batch 2
 
 The owner's run on `c3cfaed` (the trail `trail-45356-20261101-022524`, its ticket and 34 stall reports, from

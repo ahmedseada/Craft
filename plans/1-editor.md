@@ -2139,6 +2139,19 @@ the owner's machine, not only headless.
     paint, and every view's dispatch (`UiDispatch.DispatchLabelled`): the next report names the work. The plug-ins'
     Idrak libraries were already registered before the window (phase U). The owner's next run on Windows names what is left.
 
+25. **Every model has its own settings** (the owner, 2026-11-01: "all models should have settings: inline completion
+    (enable / disable) and device to run on and each respective settings; chat, agent model as well"). Queued for the
+    next free slot, ahead of the rest of X. Three roles, each with the same set: enabled, model, device (auto, cpu,
+    cuda:N...), weights, context, keep-alive, temperature, max reply tokens.
+    - Completion: enabled and model exist (the 1.5B default); device, weights, context and keep-alive are new (today it
+      shares the chat's).
+    - Chat: today's `model`, `device`, `weights`, `context`, `keepAliveMinutes` become the chat's (the variables kept);
+      enabled and temperature are new.
+    - Agent: all new; an empty model or device means the chat's, so one copy is shared on the card by default.
+    - The settings page shows the Completion, Chat and Agent sections; each composer's chip writes its own panel's
+      model and device; every one a `CRAFT_PLUGIN_AI_*` variable and a `.craft/settings.json` key; the lease per role
+      (d260816) keys on the role's own settings, so two roles on one model and settings share one copy.
+
 **Already planned and still owed** (from the earlier notes, in U and U2 above): the notification centre, every
 operation in the status bar, the window never freezing, the settings and Models pages not covering the menus, new
 files showing in the tree, the side panel gone, every panel collapsible and resizable, and the open question of

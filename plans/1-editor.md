@@ -2025,6 +2025,19 @@ the owner's machine, not only headless.
     `.editorconfig`, `.json` (`appsettings.json`, `launchSettings.json`, `global.json`); each removable with the plug-in.
 18. **Format document for those files** (XML and JSON formatting beside C#'s), on Shift+Alt+F and on save as a setting.
 
+**Second Windows run (2026-10-31, late), queued for the next free slot, broken first**
+19. **The Output panel's text cannot be copied**: selectable lines, Ctrl+C, a Copy all, as the chat's messages (note 4).
+20. **Copying in the terminal crashed the app with no crash report**: a native (WinUI/COM) fail-fast skips every managed
+    handler, so the crash dialog never ran. Likely the clipboard touched off the UI thread, or the terminal's Ctrl+C;
+    found and fixed where it lives, with a test where it can be headless.
+21. **A global crash reporter that needs no hook ("an audit or a support ticket")**: a run marker written at start and
+    removed on a clean exit, so the next start knows the last run died whatever killed it; a breadcrumb trail flushed to
+    disk as it happens (the last UI work, commands, key names never typed text, first-chance exceptions, output lines);
+    on Windows, the next start reads the Application event log's entry for that process (faulting module and code, or
+    the .NET Runtime stack); and a "Report a problem" ticket (offered at the next start and in Help) bundling all of it
+    with the app and system details into `CRAFT_CRASH_FOLDER`, shown for the owner to review and paste. Nothing is sent
+    anywhere. Every option per the option rule.
+
 **Already planned and still owed** (from the earlier notes, in U and U2 above): the notification centre, every
 operation in the status bar, the window never freezing, the settings and Models pages not covering the menus, new
 files showing in the tree, the side panel gone, every panel collapsible and resizable, and the open question of

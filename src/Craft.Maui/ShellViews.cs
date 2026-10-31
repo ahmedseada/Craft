@@ -50,11 +50,10 @@ public sealed class FolderTreeView : ContentView
     {
         _list = new CollectionView
         {
-            SelectionMode = SelectionMode.Single,
+            SelectionMode = SelectionMode.None,                     // a row's own tap opens it (below), not the list's selection
             ItemTemplate = new DataTemplate(MakeRow),
             ItemsSource = _items,
         };
-        _list.SelectionChanged += OnSelectionChanged;
         Content = _list;
     }
 
@@ -192,6 +191,18 @@ public sealed class FolderTreeView : ContentView
             states.Apply(palette);
             states.Selected = item.Active;
         };
+        // A click opens the file or toggles the folder through the row's own tap: on Windows the drag recognizer below
+        // takes the press from the list, so the list's selection never changed and a click opened nothing (the owner's
+        // run, 2026-11-01).
+        var open = new TapGestureRecognizer { Buttons = ButtonsMask.Primary };
+        open.Tapped += (_, _) =>
+        {
+            if (row.BindingContext is FolderTreeItem item)
+            {
+                Activate(item);
+            }
+        };
+        row.GestureRecognizers.Add(open);
         var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
         context.Tapped += (_, e) => ContextRequested?.Invoke(this, (row.BindingContext as FolderTreeItem, e));
         row.GestureRecognizers.Add(context);
@@ -273,17 +284,16 @@ public sealed class FolderTreeView : ContentView
         }
     }
 
-    private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    private void Activate(FolderTreeItem item)
     {
-        if (e.CurrentSelection.Count == 0 || e.CurrentSelection[0] is not FolderTreeItem item || _tree is null)
+        if (_tree is null)
         {
             return;
         }
 
-        // Acted on after the list finished its selection (the items may be replaced).
+        // Acted on after the tap's handler returns (toggling a folder replaces the items).
         Dispatcher.DispatchLabelled("explorer: open the chosen row", () =>
         {
-            _list.SelectedItem = null;
             if (_tree is not { } tree || tree.IndexOf(item.Path) is not (>= 0 and var index))
             {
                 return;

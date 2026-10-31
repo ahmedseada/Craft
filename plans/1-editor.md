@@ -2834,8 +2834,10 @@ where the text before the caret matches the primary's, the rest said.
   times.
 - Slot 2, the surface: 2a batched build, hover cards and fold preview, ruler, sticky scroll; 2b minimap, completion at
   several carets.
-- Slot 3, language and shell: 3a symbols, `@`, breadcrumb, F2 rename; 3b split editor, tree move, peek.
-- Merge: 1a, then 2a, 3a, 1b as they finish, then 2b and 3b, then 1c. Shared files (`CraftOptions.cs`, the API dumps,
+- Slot 3, language and shell: 3a split editor first (the owner asked for it directly, 2026-11-01: "I need to split the
+  editor screen"), then tree move and peek; 3b symbols, `@`, breadcrumb, F2 rename.
+- Merge: 1a, then 2a, 3a (the split editor), 1b as they finish, then 2b and 3b, then 1c; 3a's `EditorModel.cs` change
+  (a shared language session) rebases on 2a's. Shared files (`CraftOptions.cs`, the API dumps,
   `StandardShortcuts.cs`, `MenuModel.cs`): a dump that conflicts is regenerated, built once, `ApiGuard|Inventory` run.
 - Windows-only (not compiled here): the wheel inside a hover card (guess), `IInputTimestamps`, Ctrl+\ if the adapter
   lacks the key (guess), Ctrl+1/2/3 and Alt+F12 checked in the adapter.

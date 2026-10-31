@@ -43,6 +43,15 @@ public interface ILanguage : IKind
     /// calls <see cref="Open(ITextBuffer)"/>).
     /// </summary>
     ILanguageSession Open(ITextBuffer buffer, LanguageOpenContext context) => Open(buffer);
+
+    /// <summary>
+    /// Frees what the language holds that it can build again (a semantic layer's workspaces and their references): the
+    /// host calls it when memory runs low (<see cref="MemoryPressureMonitors"/>). It may be called from any thread and must
+    /// not block it; the sessions stay open and build what they need again on their next request. The default frees nothing.
+    /// </summary>
+    void ReleaseMemory()
+    {
+    }
 }
 
 /// <summary>

@@ -7,7 +7,7 @@ using Craft.Benches;
 //   dotnet run -c Release --project benches/Craft.Benches -- buffer     (E1: the piece table and the document)
 //   dotnet run -c Release --project benches/Craft.Benches -- csharp     (E2: the incremental parse and classification)
 //   dotnet run -c Release --project benches/Craft.Benches -- editor     (E3: keystroke to render, blink and scroll frames)
-//   dotnet run -c Release --project benches/Craft.Benches -- semantic   (E5: the workspace, diagnostics, completion)
+//   dotnet run -c Release --project benches/Craft.Benches -- semantic   (E5: the workspace, generators, diagnostics, completion, colours, memory)
 // No argument runs them all. CRAFT_BENCH_LINES sets the generated file's lines (100,000 by default).
 var which = args.Length > 0 ? args[0] : "all";
 int lines = int.TryParse(Environment.GetEnvironmentVariable("CRAFT_BENCH_LINES"), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : 100_000;

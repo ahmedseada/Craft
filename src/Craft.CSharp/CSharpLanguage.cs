@@ -84,6 +84,12 @@ public sealed class CSharpLanguage : ILanguage
     /// <summary>Releases every C# workspace and the shared references (the host's memory-pressure call); each is built again on its next request.</summary>
     public static void ReleaseWorkspaces() => CSharpWorkspace.ReleaseAll();
 
+    /// <summary>
+    /// The host's memory-pressure call (<see cref="ILanguage.ReleaseMemory"/>): every C# workspace and the shared references
+    /// are dropped off the calling thread; the sessions stay and build what they need again.
+    /// </summary>
+    public void ReleaseMemory() => CSharpWorkspace.RequestReleaseAll();
+
     /// <inheritdoc />
     ILanguageSession ILanguage.Open(ITextBuffer buffer) => Open(buffer);
 
@@ -218,6 +224,15 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
             throw new ArgumentOutOfRangeException(nameof(start), start, $"The range of {length} characters at {start} runs outside the text of {snapshot.Length}.");
         }
 
+        if (!ClassifyWithColors(snapshot, start, length, into))
+        {
+            ClassifySyntactic(snapshot, start, length, into);
+        }
+    }
+
+    /// <summary>The syntactic layer's spans of the range (the last parse, through the change still being parsed).</summary>
+    private void ClassifySyntactic(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into)
+    {
         var parsed = Volatile.Read(ref _parsed);
         if (parsed is not null && IsOf(snapshot, parsed))
         {
@@ -512,6 +527,7 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
         _stop.Dispose();
         _resume.Dispose();
         Interlocked.Exchange(ref _scratch, null)?.Dispose();
+        Interlocked.Exchange(ref _colorScratch, null)?.Dispose();
         _idle.TrySetResult();
     }
 

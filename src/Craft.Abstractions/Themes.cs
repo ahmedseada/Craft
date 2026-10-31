@@ -77,7 +77,21 @@ public sealed class TableTheme : ITheme
         IsDark = isDark;
         Colors = colors;
         _plain = new TextStyle(colors.Foreground);
-        _styles = styles.ToFrozenDictionary(StringComparer.Ordinal);
+        // A static name's class ("method name + static symbol"): its own class's style with the static symbol's bold and
+        // italic over it, made here once, so StyleOf stays one lookup.
+        var all = new Dictionary<string, TextStyle>(styles, StringComparer.Ordinal);
+        if (styles.TryGetValue(TokenClasses.StaticSymbol, out var @static))
+        {
+            foreach (var (tokenClass, style) in styles)
+            {
+                if (tokenClass != TokenClasses.StaticSymbol && !tokenClass.EndsWith(TokenClasses.StaticSymbolSuffix, StringComparison.Ordinal))
+                {
+                    all.TryAdd(TokenClasses.WithStaticSymbol(tokenClass), style with { Bold = style.Bold || @static.Bold, Italic = style.Italic || @static.Italic });
+                }
+            }
+        }
+
+        _styles = all.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     /// <inheritdoc />
@@ -147,7 +161,9 @@ public static class EditorThemes
             PopupBackground = 0xFF22262E, PopupBorder = 0xFF4A5260, PopupSelection = 0xFF2C3A55, PopupText = 0xFFD5D9E0,
         },
         Styles(keyword: 0xFF82AAFF, type: 0xFF5FC9B4, @string: 0xFFE3B27A, comment: 0xFF8790A0, number: 0xFFD9A0E8, method: 0xFFE8D58A,
-            local: 0xFFB8C7DC, preprocessor: 0xFFB09EE0, excluded: 0xFF6B7382, punctuation: 0xFFAEB6C2));
+            local: 0xFFB8C7DC, preprocessor: 0xFFB09EE0, excluded: 0xFF6B7382, punctuation: 0xFFAEB6C2,
+            new Semantic(Value: 0xFF8FD19E, Interface: 0xFFB8D7A3, TypeParameter: 0xFF7FD3E6, Member: 0xFF9CCBF0, Parameter: 0xFFC9B8E8,
+                Namespace: 0xFFC8CDD6, Constant: 0xFFE0A7C2)));
 
     private static TableTheme MakeLight() => new TableTheme(Light, "Light: a paper ground, deep inks", isDark: false,
         new EditorColors(Background: 0xFFFFFFFF, Foreground: 0xFF1F2328, Selection: 0xFFC8DAF8, CurrentLine: 0xFFF3F5F8, Caret: 0xFFB2650F,
@@ -157,10 +173,18 @@ public static class EditorThemes
             PopupBackground = 0xFFF6F8FA, PopupBorder = 0xFF8C959F, PopupSelection = 0xFFC8DAF8, PopupText = 0xFF1F2328,
         },
         Styles(keyword: 0xFF0B4FC6, type: 0xFF0E7A6B, @string: 0xFF9A4A06, comment: 0xFF5F6B78, number: 0xFF8A2BB8, method: 0xFF795E00,
-            local: 0xFF2A4A75, preprocessor: 0xFF6F42C1, excluded: 0xFF8C959F, punctuation: 0xFF404852));
+            local: 0xFF2A4A75, preprocessor: 0xFF6F42C1, excluded: 0xFF8C959F, punctuation: 0xFF404852,
+            new Semantic(Value: 0xFF2E7D32, Interface: 0xFF4D6B16, TypeParameter: 0xFF16697F, Member: 0xFF0B5C8E, Parameter: 0xFF6A3D9A,
+                Namespace: 0xFF404852, Constant: 0xFF9C2F6B)));
+
+    /// <summary>
+    /// The hues of the semantic classes beside the syntactic ones: value types (structs, enums), interfaces, type
+    /// parameters, members (properties, fields, events), parameters, namespaces and constants (enum members too).
+    /// </summary>
+    private sealed record Semantic(uint Value, uint Interface, uint TypeParameter, uint Member, uint Parameter, uint Namespace, uint Constant);
 
     private static Dictionary<string, TextStyle> Styles(uint keyword, uint type, uint @string, uint comment, uint number, uint method,
-        uint local, uint preprocessor, uint excluded, uint punctuation) => new(StringComparer.Ordinal)
+        uint local, uint preprocessor, uint excluded, uint punctuation, Semantic semantic) => new(StringComparer.Ordinal)
     {
         [TokenClasses.Keyword] = new(keyword),
         [TokenClasses.ControlKeyword] = new(keyword),
@@ -178,14 +202,24 @@ public static class EditorThemes
         [TokenClasses.ExcludedCode] = new(excluded),
         [TokenClasses.ClassName] = new(type),
         [TokenClasses.RecordClassName] = new(type),
-        [TokenClasses.StructName] = new(type),
-        [TokenClasses.RecordStructName] = new(type),
-        [TokenClasses.InterfaceName] = new(type),
-        [TokenClasses.EnumName] = new(type),
+        [TokenClasses.StructName] = new(semantic.Value),
+        [TokenClasses.RecordStructName] = new(semantic.Value),
+        [TokenClasses.InterfaceName] = new(semantic.Interface),
+        [TokenClasses.EnumName] = new(semantic.Value),
         [TokenClasses.DelegateName] = new(type),
-        [TokenClasses.TypeParameterName] = new(type),
+        [TokenClasses.TypeParameterName] = new(semantic.TypeParameter),
         [TokenClasses.MethodName] = new(method),
+        [TokenClasses.ExtensionMethodName] = new(method),
+        [TokenClasses.PropertyName] = new(semantic.Member),
+        [TokenClasses.FieldName] = new(semantic.Member),
+        [TokenClasses.EventName] = new(semantic.Member),
         [TokenClasses.LocalName] = new(local),
-        [TokenClasses.ParameterName] = new(local),
+        [TokenClasses.ParameterName] = new(semantic.Parameter),
+        [TokenClasses.NamespaceName] = new(semantic.Namespace),
+        [TokenClasses.ConstantName] = new(semantic.Constant),
+        [TokenClasses.EnumMemberName] = new(semantic.Constant),
+        [TokenClasses.LabelName] = new(local),
+        // Static members and types in their own colour, italic (Roslyn's additive "static symbol").
+        [TokenClasses.StaticSymbol] = new(type, Italic: true),
     };
 }

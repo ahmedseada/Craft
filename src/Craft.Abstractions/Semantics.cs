@@ -44,6 +44,19 @@ public sealed record LanguageSettings
     /// <summary>The build configuration a project is read for ("Debug" defines DEBUG) (<c>CRAFT_WORKSPACE_CONFIGURATION</c>).</summary>
     public string Configuration { get; init; } = "Debug";
 
+    /// <summary>
+    /// Whether the projects' source generators run in the semantic model (the analyzers' generators only, never their
+    /// diagnostics), so generated code counts as the build counts it (<c>CRAFT_SOURCE_GENERATORS</c>).
+    /// </summary>
+    public bool SourceGenerators { get; init; } = true;
+
+    /// <summary>
+    /// Milliseconds after the last change (or the first paint of new lines) before the visible lines are classified by
+    /// meaning, off the UI thread (type, member, local and parameter names); -1 turns semantic colours off
+    /// (<c>CRAFT_SEMANTIC_COLORS_DELAY_MS</c>).
+    /// </summary>
+    public int SemanticColorsDelayMilliseconds { get; init; } = 30;
+
     /// <summary>The columns of an indentation step, for formatting (the editor's tab size).</summary>
     public int TabSize { get; init; } = 4;
 

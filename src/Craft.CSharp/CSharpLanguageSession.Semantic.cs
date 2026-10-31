@@ -214,6 +214,7 @@ public sealed partial class CSharpLanguageSession
     /// <summary>Called holding the gate, on each buffer change: the change joins the one the workspace has not seen, and diagnostics are due again.</summary>
     private void NoteSemanticChange(TextChangedEventArgs change, bool continuous)
     {
+        NoteColorsChange(change, continuous);
         if (_workspaceVersion >= 0)
         {
             if (continuous)
@@ -457,6 +458,7 @@ public sealed partial class CSharpLanguageSession
         _diagnosticsArmed = false;
         _diagnosticsTimer?.Dispose();
         _diagnosticsTimer = null;
+        StopColors();
         if (!_diagnosticsRunning)
         {
             _diagnosticsIdle.TrySetResult();

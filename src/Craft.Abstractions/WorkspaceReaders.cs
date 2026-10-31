@@ -60,6 +60,12 @@ public sealed record WorkspaceProject
     /// <summary>The assemblies it references (metadata: files on disk).</summary>
     public IReadOnlyList<string> References { get; init; } = [];
 
+    /// <summary>
+    /// The analyzer assemblies its build runs (files on disk: the targeting packs' and the packages'); a language runs their
+    /// source generators, so code a generator completes (a <c>LibraryImport</c> or <c>GeneratedRegex</c> partial) compiles.
+    /// </summary>
+    public IReadOnlyList<string> Analyzers { get; init; } = [];
+
     /// <summary>The project files it references (each one also in <see cref="WorkspaceModel.Projects"/>).</summary>
     public IReadOnlyList<string> ProjectReferences { get; init; } = [];
 

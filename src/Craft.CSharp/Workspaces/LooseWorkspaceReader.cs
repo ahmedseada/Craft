@@ -40,6 +40,7 @@ public sealed class LooseWorkspaceReader : IWorkspaceReader
             GlobalUsings = ["System", "System.Collections.Generic", "System.IO", "System.Linq", "System.Net.Http", "System.Threading", "System.Threading.Tasks"],
             SourceFiles = request.FilePath is { } path ? [Path.GetFullPath(path)] : [],
             References = framework.Files,
+            Analyzers = framework.Analyzers,
             Notes = ["a stray file, in no project: the running framework's references", .. framework.Notes],
         };
         return new WorkspaceModel(ReaderName, folder, [project]);

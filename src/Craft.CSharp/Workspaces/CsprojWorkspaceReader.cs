@@ -214,10 +214,19 @@ public sealed class CsprojWorkspaceReader : IWorkspaceReader
         }
 
         var frameworks = new List<string>();
+        var analyzers = new List<string>();
+        foreach (var (include, _, _, itemFolder) in evaluator.Items("Analyzer"))
+        {
+            foreach (var part in Split(include))
+            {
+                analyzers.Add(Path.GetFullPath(Path.Combine(itemFolder, Normalize(part))));
+            }
+        }
+
         var assets = Path.Combine(evaluator["MSBuildProjectExtensionsPath"] is { } extensions ? Path.Combine(folder, Normalize(extensions)) : Path.Combine(folder, "obj"), "project.assets.json");
         if (File.Exists(assets))
         {
-            ReadAssets(assets, folder, tfm, references, projectReferences, frameworks, notes);
+            ReadAssets(assets, folder, tfm, references, projectReferences, frameworks, analyzers, notes);
         }
         else
         {
@@ -231,6 +240,17 @@ public sealed class CsprojWorkspaceReader : IWorkspaceReader
 
         var framework = ReferenceAssemblies.For(tfm, frameworks);
         notes.AddRange(framework.Notes);
+        var allAnalyzers = new List<string>(framework.Analyzers);
+        var knownAnalyzers = new HashSet<string>(framework.Analyzers.Select(Path.GetFileName)!, StringComparer.OrdinalIgnoreCase);
+        foreach (var analyzer in analyzers)
+        {
+            // A package that carries an analyzer the framework's pack has gives way to the pack's (the SDK does the same).
+            if (knownAnalyzers.Add(Path.GetFileName(analyzer)))
+            {
+                allAnalyzers.Add(analyzer);
+            }
+        }
+
         var allReferences = new List<string>(framework.Files);
         var known = new HashSet<string>(framework.Files.Select(Path.GetFileNameWithoutExtension)!, StringComparer.OrdinalIgnoreCase);
         foreach (var reference in references)
@@ -273,6 +293,7 @@ public sealed class CsprojWorkspaceReader : IWorkspaceReader
             InternalsVisibleTo = internals,
             SourceFiles = sources,
             References = allReferences,
+            Analyzers = allAnalyzers,
             ProjectReferences = projectReferences.Distinct(PathComparer).Where(p => !PathComparer.Equals(p, evaluator.ProjectFile)).ToList(),
             Notes = notes,
         };
@@ -398,8 +419,64 @@ public sealed class CsprojWorkspaceReader : IWorkspaceReader
         return files;
     }
 
+    /// <summary>
+    /// A package's C# analyzers, as NuGet picks them from its files: <c>analyzers/dotnet[/roslynX.Y][/cs]/*.dll</c> (not
+    /// another language's folder, not a satellite resource), the highest <c>roslynX.Y</c> folder the running Roslyn can load
+    /// when the package has several.
+    /// </summary>
+    private static void PackageAnalyzers(JsonElement files, string packageFolder, List<string> analyzers)
+    {
+        var candidates = new List<(Version? Roslyn, string File)>();
+        var roslyn = typeof(Microsoft.CodeAnalysis.Compilation).Assembly.GetName().Version ?? new Version(0, 0);
+        foreach (var file in files.EnumerateArray())
+        {
+            if (file.GetString() is not { } name || !name.StartsWith("analyzers/", StringComparison.OrdinalIgnoreCase)
+                || !name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".resources.dll", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var parts = name.Split('/');
+            Version? version = null;
+            bool other = false;
+            for (int i = 1; i < parts.Length - 1; i++)
+            {
+                var part = parts[i];
+                if (part.StartsWith("roslyn", StringComparison.OrdinalIgnoreCase) && Version.TryParse(part.AsSpan(6), out var v))
+                {
+                    version = v;
+                }
+                else if (part.Equals("vb", StringComparison.OrdinalIgnoreCase) || part.Equals("fs", StringComparison.OrdinalIgnoreCase))
+                {
+                    other = true;
+                }
+            }
+
+            if (!other && (version is null || version <= roslyn))
+            {
+                candidates.Add((version, name));
+            }
+        }
+
+        var best = candidates.Where(c => c.Roslyn is not null).Select(c => c.Roslyn!).DefaultIfEmpty().Max();
+        foreach (var (version, name) in candidates)
+        {
+            if (best is not null && version != best)
+            {
+                continue;
+            }
+
+            var full = Path.GetFullPath(Path.Combine(packageFolder, Normalize(name)));
+            if (File.Exists(full))
+            {
+                analyzers.Add(full);
+            }
+        }
+    }
+
     /// <summary>Reads a restore's assets: the compile assets of each package for the framework, its projects and framework references.</summary>
-    private static void ReadAssets(string path, string projectFolder, string? tfm, List<string> references, List<string> projectReferences, List<string> frameworks, List<string> notes)
+    private static void ReadAssets(string path, string projectFolder, string? tfm, List<string> references, List<string> projectReferences, List<string> frameworks,
+        List<string> analyzers, List<string> notes)
     {
         try
         {
@@ -451,6 +528,11 @@ public sealed class CsprojWorkspaceReader : IWorkspaceReader
                     var projectPath = library.TryGetProperty("msbuildProject", out var msbuild) && msbuild.GetString() is { } m ? m : relative;
                     projectReferences.Add(Path.GetFullPath(Path.Combine(projectFolder, Normalize(projectPath))));
                     continue;
+                }
+
+                if (packages is not null && type == "package" && library.TryGetProperty("files", out var files))
+                {
+                    PackageAnalyzers(files, Path.Combine(packages, Normalize(relative)), analyzers);
                 }
 
                 if (packages is null || !entry.Value.TryGetProperty("compile", out var compile))

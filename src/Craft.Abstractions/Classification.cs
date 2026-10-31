@@ -110,6 +110,43 @@ public static class TokenClasses
 
     /// <summary>A local's name.</summary>
     public const string LocalName = "local name";
+
+    /// <summary>An extension method's name.</summary>
+    public const string ExtensionMethodName = "extension method name";
+
+    /// <summary>An event's name.</summary>
+    public const string EventName = "event name";
+
+    /// <summary>An enum member's name.</summary>
+    public const string EnumMemberName = "enum member name";
+
+    /// <summary>A constant's name.</summary>
+    public const string ConstantName = "constant name";
+
+    /// <summary>A label's name.</summary>
+    public const string LabelName = "label name";
+
+    /// <summary>
+    /// A static member or type: Roslyn adds it to a name's own class (a static method is "method name" and "static symbol").
+    /// A span carries one class, so a static name's class is <see cref="WithStaticSymbol"/> of its own; a theme styles it as
+    /// its own class with this class's bold and italic over it.
+    /// </summary>
+    public const string StaticSymbol = "static symbol";
+
+    /// <summary>What <see cref="WithStaticSymbol"/> appends to a class's name.</summary>
+    public const string StaticSymbolSuffix = " + " + StaticSymbol;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Statics = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The class of a static name whose own class is <paramref name="tokenClass"/> ("method name + static symbol"): one
+    /// shared string per class, made once per process.
+    /// </summary>
+    public static string WithStaticSymbol(string tokenClass)
+    {
+        ArgumentNullException.ThrowIfNull(tokenClass);
+        return Statics.TryGetValue(tokenClass, out var known) ? known : Statics.GetOrAdd(tokenClass, static name => name + StaticSymbolSuffix);
+    }
 }
 
 /// <summary>

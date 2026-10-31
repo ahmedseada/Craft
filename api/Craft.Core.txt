@@ -5,6 +5,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
   System.Boolean InsertSpaces { get; init; }
+  System.Boolean SourceGenerators { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> PluginFolders { get; init; }
@@ -30,6 +31,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 RecentLimit { get; init; }
   System.Int32 ScrollMarginColumns { get; init; }
   System.Int32 ScrollMarginLines { get; init; }
+  System.Int32 SemanticColorsDelayMilliseconds { get; init; }
   System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 UndoGroupMilliseconds { get; init; }
@@ -44,6 +46,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String CrashFolder { get; init; }
   System.String DataFolder { get; init; }
   System.String FontFamily { get; init; }
+  System.String MemoryMonitor { get; init; }
   System.String NewLine { get; init; }
   System.String RecoveryFolder { get; init; }
   System.String ResolveDataFolder()

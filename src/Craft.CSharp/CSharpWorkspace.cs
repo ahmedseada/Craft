@@ -9,6 +9,7 @@ using System.Text;
 using Craft.Abstractions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.Text;
 
@@ -28,7 +29,8 @@ internal sealed class CSharpWorkspace
     private static readonly Lock RegistryGate = new();
     private static readonly Dictionary<string, CSharpWorkspace> Open = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, (DateTime Written, PortableExecutableReference Reference, long Bytes)> References = new(StringComparer.Ordinal);
-    private static readonly Lazy<MefHostServices> Host = new(CreateHost, LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Lock HostGate = new();
+    private static MefHostServices? s_host;
 
     private readonly string _key;
     private readonly string? _root;
@@ -67,7 +69,7 @@ internal sealed class CSharpWorkspace
     /// <summary>The workspace of <paramref name="root"/> for <paramref name="settings"/>, its user count raised (give it back with <see cref="Leave"/>).</summary>
     public static CSharpWorkspace Enter(string? root, LanguageSettings settings)
     {
-        var key = string.Join('|', root ?? "", settings.Configuration, string.Join(',', settings.WorkspaceReaders));
+        var key = string.Join('|', root ?? "", settings.Configuration, string.Join(',', settings.WorkspaceReaders), settings.SourceGenerators ? "generators" : "");
         lock (RegistryGate)
         {
             if (!Open.TryGetValue(key, out var workspace))
@@ -81,7 +83,62 @@ internal sealed class CSharpWorkspace
         }
     }
 
-    /// <summary>Releases every open workspace and the shared references (the host's memory-pressure call).</summary>
+    /// <summary>Roslyn's MEF host services, composed on first need and again after <see cref="ReleaseHost"/>.</summary>
+    internal static MefHostServices HostServices()
+    {
+        lock (HostGate)
+        {
+            return s_host ??= CreateHost();
+        }
+    }
+
+    /// <summary>Whether the MEF host is composed now.</summary>
+    internal static bool HostComposed
+    {
+        get
+        {
+            lock (HostGate)
+            {
+                return s_host is not null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drops the MEF host (its export provider and the services it made): a workspace built after this composes it again.
+    /// A workspace that still runs keeps the host it was built with until it is released.
+    /// </summary>
+    internal static void ReleaseHost()
+    {
+        lock (HostGate)
+        {
+            s_host = null;
+        }
+    }
+
+    /// <summary>
+    /// The memory-pressure call, from any thread without blocking it: every open workspace drops its solution before its
+    /// next request (or on the thread pool, whichever comes first), with the shared references. The MEF host stays: it
+    /// holds some 2 MB and composing it again costs 0.3-0.6 s (measured, "Measured (E5)" in the plan).
+    /// </summary>
+    public static void RequestReleaseAll()
+    {
+        CSharpWorkspace[] all;
+        lock (RegistryGate)
+        {
+            all = [.. Open.Values];
+        }
+
+        foreach (var workspace in all)
+        {
+            workspace.RequestRelease();
+        }
+
+        References.Clear();
+        Workspaces.ReferenceAssemblies.Clear();
+    }
+
+    /// <summary>Releases every open workspace and the shared references (the MEF host stays; <see cref="ReleaseHost"/> drops it).</summary>
     public static void ReleaseAll()
     {
         CSharpWorkspace[] all;
@@ -287,7 +344,7 @@ internal sealed class CSharpWorkspace
     {
         long start = Stopwatch.GetTimestamp();
         long heap = GC.GetTotalMemory(false);
-        _workspace = new AdhocWorkspace(Host.Value);
+        _workspace = new AdhocWorkspace(HostServices());
         Volatile.Write(ref _solution, _workspace.CurrentSolution);
         Volatile.Write(ref _referenceBytes, 0);
         _referenced.Clear();
@@ -447,8 +504,24 @@ internal sealed class CSharpWorkspace
             }
         }
 
+        // The analyzers' source generators run in the compilation (Roslyn runs every generator of a project's analyzer
+        // references when it makes the compilation); their diagnostic analyzers are never run, so only the generator part
+        // of each counts. The same reference per assembly for every project and workspace (AnalyzerLoader, per process).
+        var analyzers = new List<AnalyzerReference>();
+        if (_settings.SourceGenerators)
+        {
+            foreach (var file in project.Analyzers)
+            {
+                if (AnalyzerLoader.Reference(file) is { } analyzer)
+                {
+                    analyzers.Add(analyzer);
+                }
+            }
+        }
+
         return ProjectInfo.Create(id, VersionStamp.Create(), project.Name, project.Name, LanguageNames.CSharp, filePath: project.ProjectFile,
-            compilationOptions: compilation, parseOptions: parse, documents: documents, projectReferences: projectReferences, metadataReferences: references);
+            compilationOptions: compilation, parseOptions: parse, documents: documents, projectReferences: projectReferences, metadataReferences: references,
+            analyzerReferences: analyzers);
     }
 
     /// <summary>The project's global usings and InternalsVisibleTo attributes, as the SDK generates them into obj.</summary>

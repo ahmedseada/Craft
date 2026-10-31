@@ -138,6 +138,21 @@ public sealed record CraftOptions
     /// <summary>The most rows the problems list shows (the counts stay exact) (<c>CRAFT_PROBLEMS_LIMIT</c>).</summary>
     public int ProblemsListLimit { get; init; } = 500;
 
+    /// <summary>Whether the projects' source generators run in the semantic model (<c>CRAFT_SOURCE_GENERATORS</c>).</summary>
+    public bool SourceGenerators { get; init; } = true;
+
+    /// <summary>
+    /// Milliseconds after a change before the visible lines are classified by meaning, off the UI thread; -1 turns
+    /// semantic colours off (<c>CRAFT_SEMANTIC_COLORS_DELAY_MS</c>).
+    /// </summary>
+    public int SemanticColorsDelayMilliseconds { get; init; } = 30;
+
+    /// <summary>
+    /// The memory-pressure monitor, by name in <see cref="MemoryPressureMonitors"/>: when memory runs low the languages free
+    /// what they can build again ("gc" by default; "none" never) (<c>CRAFT_MEMORY_MONITOR</c>).
+    /// </summary>
+    public string MemoryMonitor { get; init; } = MemoryPressureMonitors.Gc;
+
     /// <summary>The settings a language's semantic layer is opened with (these options, carried to the language).</summary>
     public LanguageSettings ToLanguageSettings() => new()
     {
@@ -147,6 +162,8 @@ public sealed record CraftOptions
         Configuration = WorkspaceConfiguration,
         TabSize = TabSize,
         InsertSpaces = InsertSpaces,
+        SourceGenerators = SourceGenerators,
+        SemanticColorsDelayMilliseconds = SemanticColorsDelayMilliseconds,
     };
 
     /// <summary>
@@ -248,6 +265,9 @@ public sealed record CraftOptions
         new("CRAFT_COMPLETION_ROWS", "10", "The rows the completion list shows before it scrolls."),
         new("CRAFT_PROBLEMS_LIMIT", "500", "The most rows the problems list shows (the counts stay exact)."),
         new("CRAFT_HOVER_DELAY_MS", "500", "Milliseconds the pointer rests on a symbol before its description shows."),
+        new("CRAFT_SOURCE_GENERATORS", "true", "Whether the projects' source generators run in the semantic model (their generated code counts, as in the build)."),
+        new("CRAFT_SEMANTIC_COLORS_DELAY_MS", "30", "Milliseconds after a change before the visible lines are coloured by meaning (off the UI thread); -1 turns semantic colours off."),
+        new("CRAFT_MEMORY_MONITOR", "gc", "What tells the editor memory runs low, so the languages free what they can build again: gc (the runtime's memory load), none, or a registered one."),
     ];
 
     /// <summary>
@@ -485,6 +505,21 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_HOVER_DELAY_MS") is { } hoverDelay)
         {
             options = options with { HoverDelayMilliseconds = Whole(hoverDelay, "CRAFT_HOVER_DELAY_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_SOURCE_GENERATORS") is { } generators)
+        {
+            options = options with { SourceGenerators = Flag(generators, "CRAFT_SOURCE_GENERATORS") };
+        }
+
+        if (Text(read, "CRAFT_SEMANTIC_COLORS_DELAY_MS") is { } colorsDelay)
+        {
+            options = options with { SemanticColorsDelayMilliseconds = Whole(colorsDelay, "CRAFT_SEMANTIC_COLORS_DELAY_MS", -1, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_MEMORY_MONITOR") is { } monitor)
+        {
+            options = options with { MemoryMonitor = monitor };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

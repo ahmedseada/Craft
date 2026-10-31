@@ -58,6 +58,7 @@ public static class ReferenceAssemblies
     private static FrameworkReferences Find(string tfm, SortedSet<string> frameworks)
     {
         var files = new List<string>();
+        var analyzers = new List<string>();
         var notes = new List<string>();
         string? packs = PacksFolder();
         foreach (var framework in frameworks)
@@ -66,6 +67,8 @@ public static class ReferenceAssemblies
             if (folder is not null)
             {
                 files.AddRange(Directory.GetFiles(folder, "*.dll"));
+                // ref/<tfm> is two folders under the pack's version folder, whose data/FrameworkList.xml lists its analyzers.
+                analyzers.AddRange(PackAnalyzers(Path.GetFullPath(Path.Combine(folder, "..", ".."))));
             }
             else if (framework.Equals("Microsoft.NETCore.App", StringComparison.OrdinalIgnoreCase))
             {
@@ -79,7 +82,52 @@ public static class ReferenceAssemblies
         }
 
         files.Sort(StringComparer.OrdinalIgnoreCase);
-        return new FrameworkReferences(files, notes);
+        return new FrameworkReferences(files, notes) { Analyzers = analyzers };
+    }
+
+    /// <summary>
+    /// The C# analyzers a targeting pack gives every project (its <c>data/FrameworkList.xml</c> entries of type Analyzer, in
+    /// C# or in no language, as the SDK's <c>ResolveTargetingPackAssets</c> takes them); else its
+    /// <c>analyzers/dotnet/cs</c> folder.
+    /// </summary>
+    internal static List<string> PackAnalyzers(string packVersionFolder)
+    {
+        var found = new List<string>();
+        var list = Path.Combine(packVersionFolder, "data", "FrameworkList.xml");
+        try
+        {
+            if (File.Exists(list))
+            {
+                var root = System.Xml.Linq.XDocument.Load(list).Root;
+                foreach (var file in root?.Elements("File") ?? [])
+                {
+                    if ((string?)file.Attribute("Type") == "Analyzer" && (string?)file.Attribute("Path") is { } relative
+                        && ((string?)file.Attribute("Language") is null or "cs" or "C#")
+                        && relative.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var path = Path.GetFullPath(Path.Combine(packVersionFolder, relative.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar)));
+                        if (File.Exists(path))
+                        {
+                            found.Add(path);
+                        }
+                    }
+                }
+
+                return found;
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            found.Clear();
+        }
+
+        var folder = Path.Combine(packVersionFolder, "analyzers", "dotnet", "cs");
+        if (Directory.Exists(folder))
+        {
+            found.AddRange(Directory.GetFiles(folder, "*.dll"));
+        }
+
+        return found;
     }
 
     private static string? PacksFolder()
@@ -171,4 +219,8 @@ public static class ReferenceAssemblies
 /// <summary>A framework's reference assemblies, and what could not be found as the build would.</summary>
 /// <param name="Files">The assemblies, as full paths.</param>
 /// <param name="Notes">What was taken instead of the targeting pack, if anything.</param>
-public sealed record FrameworkReferences(IReadOnlyList<string> Files, IReadOnlyList<string> Notes);
+public sealed record FrameworkReferences(IReadOnlyList<string> Files, IReadOnlyList<string> Notes)
+{
+    /// <summary>The C# analyzer assemblies the targeting packs give every project (their source generators among them).</summary>
+    public IReadOnlyList<string> Analyzers { get; init; } = [];
+}

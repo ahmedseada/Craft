@@ -357,6 +357,51 @@ Android out:
   changed member first (`SemanticModel.GetDiagnostics(span)`), then the rest; and one parse for both layers (the workspace
   parses the open document again beside the syntactic worker: a second tree of the same text).
 
+- **Measured (E5, Windows, the owner's run, 2026-10-31, `benches\Craft.Benches -- semantic`, 24 cores, .NET 10.0.12, Windows
+  10.0.26200; before the source generators).** The workspace of `src/Craft.Editor` (4 projects, 264 documents, 167 references,
+  5.8 MB): build cold 588.9 ms; Craft.Editor's compilation cold 789.1 ms (21 trees); every project's diagnostics 1,833.7 ms,
+  **11 errors, all CS8795** (the first Linux run 7: the 4 more, `PowerSource.GetSystemPowerStatus`, `KeepAlive.Unit` and
+  `TuningMetricImplementations`' `FinalMarker`, `NumberPattern`, `WordPattern`, are partials of a newer Idrak.Abstraction,
+  compiled on every OS, not Windows-only code), 0 warnings; 111.8 MB held with the
+  compilations; build warm after a release 29.1 ms, another workspace sharing the references 13.7 ms; compilation warm
+  287.0 ms; 63.2 MB still counted after both were released (the bench's own stack, see below). A loose 1,000-line file
+  (26,564 chars): first diagnostics 125.7 ms, 4.9 MB; warm after a keystroke 8.3 ms median, 32.7 ms max (the pass 8.2 ms);
+  completion after '.' first 299.7 ms, warm 7.4 ms median, 22.3 ms max beside the diagnostics, 6.3 ms median, 11.7 ms max
+  alone (126 items); the workspace 18.8 ms. A 10,000-line file (266,739 chars): first diagnostics 94.3 ms, 3.7 MB; warm
+  75.9 ms median, 85.6 ms max (the pass 75.8 ms); completion first 36.1 ms, warm 27.5 ms median, 43.8 ms max beside the
+  diagnostics, 12.6 ms median, 24.8 ms max alone. The Linux container is 4 to 9 times slower on every compile-bound row.
+
+- **Measured (E5 completed, 2026-10-31, the same bench, the 4-core Linux container while another agent built beside it:
+  load average 10 to 20, so the times below are upper bounds and the owner's Windows run is the reference; results in
+  `test-output/benches/semantic.txt`).**
+  - **Source generators.** The reader now gives each project its analyzers (the targeting packs' `data/FrameworkList.xml`
+    Analyzer entries in C#, the packages' `analyzers/dotnet[/roslynX.Y][/cs]` files from `project.assets.json`, `Analyzer`
+    items), and the workspace adds them as analyzer references loaded through one load context of the plug-in's (Roslyn and
+    its dependencies bound to the plug-in's copies; once per process). Every project of `src/Craft.Editor`'s workspace:
+    **0 errors with the generators, 11 without** (the same 11 CS8795 on this container with the same Idrak clone: 265 documents, 20 more
+    than the first run's), 8 generated documents; every compilation with its diagnostics 5.4-5.8 s with them against
+    11.7 s without on this loaded machine (the generators' run is lost in the noise: their cost is under the variation
+    between runs); held 91.8-92.2 MB against 88.3 MB (some 4 MB for the generators' state and documents). The generator
+    assemblies load once per process (their types are never unloaded, as in the compiler server). `CRAFT_SOURCE_GENERATORS`
+    (true) turns them off.
+  - **Semantic colours.** 60 visible lines of a loose file (and a screen either side, so a small scroll stays coloured),
+    Roslyn's `Classifier.GetClassifiedSpansAsync` on the thread pool: 1,000-line file first pass 273 ms (JIT and the
+    classifiers), warm after a keystroke 47 ms median, 178 ms max; 10,000-line file 64 ms first, 43 ms median, 297 ms max.
+    The UI thread's `Classify` with the colours merged: 158 µs and 143 µs median against 161 µs and 128 µs for the syntactic
+    layer alone (304 and 313 spans): the merge costs nothing measurable on the frame. `CRAFT_SEMANTIC_COLORS_DELAY_MS`
+    defaults to 30 (a keystroke burst is one pass; the colours land within a frame or two of a pause); -1 turns them off.
+  - **Memory after a release (what held the "56 MB").** It was the bench, not Roslyn: with `ConfigureAwait(false)` the
+    measuring code ran as an inline continuation under the frames that completed it, and a `Solution` in one of their stack
+    slots stayed live to the collector (a `dotnet-gcdump` taken at an `await` showed 23.7 MB live while `GC.GetTotalMemory`
+    counted 89.8 MB over the start). Measured after the stack unwound (`Task.Run`), over a start with nothing held:
+    built and every project compiled 90.2 MB (89.9 MB live after a compacting collection); the workspace and the shared
+    references released **0.7 MB**; the MEF host released too -0.3 MB (it holds some 2 MB); built again with the host
+    composed again 342 ms warm (545 ms in another run), 1.2 MB. The first workspace of a process leaves 22.6 MB that no
+    release frees: Roslyn's process-wide statics (the lexer's text-keyed token and trivia caches, 2 MB; the green-node cache;
+    the pooled builders and dictionaries of the binder and flow passes; a `dotnet-gcdump` shows nothing larger than 1 MB
+    there), with no public API to clear them. **Decision taken from the measures:** the memory-pressure release drops the
+    workspaces and the references and keeps the MEF host (2 MB for a 0.3-0.6 s recomposition on the next request).
+
 ### Tests and benches
 
 - `Craft.Tests` has its own small runner with the same flags as Idrak's (`--progress`, `--failures-only`,
@@ -557,7 +602,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E2 | `Craft.CSharp`, syntactic layer: the snapshot as `SourceText`, the incremental parse, classified spans for a line range, Roslyn's classification names mapped to theme classes, light and dark themes; C# shipped as a pre-installed, removable plug-in loaded from `plugins/` (`Craft.Core.Plugins.CraftPlugins`, `CRAFT_PLUGIN_FOLDERS`, `CRAFT_PLUGINS_DISABLED`). | Spans of fixed C# 14 files (every string kind, comments, preprocessor lines, contextual keywords) match; spans after random edits equal a fresh parse; the snapshot-`SourceText` equals `SourceText.From` on random edits. | E1 |
 | E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows. | E2 |
 | E4 | **Built (2026-10-31, "E4 as built" below).** `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
-| E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below; semantic colours not yet).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
+| E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below), semantic colours and source generators included; Craft's own solution compiles with 0 errors in the reader's model (the bench and the `Semantic` tests). Left: the window on Windows (the owner's run).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | D | The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
 | T | The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
@@ -773,19 +818,64 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
   pointer's hover (`MoveHoverInteraction`, `EndHoverInteraction`), has `WorkspaceRoot` and `ReleaseSemanticMemory()`; the
   Windows adapter maps F12, Space (with Ctrl or Alt only), D and K. The app's page has a collapsible problems list under the
   editor (`ProblemsPanel`: plain labels, errors first, `CRAFT_PROBLEMS_LIMIT` rows, a tap moves the caret), the error and
-  warning counts in the status bar (a tap opens the list), and F12 into another file opens it with the name selected. Not
-  yet: wiring the platform's memory-pressure signal to `ReleaseSemanticMemory` (Windows' `MemoryManager` lives under
-  `Platforms/`), semantic colours, the analyzers and source generators.
+  warning counts in the status bar (a tap opens the list), and F12 into another file opens it with the name selected.
+- **Source generators (completed 2026-10-31).** `WorkspaceProject.Analyzers` (plain data): the "csproj" reader fills it from
+  the targeting packs' `data/FrameworkList.xml` (`ReferenceAssemblies`' `FrameworkReferences.Analyzers`: Analyzer entries in
+  C# or no language, else the pack's `analyzers/dotnet/cs`), the packages' analyzers in `project.assets.json` (a package's
+  `analyzers/...dll` files, not another language's folder nor a satellite, the highest `roslynX.Y` folder the running
+  Roslyn loads) and `Analyzer` items; a package's analyzer of a name the pack has gives way to the pack's; the "loose" reader
+  gives the running framework's. `AnalyzerLoader` (an `IAnalyzerAssemblyLoader`): one non-collectible load context per
+  process whose parent is the plug-in's, Microsoft.CodeAnalysis*, System.Collections.Immutable and System.Reflection.Metadata
+  resolved through the parent (a generator built against an older Roslyn binds to the plug-in's), an analyzer's own folder
+  for its dependencies, the framework from the default context; an `AnalyzerFileReference` per path and write time. The
+  workspace adds them to each project; Roslyn runs their generators when it makes a compilation, and only the generators
+  count (their diagnostic analyzers are never run). Generated code works as the build's does: no false CS8795 on Craft's
+  own solution, on every host OS.
+- **Semantic colours (completed 2026-10-31).** `CSharpLanguageSession.Colors.cs`: when `Classify` is asked for lines the
+  colours do not cover, or the colours are older than the snapshot, it notes the range (and a screen either side); after
+  `CRAFT_SEMANTIC_COLORS_DELAY_MS` one pass on the thread pool brings the workspace's document to the newest snapshot and
+  runs Roslyn's `Classifier.GetClassifiedSpansAsync` over it, keeps the spans (in order, one per range: Roslyn's additive
+  "static symbol" joined to the name's class as `TokenClasses.WithStaticSymbol`, its other additive classes left out) and
+  raises `Reclassified`. `Classify` (UI thread, never waiting) gives Roslyn's spans inside the classified range, mapped
+  through the edits since (composed into one range as the parse worker does: the spans before and after the changed text
+  kept and shifted, the changed text given the syntactic layer's fresh spans), and the syntactic spans outside it; fresh
+  colours are exactly Roslyn's spans (the `Semantic` test compares a whole file with Roslyn's own classification). A change
+  the session did not see the start of drops them until the next pass. Not for a script, nor above `CRAFT_SEMANTIC_MAX_CHARS`
+  until `EnableSemantics`. `TokenClasses` gained the extension method, event, enum member, constant, label and static symbol
+  names; the dark and light themes give structs and enums, interfaces, type parameters, members (property, field, event),
+  parameters, namespaces and constants hues of their own (methods and extension methods the method hue, locals the local
+  hue), and a static name its class's colour in italic (`TableTheme` makes the joined styles once). Every class of both
+  themes reads at 4.5:1 or more on the ground and the caret line (dark 7.5-12.1:1, light 4.8-9.3:1; checked by the
+  `Inventory` test), excluded code staying dimmed by design.
+- **Memory pressure (completed 2026-10-31).** `IMemoryPressureMonitor : IKind` and `MemoryPressureMonitors` (a `KindTable`;
+  the library's "gc" and "none"; an unknown name fails with "not registered") in `Craft.Abstractions`; `ILanguage.ReleaseMemory()`
+  (a default that frees nothing; any thread, never blocking) and `MemoryPressureMonitors.ReleaseLanguages()`. "gc" reads,
+  after each full collection, the memory load the runtime measures against its high-load threshold (the system's memory or a
+  container's limit; high at the threshold, critical half-way to all of it): an object the collector finalizes re-registers
+  itself, so no thread or timer runs, and the report goes to the thread pool, one at a time. Because the runtime measures the
+  OS's own memory load on Windows as elsewhere, no Windows-only monitor is needed under `Platforms/Windows`; a platform's own
+  (an app memory-usage notification) can be registered under another name and chosen with `CRAFT_MEMORY_MONITOR`.
+  `ShellModel` starts the options' monitor (again when the setting changes; an unknown name is an options problem, never a
+  crash), and on pressure every language frees what it can build again (`MemoryReleases` counts it). `CSharpLanguage.ReleaseMemory`
+  asks every workspace to drop its solution before its next request and clears the shared references, off the calling thread.
 - **Settings added** (each a `CRAFT_*` variable): `CRAFT_DIAGNOSTICS_DELAY_MS` (400), `CRAFT_SEMANTIC_MAX_CHARS` (1,000,000),
   `CRAFT_WORKSPACE_READERS` (csproj,loose), `CRAFT_WORKSPACE_CONFIGURATION` (Debug), `CRAFT_COMPLETION_DELAY_MS` (50),
-  `CRAFT_COMPLETION_ROWS` (10), `CRAFT_HOVER_DELAY_MS` (500), `CRAFT_PROBLEMS_LIMIT` (500).
+  `CRAFT_COMPLETION_ROWS` (10), `CRAFT_HOVER_DELAY_MS` (500), `CRAFT_PROBLEMS_LIMIT` (500); then `CRAFT_SOURCE_GENERATORS` (true),
+  `CRAFT_SEMANTIC_COLORS_DELAY_MS` (30; -1 off), `CRAFT_MEMORY_MONITOR` (gc).
 - **Tests:** group `Semantic` (a temporary project of a .csproj and two files: the reader's model, diagnostics that appear and
   clear, waited on with `WhenDiagnosticsIdle`; completion after `Console.` and on a local of the other file's type, applied;
   signature help, hover with the summary, definition into the other file, in the same document and in metadata; format;
   release and rebuild; a large file waiting for the command), `Editor` additions (completion filtering, selection, commit as
   one step, resolve on commit, late answers dropped, camel humps, popup clicks, diagnostics of an older snapshot mapped,
   squiggles only on visible lines, popups drawn, definition and format through the model), and the `Plugins` test copies the
-  whole plug-in output and asks the plug-in's own semantic layer for `Console.` completion.
+  whole plug-in output and asks the plug-in's own semantic layer for `Console.` completion. Then (`SemanticGeneratorTests`):
+  the targeting pack's generators found; a temporary project with a `LibraryImport` and a `GeneratedRegex` partial compiles
+  clean with the generators and gives both CS8795 without them; `src/Craft.Editor`'s workspace (Idrak.Abstraction,
+  Craft.Abstractions, Craft.Core, Craft.Editor) compiles with 0 errors; the session's spans of a whole file equal Roslyn's
+  `Classifier` output, with the expected class, static method and local names; colours shifted by an edit, then a new pass;
+  the merge on fixed spans; `ReleaseMemory` and the rebuilt workspace. `ThemeAndMemoryTests` (`Inventory`): every class's
+  contrast in both themes, the static style, the monitors' registry and the languages' release.
+- **Not built (a candidate, measured before):** diagnosing the changed member first; one parse for both layers.
 
 ## Commands for the owner (once a phase is built)
 

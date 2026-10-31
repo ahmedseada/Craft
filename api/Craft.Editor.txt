@@ -402,6 +402,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Editor.Shell.ShellLayout Layout { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> SettingRows()
   System.Collections.Generic.IReadOnlyList<System.String> OptionsProblems { get; }
+  System.Int32 MemoryReleases { get; }
   System.String ApplySetting(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
   System.Threading.Tasks.Task OpenRecentAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Shell.DocumentTab> OpenFileAsync(System.String path, System.Boolean fromTree = false, System.Threading.CancellationToken cancellationToken = null)
@@ -412,6 +413,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Threading.Tasks.Task<System.Boolean> SaveAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
   System.Void CloseFolder()
   System.Void Dispose()
+  System.Void OnMemoryPressure(Craft.Abstractions.MemoryPressureLevel level)
   System.Void ReloadOptions()
   System.Void ToggleTheme()
   ctor(Craft.Editor.EditorHost host, Craft.Core.Settings.CraftSettings settings, Craft.Core.Workspaces.RecentList recent, Craft.Editor.Abstractions.IFileDialogs dialogs, Craft.Editor.Abstractions.IShellUi ui, System.Func<System.String, Craft.Core.CraftOptions, System.Threading.CancellationToken, System.Threading.Tasks.Task<Craft.Abstractions.ITextDocument>> openDocument = null)

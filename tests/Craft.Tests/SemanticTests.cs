@@ -53,7 +53,7 @@ public static class SemanticTests
     {
         private readonly TempFolder _folder = new();
 
-        public Project()
+        public Project(LanguageSettings? settings = null)
         {
             CSharpLanguage.Register();
             File.WriteAllText(_folder.File("Demo.csproj"), $"""
@@ -74,7 +74,7 @@ public static class SemanticTests
             Directory.CreateDirectory(_folder.File("obj"));
             File.WriteAllText(_folder.File(Path.Combine("obj", "Junk.cs")), "this is not C#");
             Buffer = new PieceTableBuffer(Program.ReplaceLineEndings("\n"));
-            Session = new CSharpLanguage().Open(Buffer, new LanguageOpenContext(ProgramPath, Root, Fast));
+            Session = new CSharpLanguage().Open(Buffer, new LanguageOpenContext(ProgramPath, Root, settings ?? Fast));
         }
 
         public string Root => _folder.Path;

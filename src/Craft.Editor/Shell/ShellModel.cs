@@ -81,6 +81,8 @@ public sealed class ShellModel : IDisposable
     private readonly List<KeyBinding> _bindings = [];
     private string _optionsSignature;
     private bool _disposed;
+    private IDisposable? _memoryWatch;
+    private int _memoryReleases;
 
     /// <summary>The shell over <paramref name="host"/>, its commands and bindings registered.</summary>
     /// <param name="host">The editor host (the tabs open their documents in it).</param>
@@ -111,6 +113,36 @@ public sealed class ShellModel : IDisposable
         Tabs = new DocumentTabs(host);
         Layout = new ShellLayout(Options);
         RegisterCommands();
+        WatchMemory();
+    }
+
+    /// <summary>How many times low memory made the languages free what they can build again (<see cref="CraftOptions.MemoryMonitor"/>).</summary>
+    public int MemoryReleases => Volatile.Read(ref _memoryReleases);
+
+    /// <summary>
+    /// What low memory does (the monitor calls it on the thread pool; a test or a command may call it): every language
+    /// frees what it can build again (<see cref="ILanguage.ReleaseMemory"/>), the open sessions stay.
+    /// </summary>
+    public void OnMemoryPressure(MemoryPressureLevel level)
+    {
+        _ = level;
+        Interlocked.Increment(ref _memoryReleases);
+        MemoryPressureMonitors.ReleaseLanguages();
+    }
+
+    /// <summary>Starts the options' memory monitor; an unknown name is an options problem (nothing is watched), never a crash.</summary>
+    private void WatchMemory()
+    {
+        _memoryWatch?.Dispose();
+        _memoryWatch = null;
+        try
+        {
+            _memoryWatch = MemoryPressureMonitors.Get(Options.MemoryMonitor).Watch(OnMemoryPressure);
+        }
+        catch (NotRegisteredException e)
+        {
+            OptionsProblems = [.. OptionsProblems, $"CRAFT_MEMORY_MONITOR: {e.Message}"];
+        }
     }
 
     /// <summary>The editor host.</summary>
@@ -419,7 +451,13 @@ public sealed class ShellModel : IDisposable
 
         _optionsSignature = signature;
         bool themeChanged = !string.Equals(options.Theme, Options.Theme, StringComparison.OrdinalIgnoreCase);
+        bool monitorChanged = !string.Equals(options.MemoryMonitor, Options.MemoryMonitor, StringComparison.OrdinalIgnoreCase);
         Options = options;
+        if (monitorChanged)
+        {
+            WatchMemory();
+        }
+
         Recent.Limit = options.RecentLimit;
         Layout.Options = options;
         OptionsChanged?.Invoke(this, EventArgs.Empty);
@@ -455,6 +493,7 @@ public sealed class ShellModel : IDisposable
             EditorCommands.Unregister(id);
         }
 
+        _memoryWatch?.Dispose();
         Tabs.Dispose();
         Workspace?.Dispose();
     }

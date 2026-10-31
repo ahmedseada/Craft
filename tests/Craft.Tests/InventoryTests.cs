@@ -99,6 +99,9 @@ public static class InventoryTests
             ["CRAFT_CRASH_TICKET_OFFER"] = "false", ["CRAFT_CRASH_RUNS_KEPT"] = "2", ["CRAFT_CRASH_RECORDS"] = "none", ["CRAFT_TERMINAL_CTRL_C_COPIES"] = "false",
             // Phase X: motion, smooth scrolling, Find references.
             ["CRAFT_REDUCED_MOTION"] = "true", ["CRAFT_MOTION_MS"] = "120", ["CRAFT_SCROLL_MS"] = "0", ["CRAFT_SCROLL_WHEEL_LINES"] = "4", ["CRAFT_REFERENCES_LIMIT"] = "77",
+            // Phase X: the editing surface.
+            ["CRAFT_INDENT_GUIDES"] = "false", ["CRAFT_BRACKET_HIGHLIGHT"] = "false", ["CRAFT_WORD_HIGHLIGHT"] = "false", ["CRAFT_FOLDING"] = "false",
+            ["CRAFT_FOLDING_DELAY_MS"] = "100", ["CRAFT_MAX_CARETS"] = "50",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -127,6 +130,7 @@ public static class InventoryTests
             CrashTrail = false, CrashTrailKilobytes = 64, CrashTrailExceptionsPerSecond = 3, CrashTicketTrailLines = 50, CrashTicketOffer = false, CrashRunsKept = 2,
             CrashRecords = "none", TerminalCtrlCCopies = false,
             ReducedMotion = true, MotionMilliseconds = 120, ScrollMilliseconds = 0, ScrollWheelLines = 4, ReferencesLimit = 77,
+            IndentGuides = false, BracketHighlight = false, WordHighlight = false, Folding = false, FoldingDelayMilliseconds = 100, MaxCarets = 50,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

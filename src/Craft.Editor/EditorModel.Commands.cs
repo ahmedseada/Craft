@@ -9,6 +9,7 @@ namespace Craft.Editor;
 public sealed partial class EditorModel
 {
     private readonly List<int> _autoClosed = [];
+    private string[]? _pairTexts;
     private long _lastClickTimestamp;
     private float _lastClickX = float.NaN;
     private float _lastClickY = float.NaN;
@@ -24,7 +25,7 @@ public sealed partial class EditorModel
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
         bool control = (modifiers & KeyModifiers.Control) != 0;
         bool alt = (modifiers & KeyModifiers.Alt) != 0;
-        if (!Completion.IsOpen && InlineCompletion.HandleKey(key, modifiers))
+        if (!Completion.IsOpen && !HasMultipleCarets && InlineCompletion.HandleKey(key, modifiers))
         {
             NoteInput();
             return true;
@@ -49,7 +50,7 @@ public sealed partial class EditorModel
             EditorKey.Backspace => Backspace(control),
             EditorKey.Delete => DeleteForward(control),
             EditorKey.Enter when !control => Enter(),
-            EditorKey.Tab when !control => shift ? Outdent() : Indent(),
+            EditorKey.Tab when !control => shift ? OutdentLines() : Indent(),
             EditorKey.Escape => Escape(),
             EditorKey.Insert when !shift && !control => ToggleOverwrite(),
             EditorKey.F3 => shift ? Find.FindPrevious() || true : Find.FindNext() || true,
@@ -86,53 +87,22 @@ public sealed partial class EditorModel
         }
 
         NoteInput();
-        InlineCompletion.TypeThrough(text);
-        var selection = _selection;
-        var snapshot = Snapshot;
-        if (text.Length == 1 && selection.IsEmpty && TryOvertypeClose(text[0]))
+        bool many = HasMultipleCarets;
+        if (many)
+        {
+            InlineCompletion.Dismiss();
+        }
+        else
+        {
+            InlineCompletion.TypeThrough(text);
+        }
+
+        EditCarets(EditKind.Typing, keepAutoClosed: true, text, static (model, selection, snapshot, typed) => model.TypedPart(selection, snapshot, typed));
+        EnsureCaretVisible();
+        if (!many)
         {
             AfterTyped(text);
-            return;
         }
-
-        int start = selection.Start;
-        int length = selection.Length;
-        if (Overwrite && selection.IsEmpty)
-        {
-            var line = snapshot.GetLine(snapshot.GetLineIndex(start));
-            int replace = 0;
-            int at = start;
-            for (int i = 0; i < text.Length && at < line.End; i++)
-            {
-                if (char.IsLowSurrogate(text[i]))
-                {
-                    continue;
-                }
-
-                at += at + 1 < line.End && char.IsHighSurrogate(snapshot[at]) && char.IsLowSurrogate(snapshot[at + 1]) ? 2 : 1;
-                replace = at - start;
-            }
-
-            length = replace;
-        }
-
-        string insert = text;
-        bool closed = false;
-        if (Options.AutoCloseBrackets && text.Length == 1 && selection.IsEmpty && CloseOf(text[0]) is { } close && AllowsAutoClose(start + length))
-        {
-            insert = string.Concat(text, close.ToString());
-            closed = true;
-        }
-
-        ShiftAutoClosed(start, insert.Length - length);
-        Replace(start, length, insert, EditKind.Typing, SelectionState.At(start + text.Length), keepAutoClosed: true);
-        if (closed)
-        {
-            _autoClosed.Add(start + text.Length);
-        }
-
-        EnsureCaretVisible();
-        AfterTyped(text);
     }
 
     private SelectionState _selectionBeforePress;
@@ -184,8 +154,36 @@ public sealed partial class EditorModel
 
         CloseTooltips();
         _completion?.Close();
+        _pointerMode = PointerMode.Select;
+        if (FoldChevronAt(viewX, viewY) is int foldLine)
+        {
+            _pointerDown = false;
+            Folding.Toggle(foldLine);
+            return;
+        }
+
+        bool shiftHeld = (modifiers & KeyModifiers.Shift) != 0;
+        bool altHeld = (modifiers & KeyModifiers.Alt) != 0;
+        bool controlHeld = (modifiers & KeyModifiers.Control) != 0;
+        if (altHeld && shiftHeld && !controlHeld)
+        {
+            // Shift+Alt+press: a column selection from here, the drag its other corner.
+            _clickCount = 1;
+            StartBox(viewX, viewY);
+            return;
+        }
+
         int position = PositionFromView(viewX, viewY);
-        if ((modifiers & KeyModifiers.Shift) != 0 && _clickCount == 1)
+        if (altHeld && !shiftHeld && !controlHeld)
+        {
+            // Alt+click: another caret (a click on one of several takes it away); a drag selects from it.
+            _clickCount = 1;
+            AddCaret(position);
+            _pointerMode = PointerMode.AddSelection;
+            return;
+        }
+
+        if (shiftHeld && _clickCount == 1)
         {
             SetSelection(new SelectionState(_selection.Anchor, position));
             return;
@@ -217,12 +215,27 @@ public sealed partial class EditorModel
         }
 
         NoteInput();
+        switch (_pointerMode)
+        {
+            case PointerMode.Box:
+                MoveBox(viewX, viewY);
+                return;
+            case PointerMode.AddSelection when HasMultipleCarets:
+                ReplacePrimary(new SelectionState(_selection.Anchor, PositionFromView(viewX, viewY)));
+                EnsureCaretVisible();
+                return;
+        }
+
         SetSelection(new SelectionState(_selection.Anchor, PositionFromView(viewX, viewY)));
         EnsureCaretVisible();
     }
 
     /// <summary>The primary button was released.</summary>
-    public void PointerReleased() => _pointerDown = false;
+    public void PointerReleased()
+    {
+        _pointerDown = false;
+        _pointerMode = PointerMode.Select;
+    }
 
     private int PositionFromView(float viewX, float viewY)
     {
@@ -234,51 +247,79 @@ public sealed partial class EditorModel
 
     private bool Move(EditorKey key, bool shift, bool control)
     {
-        var selection = _selection;
+        bool vertical = key is EditorKey.Up or EditorKey.Down or EditorKey.PageUp or EditorKey.PageDown;
+        if (key is EditorKey.PageUp or EditorKey.PageDown && ViewportHeight > 0)
+        {
+            int sign = key == EditorKey.PageUp ? -1 : 1;
+            float y = Math.Clamp(ScrollY + (sign * PageLines() * Metrics.LineHeight), 0, Math.Max(0, ContentHeight - ViewportHeight));
+            if (y != ScrollY)
+            {
+                ScrollTo(ScrollX, y);
+            }
+        }
+
+        if (!HasMultipleCarets)
+        {
+            var selection = _selection;
+            int target = MoveTarget(selection, key, shift, control, ref _desiredColumn);
+            SetSelection(shift ? new SelectionState(selection.Anchor, target) : SelectionState.At(target), keepDesiredColumn: vertical);
+            EnsureCaretVisible();
+            return true;
+        }
+
+        int count = _carets.Count;
+        if (_desiredColumns.Length < count)
+        {
+            Array.Resize(ref _desiredColumns, Math.Max(count, _desiredColumns.Length * 2));
+        }
+
+        bool keep = vertical && _desiredCount == count;
+        var after = ArrayPool<SelectionState>.Shared.Rent(count);
+        try
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var selection = _carets[i];
+                int desired = keep ? _desiredColumns[i] : -1;
+                int target = MoveTarget(selection, key, shift, control, ref desired);
+                _desiredColumns[i] = desired;
+                after[i] = shift ? new SelectionState(selection.Anchor, target) : SelectionState.At(target);
+            }
+
+            _desiredCount = vertical ? count : 0;
+            SetSelectionsCore(after.AsSpan(0, count), _primary, keepDesiredColumns: vertical, keepAutoClosed: false, keepBox: false);
+        }
+        finally
+        {
+            ArrayPool<SelectionState>.Shared.Return(after);
+        }
+
+        EnsureCaretVisible();
+        return true;
+    }
+
+    // Where one caret goes for a movement key; a vertical move keeps `desired` (the column it started from).
+    private int MoveTarget(SelectionState selection, EditorKey key, bool shift, bool control, ref int desired)
+    {
         var snapshot = Snapshot;
         int caret = selection.Caret;
-        bool vertical = false;
-        int target;
         switch (key)
         {
             case EditorKey.Left:
-                target = !shift && !selection.IsEmpty ? selection.Start : control ? WordLeft(caret) : CharLeft(caret);
-                break;
+                return !shift && !selection.IsEmpty ? selection.Start : control ? WordLeft(caret) : CharLeft(caret);
             case EditorKey.Right:
-                target = !shift && !selection.IsEmpty ? selection.End : control ? WordRight(caret) : CharRight(caret);
-                break;
+                return !shift && !selection.IsEmpty ? selection.End : control ? WordRight(caret) : CharRight(caret);
             case EditorKey.Up:
             case EditorKey.Down:
-                target = LineMove(caret, key == EditorKey.Up ? -1 : 1);
-                vertical = true;
-                break;
+                return LineMove(caret, key == EditorKey.Up ? -1 : 1, ref desired);
             case EditorKey.PageUp:
             case EditorKey.PageDown:
-                int lines = Math.Max(1, (int)MathF.Floor(ViewportHeight / Metrics.LineHeight));
-                int sign = key == EditorKey.PageUp ? -1 : 1;
-                target = LineMove(caret, sign * lines);
-                vertical = true;
-                if (ViewportHeight > 0)
-                {
-                    float y = Math.Clamp(ScrollY + (sign * lines * Metrics.LineHeight), 0, Math.Max(0, ContentHeight - ViewportHeight));
-                    if (y != ScrollY)
-                    {
-                        ScrollTo(ScrollX, y);
-                    }
-                }
-
-                break;
+                return LineMove(caret, (key == EditorKey.PageUp ? -1 : 1) * PageLines(), ref desired);
             case EditorKey.Home:
-                target = control ? 0 : SmartHome(caret);
-                break;
+                return control ? 0 : SmartHome(caret);
             default:
-                target = control ? snapshot.Length : snapshot.GetLine(snapshot.GetLineIndex(caret)).End;
-                break;
+                return control ? snapshot.Length : snapshot.GetLine(snapshot.GetLineIndex(caret)).End;
         }
-
-        SetSelection(shift ? new SelectionState(selection.Anchor, target) : SelectionState.At(target), keepDesiredColumn: vertical);
-        EnsureCaretVisible();
-        return true;
     }
 
     private int CharLeft(int position)
@@ -444,27 +485,28 @@ public sealed partial class EditorModel
         }
     }
 
-    private int LineMove(int position, int lines)
+    // A vertical move by rows: folded lines are stepped over, never entered.
+    private int LineMove(int position, int lines, ref int desired)
     {
         var snapshot = Snapshot;
         int index = snapshot.GetLineIndex(position);
-        if (_desiredColumn < 0)
+        if (desired < 0)
         {
-            _desiredColumn = ColumnOf(position);
+            desired = ColumnOf(position);
         }
 
-        int target = index + lines;
+        int target = RowOfLine(index) + lines;
         if (target < 0)
         {
             return 0;
         }
 
-        if (target >= snapshot.LineCount)
+        if (target >= RowCount)
         {
             return snapshot.Length;
         }
 
-        return PositionAtColumn(snapshot.GetLine(target), _desiredColumn, nearest: false);
+        return PositionAtColumn(snapshot.GetLine(LineAtRow(target)), desired, nearest: false);
     }
 
     private bool SelectAll()
@@ -475,6 +517,11 @@ public sealed partial class EditorModel
 
     private bool Escape()
     {
+        if (CollapseCarets())
+        {
+            return true;
+        }
+
         if (Find.IsHighlighting)
         {
             Find.IsHighlighting = false;
@@ -525,23 +572,8 @@ public sealed partial class EditorModel
         ApplyEdits(new ReadOnlySpan<TextEdit>(in edit), kind, after, keepAutoClosed);
     }
 
-    internal void ApplyEdits(ReadOnlySpan<TextEdit> edits, EditKind kind, SelectionState after, bool keepAutoClosed = false)
-    {
-        var before = _selection;
-        _applying = true;
-        _applyingAfter = after;
-        try
-        {
-            _document.Edit(edits, kind, before, after);
-        }
-        finally
-        {
-            _applying = false;
-            _applyingAfter = null;
-        }
-
-        SetSelection(after, keepAutoClosed: keepAutoClosed);
-    }
+    internal void ApplyEdits(ReadOnlySpan<TextEdit> edits, EditKind kind, SelectionState after, bool keepAutoClosed = false) =>
+        CommitEdits(edits, kind, new ReadOnlySpan<SelectionState>(in after), 0, keepAutoClosed);
 
     private string NewLine
     {
@@ -596,39 +628,155 @@ public sealed partial class EditorModel
         return next is ' ' or '\t' or '\r' or '\n' || OpenOf(next) is not null || next is ';' or ',';
     }
 
-    private bool TryOvertypeClose(char c)
+    // The text of an opening bracket typed with its close ("()"), made once per pair of the language's rules.
+    private string? PairText(char open)
     {
-        int caret = _selection.Caret;
-        if (caret >= Snapshot.Length || Snapshot[caret] != c || OpenOf(c) is null || !_autoClosed.Contains(caret))
+        var brackets = Rules.Brackets;
+        if (_pairTexts is null || _pairTexts.Length != brackets.Count)
         {
-            return false;
+            var texts = new string[brackets.Count];
+            for (int i = 0; i < texts.Length; i++)
+            {
+                texts[i] = string.Create(2, brackets[i], static (span, pair) =>
+                {
+                    span[0] = pair.Open;
+                    span[1] = pair.Close;
+                });
+            }
+
+            _pairTexts = texts;
         }
 
-        _autoClosed.Remove(caret);
-        SetSelection(SelectionState.At(caret + 1), keepAutoClosed: true);
-        EnsureCaretVisible();
-        return true;
-    }
-
-    private void ShiftAutoClosed(int at, int delta)
-    {
-        for (int i = 0; i < _autoClosed.Count; i++)
+        for (int i = 0; i < brackets.Count; i++)
         {
-            if (_autoClosed[i] >= at)
+            if (brackets[i].Open == open)
             {
-                _autoClosed[i] += delta;
+                return _pairTexts[i];
             }
         }
+
+        return null;
+    }
+
+    // One caret's typed text: over an auto-inserted close it steps over it; a close bracket typed on a blank line takes
+    // its opening line's indent; an opening bracket gets its close (the option, before white space or a close); in
+    // overwrite mode it replaces what follows.
+    private CaretPart TypedPart(SelectionState selection, ITextSnapshot snapshot, string text)
+    {
+        if (text.Length == 1 && selection.IsEmpty)
+        {
+            int caret = selection.Caret;
+            char c = text[0];
+            if (caret < snapshot.Length && snapshot[caret] == c && OpenOf(c) is not null && IsAutoClosed(caret))
+            {
+                RemoveAutoClosed(caret);
+                return new CaretPart(caret, 0, "", 1, 1);
+            }
+
+            if (!Overwrite && OutdentedClose(caret, snapshot, c) is { } outdented)
+            {
+                return outdented;
+            }
+        }
+
+        int start = selection.Start;
+        int length = selection.Length;
+        if (Overwrite && selection.IsEmpty)
+        {
+            var line = snapshot.GetLine(snapshot.GetLineIndex(start));
+            int replace = 0;
+            int at = start;
+            for (int i = 0; i < text.Length && at < line.End; i++)
+            {
+                if (char.IsLowSurrogate(text[i]))
+                {
+                    continue;
+                }
+
+                at += at + 1 < line.End && char.IsHighSurrogate(snapshot[at]) && char.IsLowSurrogate(snapshot[at + 1]) ? 2 : 1;
+                replace = at - start;
+            }
+
+            length = replace;
+        }
+
+        if (Options.AutoCloseBrackets && text.Length == 1 && selection.IsEmpty && PairText(text[0]) is { } pair && AllowsAutoClose(start + length))
+        {
+            return new CaretPart(start, length, pair, 1, 1) { AutoClose = 1 };
+        }
+
+        return new CaretPart(start, length, text, text.Length, text.Length);
+    }
+
+    // '}' or ']' typed where only white space is before the caret on its line: the line takes the indent of the line that
+    // opened the bracket (found by a backward scan of BracketScanLines lines), when that is less, so a block typed with
+    // Enter closes where it began. Null when it does not apply.
+    private CaretPart? OutdentedClose(int caret, ITextSnapshot snapshot, char close)
+    {
+        if (close is not ('}' or ']') || OpenOf(close) is not { } open)
+        {
+            return null;
+        }
+
+        var line = snapshot.GetLine(snapshot.GetLineIndex(caret));
+        int prefix = caret - line.Start;
+        if (prefix == 0)
+        {
+            return null;
+        }
+
+        for (int i = line.Start; i < caret; i++)
+        {
+            if (snapshot[i] is not (' ' or '\t'))
+            {
+                return null;
+            }
+        }
+
+        int floor = snapshot.GetLine(Math.Max(0, line.Index - Options.BracketScanLines)).Start;
+        int depth = 0;
+        for (int i = line.Start - 1; i >= floor; i--)
+        {
+            char c = snapshot[i];
+            if (c == close)
+            {
+                depth++;
+            }
+            else if (c == open && depth-- == 0)
+            {
+                var opening = snapshot.GetLine(snapshot.GetLineIndex(i));
+                int indent = 0;
+                while (opening.Start + indent < opening.End && snapshot[opening.Start + indent] is ' ' or '\t')
+                {
+                    indent++;
+                }
+
+                if (indent >= prefix)
+                {
+                    return null;
+                }
+
+                string text = string.Concat(snapshot.GetText(opening.Start, indent), close.ToString());
+                return new CaretPart(line.Start, prefix, text, text.Length, text.Length);
+            }
+        }
+
+        return null;
     }
 
     private bool Enter()
     {
-        var snapshot = Snapshot;
-        var selection = _selection;
+        EditCarets(EditKind.Typing, keepAutoClosed: false, 0, static (model, selection, snapshot, _) => model.EnterPart(selection, snapshot));
+        EnsureCaretVisible();
+        return true;
+    }
+
+    // One caret's Enter: a line break with the line's indent; after an opening bracket one level more, and when its close
+    // follows, the close on a line of its own at the line's indent.
+    private CaretPart EnterPart(SelectionState selection, ITextSnapshot snapshot)
+    {
         var line = snapshot.GetLine(snapshot.GetLineIndex(selection.Start));
         char[]? buffer = null;
-        string insert;
-        int caretOffset;
         try
         {
             var text = TextReading.ReadLine(snapshot, line, ref buffer);
@@ -646,45 +794,51 @@ public sealed partial class EditorModel
             {
                 bool closeAfter = selection.End < snapshot.Length && snapshot[selection.End] == closing;
                 string inner = string.Concat(newLine, indent, _indentUnit);
-                caretOffset = inner.Length;
-                insert = closeAfter ? string.Concat(inner, newLine, indent) : inner;
+                string insert = closeAfter ? string.Concat(inner, newLine, indent) : inner;
+                return new CaretPart(selection.Start, selection.Length, insert, inner.Length, inner.Length);
             }
-            else
-            {
-                insert = string.Concat(newLine, indent);
-                caretOffset = insert.Length;
-            }
+
+            string plain = string.Concat(newLine, indent);
+            return new CaretPart(selection.Start, selection.Length, plain, plain.Length, plain.Length);
         }
         finally
         {
             TextReading.Return(buffer);
         }
-
-        Replace(selection.Start, selection.Length, insert, EditKind.Typing, SelectionState.At(selection.Start + caretOffset));
-        EnsureCaretVisible();
-        return true;
     }
 
     private bool Backspace(bool control)
     {
-        var selection = _selection;
+        EditCarets(EditKind.Deleting, keepAutoClosed: true, control, static (model, selection, snapshot, word) => model.BackspacePart(selection, snapshot, word));
+        EnsureCaretVisible();
+        return true;
+    }
+
+    // One caret's Backspace: the selection; else the word (Ctrl), an auto-inserted pair the caret is inside, the spaces
+    // back to the tab stop in leading white space, or the character before.
+    private CaretPart BackspacePart(SelectionState selection, ITextSnapshot snapshot, bool control)
+    {
         if (!selection.IsEmpty)
         {
-            return DeleteRange(selection.Start, selection.End);
+            return CaretPart.Delete(selection.Start, selection.End);
         }
 
         int caret = selection.Caret;
         if (caret == 0)
         {
-            return true;
+            return CaretPart.Stay(selection);
         }
 
         if (control)
         {
-            return DeleteRange(WordLeft(caret), caret);
+            return CaretPart.Delete(WordLeft(caret), caret);
         }
 
-        var snapshot = Snapshot;
+        if (caret < snapshot.Length && IsAutoClosed(caret) && OpenOf(snapshot[caret]) is { } open && snapshot[caret - 1] == open)
+        {
+            return CaretPart.Delete(caret - 1, caret + 1);
+        }
+
         var line = snapshot.GetLine(snapshot.GetLineIndex(caret));
         int column = caret - line.Start;
         if (column > 0 && Options.InsertSpaces)
@@ -696,7 +850,7 @@ public sealed partial class EditorModel
                 if (text[..column].IndexOfAnyExcept(' ') < 0)
                 {
                     int stop = (column - 1) / Options.TabSize * Options.TabSize;
-                    return DeleteRange(line.Start + stop, caret);
+                    return CaretPart.Delete(line.Start + stop, caret);
                 }
             }
             finally
@@ -705,48 +859,43 @@ public sealed partial class EditorModel
             }
         }
 
-        return DeleteRange(CharLeft(caret), caret);
+        return CaretPart.Delete(CharLeft(caret), caret);
     }
 
     private bool DeleteForward(bool control)
     {
-        var selection = _selection;
-        if (!selection.IsEmpty)
-        {
-            return DeleteRange(selection.Start, selection.End);
-        }
-
-        int caret = selection.Caret;
-        if (caret >= Snapshot.Length)
-        {
-            return true;
-        }
-
-        if (control)
-        {
-            return DeleteRange(caret, WordRight(caret));
-        }
-
-        var snapshot = Snapshot;
-        var line = snapshot.GetLine(snapshot.GetLineIndex(caret));
-        return DeleteRange(caret, caret >= line.End ? line.EndIncludingBreak : CharRight(caret));
-    }
-
-    private bool DeleteRange(int start, int end)
-    {
-        if (end > start)
-        {
-            Replace(start, end - start, "", EditKind.Deleting, SelectionState.At(start));
-        }
-
+        EditCarets(EditKind.Deleting, keepAutoClosed: true, control, static (model, selection, snapshot, word) => model.DeletePart(selection, snapshot, word));
         EnsureCaretVisible();
         return true;
     }
 
-    private (int First, int Last) SelectedLines()
+    private CaretPart DeletePart(SelectionState selection, ITextSnapshot snapshot, bool control)
+    {
+        if (!selection.IsEmpty)
+        {
+            return CaretPart.Delete(selection.Start, selection.End);
+        }
+
+        int caret = selection.Caret;
+        if (caret >= snapshot.Length)
+        {
+            return CaretPart.Stay(selection);
+        }
+
+        if (control)
+        {
+            return CaretPart.Delete(caret, WordRight(caret));
+        }
+
+        var line = snapshot.GetLine(snapshot.GetLineIndex(caret));
+        return CaretPart.Delete(caret, caret >= line.End ? line.EndIncludingBreak : CharRight(caret));
+    }
+
+    private (int First, int Last) SelectedLines() => SelectedLinesOf(_selection);
+
+    private (int First, int Last) SelectedLinesOf(SelectionState selection)
     {
         var snapshot = Snapshot;
-        var selection = _selection;
         int first = snapshot.GetLineIndex(selection.Start);
         int last = snapshot.GetLineIndex(selection.End);
         if (last > first && snapshot.GetLine(last).Start == selection.End)
@@ -760,107 +909,38 @@ public sealed partial class EditorModel
     private bool Indent()
     {
         var snapshot = Snapshot;
-        var selection = _selection;
-        if (selection.IsEmpty || snapshot.GetLineIndex(selection.Start) == snapshot.GetLineIndex(selection.End))
+        bool lines = false;
+        foreach (var selection in Selections)
         {
-            string insert = _indentUnit;
-            if (Options.InsertSpaces)
+            if (!selection.IsEmpty && snapshot.GetLineIndex(selection.Start) != snapshot.GetLineIndex(selection.End))
             {
-                int column = ColumnOf(selection.Start);
-                insert = new string(' ', Options.TabSize - (column % Options.TabSize));
-            }
-
-            Replace(selection.Start, selection.Length, insert, EditKind.Typing, SelectionState.At(selection.Start + insert.Length));
-            EnsureCaretVisible();
-            return true;
-        }
-
-        var (first, last) = SelectedLines();
-        var edits = ArrayPool<TextEdit>.Shared.Rent(last - first + 1);
-        try
-        {
-            int count = 0;
-            for (int i = first; i <= last; i++)
-            {
-                var line = snapshot.GetLine(i);
-                if (line.Length > 0)
-                {
-                    edits[count++] = TextEdit.Insert(line.Start, _indentUnit);
-                }
-            }
-
-            var span = edits.AsSpan(0, count);
-            bool anchorIsStart = selection.Anchor <= selection.Caret;
-            int start = MapInserted(selection.Start, span, atStartStays: true);
-            int end = MapInserted(selection.End, span, atStartStays: false);
-            if (count > 0)
-            {
-                ApplyEdits(span, EditKind.Command, anchorIsStart ? new SelectionState(start, end) : new SelectionState(end, start));
+                lines = true;
+                break;
             }
         }
-        finally
+
+        if (lines)
         {
-            ArrayPool<TextEdit>.Shared.Return(edits, clearArray: true);
+            return IndentSelectedLines(tab: true);
         }
 
+        EditCarets(EditKind.Typing, keepAutoClosed: false, 0, static (model, selection, snapshot, _) => model.TabPart(selection));
         EnsureCaretVisible();
         return true;
     }
 
-    private bool Outdent()
+    // One caret's Tab on one line: the selection replaced by an indent (to the next tab stop with spaces).
+    private CaretPart TabPart(SelectionState selection)
     {
-        var snapshot = Snapshot;
-        var selection = _selection;
-        var (first, last) = SelectedLines();
-        var edits = ArrayPool<TextEdit>.Shared.Rent(last - first + 1);
-        char[]? buffer = null;
-        try
+        string insert = _indentUnit;
+        if (Options.InsertSpaces)
         {
-            int count = 0;
-            for (int i = first; i <= last; i++)
-            {
-                var line = snapshot.GetLine(i);
-                var text = TextReading.ReadLine(snapshot, line, ref buffer);
-                int remove = 0;
-                if (text.Length > 0 && text[0] == '\t')
-                {
-                    remove = 1;
-                }
-                else
-                {
-                    int spaces = 0;
-                    while (spaces < text.Length && text[spaces] == ' ')
-                    {
-                        spaces++;
-                    }
-
-                    if (spaces > 0)
-                    {
-                        remove = Math.Min(spaces, spaces % Options.TabSize == 0 ? Options.TabSize : spaces % Options.TabSize);
-                    }
-                }
-
-                if (remove > 0)
-                {
-                    edits[count++] = TextEdit.Delete(line.Start, remove);
-                }
-            }
-
-            var span = edits.AsSpan(0, count);
-            if (count > 0)
-            {
-                var after = new SelectionState(MapDeleted(selection.Anchor, span), MapDeleted(selection.Caret, span));
-                ApplyEdits(span, EditKind.Command, after);
-            }
-        }
-        finally
-        {
-            TextReading.Return(buffer);
-            ArrayPool<TextEdit>.Shared.Return(edits, clearArray: true);
+            int column = ColumnOf(selection.Start);
+            int width = Options.TabSize - (column % Options.TabSize);
+            insert = width == _indentUnit.Length ? _indentUnit : new string(' ', width);
         }
 
-        EnsureCaretVisible();
-        return true;
+        return new CaretPart(selection.Start, selection.Length, insert, insert.Length, insert.Length);
     }
 
     private static int MapInserted(int position, ReadOnlySpan<TextEdit> inserts, bool atStartStays)
@@ -908,13 +988,23 @@ public sealed partial class EditorModel
             _applying = false;
         }
 
-        if (restored is { } selection)
+        RestoreSelections(restored);
+        return true;
+    }
+
+    // After an undo or a redo: every caret the step kept (a multi-selection document), else its one selection.
+    private void RestoreSelections(SelectionState? restored)
+    {
+        if (_document is IMultiSelectionDocument multi && multi.RestoredSelections.Length > 1)
+        {
+            SetSelectionsCore(multi.RestoredSelections, multi.RestoredPrimary, keepDesiredColumns: false, keepAutoClosed: false, keepBox: false);
+            EnsureCaretVisible();
+        }
+        else if (restored is { } selection)
         {
             SetSelection(selection);
             EnsureCaretVisible();
         }
-
-        return true;
     }
 
     private bool Redo()
@@ -930,12 +1020,7 @@ public sealed partial class EditorModel
             _applying = false;
         }
 
-        if (restored is { } selection)
-        {
-            SetSelection(selection);
-            EnsureCaretVisible();
-        }
-
+        RestoreSelections(restored);
         return true;
     }
 
@@ -962,7 +1047,7 @@ public sealed partial class EditorModel
 
     private bool Copy()
     {
-        string text = CopiedText(out _, out _);
+        string text = HasMultipleCarets ? CopiedTexts() : CopiedText(out _, out _);
         if (text.Length > 0)
         {
             _ = SetClipboardAsync(text);
@@ -973,6 +1058,24 @@ public sealed partial class EditorModel
 
     private bool Cut()
     {
+        if (HasMultipleCarets)
+        {
+            string all = CopiedTexts();
+            _ = SetClipboardAsync(all);
+            EditCarets(EditKind.Command, keepAutoClosed: false, 0, static (model, selection, snapshot, _) =>
+            {
+                if (!selection.IsEmpty)
+                {
+                    return CaretPart.Delete(selection.Start, selection.End);
+                }
+
+                var line = snapshot.GetLine(snapshot.GetLineIndex(selection.Caret));
+                return CaretPart.Delete(line.Start, line.EndIncludingBreak);
+            });
+            EnsureCaretVisible();
+            return true;
+        }
+
         var snapshot = Snapshot;
         string text = CopiedText(out int start, out int end);
         if (text.Length == 0)
@@ -990,6 +1093,35 @@ public sealed partial class EditorModel
         Replace(start, end - start, "", EditKind.Command, SelectionState.At(start));
         EnsureCaretVisible();
         return true;
+    }
+
+    // Several carets: each selection's text (an empty one's whole line), one per line.
+    private string CopiedTexts()
+    {
+        var snapshot = Snapshot;
+        var text = new System.Text.StringBuilder();
+        string newLine = NewLine;
+        var all = Selections;
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (i > 0)
+            {
+                text.Append(newLine);
+            }
+
+            var selection = all[i];
+            if (selection.IsEmpty)
+            {
+                var line = snapshot.GetLine(snapshot.GetLineIndex(selection.Caret));
+                text.Append(snapshot.GetText(line.Start, line.Length));
+            }
+            else
+            {
+                text.Append(snapshot.GetText(selection.Start, selection.Length));
+            }
+        }
+
+        return text.ToString();
     }
 
     private bool Paste()
@@ -1029,8 +1161,38 @@ public sealed partial class EditorModel
         }
 
         text = text.ReplaceLineEndings(NewLine);
-        var selection = _selection;
-        Replace(selection.Start, selection.Length, text, EditKind.Paste, SelectionState.At(selection.Start + text.Length));
+        PasteText(text);
+    }
+
+    /// <summary>
+    /// Pastes <paramref name="text"/> at every caret (never auto-closing a bracket); with several carets and as many lines
+    /// as carets, one line at each. One undo step.
+    /// </summary>
+    public void PasteText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (!HasMultipleCarets)
+        {
+            var selection = _selection;
+            Replace(selection.Start, selection.Length, text, EditKind.Paste, SelectionState.At(selection.Start + text.Length));
+            EnsureCaretVisible();
+            return;
+        }
+
+        string newLine = NewLine;
+        var lines = text.Split(newLine);
+        if (lines.Length == _carets.Count + 1 && lines[^1].Length == 0)
+        {
+            lines = lines[..^1];
+        }
+
+        bool each = lines.Length == _carets.Count;
+        int index = 0;
+        EditCarets(EditKind.Paste, keepAutoClosed: false, (each ? lines : null, text), (model, selection, snapshot, state) =>
+        {
+            string insert = state.Item1 is { } perCaret ? perCaret[index++] : state.text;
+            return new CaretPart(selection.Start, selection.Length, insert, insert.Length, insert.Length);
+        });
         EnsureCaretVisible();
     }
 }

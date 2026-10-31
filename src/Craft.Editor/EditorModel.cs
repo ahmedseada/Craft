@@ -84,6 +84,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         _lastLineCount = Snapshot.LineCount;
         _lastDigits = TextReading.Digits(_lastLineCount);
+        Folding = new EditorFolding(this);
         document.Buffer.Changed += OnBufferChanged;
     }
 
@@ -125,6 +126,24 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
     /// <summary>Find and replace.</summary>
     public EditorFind Find { get; }
+
+    /// <summary>Code folding: the ranges, the folds, and the line-to-row mapping the layout and the paint follow.</summary>
+    public EditorFolding Folding { get; }
+
+    /// <summary>The cells of the gutter's fold column (its chevrons), when the document folds.</summary>
+    public const int FoldGutterCells = 2;
+
+    /// <summary>The rows drawn: the lines minus those the folds hide.</summary>
+    public int RowCount => Folding.Map.HasHidden ? Folding.Map.RowCount : Snapshot.LineCount;
+
+    /// <summary>The row <paramref name="line"/> is drawn on (its fold's header row when hidden).</summary>
+    public int RowOfLine(int line) => Folding.Map.HasHidden ? Folding.Map.RowOf(line) : line;
+
+    /// <summary>The line drawn on <paramref name="row"/>.</summary>
+    public int LineAtRow(int row) => Folding.Map.HasHidden ? Folding.Map.LineAt(row) : Math.Clamp(row, 0, Snapshot.LineCount - 1);
+
+    /// <summary>The next line drawn after <paramref name="line"/> (the line count when it is the last).</summary>
+    public int NextShownLine(int line) => Folding.Map.HasHidden ? Folding.Map.NextShown(line) : line + 1;
 
     /// <summary>The ghost text of an inline completion provider at the caret.</summary>
     public InlineCompletionController InlineCompletion { get; }
@@ -197,13 +216,13 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private int CaretPosition => Math.Min((_applyingAfter ?? _selection).Caret, Snapshot.Length);
 
     /// <summary>The line-number gutter's width: the line count's digits plus the padding, in cells.</summary>
-    public float GutterWidth => (TextReading.Digits(Snapshot.LineCount) + Options.GutterPaddingCells) * Metrics.CellWidth;
+    public float GutterWidth => (TextReading.Digits(Snapshot.LineCount) + Options.GutterPaddingCells + (Folding.IsAvailable ? FoldGutterCells : 0)) * Metrics.CellWidth;
 
     /// <summary>Where column 0 of the text starts, in content coordinates (the gutter's right edge).</summary>
     public float TextLeft => GutterWidth;
 
     /// <summary>The content's height: every line plus the bottom margin.</summary>
-    public float ContentHeight => (Snapshot.LineCount + Options.BottomMarginLines) * Metrics.LineHeight;
+    public float ContentHeight => (RowCount + Options.BottomMarginLines) * Metrics.LineHeight;
 
     /// <summary>
     /// The content's width: the longest line seen while drawing (or with the caret on it) plus the margin. It only grows:
@@ -228,10 +247,57 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         }
     }
 
-    /// <summary>The lines a viewport at <paramref name="scrollY"/> of <paramref name="viewportHeight"/> shows, plus one.</summary>
+    /// <summary>
+    /// The word at the caret whose other places are highlighted (a word of letters, digits and '_' touching the caret, with
+    /// nothing selected and one caret), or null; found once per caret and version.
+    /// </summary>
+    public string? HighlightedWord
+    {
+        get
+        {
+            var snapshot = Snapshot;
+            if (_wordVersion != snapshot.Version || _wordCaret != _selection.Caret || _wordMany != HasMultipleCarets || _wordEmpty != _selection.IsEmpty)
+            {
+                _wordVersion = snapshot.Version;
+                _wordCaret = _selection.Caret;
+                _wordMany = HasMultipleCarets;
+                _wordEmpty = _selection.IsEmpty;
+                _word = null;
+                if (_selection.IsEmpty && !_wordMany && snapshot.Length > 0)
+                {
+                    var (start, end) = WordAt(Math.Min(_selection.Caret, snapshot.Length));
+                    if (end > start && end - start <= MaxHighlightedWord && TextReading.KindOf(snapshot[start]) == CharKind.Word)
+                    {
+                        _word = snapshot.GetText(start, end - start);
+                    }
+                }
+            }
+
+            return _word;
+        }
+    }
+
+    private const int MaxHighlightedWord = 256;
+    private string? _word;
+    private int _wordVersion = -1;
+    private int _wordCaret = -1;
+    private bool _wordMany;
+    private bool _wordEmpty;
+
+    /// <summary>
+    /// The lines a viewport at <paramref name="scrollY"/> of <paramref name="viewportHeight"/> shows, plus one: the first and
+    /// the last drawn (with folds, the lines between them that are hidden are not drawn; step with <see cref="NextShownLine"/>).
+    /// </summary>
     public LineRange VisibleLines(float scrollY, float viewportHeight)
     {
-        int last = Snapshot.LineCount - 1;
+        var rows = VisibleRows(scrollY, viewportHeight);
+        return new LineRange(LineAtRow(rows.First), LineAtRow(rows.Last));
+    }
+
+    /// <summary>The rows a viewport at <paramref name="scrollY"/> of <paramref name="viewportHeight"/> shows, plus one.</summary>
+    public LineRange VisibleRows(float scrollY, float viewportHeight)
+    {
+        int last = RowCount - 1;
         float height = Metrics.LineHeight;
         int first = Math.Clamp((int)MathF.Floor(Math.Max(0, scrollY) / height), 0, last);
         int end = Math.Clamp((int)MathF.Ceiling((Math.Max(0, scrollY) + Math.Max(0, viewportHeight)) / height), first, last);
@@ -260,14 +326,14 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     public EditorPoint PointFromPosition(int position)
     {
         int line = Snapshot.GetLineIndex(Math.Clamp(position, 0, Snapshot.Length));
-        return new EditorPoint(TextLeft + ColumnOf(position) * Metrics.CellWidth, line * Metrics.LineHeight);
+        return new EditorPoint(TextLeft + ColumnOf(position) * Metrics.CellWidth, RowOfLine(line) * Metrics.LineHeight);
     }
 
     /// <summary>The position nearest to the content point (<paramref name="x"/>, <paramref name="y"/>), clamped to the text.</summary>
     public int PositionFromPoint(float x, float y)
     {
         var snapshot = Snapshot;
-        int index = Math.Clamp((int)MathF.Floor(y / Metrics.LineHeight), 0, snapshot.LineCount - 1);
+        int index = LineAtRow(Math.Clamp((int)MathF.Floor(y / Metrics.LineHeight), 0, RowCount - 1));
         if (y < 0)
         {
             index = 0;
@@ -361,7 +427,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         int column = CaretColumn;
         NoteLineColumns(column);
         float caretX = column * metrics.CellWidth;
-        float caretY = CaretLine * metrics.LineHeight;
+        float caretY = RowOfLine(CaretLine) * metrics.LineHeight;
         float textWidth = Math.Max(metrics.CellWidth, ViewportWidth - TextLeft);
         float marginX = Math.Min(Options.ScrollMarginColumns * metrics.CellWidth, Math.Max(0, (textWidth - metrics.CellWidth) / 2));
         float marginY = Math.Min(Options.ScrollMarginLines * metrics.LineHeight, Math.Max(0, (ViewportHeight - metrics.LineHeight) / 2));
@@ -409,6 +475,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         _disposed = true;
         _document.Buffer.Changed -= OnBufferChanged;
+        Folding.Dispose();
         InlineCompletion.Dispose();
         DisposeSemantic();
         if (_session is not null)
@@ -424,26 +491,81 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
     internal void SetSelection(SelectionState selection, bool keepDesiredColumn = false, bool keepAutoClosed = false)
     {
-        int length = Snapshot.Length;
-        selection = new SelectionState(Math.Clamp(selection.Anchor, 0, length), Math.Clamp(selection.Caret, 0, length));
-        if (!keepDesiredColumn)
+        // One selection: the other carets, a column selection and Ctrl+D's whole-word mode end.
+        _occurrenceWhole = false;
+        SetSelectionsCore(new ReadOnlySpan<SelectionState>(in selection), 0, keepDesiredColumn, keepAutoClosed, keepBox: false);
+    }
+
+    /// <summary>
+    /// The folds changed (a fold, an unfold, an edit that unfolded one): the content's height and the paint follow; with
+    /// <paramref name="movedOutOfFolds"/>, a caret the new fold hides goes to the end of its header line.
+    /// </summary>
+    internal void OnFoldsChanged(bool movedOutOfFolds = false)
+    {
+        if (movedOutOfFolds && Folding.Map.HasHidden)
         {
-            _desiredColumn = -1;
+            var snapshot = Snapshot;
+            var all = Selections;
+            bool hidden = false;
+            foreach (var s in all)
+            {
+                hidden |= Folding.Map.IsHidden(snapshot.GetLineIndex(s.Caret));
+            }
+
+            if (hidden)
+            {
+                var moved = System.Buffers.ArrayPool<SelectionState>.Shared.Rent(all.Length);
+                try
+                {
+                    for (int i = 0; i < all.Length; i++)
+                    {
+                        int line = snapshot.GetLineIndex(all[i].Caret);
+                        if (Folding.Map.IsHidden(line))
+                        {
+                            int header = LineAtRow(RowOfLine(line));
+                            moved[i] = SelectionState.At(snapshot.GetLine(header).End);
+                        }
+                        else
+                        {
+                            moved[i] = all[i];
+                        }
+                    }
+
+                    SetSelectionsCore(moved.AsSpan(0, all.Length), PrimarySelectionIndex, keepDesiredColumns: false, keepAutoClosed: false, keepBox: false);
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<SelectionState>.Shared.Return(moved);
+                }
+            }
         }
 
-        if (!keepAutoClosed)
-        {
-            _autoClosed.Clear();
-        }
-
-        bool moved = selection != _selection;
-        _selection = selection;
-        if (moved)
-        {
-            CaretMoved?.Invoke(this, EventArgs.Empty);
-        }
-
+        ContentSizeChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
+    }
+
+    /// <summary>The line whose fold chevron is at the view point (the gutter's fold column), or null.</summary>
+    internal int? FoldChevronAt(float viewX, float viewY)
+    {
+        if (!Folding.IsAvailable)
+        {
+            return null;
+        }
+
+        float right = GutterWidth;
+        if (viewX < right - (FoldGutterCells * Metrics.CellWidth) || viewX >= right)
+        {
+            return null;
+        }
+
+        int row = (int)MathF.Floor((viewY + ScrollY) / Metrics.LineHeight);
+        if (row < 0 || row >= RowCount)
+        {
+            return null;
+        }
+
+        int line = LineAtRow(row);
+        return Folding.IsFoldable(line) || Folding.IsFolded(line) ? line : null;
     }
 
     private void OnSessionReclassified(object? sender, EventArgs e) => Reclassified?.Invoke(this, EventArgs.Empty);
@@ -503,12 +625,35 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
     private void OnBufferChanged(object? sender, TextChangedEventArgs e)
     {
+        // The folds first: the selections mapped below may land on lines they hide.
+        Folding.OnBufferChanged(e);
         if (!_applying)
         {
             // A change that did not come through this editor (a reload, another view): the selection follows the edits.
             var edits = e.Edits;
-            SetSelection(new SelectionState(MapThrough(_selection.Anchor, edits), MapThrough(_selection.Caret, edits)));
+            if (HasMultipleCarets)
+            {
+                var mapped = System.Buffers.ArrayPool<SelectionState>.Shared.Rent(_carets.Count);
+                try
+                {
+                    for (int i = 0; i < _carets.Count; i++)
+                    {
+                        mapped[i] = new SelectionState(MapThrough(_carets[i].Anchor, edits), MapThrough(_carets[i].Caret, edits));
+                    }
+
+                    SetSelectionsCore(mapped.AsSpan(0, _carets.Count), _primary, keepDesiredColumns: false, keepAutoClosed: false, keepBox: false);
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<SelectionState>.Shared.Return(mapped);
+                }
+            }
+            else
+            {
+                SetSelection(new SelectionState(MapThrough(_selection.Anchor, edits), MapThrough(_selection.Caret, edits)));
+            }
         }
+
 
         int lines = e.After.LineCount;
         int digits = TextReading.Digits(lines);

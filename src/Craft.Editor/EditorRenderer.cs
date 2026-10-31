@@ -20,6 +20,9 @@ namespace Craft.Editor;
 public sealed class EditorRenderer : IDisposable
 {
     private readonly TokenSpanBuffer _spans = new();
+    private readonly TokenSpanBuffer _runSpans = new();
+    private readonly List<(int Column, float Top, int Line)> _carets = [];
+    private readonly List<int> _drawnRows = [];
     private readonly Dictionary<int, LineRuns> _lines = [];
     private readonly Dictionary<int, string> _numbers = [];
     private readonly EditorPopupRenderer _popups = new();
@@ -82,25 +85,39 @@ public sealed class EditorRenderer : IDisposable
 
         var colors = theme.Colors;
         var metrics = model.Metrics;
+        var options = model.Options;
         float cell = metrics.CellWidth;
         float height = metrics.LineHeight;
         float textLeft = model.TextLeft;
         float gutterWidth = model.GutterWidth;
-        int tabSize = model.Options.TabSize;
-        var selection = model.Selection;
-        int caretLine = snapshot.GetLineIndex(selection.Caret);
-        var visible = model.VisibleLines(scrollY, viewportHeight);
+        int tabSize = options.TabSize;
+        var folding = model.Folding;
+        bool folds = folding.IsAvailable;
+        bool hidden = folding.Map.HasHidden;
+        var selections = model.Selections;
+        var rows = model.VisibleRows(scrollY, viewportHeight);
+        var visible = new LineRange(model.LineAtRow(rows.First), model.LineAtRow(rows.Last));
         LastVisible = visible;
         TrimCaches(visible);
 
-        canvas.FillRect(0, 0, viewportWidth, viewportHeight, colors.Background);
-        if (caretLine >= visible.First && caretLine <= visible.Last)
-        {
-            canvas.FillRect(textLeft, (caretLine * height) - scrollY, Math.Max(0, viewportWidth - textLeft), height, colors.CurrentLine);
-        }
-
         var firstLine = snapshot.GetLine(visible.First);
         var lastLine = snapshot.GetLine(visible.Last);
+        canvas.FillRect(0, 0, viewportWidth, viewportHeight, colors.Background);
+
+        // The caret lines' fill, under everything else: one per line holding a caret.
+        int firstSelection = FirstSelectionReaching(selections, firstLine.Start);
+        int previousCaretLine = -1;
+        for (int i = firstSelection; i < selections.Length && selections[i].Start <= lastLine.EndIncludingBreak; i++)
+        {
+            int line = snapshot.GetLineIndex(selections[i].Caret);
+            if (line != previousCaretLine && line >= visible.First && line <= visible.Last && !(hidden && folding.Map.IsHidden(line)))
+            {
+                canvas.FillRect(textLeft, (model.RowOfLine(line) * height) - scrollY, Math.Max(0, viewportWidth - textLeft), height, colors.CurrentLine);
+            }
+
+            previousCaretLine = line;
+        }
+
         _spans.Clear();
         LastFrameClassified = model.WaitForClassification(snapshot);
         if (!LastFrameClassified)
@@ -108,28 +125,38 @@ public sealed class EditorRenderer : IDisposable
             ParseWaitsExceeded++;
         }
 
-        model.LanguageSession?.Classify(snapshot, firstLine.Start, lastLine.EndIncludingBreak - firstLine.Start, _spans);
+        ClassifyShown(model, snapshot, visible);
         var spans = _spans.Spans;
         var find = model.Find;
         bool findShown = find.IsHighlighting && find.Searchable;
         int queryLength = find.Query.Length;
-        var bracket = model.MatchingBrackets;
-        int caretColumn = 0;
+        var bracket = options.BracketHighlight ? model.MatchingBrackets : null;
+        string? word = options.WordHighlight ? model.HighlightedWord : null;
         var diagnostics = model.Diagnostics;
         int firstDiagnostic = diagnostics.IsEmpty ? 0 : model.FirstDiagnosticReaching(firstLine.Start);
         SquiggleSegmentsDrawn = 0;
+        GuidesDrawn = 0;
+        WordHighlightsDrawn = 0;
+        _carets.Clear();
+        _drawnRows.Clear();
+        int guidePrevious = 0;
 
         char[]? buffer = null;
         char[]? expanded = null;
         int spanIndex = 0;
+        int selectionIndex = firstSelection;
+        int drawn = 0;
         try
         {
-            for (int index = visible.First; index <= visible.Last; index++)
+            int row = rows.First;
+            for (int index = visible.First; index <= visible.Last && index < snapshot.LineCount; index = model.NextShownLine(index), row++)
             {
                 var line = snapshot.GetLine(index);
                 var text = TextReading.ReadLine(snapshot, line, ref buffer);
-                float top = (index * height) - scrollY;
+                float top = (row * height) - scrollY;
                 float left = textLeft - scrollX;
+                drawn++;
+                _drawnRows.Add(index);
 
                 while (spanIndex < spans.Length && spans[spanIndex].End <= line.Start)
                 {
@@ -152,14 +179,33 @@ public sealed class EditorRenderer : IDisposable
                     }
                 }
 
-                if (!selection.IsEmpty && selection.Start <= line.EndIncludingBreak && selection.End >= line.Start
-                    && !(selection.End == line.Start && index > snapshot.GetLineIndex(selection.Start)))
+                if (word is not null)
                 {
-                    int start = selection.Start <= line.Start ? 0 : TextReading.ColumnOf(text, selection.Start - line.Start, tabSize);
-                    int end = selection.End > line.End ? runs.Columns + 1 : TextReading.ColumnOf(text, selection.End - line.Start, tabSize);
-                    if (end > start)
+                    DrawWord(canvas, text, word, left, top, cell, height, tabSize, colors.WordHighlight);
+                }
+
+                while (selectionIndex < selections.Length && selections[selectionIndex].End < line.Start)
+                {
+                    selectionIndex++;
+                }
+
+                for (int j = selectionIndex; j < selections.Length && selections[j].Start <= line.EndIncludingBreak; j++)
+                {
+                    var selection = selections[j];
+                    if (!selection.IsEmpty && selection.End >= line.Start
+                        && !(selection.End == line.Start && index > snapshot.GetLineIndex(selection.Start)))
                     {
-                        canvas.FillRect(left + (start * cell), top, (end - start) * cell, height, colors.Selection);
+                        int start = selection.Start <= line.Start ? 0 : TextReading.ColumnOf(text, selection.Start - line.Start, tabSize);
+                        int end = selection.End > line.End ? runs.Columns + 1 : TextReading.ColumnOf(text, selection.End - line.Start, tabSize);
+                        if (end > start)
+                        {
+                            canvas.FillRect(left + (start * cell), top, (end - start) * cell, height, colors.Selection);
+                        }
+                    }
+
+                    if (selection.Caret >= line.Start && selection.Caret <= line.End)
+                    {
+                        _carets.Add((TextReading.ColumnOf(text, selection.Caret - line.Start, tabSize), top, index));
                     }
                 }
 
@@ -175,10 +221,16 @@ public sealed class EditorRenderer : IDisposable
                     }
                 }
 
-                var drawn = runs.Items;
+                if (options.IndentGuides)
+                {
+                    guidePrevious = DrawGuides(canvas, model, snapshot, index, text, visible.Last, guidePrevious, left, top, cell, height, textLeft, tabSize, colors.IndentGuide, ref buffer);
+                    text = TextReading.ReadLine(snapshot, line, ref buffer);    // the guides may have read other lines into the buffer
+                }
+
+                var items = runs.Items;
                 for (int r = 0; r < runs.Count; r++)
                 {
-                    ref readonly var run = ref drawn[r];
+                    ref readonly var run = ref items[r];
                     float x = left + (run.Column * cell);
                     if (x > viewportWidth || x + (run.Text.Length * cell) < textLeft)
                     {
@@ -188,14 +240,20 @@ public sealed class EditorRenderer : IDisposable
                     canvas.DrawText(run.Text, x, top, run.Style);
                 }
 
+                if (hidden && folding.Map.IsFolded(index))
+                {
+                    // The hidden lines' marker after the header's text.
+                    float x = left + ((runs.Columns + 1) * cell);
+                    if (x + (3 * cell) > textLeft && x < viewportWidth)
+                    {
+                        canvas.FillRect(x, top + 2, 3 * cell, height - 4, colors.FoldMarker);
+                        canvas.DrawText(FoldMarkerText, x, top, new TextStyle(colors.GutterCurrentText));
+                    }
+                }
+
                 for (int d = firstDiagnostic; d < diagnostics.Length && diagnostics[d].Start <= line.End; d++)
                 {
                     DrawSquiggle(canvas, diagnostics[d], line, text, left, top, metrics, tabSize, textLeft, viewportWidth, colors);
-                }
-
-                if (index == caretLine)
-                {
-                    caretColumn = TextReading.ColumnOf(text, selection.Caret - line.Start, tabSize);
                 }
             }
         }
@@ -205,31 +263,53 @@ public sealed class EditorRenderer : IDisposable
             TextReading.Return(expanded);
         }
 
-        LinesDrawn = visible.Count;
+        LinesDrawn = drawn;
 
         canvas.FillRect(0, 0, gutterWidth, viewportHeight, colors.Gutter);
         var plainNumber = new TextStyle(colors.GutterText);
         var currentNumber = new TextStyle(colors.GutterCurrentText);
-        for (int index = visible.First; index <= visible.Last; index++)
+        float numbersRight = gutterWidth - (folds ? EditorModel.FoldGutterCells * cell : 0);
+        int caretAt = 0;
+        for (int r = 0; r < _drawnRows.Count; r++)
         {
+            int index = _drawnRows[r];
+            float top = ((rows.First + r) * height) - scrollY;
+            while (caretAt < _carets.Count && _carets[caretAt].Line < index)
+            {
+                caretAt++;
+            }
+
+            bool current = caretAt < _carets.Count && _carets[caretAt].Line == index;
             string number = Number(index + 1);
-            float x = gutterWidth - ((model.Options.GutterPaddingCells > 0 ? 1 : 0) + number.Length) * cell;
-            canvas.DrawText(number, x, (index * height) - scrollY, index == caretLine ? currentNumber : plainNumber);
+            float x = numbersRight - ((options.GutterPaddingCells > 0 ? 1 : 0) + number.Length) * cell;
+            canvas.DrawText(number, x, top, current ? currentNumber : plainNumber);
+            if (folds)
+            {
+                bool folded = hidden && folding.Map.IsFolded(index);
+                if (folded || folding.IsFoldable(index))
+                {
+                    DrawChevron(canvas, numbersRight + (cell * 0.8f), top + (height / 2), cell * 0.28f, folded, folded ? colors.GutterCurrentText : colors.FoldChevron);
+                }
+            }
         }
 
-        if (caretVisible && caretLine >= visible.First && caretLine <= visible.Last)
+        if (caretVisible)
         {
-            float x = textLeft - scrollX + (caretColumn * cell);
-            if (x >= textLeft - 1 && x <= viewportWidth)
+            foreach (var (column, top, _) in _carets)
             {
-                float top = (caretLine * height) - scrollY;
+                float x = textLeft - scrollX + (column * cell);
+                if (x < textLeft - 1 || x > viewportWidth)
+                {
+                    continue;
+                }
+
                 if (model.Overwrite)
                 {
                     canvas.FillRect(x, top, cell, height, (colors.Caret & 0x00FFFFFFu) | 0x80000000u);
                 }
                 else
                 {
-                    canvas.FillRect(x, top, model.Options.CaretWidth, height, colors.Caret);
+                    canvas.FillRect(x, top, options.CaretWidth, height, colors.Caret);
                 }
             }
         }
@@ -237,6 +317,177 @@ public sealed class EditorRenderer : IDisposable
         _ghost.Draw(canvas, model, scrollX, scrollY, viewportWidth, viewportHeight);
         _popups.Draw(canvas, model);
         model.NotePainted();
+    }
+
+    /// <summary>The carets the last frame drew (or would have, with the caret shown).</summary>
+    public int CaretsDrawn => _carets.Count;
+
+    /// <summary>The indentation guide segments the last frame drew.</summary>
+    public int GuidesDrawn { get; private set; }
+
+    /// <summary>The current word's other places the last frame highlighted.</summary>
+    public int WordHighlightsDrawn { get; private set; }
+
+    private const string FoldMarkerText = "...";
+
+    // The first selection whose end reaches `position` (selections are in order and do not overlap, so their ends are too).
+    private static int FirstSelectionReaching(ReadOnlySpan<SelectionState> selections, int position)
+    {
+        int lo = 0, hi = selections.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) >>> 1;
+            if (selections[mid].End < position)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return lo;
+    }
+
+    // The visible lines' spans: one call for the whole range when nothing is folded; with folds, one per run of shown
+    // lines (a folded 100,000-line file classifies what is on screen, not what the folds hide), each run's spans clipped to it.
+    private void ClassifyShown(EditorModel model, ITextSnapshot snapshot, LineRange visible)
+    {
+        var session = model.LanguageSession;
+        if (session is null)
+        {
+            return;
+        }
+
+        var firstLine = snapshot.GetLine(visible.First);
+        var lastLine = snapshot.GetLine(visible.Last);
+        if (!model.Folding.Map.HasHidden)
+        {
+            session.Classify(snapshot, firstLine.Start, lastLine.EndIncludingBreak - firstLine.Start, _spans);
+            return;
+        }
+
+        int runFirst = visible.First;
+        while (runFirst <= visible.Last && runFirst < snapshot.LineCount)
+        {
+            int runLast = runFirst;
+            int next = model.NextShownLine(runLast);
+            while (next == runLast + 1 && next <= visible.Last)
+            {
+                runLast = next;
+                next = model.NextShownLine(runLast);
+            }
+
+            int start = snapshot.GetLine(runFirst).Start;
+            int end = snapshot.GetLine(runLast).EndIncludingBreak;
+            _runSpans.Clear();
+            session.Classify(snapshot, start, end - start, _runSpans);
+            foreach (var span in _runSpans.Spans)
+            {
+                int from = Math.Max(span.Start, start);
+                int to = Math.Min(span.End, end);
+                if (to > from)
+                {
+                    _spans.Add(from, to - from, span.Class);
+                }
+            }
+
+            runFirst = next;
+        }
+    }
+
+    // The other places of the current word on a line (whole words), behind the text.
+    private void DrawWord(IEditorCanvas canvas, ReadOnlySpan<char> text, string word, float left, float top, float cell, float height, int tabSize, uint color)
+    {
+        int from = 0;
+        while (from <= text.Length - word.Length)
+        {
+            int found = text[from..].IndexOf(word.AsSpan(), StringComparison.Ordinal);
+            if (found < 0)
+            {
+                break;
+            }
+
+            int at = from + found;
+            int end = at + word.Length;
+            if ((at == 0 || TextReading.KindOf(text[at - 1]) != CharKind.Word) && (end >= text.Length || TextReading.KindOf(text[end]) != CharKind.Word))
+            {
+                int startColumn = TextReading.ColumnOf(text, at, tabSize);
+                int endColumn = TextReading.ColumnOf(text, end, tabSize);
+                canvas.FillRect(left + (startColumn * cell), top, (endColumn - startColumn) * cell, height, color);
+                WordHighlightsDrawn++;
+            }
+
+            from = end;
+        }
+    }
+
+    // A line's indentation guides: one at each indent level of its leading white space; a blank line takes the smaller
+    // of the levels around it (the line before, the next non-blank one), so the guides run through it. Returns this
+    // line's indent in columns (a blank line's is the one it took).
+    private int DrawGuides(IEditorCanvas canvas, EditorModel model, ITextSnapshot snapshot, int index, ReadOnlySpan<char> text, int lastVisible, int previous,
+        float left, float top, float cell, float height, float textLeft, int tabSize, uint color, ref char[]? buffer)
+    {
+        int lead = TextReading.IndentLength(text);
+        int columns;
+        if (lead < text.Length)
+        {
+            columns = TextReading.ColumnOf(text, lead, tabSize);
+        }
+        else
+        {
+            int next = 0;
+            int line = index;
+            for (int step = 0; step < GuideScanLines; step++)
+            {
+                line = model.NextShownLine(line);
+                if (line >= snapshot.LineCount)
+                {
+                    break;
+                }
+
+                var other = TextReading.ReadLine(snapshot, snapshot.GetLine(line), ref buffer);
+                int otherLead = TextReading.IndentLength(other);
+                if (otherLead < other.Length)
+                {
+                    next = TextReading.ColumnOf(other, otherLead, tabSize);
+                    break;
+                }
+            }
+
+            columns = Math.Min(previous, next);
+            _ = lastVisible;
+        }
+
+        for (int level = 0; level * tabSize < columns; level++)
+        {
+            float x = left + (level * tabSize * cell) + 0.5f;
+            if (x >= textLeft)
+            {
+                canvas.DrawLine(x, top, x, top + height, color, 1);
+                GuidesDrawn++;
+            }
+        }
+
+        return columns;
+    }
+
+    private const int GuideScanLines = 100;
+
+    // A fold's chevron: pointing down when it can fold, right when folded.
+    private static void DrawChevron(IEditorCanvas canvas, float cx, float cy, float size, bool folded, uint color)
+    {
+        if (folded)
+        {
+            canvas.DrawLine(cx - (size / 2), cy - size, cx + (size / 2), cy, color, 1.5f);
+            canvas.DrawLine(cx + (size / 2), cy, cx - (size / 2), cy + size, color, 1.5f);
+        }
+        else
+        {
+            canvas.DrawLine(cx - size, cy - (size / 2), cx, cy + (size / 2), color, 1.5f);
+            canvas.DrawLine(cx, cy + (size / 2), cx + size, cy - (size / 2), color, 1.5f);
+        }
     }
 
     /// <summary>A diagnostic's part on one line: a wave (errors, warnings) or dots (information) under its columns; hidden ones are not drawn.</summary>
@@ -317,6 +568,7 @@ public sealed class EditorRenderer : IDisposable
 
         _disposed = true;
         _spans.Dispose();
+        _runSpans.Dispose();
         ArrayPool<TokenSpan>.Shared.Return(_clipped, clearArray: true);
         _clipped = [];
         _lines.Clear();

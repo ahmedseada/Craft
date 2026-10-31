@@ -56,6 +56,9 @@ public static class ProjectLanguages
         {
             EditorLanguages.Register(language);
         }
+
+        FoldingRangeProviders.Register(new MarkupFolding());
+        FoldingRangeProviders.Register(new JsonFolding());
     }
 
     /// <summary>Removes every one.</summary>
@@ -65,6 +68,9 @@ public static class ProjectLanguages
         {
             EditorLanguages.Unregister(name);
         }
+
+        FoldingRangeProviders.Unregister(MarkupFolding.ProviderName);
+        FoldingRangeProviders.Unregister(JsonFolding.ProviderName);
     }
 
     private static ILanguage[] Make()

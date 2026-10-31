@@ -95,6 +95,21 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
 
     /// <summary>Ghost text: an inline completion not yet accepted, drawn italic (the design's #717A8A lifted to 4.8:1 on the dark editor ground).</summary>
     public uint GhostText { get; init; } = 0xFF7D8696;
+
+    // Phase X: the editing surface's marks. Each defaults from the constructor's colours (a theme made before them draws
+    // them in its own colours): faint lines from the line numbers' colour, the word's fill from the selection's.
+
+    /// <summary>An indentation guide: a thin line at each indent level of the leading white space.</summary>
+    public uint IndentGuide { get; init; } = (GutterText & 0x00FFFFFFu) | 0x40000000u;
+
+    /// <summary>The other places of the word at the caret (the current word's highlight).</summary>
+    public uint WordHighlight { get; init; } = (Selection & 0x00FFFFFFu) | 0x70000000u;
+
+    /// <summary>A fold's chevron in the gutter.</summary>
+    public uint FoldChevron { get; init; } = GutterText;
+
+    /// <summary>The marker drawn after a folded line's text (the hidden lines' "...").</summary>
+    public uint FoldMarker { get; init; } = (GutterText & 0x00FFFFFFu) | 0x50000000u;
 }
 
 /// <summary>

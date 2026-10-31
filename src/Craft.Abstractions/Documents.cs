@@ -83,3 +83,29 @@ public interface ITextDocument : IDisposable
     /// <exception cref="InvalidOperationException">The document has no file and no path was given.</exception>
     Task SaveAsync(string? path = null, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// A document whose undo steps keep every selection of a multi-caret edit (phase X): the editor records them with
+/// <see cref="Edit"/>, and after <see cref="ITextDocument.Undo"/> or <see cref="ITextDocument.Redo"/> reads them back from
+/// <see cref="RestoredSelections"/>. A document without it restores the primary selection only (the edit is still one
+/// undo step). Consecutive typing at the same carets joins one step, as single-caret typing does.
+/// </summary>
+public interface IMultiSelectionDocument : ITextDocument
+{
+    /// <summary>
+    /// Applies <paramref name="edits"/> as one change, as <see cref="ITextDocument.Edit"/> does, recording every selection
+    /// before and after it (each in order of position; <paramref name="primaryBefore"/> and <paramref name="primaryAfter"/>
+    /// index the primary one, whose caret the view follows).
+    /// </summary>
+    ITextSnapshot Edit(ReadOnlySpan<TextEdit> edits, EditKind kind, ReadOnlySpan<SelectionState> before, int primaryBefore,
+        ReadOnlySpan<SelectionState> after, int primaryAfter);
+
+    /// <summary>
+    /// The selections the last <see cref="ITextDocument.Undo"/> or <see cref="ITextDocument.Redo"/> restored, in order of
+    /// position, when its step kept more than one; empty when it kept one (the returned selection is then the whole answer).
+    /// </summary>
+    ReadOnlySpan<SelectionState> RestoredSelections { get; }
+
+    /// <summary>The index in <see cref="RestoredSelections"/> of the primary selection (0 when it is empty).</summary>
+    int RestoredPrimary { get; }
+}

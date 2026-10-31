@@ -2443,6 +2443,9 @@ Each item is checked by the owner on Windows, against the design (`docs/design/`
   sticky scroll of the current type and member, code folding, indentation guides, matching-bracket and current-word
   highlights, multi-caret (Alt+click, Ctrl+D), column selection, line and selection moves (Alt+Up/Down), auto-indent
   and auto-close that never fight the user, hover cards that stay while the pointer moves into them.
+  **Slice 2 built (2026-10-31): multi-caret, column selection, code folding, indentation guides, the matching-bracket
+  and current-word highlights, auto-indent and auto-close** (see "X slice 2 as built" below). Left of this bullet:
+  smooth scrolling (slice 1), the minimap or overview ruler, sticky scroll, hover cards that stay.
 - **Friendly when empty or wrong**: a welcome page (open a folder, recent folders, start from a template, the shortcuts
   that matter, the model state), empty states that say what to do (no folder, no problems, no model, no terminal),
   errors in plain words with the action that fixes them (a model that fails to load, a plug-in that failed, a save
@@ -2458,3 +2461,88 @@ Each item is checked by the owner on Windows, against the design (`docs/design/`
 
 Checks: the owner uses Craft on the test project for a session (open, edit, search, refactor, chat, run the agent, the
 terminal) and every item above holds; the measured numbers are written here.
+
+### X slice 2 as built (2026-10-31): the editing surface
+
+- **Multi-caret** (`Craft.Editor/EditorModel.Carets.cs`). The primary selection is `Selection`; `Selections` holds all,
+  in order, merged where they overlap; `SetSelections`, `AddCaret`, `AddSelection`, `CollapseCarets`. Alt+click adds a
+  caret (on one of several, takes it away; a drag from it selects), Ctrl+D (`AddNextOccurrence`: the word at the caret
+  first, then its next whole-word place, wrapping; a selection the user made matches anywhere; case matched),
+  Ctrl+Shift+L (`SelectAllOccurrences`), Ctrl+Alt+Up/Down (a caret above or below), Escape back to one caret (before the
+  find highlight and the selection). Typing (auto-close and step-over per caret), Backspace, Delete, Enter (its
+  indent), Tab, paste (as many lines as carets: one at each, else the whole text at each; never auto-closed), cut, copy
+  (one line per selection), the movement keys (each caret keeps its own column on Up/Down), and the line commands
+  (comment, uncomment, toggle, move, copy, duplicate, delete, indent, outdent: every caret's lines merged into blocks)
+  act on every caret. Each is one change and one undo step: a per-caret plan into pooled buffers (`EditCarets`,
+  `ApplyParts`), then one place commits every edit of the editor to the document (`CommitEdits`, where note 26's
+  read-only check sits). New contract `IMultiSelectionDocument` (`Craft.Abstractions`): Craft.Core's `TextDocument` keeps
+  every caret of a step, restores them on undo and redo, and joins multi-caret typing into one step the way single-caret
+  typing joins; a document without it restores the primary. The completion list and ghost text stay single-caret (they
+  close while there are several). The caret limit is `CRAFT_MAX_CARETS` (10,000), said in `LastCaretMessage`.
+- **Column selection**: Shift+Alt+drag (the box from the press to the pointer, per shown line, clamped to short lines)
+  and, by keys, Ctrl+Shift+Alt+arrows in the VS Code keymap (VS Code's own keys: its Shift+Alt+Up/Down copy lines and
+  Shift+Alt+Left/Right expand and shrink, so they stay so) and Shift+Alt+arrows in the Visual Studio keymap (Visual
+  Studio's box selection, over its copy-lines and its unbound Shift+Alt+Left/Right). The box's selections are carets.
+- **Keys** (`StandardShortcuts`, so the Keyboard page shows and remaps them): VS Code's Ctrl+D, Ctrl+Shift+L,
+  Ctrl+Alt+Up/Down, Ctrl+Shift+Alt+arrows, Ctrl+Shift+[ and ] (fold, unfold), Ctrl+K Ctrl+0 and Ctrl+K Ctrl+J (fold all,
+  unfold all); the Visual Studio keymap keeps Ctrl+D for duplicate and Ctrl+Shift+L for delete lines, takes Shift+Alt+.
+  for the next occurrence, Shift+Alt+arrows for the box, and Ctrl+M Ctrl+M (toggle), Ctrl+M Ctrl+O (fold all), Ctrl+M
+  Ctrl+L and Ctrl+M Ctrl+P (unfold all). New palette and Edit-menu commands: add the next occurrence, select all
+  occurrences, add a caret above/below, the four column moves, back to one caret, fold, unfold, toggle, fold all, unfold all.
+- **Folding**. Contract (`Craft.Abstractions/Folding.cs`): `FoldingRange` (header line, last hidden line, kind: region,
+  comment, imports, marked), `FoldingRequest`, `IFoldingRangeProvider` (its languages; asked on the thread pool) and the
+  `FoldingRangeProviders` registry (a third party folds any language; the editor joins every provider of a language,
+  one range per header, the longest). Providers in the C# plug-in, one part each, gone with it: `CSharpFolding` (Roslyn's
+  tree: namespaces, types from the line after their attributes, members and accessors with bodies, statements' blocks,
+  local functions, lambdas, switch, initializers, collection expressions, using runs, `#region`, comments over several
+  lines; the session's last parse reused when it is of the asked version, else parsed there), `MarkupFolding` (MSBuild,
+  XML, XAML: elements, long start tags, comments) and `JsonFolding` (objects, arrays, block comments), both one pass over
+  the lines with a state carried across them. The editor (`EditorFolding`) asks `CRAFT_FOLDING_DELAY_MS` (300) after
+  the last change, off the UI thread, and applies the answer on the UI thread when the text is still that version; in
+  between the ranges and the folds follow the edits (`MapRanges`: one pass over prefix sums of the edits' line deltas).
+  `FoldMap` holds the folds (nested ones kept inside an outer one) as merged hidden intervals with the count hidden
+  before each: a line's row, a row's line, the next shown line and whether a line is hidden are binary searches over the
+  intervals, never a walk over the folds. Folded lines are not laid out, classified or drawn: the renderer steps rows,
+  and classifies each run of shown lines on screen apart. The gutter has a chevron column (a click folds or unfolds);
+  a folded header shows "..." after its text; the line numbers stay the lines' own (they jump). Up/Down and PageUp/Down
+  step over folds; any caret a search, go to line, Ctrl+D, a click or an undo puts on a hidden line unfolds what hides
+  it; a fold that hides a caret moves it to the header's end; an edit that reaches hidden lines unfolds them (an edit
+  never happens out of sight). `CRAFT_FOLDING` switches it off.
+- **Indentation guides, the matching bracket, the current word** (each an option on the settings page, Editor ›
+  Display: `CRAFT_INDENT_GUIDES`, `CRAFT_BRACKET_HIGHLIGHT`, `CRAFT_WORD_HIGHLIGHT`). New theme tokens, each derived
+  from the theme's own colours so a plug-in's theme draws them in its colours: `IndentGuide`, `WordHighlight`,
+  `FoldChevron`, `FoldMarker`. A guide at each indent level of the leading white space; a blank line takes the smaller
+  level around it, so the guides run through it. The current word: the whole-word places of the word at the caret on
+  the lines on screen (one caret, nothing selected), found once per caret and version.
+- **Auto-indent and auto-close, checked and fixed where they fought**: Backspace in an empty pair it inserted deletes
+  both (a pair the user typed is left alone); the auto-inserted closes now follow deletions too (before, a Backspace
+  inside "(ab" forgot the ")" and the next ")" was typed twice); a '}' or ']' typed where only white space precedes it
+  takes the indent of the line that opened it (after Enter in a block the close went at the inner indent); pasting
+  never auto-closes (was already so, now tested). Enter's indent and the step-over were right and are unchanged.
+- **The document**: a held Backspace or Delete grouped into one undo step concatenated the whole removed run again on
+  every key (quadratic, one caret too); the removed text now gathers in a buffer with room at both ends
+  (`TextDocument.HistoryEdit.Grow`), each key copying its own characters only.
+- **Measured** (headless, Linux container, Release, the tests' fixed metrics; tests `MultiCaret.AKeystrokeAtAHundredCaretsIsMeasured`
+  and `Folding.APaintOfAFolded100000LineFileDrawsAndClassifiesOnlyTheRowsOnScreen`):
+  - A keystroke at 100 carets (400 typed, 400 Backspaces): median 191 us, p99 3.3 ms, 314 KB allocated; of it the
+    document's change alone (the same changes replayed into a `TextDocument`) 136 us and 312 KB; the editor's own work
+    about 1.7 KB (0.5%). Its paint (21 lines, 21 carets) median 384 us, p99 1.5 ms.
+  - A folded 100,000-line file (10,000 folds, every block folded to its header): fold all 5.3 ms; a paint of 21 rows
+    median 9.7 us, p99 27.8 us, 273 characters classified a frame (only the rows on screen).
+- **Left of X's editing surface**: the document's multi-edit change copies a path of the persistent piece tree per
+  edit and fragments it a piece per caret per keystroke (the 312 KB above, and a tree that grows while typing at many
+  carets): a batched build in `PieceTableBuffer` is the next step there, measured before and after. Completion and
+  ghost text at several carets; a fold's own hover preview; folding providers registered after a document opened apply
+  when it opens again; Razor, .sln and .editorconfig have no folding provider. The owner's Windows check below.
+- **Not compiled here**: nothing. No Windows-only line changed: Alt+click and Shift+Alt+drag read the modifiers the
+  Windows input adapter already reports with the press (`WindowsTextInputAdapter.Modifiers()` through
+  `IKeyModifierSource`), and Ctrl+Shift+[ and ] are the bracket keys it already maps.
+- **Tests**: groups `MultiCaret` (7), `Folding` (6), `Surface` (2), with `Editor`, `Keys`, `Settings`, `Document`,
+  `ProjectLanguages`, `Shell`, `Plugins`, `CSharp`, `Diagnostics`, `AiPlugins`, `Semantic`, `LookAndFeel`, `Design`,
+  `Ui`, `Layout`, `ApiGuard`, `Inventory`: 191 passed, 0 failed (after the rebase over slice 1 and notes 19-21).
+- **The owner's check** on `test-output\CarftTestPOC`: Alt+click three carets and type, Backspace, Ctrl+Z once; Ctrl+D
+  on a name a few times, then type; Ctrl+Shift+L; Shift+Alt+drag a box and type; paste three copied lines at three carets;
+  Alt+Down with two carets; the gutter chevrons on a class and a method, Ctrl+Shift+[ and ], Ctrl+K Ctrl+0 and Ctrl+K
+  Ctrl+J; Ctrl+G or a search into a fold; fold in the `.csproj` and an `appsettings.json`; the guides and the word
+  highlight on and off in Settings › Editor › Display; with auto-close on, "(" then Backspace, and Enter in a block then "}";
+  the Visual Studio keymap's Shift+Alt+. and Ctrl+M Ctrl+M.

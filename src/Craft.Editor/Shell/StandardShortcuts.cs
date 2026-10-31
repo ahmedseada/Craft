@@ -59,6 +59,48 @@ public static class StandardShortcuts
     /// <summary>Edit: Shrink the selection.</summary>
     public const string ShrinkSelection = "craft.editor.shrinkSelection";
 
+    /// <summary>Selection: Add the next occurrence (Ctrl+D; Visual Studio: Shift+Alt+.).</summary>
+    public const string AddNextOccurrence = "craft.editor.addNextOccurrence";
+
+    /// <summary>Selection: Select all occurrences (Ctrl+Shift+L, VS Code only).</summary>
+    public const string SelectAllOccurrences = "craft.editor.selectAllOccurrences";
+
+    /// <summary>Selection: Add a caret above (Ctrl+Alt+Up).</summary>
+    public const string AddCaretAbove = "craft.editor.addCaretAbove";
+
+    /// <summary>Selection: Add a caret below (Ctrl+Alt+Down).</summary>
+    public const string AddCaretBelow = "craft.editor.addCaretBelow";
+
+    /// <summary>Selection: Column select up (Ctrl+Shift+Alt+Up; Visual Studio: Shift+Alt+Up).</summary>
+    public const string ColumnSelectUp = "craft.editor.columnSelectUp";
+
+    /// <summary>Selection: Column select down.</summary>
+    public const string ColumnSelectDown = "craft.editor.columnSelectDown";
+
+    /// <summary>Selection: Column select left.</summary>
+    public const string ColumnSelectLeft = "craft.editor.columnSelectLeft";
+
+    /// <summary>Selection: Column select right.</summary>
+    public const string ColumnSelectRight = "craft.editor.columnSelectRight";
+
+    /// <summary>Selection: Back to one caret (Escape does it too).</summary>
+    public const string SingleCaret = "craft.editor.singleCaret";
+
+    /// <summary>Fold: Fold the region at the caret (Ctrl+Shift+[; Visual Studio: Ctrl+M Ctrl+M toggles).</summary>
+    public const string Fold = "craft.editor.fold";
+
+    /// <summary>Fold: Unfold the region at the caret (Ctrl+Shift+]).</summary>
+    public const string Unfold = "craft.editor.unfold";
+
+    /// <summary>Fold: Toggle the fold at the caret (Visual Studio's Ctrl+M Ctrl+M).</summary>
+    public const string ToggleFold = "craft.editor.toggleFold";
+
+    /// <summary>Fold: Fold all (Ctrl+K Ctrl+0; Visual Studio: Ctrl+M Ctrl+O).</summary>
+    public const string FoldAll = "craft.editor.foldAll";
+
+    /// <summary>Fold: Unfold all (Ctrl+K Ctrl+J; Visual Studio: Ctrl+M Ctrl+L and Ctrl+M Ctrl+P).</summary>
+    public const string UnfoldAll = "craft.editor.unfoldAll";
+
     /// <summary>Edit: Quick fix (the code actions at the caret).</summary>
     public const string QuickFix = "craft.quickFix";
 
@@ -79,6 +121,20 @@ public static class StandardShortcuts
         (SelectLine, "Selection: Select the line", static m => m.SelectLine(), true),
         (ExpandSelection, "Selection: Expand", static m => m.ExpandSelection(), true),
         (ShrinkSelection, "Selection: Shrink", static m => m.ShrinkSelection(), false),
+        (AddNextOccurrence, "Selection: Add the next occurrence", static m => m.AddNextOccurrence(), true),
+        (SelectAllOccurrences, "Selection: Select all occurrences", static m => m.SelectAllOccurrences(), true),
+        (AddCaretAbove, "Selection: Add a caret above", static m => m.AddCaretVertical(LineDirection.Up), true),
+        (AddCaretBelow, "Selection: Add a caret below", static m => m.AddCaretVertical(LineDirection.Down), true),
+        (ColumnSelectUp, "Selection: Column select up", static m => m.ColumnSelect(EditorKey.Up), false),
+        (ColumnSelectDown, "Selection: Column select down", static m => m.ColumnSelect(EditorKey.Down), false),
+        (ColumnSelectLeft, "Selection: Column select left", static m => m.ColumnSelect(EditorKey.Left), false),
+        (ColumnSelectRight, "Selection: Column select right", static m => m.ColumnSelect(EditorKey.Right), false),
+        (SingleCaret, "Selection: Back to one caret", static m => m.CollapseCarets() || true, false),
+        (Fold, "Fold: Fold the region at the caret", static m => m.Folding.Fold(m.CaretLine) || true, true),
+        (Unfold, "Fold: Unfold the region at the caret", static m => m.Folding.Unfold(m.CaretLine) || true, true),
+        (ToggleFold, "Fold: Toggle the fold at the caret", static m => (m.Folding.Unfold(m.CaretLine) || m.Folding.Fold(m.CaretLine)) || true, false),
+        (FoldAll, "Fold: Fold all", static m => m.Folding.FoldAll() >= 0, true),
+        (UnfoldAll, "Fold: Unfold all", static m => m.Folding.UnfoldAll() || true, true),
     ];
 
     /// <summary>
@@ -101,6 +157,18 @@ public static class StandardShortcuts
         Editor("Shift+Alt+Right", ExpandSelection),
         Editor("Shift+Alt+Left", ShrinkSelection),
         Editor("Ctrl+K Ctrl+D", "craft.formatDocument"),
+        Editor("Ctrl+D", AddNextOccurrence),
+        Editor("Ctrl+Shift+L", SelectAllOccurrences),
+        Editor("Ctrl+Alt+Up", AddCaretAbove),
+        Editor("Ctrl+Alt+Down", AddCaretBelow),
+        Editor("Ctrl+Shift+Alt+Up", ColumnSelectUp),
+        Editor("Ctrl+Shift+Alt+Down", ColumnSelectDown),
+        Editor("Ctrl+Shift+Alt+Left", ColumnSelectLeft),
+        Editor("Ctrl+Shift+Alt+Right", ColumnSelectRight),
+        Editor("Ctrl+Shift+[", Fold),
+        Editor("Ctrl+Shift+]", Unfold),
+        Editor("Ctrl+K Ctrl+0", FoldAll),
+        Editor("Ctrl+K Ctrl+J", UnfoldAll),
         Anywhere("Ctrl+.", QuickFix),
         Anywhere("F1", ShellCommandIds.CommandPalette),
         Anywhere("Ctrl+F4", ShellCommandIds.CloseTab),
@@ -129,11 +197,18 @@ public static class StandardShortcuts
     [
         Editor("Ctrl+D", DuplicateLines),
         Editor("Ctrl+Shift+L", DeleteLines),
+        Editor("Shift+Alt+.", AddNextOccurrence),
+        Editor("Shift+Alt+Up", ColumnSelectUp),
+        Editor("Shift+Alt+Down", ColumnSelectDown),
+        Editor("Ctrl+M Ctrl+M", ToggleFold),
+        Editor("Ctrl+M Ctrl+O", FoldAll),
+        Editor("Ctrl+M Ctrl+L", UnfoldAll),
+        Editor("Ctrl+M Ctrl+P", UnfoldAll),
         Editor("Ctrl+K Ctrl+/", ToggleComment),
         Editor("Shift+Alt+=", ExpandSelection),
         Editor("Shift+Alt+-", ShrinkSelection),
-        Editor("Shift+Alt+Right", ""),
-        Editor("Shift+Alt+Left", ""),
+        Editor("Shift+Alt+Right", ColumnSelectRight),
+        Editor("Shift+Alt+Left", ColumnSelectLeft),
         Anywhere("Ctrl+Shift+S", ShellCommandIds.SaveAll),
         Anywhere("Ctrl+T", ShellCommandIds.QuickOpen),
         Anywhere("Ctrl+Q", ShellCommandIds.CommandPalette),

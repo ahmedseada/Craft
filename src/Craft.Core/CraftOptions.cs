@@ -256,6 +256,26 @@ public sealed record CraftOptions
     /// <summary>The most places Find references lists (<c>CRAFT_REFERENCES_LIMIT</c>).</summary>
     public int ReferencesLimit { get; init; } = 1000;
 
+    // Phase X: the editing surface.
+
+    /// <summary>Whether the editor draws a guide at each indent level of the leading white space (<c>CRAFT_INDENT_GUIDES</c>).</summary>
+    public bool IndentGuides { get; init; } = true;
+
+    /// <summary>Whether the bracket at the caret and its partner are highlighted (<c>CRAFT_BRACKET_HIGHLIGHT</c>).</summary>
+    public bool BracketHighlight { get; init; } = true;
+
+    /// <summary>Whether the other places of the word at the caret are highlighted on the lines on screen (<c>CRAFT_WORD_HIGHLIGHT</c>).</summary>
+    public bool WordHighlight { get; init; } = true;
+
+    /// <summary>Whether a document whose language has a folding range provider shows fold chevrons and folds (<c>CRAFT_FOLDING</c>).</summary>
+    public bool Folding { get; init; } = true;
+
+    /// <summary>Milliseconds after the last change before the folding ranges are asked for again, off the UI thread (<c>CRAFT_FOLDING_DELAY_MS</c>).</summary>
+    public int FoldingDelayMilliseconds { get; init; } = 300;
+
+    /// <summary>The most carets (and selections) one editor holds; adding more is refused and said (<c>CRAFT_MAX_CARETS</c>).</summary>
+    public int MaxCarets { get; init; } = 10_000;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -536,6 +556,12 @@ public sealed record CraftOptions
         new("CRAFT_SCROLL_MS", "120", "How long the editor's smooth scroll takes to reach where a wheel turn or a jump asked; 0 scrolls at once.") { Shape = SettingShape.Whole(SettingSections.Editor, "Smooth scrolling takes", 0, 1000, "ms", "Scrolling", step: 10) },
         new("CRAFT_SCROLL_WHEEL_LINES", "3", "The lines one notch of the mouse wheel scrolls the editor.") { Shape = SettingShape.Whole(SettingSections.Editor, "Lines per wheel notch", 1, 100, "lines", "Scrolling") },
         new("CRAFT_REFERENCES_LIMIT", "1000", "The most places Find references (Shift+F12) lists.") { Shape = SettingShape.Whole(SettingSections.Editor, "Find references lists at most", 1, 1_000_000, "places", "Navigation") },
+        new("CRAFT_INDENT_GUIDES", "true", "Whether the editor draws a guide at each indent level of the leading white space.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Indentation guides", "Display") },
+        new("CRAFT_BRACKET_HIGHLIGHT", "true", "Whether the bracket at the caret and its partner are highlighted.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Highlight the matching bracket", "Display") },
+        new("CRAFT_WORD_HIGHLIGHT", "true", "Whether the other places of the word at the caret are highlighted.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Highlight the word at the caret", "Display") },
+        new("CRAFT_FOLDING", "true", "Whether documents whose language folds show fold chevrons (Ctrl+Shift+[ and ] fold and unfold).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Code folding", "Display") },
+        new("CRAFT_FOLDING_DELAY_MS", "300", "Milliseconds after the last change before the folding ranges are asked for again (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.Editor, "Folding ranges follow edits after", 0, 60_000, "ms", "Advanced", step: 50) },
+        new("CRAFT_MAX_CARETS", "10000", "The most carets one editor holds (Alt+click, Ctrl+D, select all occurrences, column selection).") { Shape = SettingShape.Whole(SettingSections.Editor, "Most carets", 1, 1_000_000, "carets", "Carets", step: 100) },
     ];
 
     /// <summary>
@@ -732,6 +758,36 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_SCROLL_WHEEL_LINES") is { } wheelLines)
         {
             options = options with { ScrollWheelLines = Whole(wheelLines, "CRAFT_SCROLL_WHEEL_LINES", 1, 100) };
+        }
+
+        if (Text(read, "CRAFT_INDENT_GUIDES") is { } guides)
+        {
+            options = options with { IndentGuides = Flag(guides, "CRAFT_INDENT_GUIDES") };
+        }
+
+        if (Text(read, "CRAFT_BRACKET_HIGHLIGHT") is { } bracketHighlight)
+        {
+            options = options with { BracketHighlight = Flag(bracketHighlight, "CRAFT_BRACKET_HIGHLIGHT") };
+        }
+
+        if (Text(read, "CRAFT_WORD_HIGHLIGHT") is { } wordHighlight)
+        {
+            options = options with { WordHighlight = Flag(wordHighlight, "CRAFT_WORD_HIGHLIGHT") };
+        }
+
+        if (Text(read, "CRAFT_FOLDING") is { } folding)
+        {
+            options = options with { Folding = Flag(folding, "CRAFT_FOLDING") };
+        }
+
+        if (Text(read, "CRAFT_FOLDING_DELAY_MS") is { } foldingDelay)
+        {
+            options = options with { FoldingDelayMilliseconds = Whole(foldingDelay, "CRAFT_FOLDING_DELAY_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_MAX_CARETS") is { } maxCarets)
+        {
+            options = options with { MaxCarets = Whole(maxCarets, "CRAFT_MAX_CARETS", 1, 1_000_000) };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)

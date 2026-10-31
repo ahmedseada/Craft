@@ -68,6 +68,7 @@ public sealed class CSharpLanguage : ILanguage
     {
         EditorLanguages.Register(new CSharpLanguage());
         EditorLanguages.Register(Script);
+        FoldingRangeProviders.Register(new CSharpFolding());
         WorkspaceReaders.Register(new Workspaces.CsprojWorkspaceReader());
         WorkspaceReaders.Register(new Workspaces.LooseWorkspaceReader());
     }
@@ -77,6 +78,7 @@ public sealed class CSharpLanguage : ILanguage
     {
         EditorLanguages.Unregister(RegularName);
         EditorLanguages.Unregister(ScriptName);
+        FoldingRangeProviders.Unregister(CSharpFolding.ProviderName);
         WorkspaceReaders.Unregister(Workspaces.CsprojWorkspaceReader.ReaderName);
         WorkspaceReaders.Unregister(Workspaces.LooseWorkspaceReader.ReaderName);
     }
@@ -206,6 +208,9 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
 
     /// <summary>The snapshot <see cref="Tree"/> is the text of, or null before the first parse lands.</summary>
     public ITextSnapshot? Snapshot => Volatile.Read(ref _parsed)?.Text.Snapshot;
+
+    /// <summary>The last landed tree with the snapshot it is the text of, read together (null before the first parse lands).</summary>
+    internal (SyntaxTree Tree, ITextSnapshot Snapshot)? LastParse => Volatile.Read(ref _parsed) is { } parsed ? (parsed.Tree, parsed.Text.Snapshot) : null;
 
     /// <summary>What the last landed parse cost on the worker (the first full parse, then each incremental one).</summary>
     public TimeSpan LastUpdate => Volatile.Read(ref _parsed)?.Elapsed ?? TimeSpan.Zero;

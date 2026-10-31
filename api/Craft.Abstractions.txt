@@ -376,12 +376,15 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 DiffRemoved { get; init; }
   System.UInt32 Error { get; init; }
   System.UInt32 FindMatch { get; init; }
+  System.UInt32 FoldChevron { get; init; }
+  System.UInt32 FoldMarker { get; init; }
   System.UInt32 Foreground { get; init; }
   System.UInt32 GhostText { get; init; }
   System.UInt32 Ground { get; init; }
   System.UInt32 Gutter { get; init; }
   System.UInt32 GutterCurrentText { get; init; }
   System.UInt32 GutterText { get; init; }
+  System.UInt32 IndentGuide { get; init; }
   System.UInt32 Info { get; init; }
   System.UInt32 InterfaceSelection { get; init; }
   System.UInt32 PopupBackground { get; init; }
@@ -396,6 +399,7 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 Surface { get; init; }
   System.UInt32 Text { get; init; }
   System.UInt32 Warning { get; init; }
+  System.UInt32 WordHighlight { get; init; }
   System.Void Deconstruct(out System.UInt32 Background, out System.UInt32 Foreground, out System.UInt32 Selection, out System.UInt32 CurrentLine, out System.UInt32 Caret, out System.UInt32 Gutter, out System.UInt32 GutterText, out System.UInt32 GutterCurrentText, out System.UInt32 BracketMatch, out System.UInt32 FindMatch)
   ctor(System.UInt32 Background, System.UInt32 Foreground, System.UInt32 Selection, System.UInt32 CurrentLine, System.UInt32 Caret, System.UInt32 Gutter, System.UInt32 GutterText, System.UInt32 GutterCurrentText, System.UInt32 BracketMatch, System.UInt32 FindMatch)
 sealed class Craft.Abstractions.EditorCommand : Craft.Abstractions.IEditorCommand, Idrak.Abstraction.IKind
@@ -654,6 +658,42 @@ static class Craft.Abstractions.FolderWatchers
   static System.Boolean Unregister(System.String name)
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.IFolderWatcher watcher)
+struct Craft.Abstractions.FoldingRange : System.IEquatable<Craft.Abstractions.FoldingRange>
+  Craft.Abstractions.FoldingRangeKind Kind { get; init; }
+  System.Boolean Equals(Craft.Abstractions.FoldingRange other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 EndLine { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 HiddenLines { get; }
+  System.Int32 StartLine { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 StartLine, out System.Int32 EndLine, out Craft.Abstractions.FoldingRangeKind Kind)
+  ctor(System.Int32 StartLine, System.Int32 EndLine, Craft.Abstractions.FoldingRangeKind Kind = Region)
+enum Craft.Abstractions.FoldingRangeKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Comment = 1
+  Imports = 2
+  Marked = 3
+  Region = 0
+static class Craft.Abstractions.FoldingRangeProviders
+  static Craft.Abstractions.IFoldingRangeProvider Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IFoldingRangeProvider Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IFoldingRangeProvider> All { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IFoldingRangeProvider> For(System.String language)
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.IFoldingRangeProvider provider)
+sealed class Craft.Abstractions.FoldingRequest : System.IEquatable<Craft.Abstractions.FoldingRequest>
+  Craft.Abstractions.FoldingRequest <Clone>$()
+  Craft.Abstractions.ILanguageSession Session { get; init; }
+  Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
+  System.Boolean Equals(Craft.Abstractions.FoldingRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 TabSize { get; init; }
+  System.String Language { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Abstractions.ITextSnapshot Snapshot, out System.String Language, out Craft.Abstractions.ILanguageSession Session, out System.Int32 TabSize)
+  ctor(Craft.Abstractions.ITextSnapshot Snapshot, System.String Language, Craft.Abstractions.ILanguageSession Session, System.Int32 TabSize)
 struct Craft.Abstractions.FontMetrics : System.IEquatable<Craft.Abstractions.FontMetrics>
   System.Boolean Equals(Craft.Abstractions.FontMetrics other)
   System.Boolean Equals(System.Object obj)
@@ -802,6 +842,9 @@ interface Craft.Abstractions.IEditorToolSet : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host)
 interface Craft.Abstractions.IFolderWatcher : Idrak.Abstraction.IKind
   System.IDisposable Watch(System.String folder, System.Action<Craft.Abstractions.FolderChange> changed)
+interface Craft.Abstractions.IFoldingRangeProvider : Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.IFormattingLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.IInlineCompletionProvider : Idrak.Abstraction.IKind
@@ -831,6 +874,10 @@ interface Craft.Abstractions.IModelProvider : Idrak.Abstraction.IKind
   Craft.Abstractions.ModelProviderStatus Status { get; }
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> AcquireAsync(Craft.Abstractions.ModelRequest request, System.IProgress<Craft.Abstractions.ModelLoadStatus> progress = null, System.Threading.CancellationToken cancellationToken = null)
   event System.EventHandler StatusChanged
+interface Craft.Abstractions.IMultiSelectionDocument : Craft.Abstractions.ITextDocument, System.IDisposable
+  Craft.Abstractions.ITextSnapshot Edit(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.EditKind kind, System.ReadOnlySpan<Craft.Abstractions.SelectionState> before, System.Int32 primaryBefore, System.ReadOnlySpan<Craft.Abstractions.SelectionState> after, System.Int32 primaryAfter)
+  System.Int32 RestoredPrimary { get; }
+  System.ReadOnlySpan<Craft.Abstractions.SelectionState> RestoredSelections { get; }
 interface Craft.Abstractions.IPluginSettings
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
   System.String Get(System.String plugin, System.String key)

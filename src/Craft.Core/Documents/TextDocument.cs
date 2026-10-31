@@ -16,7 +16,7 @@ namespace Craft.Core.Documents;
 /// inserted text while it is undone), and reads the other side from the buffer when it is undone or redone. Used on the
 /// UI thread; <see cref="SaveAsync"/> encodes an immutable snapshot, so typing may go on while it writes.
 /// </summary>
-public sealed class TextDocument : ITextDocument
+public sealed class TextDocument : IMultiSelectionDocument
 {
     private const int SaveBlockCharacters = 32 * 1024;
 
@@ -25,6 +25,8 @@ public sealed class TextDocument : ITextDocument
     private readonly Func<long> _clock;
     private readonly List<Step> _undo = [];
     private readonly List<Step> _redo = [];
+    private SelectionState[] _restored = [];
+    private int _restoredPrimary;
     private long _nextStepId = 1;
     private long _state;
     private long _savedState;
@@ -190,6 +192,97 @@ public sealed class TextDocument : ITextDocument
     }
 
     /// <inheritdoc />
+    public ReadOnlySpan<SelectionState> RestoredSelections => _restored;
+
+    /// <inheritdoc />
+    public int RestoredPrimary => _restoredPrimary;
+
+    /// <inheritdoc />
+    public ITextSnapshot Edit(ReadOnlySpan<TextEdit> edits, EditKind kind, ReadOnlySpan<SelectionState> before, int primaryBefore,
+        ReadOnlySpan<SelectionState> after, int primaryAfter)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (before.IsEmpty || after.IsEmpty)
+        {
+            throw new ArgumentException("A multi-selection edit needs the selections before and after it (at least one each).");
+        }
+
+        primaryBefore = Math.Clamp(primaryBefore, 0, before.Length - 1);
+        primaryAfter = Math.Clamp(primaryAfter, 0, after.Length - 1);
+        if (before.Length == 1 && after.Length == 1)
+        {
+            return Edit(edits, kind, before[0], after[0]);
+        }
+
+        var current = _buffer.Current;
+        long now = _clock();
+        if (TryJoinMany(current, edits, kind, before, now))
+        {
+            var top = _undo[^1];
+            var applied = _buffer.Apply(edits);
+            top.After = after[primaryAfter];
+            top.PrimaryAfter = primaryAfter;
+            if (top.AfterAll is { } kept && kept.Length == after.Length)
+            {
+                after.CopyTo(kept);
+            }
+            else
+            {
+                top.AfterAll = after.ToArray();
+            }
+
+            top.Time = now;
+            top.Id = _nextStepId++;
+            bool breaks = false;
+            foreach (ref readonly var edit in edits)
+            {
+                breaks |= BreaksGroup(kind, edit);
+            }
+
+            top.Open = !breaks;
+            _state = top.Id;
+            _redo.Clear();
+            StateChanged?.Invoke(this, EventArgs.Empty);
+            return applied;
+        }
+
+        var history = new HistoryEdit[edits.Length];
+        bool groupBreaks = false;
+        for (int i = 0; i < edits.Length; i++)
+        {
+            ref readonly var edit = ref edits[i];
+            string removed = edit.Length == 0 || edit.Start < 0 || edit.Length < 0 || edit.Start > current.Length - edit.Length ? "" : current.GetText(edit.Start, edit.Length);
+            history[i] = new HistoryEdit(edit.Start, edit.Length, edit.Text?.Length ?? 0, removed);
+            groupBreaks |= BreaksGroup(kind, edit);
+        }
+
+        var result = _buffer.Apply(edits);
+        if (ReferenceEquals(result, current))
+        {
+            return current;
+        }
+
+        if (_undo.Count > 0)
+        {
+            _undo[^1].Open = false;
+        }
+
+        var step = new Step(history, kind, before[primaryBefore], after[primaryAfter], now, _nextStepId++)
+        {
+            Open = kind is EditKind.Typing or EditKind.Deleting && !groupBreaks,
+            BeforeAll = before.ToArray(),
+            AfterAll = after.ToArray(),
+            PrimaryBefore = primaryBefore,
+            PrimaryAfter = primaryAfter,
+        };
+        _undo.Add(step);
+        _state = step.Id;
+        _redo.Clear();
+        StateChanged?.Invoke(this, EventArgs.Empty);
+        return result;
+    }
+
+    /// <inheritdoc />
     public SelectionState? Undo()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -209,11 +302,13 @@ public sealed class TextDocument : ITextDocument
             ref var edit = ref step.Edits[i];
             int start = edit.Start + shift;
             string present = edit.AfterLength == 0 ? "" : current.GetText(start, edit.AfterLength);
-            edits[i] = new TextEdit(start, edit.AfterLength, edit.Absent);
+            edits[i] = new TextEdit(start, edit.AfterLength, edit.TakeAbsent());
             edit.Absent = present;
             shift += edit.AfterLength - edit.BeforeLength;
         }
 
+        _restored = step.BeforeAll ?? [];
+        _restoredPrimary = step.BeforeAll is null ? 0 : step.PrimaryBefore;
         _buffer.Apply(edits, TextChangeReason.Undo);
         _redo.Add(step);
         _state = _undo.Count > 0 ? _undo[^1].Id : 0;
@@ -238,10 +333,12 @@ public sealed class TextDocument : ITextDocument
         {
             ref var edit = ref step.Edits[i];
             string present = edit.BeforeLength == 0 ? "" : current.GetText(edit.Start, edit.BeforeLength);
-            edits[i] = new TextEdit(edit.Start, edit.BeforeLength, edit.Absent);
+            edits[i] = new TextEdit(edit.Start, edit.BeforeLength, edit.TakeAbsent());
             edit.Absent = present;
         }
 
+        _restored = step.AfterAll ?? [];
+        _restoredPrimary = step.AfterAll is null ? 0 : step.PrimaryAfter;
         _buffer.Apply(edits, TextChangeReason.Redo);
         _undo.Add(step);
         _state = step.Id;
@@ -508,7 +605,7 @@ public sealed class TextDocument : ITextDocument
         }
 
         var top = _undo[^1];
-        if (!top.Open || top.Kind != kind || top.Edits.Length != 1 || top.After != before || now - top.Time >= _options.UndoGroupMilliseconds || top.Id != _state)
+        if (!top.Open || top.Kind != kind || top.Edits.Length != 1 || top.AfterAll is not null || top.After != before || now - top.Time >= _options.UndoGroupMilliseconds || top.Id != _state)
         {
             return false;
         }
@@ -529,16 +626,85 @@ public sealed class TextDocument : ITextDocument
         int suffix = Math.Max(0, edit.End - end);
         if (prefix > 0 || suffix > 0)
         {
-            range.Absent = string.Concat(
-                prefix > 0 ? current.GetText(edit.Start, prefix) : "",
-                range.Absent,
-                suffix > 0 ? current.GetText(end, suffix) : "");
+            range.Grow(current, edit.Start, prefix, end, suffix);
         }
 
         int newStart = Math.Min(start, edit.Start);
         int span = Math.Max(end, edit.End) - newStart;
-        range = new HistoryEdit(newStart, range.BeforeLength + prefix + suffix, span - edit.Length + edit.Text.Length, range.Absent);
+        range.Reset(newStart, range.BeforeLength + prefix + suffix, span - edit.Length + edit.Text.Length);
         step = top;
+        return true;
+    }
+
+    /// <summary>
+    /// Joins a multi-caret Typing or Deleting change into the open multi-caret step on top: the same kind and count of
+    /// edits, a short pause, the carets where the step left them, and each edit touching its own range of the step (in
+    /// the current text) without reaching a neighbour's. On success every range and removed text already covers its edit.
+    /// </summary>
+    private bool TryJoinMany(ITextSnapshot current, ReadOnlySpan<TextEdit> edits, EditKind kind, ReadOnlySpan<SelectionState> before, long now)
+    {
+        if (kind is not (EditKind.Typing or EditKind.Deleting) || _undo.Count == 0 || edits.IsEmpty)
+        {
+            return false;
+        }
+
+        var top = _undo[^1];
+        if (!top.Open || top.Kind != kind || top.Edits.Length != edits.Length || top.AfterAll is not { } kept || !before.SequenceEqual(kept)
+            || now - top.Time >= _options.UndoGroupMilliseconds || top.Id != _state)
+        {
+            return false;
+        }
+
+        // First check every edit against its range, in the current text's positions; nothing changes unless all join.
+        var ranges = top.Edits;
+        int shift = 0;
+        int previousEnd = int.MinValue;
+        for (int k = 0; k < edits.Length; k++)
+        {
+            ref readonly var edit = ref edits[k];
+            if (edit.Text is null || edit.Start < 0 || edit.Length < 0 || edit.Start > current.Length - edit.Length)
+            {
+                return false;
+            }
+
+            int start = ranges[k].Start + shift;
+            int end = start + ranges[k].AfterLength;
+            if (edit.Start > end || edit.End < start)
+            {
+                return false;
+            }
+
+            int joinedStart = Math.Min(start, edit.Start);
+            if (joinedStart < previousEnd)
+            {
+                return false;
+            }
+
+            previousEnd = Math.Max(end, edit.End);
+            shift += ranges[k].AfterLength - ranges[k].BeforeLength;
+        }
+
+        shift = 0;
+        for (int k = 0; k < edits.Length; k++)
+        {
+            ref readonly var edit = ref edits[k];
+            ref var range = ref ranges[k];
+            int oldShift = shift;
+            shift += range.AfterLength - range.BeforeLength;
+            int start = range.Start + oldShift;
+            int end = start + range.AfterLength;
+            int prefix = Math.Max(0, start - edit.Start);
+            int suffix = Math.Max(0, edit.End - end);
+            if (prefix > 0 || suffix > 0)
+            {
+                range.Grow(current, edit.Start, prefix, end, suffix);
+            }
+
+            int newStart = Math.Min(start, edit.Start);
+            int span = Math.Max(end, edit.End) - newStart;
+            range.Reset(newStart - oldShift, range.BeforeLength + prefix + suffix, span - edit.Length + edit.Text.Length);
+        }
+
         return true;
     }
 
@@ -549,6 +715,68 @@ public sealed class TextDocument : ITextDocument
         public int BeforeLength = beforeLength;
         public int AfterLength = afterLength;
         public string Absent = absent;
+
+        // While a typing or deleting group grows (a held Backspace or Delete), the removed text gathers here, with room at
+        // both ends, so each keystroke copies its own characters only (a concat per keystroke copied the whole run again).
+        private char[]? _grown;
+        private int _from;
+        private int _to;
+
+        /// <summary>The side not in the buffer, as a string (the gathered text made one once, when undone or redone).</summary>
+        public string TakeAbsent()
+        {
+            if (_grown is not null)
+            {
+                Absent = new string(_grown, _from, _to - _from);
+                _grown = null;
+            }
+
+            return Absent;
+        }
+
+        /// <summary>Adds the <paramref name="prefix"/> characters at <paramref name="before"/> in front and the <paramref name="suffix"/> at <paramref name="after"/> behind.</summary>
+        public void Grow(ITextSnapshot current, int before, int prefix, int after, int suffix)
+        {
+            if (_grown is null)
+            {
+                int length = Absent.Length;
+                int room = Math.Max(16, length);
+                _grown = new char[length + (2 * room)];
+                _from = room;
+                Absent.CopyTo(0, _grown, _from, length);
+                _to = _from + length;
+            }
+
+            if (_from < prefix || _grown.Length - _to < suffix)
+            {
+                int length = _to - _from;
+                int room = Math.Max(Math.Max(prefix, suffix), length);
+                var bigger = new char[length + (2 * room)];
+                Array.Copy(_grown, _from, bigger, room, length);
+                _grown = bigger;
+                _from = room;
+                _to = room + length;
+            }
+
+            if (prefix > 0)
+            {
+                _from -= prefix;
+                current.CopyTo(before, _grown.AsSpan(_from, prefix));
+            }
+
+            if (suffix > 0)
+            {
+                current.CopyTo(after, _grown.AsSpan(_to, suffix));
+                _to += suffix;
+            }
+        }
+
+        public void Reset(int start, int beforeLength, int afterLength)
+        {
+            Start = start;
+            BeforeLength = beforeLength;
+            AfterLength = afterLength;
+        }
     }
 
     /// <summary>One undo step.</summary>
@@ -567,5 +795,15 @@ public sealed class TextDocument : ITextDocument
         public long Id { get; set; } = id;
 
         public bool Open { get; set; }
+
+        /// <summary>Every selection before the step, when it had more than one (else null: <see cref="Before"/> is all).</summary>
+        public SelectionState[]? BeforeAll { get; init; }
+
+        /// <summary>Every selection after the step, when it had more than one.</summary>
+        public SelectionState[]? AfterAll { get; set; }
+
+        public int PrimaryBefore { get; init; }
+
+        public int PrimaryAfter { get; set; }
     }
 }

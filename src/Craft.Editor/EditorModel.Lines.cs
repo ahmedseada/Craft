@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using System.Buffers;
 using Craft.Abstractions;
 
 namespace Craft.Editor;
@@ -35,25 +36,41 @@ public sealed partial class EditorModel
     /// <summary>Takes the line comment off the selected lines that have one (Ctrl+K Ctrl+U); false when the language has no line comment.</summary>
     public bool UncommentLines() => Comment(remove: true);
 
-    /// <summary>Copies the selected lines above or below them (Shift+Alt+Up and Down; Visual Studio's Ctrl+D below); the selection goes with the copy below.</summary>
+    /// <summary>Copies the selected lines above or below them (Shift+Alt+Up and Down; Visual Studio's Ctrl+D below); the selection goes with the copy below. Every caret's lines.</summary>
     public bool CopyLines(LineDirection direction)
     {
         var snapshot = Snapshot;
-        var selection = _selection;
-        var (first, last) = SelectedLines();
-        var firstLine = snapshot.GetLine(first);
-        var lastLine = snapshot.GetLine(last);
-        string block = snapshot.GetText(firstLine.Start, lastLine.End - firstLine.Start);
-        string newLine = NewLine;
-        if (direction == LineDirection.Up)
+        var blocks = LineBlocks(out int count);
+        var edits = ArrayPool<TextEdit>.Shared.Rent(count);
+        var shifts = ArrayPool<int>.Shared.Rent(count);
+        try
         {
-            // The copy goes above: the text the selection is on moves down, so the selection stays where it is (on the copy).
-            Replace(firstLine.Start, 0, string.Concat(block, newLine), EditKind.Command, selection);
+            string newLine = NewLine;
+            for (int b = 0; b < count; b++)
+            {
+                var firstLine = snapshot.GetLine(blocks[b].First);
+                var lastLine = snapshot.GetLine(blocks[b].Last);
+                string block = snapshot.GetText(firstLine.Start, lastLine.End - firstLine.Start);
+                if (direction == LineDirection.Up)
+                {
+                    // The copy goes above: the text the selection is on moves down, so the selection stays where it is (on the copy).
+                    edits[b] = TextEdit.Insert(firstLine.Start, string.Concat(block, newLine));
+                    shifts[b] = 0;
+                }
+                else
+                {
+                    edits[b] = TextEdit.Insert(lastLine.End, string.Concat(newLine, block));
+                    shifts[b] = block.Length + newLine.Length;
+                }
+            }
+
+            ApplyBlockEdits(blocks, count, edits.AsSpan(0, count), shifts);
         }
-        else
+        finally
         {
-            int shift = block.Length + newLine.Length;
-            Replace(lastLine.End, 0, string.Concat(newLine, block), EditKind.Command, new SelectionState(selection.Anchor + shift, selection.Caret + shift));
+            ReturnBlocks(blocks);
+            ArrayPool<TextEdit>.Shared.Return(edits, clearArray: true);
+            ArrayPool<int>.Shared.Return(shifts);
         }
 
         EnsureCaretVisible();
@@ -63,89 +80,186 @@ public sealed partial class EditorModel
     /// <summary>Duplicates the selected lines below them, the selection on the copy.</summary>
     public bool DuplicateLines() => CopyLines(LineDirection.Down);
 
-    /// <summary>Deletes the selected lines with their line breaks (Ctrl+Shift+K; Visual Studio's Ctrl+Shift+L); the caret goes to the start of the line after.</summary>
+    /// <summary>Deletes the selected lines with their line breaks (Ctrl+Shift+K; Visual Studio's Ctrl+Shift+L); the caret goes to the start of the line after. Every caret's lines.</summary>
     public bool DeleteLines()
     {
         var snapshot = Snapshot;
-        var (first, last) = SelectedLines();
-        var firstLine = snapshot.GetLine(first);
-        var lastLine = snapshot.GetLine(last);
-        int start = firstLine.Start;
-        int end = lastLine.EndIncludingBreak;
-        if (lastLine.BreakLength == 0 && first > 0)
+        var blocks = LineBlocks(out int count);
+        var edits = ArrayPool<TextEdit>.Shared.Rent(count);
+        var after = ArrayPool<SelectionState>.Shared.Rent(count);
+        try
         {
-            start = snapshot.GetLine(first - 1).End;    // the last line: the break before it goes with it
+            int edited = 0;
+            int delta = 0;
+            for (int b = 0; b < count; b++)
+            {
+                var (first, last) = blocks[b];
+                var firstLine = snapshot.GetLine(first);
+                var lastLine = snapshot.GetLine(last);
+                int start = firstLine.Start;
+                int end = lastLine.EndIncludingBreak;
+                bool lastOfText = lastLine.BreakLength == 0 && first > 0;
+                if (lastOfText)
+                {
+                    start = snapshot.GetLine(first - 1).End;    // the last line: the break before it goes with it
+                }
+
+                int caret = lastOfText ? snapshot.GetLine(first - 1).Start : start;
+                after[b] = SelectionState.At(caret + delta);
+                if (end > start)
+                {
+                    edits[edited++] = TextEdit.Delete(start, end - start);
+                    delta -= end - start;
+                }
+            }
+
+            if (edited > 0)
+            {
+                ApplyEdits(edits.AsSpan(0, edited), EditKind.Command, after.AsSpan(0, count), Math.Min(BlockOf(blocks, count, PrimarySelectionIndex), count - 1));
+            }
+        }
+        finally
+        {
+            ReturnBlocks(blocks);
+            ArrayPool<TextEdit>.Shared.Return(edits, clearArray: true);
+            ArrayPool<SelectionState>.Shared.Return(after);
         }
 
-        if (end == start)
-        {
-            return true;
-        }
-
-        int caret = lastLine.BreakLength == 0 && first > 0 ? snapshot.GetLine(first - 1).Start : start;
-        Replace(start, end - start, "", EditKind.Command, SelectionState.At(caret));
         EnsureCaretVisible();
         return true;
     }
 
-    /// <summary>Moves the selected lines one line up or down (Alt+Up and Down), with the selection; at the first or last line nothing moves.</summary>
+    /// <summary>Moves the selected lines one line up or down (Alt+Up and Down), with the selection; at the first or last line nothing moves. Every caret's lines.</summary>
     public bool MoveLines(LineDirection direction)
     {
         var snapshot = Snapshot;
-        var selection = _selection;
-        var (first, last) = SelectedLines();
         bool up = direction == LineDirection.Up;
-        if (up ? first == 0 : last >= snapshot.LineCount - 1)
+        var blocks = LineBlocks(out int count);
+        var edits = ArrayPool<TextEdit>.Shared.Rent(count);
+        var shifts = ArrayPool<int>.Shared.Rent(count);
+        try
         {
-            return true;
+            if (up ? blocks[0].First == 0 : blocks[count - 1].Last >= snapshot.LineCount - 1)
+            {
+                return true;
+            }
+
+            string newLine = NewLine;
+            for (int b = 0; b < count; b++)
+            {
+                var (first, last) = blocks[b];
+                var firstLine = snapshot.GetLine(first);
+                var lastLine = snapshot.GetLine(last);
+                var other = snapshot.GetLine(up ? first - 1 : last + 1);
+                string block = snapshot.GetText(firstLine.Start, lastLine.End - firstLine.Start);
+                string moved = snapshot.GetText(other.Start, other.Length);
+                int start = up ? other.Start : firstLine.Start;
+                int end = up ? lastLine.End : other.End;
+                string text = up ? string.Concat(block, newLine, moved) : string.Concat(moved, newLine, block);
+                edits[b] = new TextEdit(start, end - start, text);
+                shifts[b] = up ? other.Start - firstLine.Start : moved.Length + newLine.Length;
+            }
+
+            ApplyBlockEdits(blocks, count, edits.AsSpan(0, count), shifts);
+        }
+        finally
+        {
+            ReturnBlocks(blocks);
+            ArrayPool<TextEdit>.Shared.Return(edits, clearArray: true);
+            ArrayPool<int>.Shared.Return(shifts);
         }
 
-        var firstLine = snapshot.GetLine(first);
-        var lastLine = snapshot.GetLine(last);
-        var other = snapshot.GetLine(up ? first - 1 : last + 1);
-        string block = snapshot.GetText(firstLine.Start, lastLine.End - firstLine.Start);
-        string moved = snapshot.GetText(other.Start, other.Length);
-        string newLine = NewLine;
-        int start = up ? other.Start : firstLine.Start;
-        int end = up ? lastLine.End : other.End;
-        string text = up ? string.Concat(block, newLine, moved) : string.Concat(moved, newLine, block);
-        int shift = up ? other.Start - firstLine.Start : moved.Length + newLine.Length;
-        Replace(start, end - start, text, EditKind.Command, new SelectionState(selection.Anchor + shift, selection.Caret + shift));
         EnsureCaretVisible();
         return true;
     }
 
-    /// <summary>Indents the selected lines by one level, whatever the selection (Ctrl+]).</summary>
-    public bool IndentLines()
+    /// <summary>Indents the selected lines by one level, whatever the selection (Ctrl+]). Every caret's lines.</summary>
+    public bool IndentLines() => IndentSelectedLines(tab: false);
+
+    /// <summary>Outdents the selected lines by one level (Ctrl+[; Shift+Tab). Every caret's lines.</summary>
+    public bool OutdentLines()
     {
-        var selection = _selection;
         var snapshot = Snapshot;
-        var (first, last) = SelectedLines();
-        var edits = new List<TextEdit>(last - first + 1);
-        for (int i = first; i <= last; i++)
+        var blocks = LineBlocks(out int count);
+        var edits = new List<TextEdit>();
+        char[]? buffer = null;
+        try
         {
-            var line = snapshot.GetLine(i);
-            if (line.Length > 0 || first == last)
+            for (int b = 0; b < count; b++)
             {
-                edits.Add(TextEdit.Insert(line.Start, _indentUnit));
+                for (int i = blocks[b].First; i <= blocks[b].Last; i++)
+                {
+                    var line = snapshot.GetLine(i);
+                    var text = TextReading.ReadLine(snapshot, line, ref buffer);
+                    int remove = 0;
+                    if (text.Length > 0 && text[0] == '\t')
+                    {
+                        remove = 1;
+                    }
+                    else
+                    {
+                        int spaces = 0;
+                        while (spaces < text.Length && text[spaces] == ' ')
+                        {
+                            spaces++;
+                        }
+
+                        if (spaces > 0)
+                        {
+                            remove = Math.Min(spaces, spaces % Options.TabSize == 0 ? Options.TabSize : spaces % Options.TabSize);
+                        }
+                    }
+
+                    if (remove > 0)
+                    {
+                        edits.Add(TextEdit.Delete(line.Start, remove));
+                    }
+                }
+            }
+        }
+        finally
+        {
+            TextReading.Return(buffer);
+            ReturnBlocks(blocks);
+        }
+
+        if (edits.Count > 0)
+        {
+            ApplyMapped(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(edits), deleting: true, static (_, _) => false);
+        }
+
+        EnsureCaretVisible();
+        return true;
+    }
+
+    // Indent every line of every caret's lines: Ctrl+] (empty lines too when a selection is on one line) or Tab over
+    // several lines (non-empty lines only; a selection's start stays before the new indent).
+    private bool IndentSelectedLines(bool tab)
+    {
+        var snapshot = Snapshot;
+        var edits = new List<TextEdit>();
+        foreach (var selection in Selections)
+        {
+            var (first, last) = SelectedLinesOf(selection);
+            for (int i = first; i <= last; i++)
+            {
+                var line = snapshot.GetLine(i);
+                if ((line.Length > 0 || (!tab && first == last)) && (edits.Count == 0 || edits[^1].Start < line.Start))
+                {
+                    edits.Add(TextEdit.Insert(line.Start, _indentUnit));
+                }
             }
         }
 
-        if (edits.Count == 0)
+        if (edits.Count > 0)
         {
-            return true;
+            ApplyMapped(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(edits), deleting: false,
+                tab ? static (selection, position) => position == selection.Start : static (_, _) => false);
         }
 
-        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(edits);
-        int anchor = MapInserted(selection.Anchor, span, atStartStays: false);
-        int caret = MapInserted(selection.Caret, span, atStartStays: false);
-        ApplyEdits(span, EditKind.Command, new SelectionState(anchor, caret));
         EnsureCaretVisible();
         return true;
     }
-
-    /// <summary>Outdents the selected lines by one level (Ctrl+[; Shift+Tab).</summary>
-    public bool OutdentLines() => Outdent();
 
     /// <summary>
     /// Selects the caret's line with its break (Ctrl+L); when the selection already holds whole lines, the next line is
@@ -217,7 +331,7 @@ public sealed partial class EditorModel
         return true;
     }
 
-    // null toggles: removed when every non-blank line has the comment.
+    // null toggles: removed when every non-blank line has the comment. Every caret's lines, decided together.
     private bool Comment(bool? remove)
     {
         if (Rules.LineComment is not { Length: > 0 } prefix)
@@ -226,75 +340,226 @@ public sealed partial class EditorModel
         }
 
         var snapshot = Snapshot;
-        var selection = _selection;
-        var (first, last) = SelectedLines();
+        var blocks = LineBlocks(out int count);
         int indent = int.MaxValue;
         bool all = true;
         bool any = false;
+        bool single = count == 1 && blocks[0].First == blocks[0].Last;
         char[]? buffer = null;
+        var edits = new List<TextEdit>();
+        bool removing;
         try
         {
-            for (int i = first; i <= last; i++)
+            for (int b = 0; b < count; b++)
             {
-                var text = TextReading.ReadLine(snapshot, snapshot.GetLine(i), ref buffer);
-                int lead = TextReading.IndentLength(text);
-                if (lead == text.Length)
+                for (int i = blocks[b].First; i <= blocks[b].Last; i++)
                 {
-                    continue;     // blank lines are left as they are
-                }
-
-                any = true;
-                indent = Math.Min(indent, lead);
-                if (!text[lead..].StartsWith(prefix, StringComparison.Ordinal))
-                {
-                    all = false;
-                }
-            }
-
-            if (!any && first != last)
-            {
-                return true;
-            }
-
-            bool removing = remove ?? (any && all);
-            var edits = new List<TextEdit>(last - first + 1);
-            for (int i = first; i <= last; i++)
-            {
-                var line = snapshot.GetLine(i);
-                var text = TextReading.ReadLine(snapshot, line, ref buffer);
-                int lead = TextReading.IndentLength(text);
-                if (removing)
-                {
-                    if (lead < text.Length && text[lead..].StartsWith(prefix, StringComparison.Ordinal))
+                    var text = TextReading.ReadLine(snapshot, snapshot.GetLine(i), ref buffer);
+                    int lead = TextReading.IndentLength(text);
+                    if (lead == text.Length)
                     {
-                        int length = prefix.Length + (lead + prefix.Length < text.Length && text[lead + prefix.Length] == ' ' ? 1 : 0);
-                        edits.Add(TextEdit.Delete(line.Start + lead, length));
+                        continue;     // blank lines are left as they are
+                    }
+
+                    any = true;
+                    indent = Math.Min(indent, lead);
+                    if (!text[lead..].StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        all = false;
                     }
                 }
-                else if (lead < text.Length || first == last)
-                {
-                    edits.Add(TextEdit.Insert(line.Start + Math.Min(lead, indent == int.MaxValue ? lead : indent), prefix + " "));
-                }
             }
 
-            if (edits.Count == 0)
+            if (!any && !single)
             {
                 return true;
             }
 
-            var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(edits);
-            var after = removing
-                ? new SelectionState(MapDeleted(selection.Anchor, span), MapDeleted(selection.Caret, span))
-                : new SelectionState(MapInserted(selection.Anchor, span, atStartStays: selection.Anchor == selection.Start && !selection.IsEmpty), MapInserted(selection.Caret, span, atStartStays: selection.Caret == selection.Start && !selection.IsEmpty));
-            ApplyEdits(span, EditKind.Command, after);
+            removing = remove ?? (any && all);
+            string inserted = prefix + " ";
+            for (int b = 0; b < count; b++)
+            {
+                for (int i = blocks[b].First; i <= blocks[b].Last; i++)
+                {
+                    var line = snapshot.GetLine(i);
+                    var text = TextReading.ReadLine(snapshot, line, ref buffer);
+                    int lead = TextReading.IndentLength(text);
+                    if (removing)
+                    {
+                        if (lead < text.Length && text[lead..].StartsWith(prefix, StringComparison.Ordinal))
+                        {
+                            int length = prefix.Length + (lead + prefix.Length < text.Length && text[lead + prefix.Length] == ' ' ? 1 : 0);
+                            edits.Add(TextEdit.Delete(line.Start + lead, length));
+                        }
+                    }
+                    else if (lead < text.Length || blocks[b].First == blocks[b].Last)
+                    {
+                        edits.Add(TextEdit.Insert(line.Start + Math.Min(lead, indent == int.MaxValue ? lead : indent), inserted));
+                    }
+                }
+            }
         }
         finally
         {
             TextReading.Return(buffer);
+            ReturnBlocks(blocks);
         }
 
+        if (edits.Count == 0)
+        {
+            return true;
+        }
+
+        ApplyMapped(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(edits), removing,
+            static (selection, position) => position == selection.Start && !selection.IsEmpty);
         EnsureCaretVisible();
         return true;
+    }
+
+    // Applies inserts (or deletes) at line starts as one Command step, every selection mapped through them; a position
+    // `stays(selection, position)` says stays before an insert at it.
+    private void ApplyMapped(ReadOnlySpan<TextEdit> edits, bool deleting, Func<SelectionState, int, bool> stays)
+    {
+        var prefix = ArrayPool<int>.Shared.Rent(edits.Length + 1);
+        var all = Selections;
+        var after = ArrayPool<SelectionState>.Shared.Rent(all.Length);
+        try
+        {
+            prefix[0] = 0;
+            for (int i = 0; i < edits.Length; i++)
+            {
+                prefix[i + 1] = prefix[i] + (deleting ? edits[i].Length : edits[i].Text.Length);
+            }
+
+            var sums = prefix.AsSpan(0, edits.Length + 1);
+            for (int i = 0; i < all.Length; i++)
+            {
+                var s = all[i];
+                after[i] = deleting
+                    ? new SelectionState(MapDeletedSorted(s.Anchor, edits, sums), MapDeletedSorted(s.Caret, edits, sums))
+                    : new SelectionState(MapInsertedSorted(s.Anchor, edits, sums, stays(s, s.Anchor)), MapInsertedSorted(s.Caret, edits, sums, stays(s, s.Caret)));
+            }
+
+            ApplyEdits(edits, EditKind.Command, after.AsSpan(0, all.Length), PrimarySelectionIndex);
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(prefix);
+            ArrayPool<SelectionState>.Shared.Return(after);
+        }
+    }
+
+    private static int MapInsertedSorted(int position, ReadOnlySpan<TextEdit> inserts, ReadOnlySpan<int> prefix, bool atStartStays)
+    {
+        int lo = 0, hi = inserts.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) >>> 1;
+            if (inserts[mid].Start < position || (!atStartStays && inserts[mid].Start == position))
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return position + prefix[lo];
+    }
+
+    private static int MapDeletedSorted(int position, ReadOnlySpan<TextEdit> deletes, ReadOnlySpan<int> prefix)
+    {
+        int lo = 0, hi = deletes.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) >>> 1;
+            if (deletes[mid].Start < position)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        if (lo > 0 && position < deletes[lo - 1].End)
+        {
+            return deletes[lo - 1].Start - prefix[lo - 1];
+        }
+
+        return position - prefix[lo];
+    }
+
+    // The lines of every selection, merged where they overlap or touch, in order (rented: ReturnBlocks).
+    private (int First, int Last)[] LineBlocks(out int count)
+    {
+        var all = Selections;
+        var blocks = ArrayPool<(int First, int Last)>.Shared.Rent(all.Length);
+        count = 0;
+        foreach (var selection in all)
+        {
+            var (first, last) = SelectedLinesOf(selection);
+            if (count > 0 && first <= blocks[count - 1].Last + 1)
+            {
+                blocks[count - 1].Last = Math.Max(blocks[count - 1].Last, last);
+            }
+            else
+            {
+                blocks[count++] = (first, last);
+            }
+        }
+
+        return blocks;
+    }
+
+    private static void ReturnBlocks((int First, int Last)[] blocks) => ArrayPool<(int First, int Last)>.Shared.Return(blocks);
+
+    // The block holding selection `index`.
+    private int BlockOf((int First, int Last)[] blocks, int count, int index)
+    {
+        var (first, _) = SelectedLinesOf(Selections[index]);
+        for (int b = 0; b < count; b++)
+        {
+            if (first <= blocks[b].Last)
+            {
+                return b;
+            }
+        }
+
+        return count - 1;
+    }
+
+    // One edit per block, as one Command step: each selection moves with the edits before its block plus its block's shift.
+    private void ApplyBlockEdits((int First, int Last)[] blocks, int count, ReadOnlySpan<TextEdit> edits, int[] shifts)
+    {
+        var all = Selections;
+        var after = ArrayPool<SelectionState>.Shared.Rent(all.Length);
+        try
+        {
+            int b = 0;
+            int delta = 0;
+            for (int i = 0; i < all.Length; i++)
+            {
+                var s = all[i];
+                var (first, _) = SelectedLinesOf(s);
+                while (b < count - 1 && first > blocks[b].Last)
+                {
+                    delta += edits[b].Delta;
+                    b++;
+                }
+
+                int move = delta + shifts[b];
+                after[i] = new SelectionState(s.Anchor + move, s.Caret + move);
+            }
+
+            ApplyEdits(edits, EditKind.Command, after.AsSpan(0, all.Length), PrimarySelectionIndex);
+        }
+        finally
+        {
+            ArrayPool<SelectionState>.Shared.Return(after);
+        }
     }
 
     private SelectionState NextExpansion(SelectionState selection)

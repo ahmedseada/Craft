@@ -35,6 +35,11 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
             Part(() => EditorLanguages.Register(language), () => EditorLanguages.Unregister(language.Name));
         }
 
+        // Folding (phase X): C#'s from its syntax tree, the project languages' from their elements, objects and arrays.
+        Part(() => FoldingRangeProviders.Register(new CSharpFolding()), () => FoldingRangeProviders.Unregister(CSharpFolding.ProviderName));
+        Part(() => FoldingRangeProviders.Register(new MarkupFolding()), () => FoldingRangeProviders.Unregister(MarkupFolding.ProviderName));
+        Part(() => FoldingRangeProviders.Register(new JsonFolding()), () => FoldingRangeProviders.Unregister(JsonFolding.ProviderName));
+
         // Dictation's C# words (phase V): what they type in a C# document, over the voice plug-in's every-language table.
         foreach (var symbol in SpokenSymbolsOfCSharp)
         {

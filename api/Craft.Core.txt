@@ -39,6 +39,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   Craft.Core.CraftOptions <Clone>$()
   System.Boolean AutoCloseBrackets { get; init; }
   System.Boolean BottomPanelOpen { get; init; }
+  System.Boolean BracketHighlight { get; init; }
   System.Boolean ChatOpen { get; init; }
   System.Boolean CrashTicketOffer { get; init; }
   System.Boolean CrashTrail { get; init; }
@@ -46,11 +47,14 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
   System.Boolean ExplorerOpen { get; init; }
+  System.Boolean Folding { get; init; }
   System.Boolean FormatOnSave { get; init; }
+  System.Boolean IndentGuides { get; init; }
   System.Boolean InsertSpaces { get; init; }
   System.Boolean ReducedMotion { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
+  System.Boolean WordHighlight { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
   System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<System.String, System.String>> TerminalEnvironment { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
@@ -76,10 +80,12 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 DiffLineLimit { get; init; }
   System.Int32 DoubleClickMilliseconds { get; init; }
   System.Int32 FindCountLimit { get; init; }
+  System.Int32 FoldingDelayMilliseconds { get; init; }
   System.Int32 GetHashCode()
   System.Int32 GutterPaddingCells { get; init; }
   System.Int32 HostLogLines { get; init; }
   System.Int32 HoverDelayMilliseconds { get; init; }
+  System.Int32 MaxCarets { get; init; }
   System.Int32 MotionMilliseconds { get; init; }
   System.Int32 NotificationsKeep { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
@@ -298,9 +304,10 @@ sealed class Craft.Core.Documents.RecoveryStore : System.IDisposable
   System.Void Discard(Craft.Core.Documents.RecoveryEntry entry)
   System.Void Dispose()
   ctor(Craft.Core.CraftOptions options = null)
-sealed class Craft.Core.Documents.TextDocument : Craft.Abstractions.ITextDocument, System.IDisposable
+sealed class Craft.Core.Documents.TextDocument : Craft.Abstractions.IMultiSelectionDocument, Craft.Abstractions.ITextDocument, System.IDisposable
   Craft.Abstractions.ITextBuffer Buffer { get; }
   Craft.Abstractions.ITextSnapshot Edit(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.EditKind kind, Craft.Abstractions.SelectionState before, Craft.Abstractions.SelectionState after)
+  Craft.Abstractions.ITextSnapshot Edit(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.EditKind kind, System.ReadOnlySpan<Craft.Abstractions.SelectionState> before, System.Int32 primaryBefore, System.ReadOnlySpan<Craft.Abstractions.SelectionState> after, System.Int32 primaryAfter)
   Craft.Abstractions.SelectionState? Redo()
   Craft.Abstractions.SelectionState? Undo()
   System.Boolean CanRedo { get; }
@@ -308,6 +315,8 @@ sealed class Craft.Core.Documents.TextDocument : Craft.Abstractions.ITextDocumen
   System.Boolean DecodedWithFallback { get; }
   System.Boolean HasBom { get; }
   System.Boolean IsDirty { get; }
+  System.Int32 RestoredPrimary { get; }
+  System.ReadOnlySpan<Craft.Abstractions.SelectionState> RestoredSelections { get; }
   System.String FilePath { get; }
   System.String LineEnding { get; set; }
   System.Text.Encoding Encoding { get; }

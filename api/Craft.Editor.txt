@@ -215,6 +215,25 @@ sealed class Craft.Editor.EditorFind
   System.Boolean WholeWord { get; set; }
   System.Int32 ReplaceAll(System.String replacement)
   System.String Query { get; set; }
+sealed class Craft.Editor.EditorFolding : System.IDisposable
+  Craft.Editor.FoldMap Map { get; }
+  System.Boolean Fold(System.Int32 line)
+  System.Boolean IsAvailable { get; }
+  System.Boolean IsFoldable(System.Int32 line)
+  System.Boolean IsFolded(System.Int32 line)
+  System.Boolean Reveal(System.Int32 line)
+  System.Boolean Toggle(System.Int32 line)
+  System.Boolean Unfold(System.Int32 line)
+  System.Boolean UnfoldAll()
+  System.Int32 FoldAll()
+  System.Int32 RangesVersion { get; }
+  System.Int64 Requests { get; }
+  System.ReadOnlySpan<Craft.Abstractions.FoldingRange> Ranges { get; }
+  System.String LastError { get; }
+  System.Threading.Tasks.Task RefreshAsync()
+  System.Void Dispose()
+  System.Void SetRanges(System.Collections.Generic.IEnumerable<Craft.Abstractions.FoldingRange> ranges)
+  event System.EventHandler RangesChanged
 sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Editor.Abstractions.IEditorKeyHandler, System.IDisposable
   Craft.Abstractions.IEditorActivities Activities { get; }
   Craft.Abstractions.IEditorDocument ActiveDocument { get; }
@@ -330,18 +349,27 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   Craft.Editor.BracketMatch? MatchingBrackets { get; }
   Craft.Editor.CompletionController Completion { get; }
   Craft.Editor.EditorFind Find { get; }
+  Craft.Editor.EditorFolding Folding { get; }
   Craft.Editor.EditorPoint PointFromPosition(System.Int32 position)
   Craft.Editor.EditorTooltip? Tooltip { get; }
   Craft.Editor.InlineCompletionController InlineCompletion { get; }
   Craft.Editor.LineRange VisibleLines(System.Single scrollY, System.Single viewportHeight)
+  Craft.Editor.LineRange VisibleRows(System.Single scrollY, System.Single viewportHeight)
   Craft.Editor.PopupBox? CompletionBox()
   System.Action<System.Action> Dispatch { get; set; }
+  System.Boolean AddCaret(System.Int32 position)
+  System.Boolean AddCaretVertical(Craft.Editor.LineDirection direction)
+  System.Boolean AddNextOccurrence()
+  System.Boolean AddSelection(Craft.Abstractions.SelectionState selection)
+  System.Boolean CollapseCarets()
+  System.Boolean ColumnSelect(Craft.Abstractions.EditorKey key)
   System.Boolean CommentLines()
   System.Boolean CopyLines(Craft.Editor.LineDirection direction)
   System.Boolean DeleteLines()
   System.Boolean DuplicateLines()
   System.Boolean ExpandSelection()
   System.Boolean GoToLine(System.Int32 line, System.Int32 column = 1)
+  System.Boolean HasMultipleCarets { get; }
   System.Boolean IndentLines()
   System.Boolean IsAnimating { get; }
   System.Boolean KeepSelectionForContextMenu()
@@ -349,6 +377,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Boolean OutdentLines()
   System.Boolean Overwrite { get; }
+  System.Boolean SelectAllOccurrences()
   System.Boolean SelectLine()
   System.Boolean ShrinkSelection()
   System.Boolean ToggleLineComment()
@@ -364,12 +393,19 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Int32 ClickCount { get; }
   System.Int32 ColumnOf(System.Int32 position)
   System.Int32 ErrorCount { get; }
+  System.Int32 LineAtRow(System.Int32 row)
+  System.Int32 NextShownLine(System.Int32 line)
   System.Int32 PositionFromPoint(System.Single x, System.Single y)
+  System.Int32 PrimarySelectionIndex { get; }
+  System.Int32 RowCount { get; }
+  System.Int32 RowOfLine(System.Int32 line)
+  System.Int32 SelectionCount { get; }
   System.Int32 SemanticRequestsInFlight { get; }
   System.Int32 WarningCount { get; }
   System.Int32? PopupRowAt(System.Single viewX, System.Single viewY)
   System.Int64 LateResultsDropped { get; }
   System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> Diagnostics { get; }
+  System.ReadOnlySpan<Craft.Abstractions.SelectionState> Selections { get; }
   System.Single CompletionShownHeight()
   System.Single ContentHeight { get; }
   System.Single ContentWidth { get; }
@@ -379,7 +415,9 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Single TextLeft { get; }
   System.Single ViewportHeight { get; }
   System.Single ViewportWidth { get; }
+  System.String HighlightedWord { get; }
   System.String LanguageName { get; }
+  System.String LastCaretMessage { get; }
   System.String LastFormatMessage { get; }
   System.String WorkspaceRoot { get; }
   System.Threading.Tasks.Task<System.Boolean> FormatDocumentAsync(System.Threading.CancellationToken cancellationToken = null)
@@ -393,6 +431,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Void NoteLineColumns(System.Int32 columns)
   System.Void NotePainted()
   System.Void OnText(System.String text)
+  System.Void PasteText(System.String text)
   System.Void PointerExited()
   System.Void PointerHovered(System.Single viewX, System.Single viewY)
   System.Void PointerMoved(System.Single viewX, System.Single viewY)
@@ -402,7 +441,9 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Void RequestSignatureHelp()
   System.Void ResetTelemetry()
   System.Void Select(System.Int32 anchor, System.Int32 caret)
+  System.Void SetSelections(System.ReadOnlySpan<Craft.Abstractions.SelectionState> selections, System.Int32 primary)
   System.Void UpdateViewport(System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight)
+  const System.Int32 FoldGutterCells = 2
   ctor(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, Craft.Core.CraftOptions options, Craft.Abstractions.ITheme theme, Craft.Abstractions.ITextMeasurer measurer, Craft.Editor.Abstractions.IEditorClipboard clipboard, System.TimeProvider time = null, System.String workspaceRoot = null, Craft.Abstractions.IEditorActivities activities = null)
   event System.EventHandler CaretMoved
   event System.EventHandler ContentSizeChanged
@@ -439,9 +480,12 @@ sealed class Craft.Editor.EditorRenderer : System.IDisposable
   Craft.Editor.LineRange LastVisible { get; }
   System.Boolean GhostHintDrawn { get; }
   System.Boolean LastFrameClassified { get; }
+  System.Int32 CaretsDrawn { get; }
   System.Int32 GhostLinesDrawn { get; }
+  System.Int32 GuidesDrawn { get; }
   System.Int32 LinesDrawn { get; }
   System.Int32 SquiggleSegmentsDrawn { get; }
+  System.Int32 WordHighlightsDrawn { get; }
   System.Int64 ParseWaitsExceeded { get; }
   System.Int64 RunStringsBuilt { get; }
   System.Void Dispose()
@@ -477,6 +521,30 @@ sealed class Craft.Editor.FindRequestedEventArgs : System.EventArgs
   System.Boolean Replace { get; }
   System.String InitialQuery { get; }
   ctor(System.Boolean replace, System.String initialQuery)
+sealed class Craft.Editor.FoldMap
+  System.Boolean Clear()
+  System.Boolean Fold(Craft.Abstractions.FoldingRange range)
+  System.Boolean HasHidden { get; }
+  System.Boolean IsFolded(System.Int32 line)
+  System.Boolean IsHidden(System.Int32 line)
+  System.Boolean OnEdited(System.Int32 firstLine, System.Int32 lastLine, System.Int32 lineDelta, System.Int32 newLineCount)
+  System.Boolean Reconcile(System.ReadOnlySpan<Craft.Abstractions.FoldingRange> ranges)
+  System.Boolean Reveal(System.Int32 line)
+  System.Boolean Unfold(System.Int32 line)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange> Folded { get; }
+  System.Int32 FoldAll(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange> ranges)
+  System.Int32 HiddenLines { get; }
+  System.Int32 IntervalCount { get; }
+  System.Int32 LineAt(System.Int32 row)
+  System.Int32 LineCount { get; }
+  System.Int32 NextShown(System.Int32 line)
+  System.Int32 PreviousShown(System.Int32 line)
+  System.Int32 RowCount { get; }
+  System.Int32 RowOf(System.Int32 line)
+  System.ValueTuple<System.Int32, System.Int32> Interval(System.Int32 index)
+  System.Void SetLineCount(System.Int32 lines)
+  ctor()
+  static System.Int32 FindRange(System.ReadOnlySpan<Craft.Abstractions.FoldingRange> ranges, System.Int32 line)
 sealed class Craft.Editor.InlineCompletionController : System.IDisposable
   System.Boolean AcceptAll()
   System.Boolean AcceptWord()
@@ -1257,21 +1325,35 @@ enum Craft.Editor.Shell.ShortcutSource : System.IComparable, System.IConvertible
   KeyMap = 1
   User = 2
 static class Craft.Editor.Shell.StandardShortcuts
+  const System.String AddCaretAbove = craft.editor.addCaretAbove
+  const System.String AddCaretBelow = craft.editor.addCaretBelow
+  const System.String AddNextOccurrence = craft.editor.addNextOccurrence
+  const System.String ColumnSelectDown = craft.editor.columnSelectDown
+  const System.String ColumnSelectLeft = craft.editor.columnSelectLeft
+  const System.String ColumnSelectRight = craft.editor.columnSelectRight
+  const System.String ColumnSelectUp = craft.editor.columnSelectUp
   const System.String Comment = craft.editor.comment
   const System.String CopyLinesDown = craft.editor.copyLinesDown
   const System.String CopyLinesUp = craft.editor.copyLinesUp
   const System.String DeleteLines = craft.editor.deleteLines
   const System.String DuplicateLines = craft.editor.duplicateLines
   const System.String ExpandSelection = craft.editor.expandSelection
+  const System.String Fold = craft.editor.fold
+  const System.String FoldAll = craft.editor.foldAll
   const System.String IndentLines = craft.editor.indentLines
   const System.String MoveLinesDown = craft.editor.moveLinesDown
   const System.String MoveLinesUp = craft.editor.moveLinesUp
   const System.String OutdentLines = craft.editor.outdentLines
   const System.String QuickFix = craft.quickFix
+  const System.String SelectAllOccurrences = craft.editor.selectAllOccurrences
   const System.String SelectLine = craft.editor.selectLine
   const System.String ShrinkSelection = craft.editor.shrinkSelection
+  const System.String SingleCaret = craft.editor.singleCaret
   const System.String ToggleComment = craft.editor.toggleComment
+  const System.String ToggleFold = craft.editor.toggleFold
   const System.String Uncomment = craft.editor.uncomment
+  const System.String Unfold = craft.editor.unfold
+  const System.String UnfoldAll = craft.editor.unfoldAll
   const System.String VisualStudio = visualstudio
   static Craft.Abstractions.KeyBinding Anywhere(System.String keys, System.String commandId)
   static Craft.Abstractions.KeyBinding Editor(System.String keys, System.String commandId)

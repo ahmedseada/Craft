@@ -73,6 +73,7 @@ enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, Sys
   B = 25
   Backspace = 9
   C = 17
+  Comma = 63
   D = 26
   D0 = 42
   D1 = 43

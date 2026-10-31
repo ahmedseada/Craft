@@ -6,6 +6,19 @@ interface Craft.Editor.Abstractions.IEditorKeyHandler
 interface Craft.Editor.Abstractions.IEditorPresenter
   System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
   System.Threading.Tasks.Task<System.Boolean> ConfirmEditsAsync(Craft.Editor.EditProposal proposal, System.Threading.CancellationToken cancellationToken)
+interface Craft.Editor.Abstractions.IFileDialogs
+  System.Threading.Tasks.Task<System.String> PickFileAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PickFolderAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PickSavePathAsync(System.String suggestedName, System.String folder, System.Threading.CancellationToken cancellationToken = null)
+interface Craft.Editor.Abstractions.IShellUi
+  System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
+  System.Threading.Tasks.Task ShowSettingsAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Editor.Abstractions.UnsavedChoice> AskUnsavedAsync(System.String title, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> PickAsync(System.String title, System.Collections.Generic.IReadOnlyList<System.String> items, System.Threading.CancellationToken cancellationToken = null)
+enum Craft.Editor.Abstractions.UnsavedChoice : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Cancel = 2
+  Discard = 1
+  Save = 0
 struct Craft.Editor.BracketMatch : System.IEquatable<Craft.Editor.BracketMatch>
   System.Boolean Equals(Craft.Editor.BracketMatch other)
   System.Boolean Equals(System.Object obj)
@@ -227,3 +240,112 @@ sealed class Craft.Editor.PluginActivation : System.IEquatable<Craft.Editor.Plug
   System.String ToString()
   System.Void Deconstruct(out System.String Name, out System.Boolean Active, out System.String Error, out System.Double Milliseconds)
   ctor(System.String Name, System.Boolean Active, System.String Error, System.Double Milliseconds)
+sealed class Craft.Editor.Shell.DocumentTab
+  Craft.Abstractions.IEditorDocument HostDocument { get; }
+  Craft.Abstractions.ILanguage Language { get; }
+  Craft.Abstractions.ITextDocument Document { get; }
+  System.Boolean IsDirty { get; }
+  System.Int32 UntitledNumber { get; }
+  System.Object View { get; set; }
+  System.String FilePath { get; }
+  System.String Title { get; }
+sealed class Craft.Editor.Shell.DocumentTabs : System.IDisposable
+  Craft.Editor.Shell.DocumentTab Active { get; }
+  Craft.Editor.Shell.DocumentTab Add(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, System.String languageName = null, System.Boolean activate = true)
+  Craft.Editor.Shell.DocumentTab Find(System.String path)
+  System.Boolean HasUnsaved { get; }
+  System.Boolean Next()
+  System.Boolean Previous()
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.DocumentTab> Tabs { get; }
+  System.Int32 ActiveIndex { get; }
+  System.Void Activate(Craft.Editor.Shell.DocumentTab tab)
+  System.Void Dispose()
+  System.Void Remove(Craft.Editor.Shell.DocumentTab tab)
+  System.Void SetLanguage(Craft.Editor.Shell.DocumentTab tab, Craft.Abstractions.ILanguage language, System.String languageName = null)
+  ctor(Craft.Editor.EditorHost host)
+  event System.EventHandler ActiveChanged
+  event System.EventHandler TabsChanged
+  event System.EventHandler<Craft.Editor.Shell.DocumentTab> TabChanged
+sealed class Craft.Editor.Shell.FolderTree
+  Craft.Core.Workspaces.Workspace Workspace { get; }
+  System.Boolean Reveal(System.String path)
+  System.Boolean Toggle(System.Int32 index)
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.FolderTreeRow> Rows { get; }
+  System.Int32 IndexOf(System.String path)
+  System.Void Refresh()
+  ctor(Craft.Core.Workspaces.Workspace workspace)
+  event System.EventHandler Changed
+sealed class Craft.Editor.Shell.FolderTreeRow : System.IEquatable<Craft.Editor.Shell.FolderTreeRow>
+  Craft.Core.Workspaces.WorkspaceEntry Entry { get; init; }
+  Craft.Editor.Shell.FolderTreeRow <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.FolderTreeRow other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsExpanded { get; init; }
+  System.Int32 Depth { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Core.Workspaces.WorkspaceEntry Entry, out System.Int32 Depth, out System.Boolean IsExpanded)
+  ctor(Craft.Core.Workspaces.WorkspaceEntry Entry, System.Int32 Depth, System.Boolean IsExpanded)
+static class Craft.Editor.Shell.ShellCommandIds
+  const System.String CloseFolder = craft.closeFolder
+  const System.String CloseTab = craft.closeTab
+  const System.String NewFile = craft.newFile
+  const System.String NextTab = craft.nextTab
+  const System.String OpenFile = craft.openFile
+  const System.String OpenFolder = craft.openFolder
+  const System.String OpenRecent = craft.openRecent
+  const System.String PreviousTab = craft.previousTab
+  const System.String RefreshTree = craft.refreshTree
+  const System.String Save = craft.save
+  const System.String SaveAs = craft.saveAs
+  const System.String Settings = craft.settings
+  const System.String ToggleTheme = craft.toggleTheme
+  const System.String ToggleTree = craft.toggleTree
+sealed class Craft.Editor.Shell.ShellLayout
+  Craft.Core.CraftOptions Options { get; set; }
+  Craft.Editor.Shell.ShellLayoutKind Kind { get; }
+  System.Boolean EditorVisible { get; }
+  System.Boolean HasFolder { get; set; }
+  System.Boolean IsNarrow { get; }
+  System.Boolean PanelsVisible { get; }
+  System.Boolean TreeVisible { get; }
+  System.Boolean UpdateWidth(System.Double width)
+  System.Double Width { get; }
+  System.Void FileOpenedFromTree()
+  System.Void ToggleTree()
+  ctor(Craft.Core.CraftOptions options)
+  event System.EventHandler Changed
+  static Craft.Editor.Shell.ShellLayoutKind Choose(System.Double width, System.Single narrowWidth)
+enum Craft.Editor.Shell.ShellLayoutKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Narrow = 1
+  Wide = 0
+sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
+  Craft.Abstractions.ITheme Theme { get; }
+  Craft.Core.CraftOptions Options { get; }
+  Craft.Core.Settings.CraftSettings Settings { get; }
+  Craft.Core.Workspaces.RecentList Recent { get; }
+  Craft.Core.Workspaces.Workspace Workspace { get; }
+  Craft.Editor.EditorHost Host { get; }
+  Craft.Editor.Shell.DocumentTab NewFile()
+  Craft.Editor.Shell.DocumentTabs Tabs { get; }
+  Craft.Editor.Shell.FolderTree Tree { get; }
+  Craft.Editor.Shell.ShellLayout Layout { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> SettingRows()
+  System.Collections.Generic.IReadOnlyList<System.String> OptionsProblems { get; }
+  System.String ApplySetting(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
+  System.Threading.Tasks.Task OpenRecentAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Editor.Shell.DocumentTab> OpenFileAsync(System.String path, System.Boolean fromTree = false, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> CloseTabAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ConfirmCloseAllAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> OpenFolderAsync(System.String path)
+  System.Threading.Tasks.Task<System.Boolean> SaveAsAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> SaveAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Void CloseFolder()
+  System.Void Dispose()
+  System.Void ReloadOptions()
+  System.Void ToggleTheme()
+  ctor(Craft.Editor.EditorHost host, Craft.Core.Settings.CraftSettings settings, Craft.Core.Workspaces.RecentList recent, Craft.Editor.Abstractions.IFileDialogs dialogs, Craft.Editor.Abstractions.IShellUi ui, System.Func<System.String, Craft.Core.CraftOptions, System.Threading.CancellationToken, System.Threading.Tasks.Task<Craft.Abstractions.ITextDocument>> openDocument = null)
+  event System.EventHandler OptionsChanged
+  event System.EventHandler ThemeChanged
+  event System.EventHandler WorkspaceChanged
+  static System.Collections.Generic.IReadOnlySet<System.String> AppliedAtStart { get; }

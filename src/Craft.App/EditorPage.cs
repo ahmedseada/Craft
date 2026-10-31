@@ -3,28 +3,35 @@
 
 using System.Globalization;
 using Craft.Abstractions;
-using Craft.Core;
 using Craft.Core.Documents;
 using Craft.Core.Plugins;
 using Craft.Editor;
+using Craft.Editor.Shell;
 using Craft.Maui;
 
 namespace Craft.App;
 
 /// <summary>
-/// The minimal window of phase E3: Open, Save and the theme on top, the find and replace bar (Ctrl+F, Ctrl+H), the editor,
-/// and a status bar (language, line and column, encoding, line ending, dirty marker, input-to-paint time). The bars wrap
-/// when the window is narrow (their layout follows the width). Code only, no XAML. Phase K: an <see cref="EditorHost"/>
-/// activates the plug-ins; their status items join the status bar, their panels the side area, their key bindings reach
-/// the editor's keys through the host; "Commands" (Ctrl+Shift+P) lists the commands and "Plug-ins" the installed ones.
+/// The app's shell (phase E4) over <see cref="ShellModel"/>: the folder tree, the tabs (one <see cref="EditorView"/> per
+/// tab, only the active one in the page, so a tab keeps its parse, caret and find state), the find and replace bar, the
+/// plug-ins' panels and status items, and the status bar; the settings page and the recent list from the shell's
+/// commands. Every button runs a command of <see cref="EditorCommands"/> (the palette lists them with their chords), so
+/// the page does nothing a plug-in could not ask for. The layout follows the window's measured width
+/// (<c>CRAFT_NARROW_WIDTH</c>): narrow, the tree takes the editor's place, the tabs are one switcher, the side panels and
+/// most buttons hide. Code only, no XAML; no platform code (the platform's pieces come through <see cref="IShellPlatform"/>).
 /// </summary>
 public sealed class EditorPage : ContentPage
 {
     private readonly AppStartup _startup;
     private readonly string? _initialPath;
-    private readonly EditorView _editor = new();
-    private readonly Button _save;
-    private readonly Button _themeButton;
+    private readonly EditorHost _host;
+    private readonly ShellModel _shell;
+    private readonly FolderTreeView _tree = new();
+    private readonly ContentView _treeBox;
+    private readonly TabStripView _tabStrip;
+    private readonly ContentView _editorArea = new();
+    private readonly List<EditorView> _views = [];
+    private readonly Label _empty;
     private readonly FlexLayout _findBar;
     private readonly Entry _query;
     private readonly Entry _replacement;
@@ -39,46 +46,65 @@ public sealed class EditorPage : ContentPage
     private readonly Label _dirty = StatusLabel();
     private readonly Label _paint = StatusLabel();
     private readonly Label _notice = StatusLabel();
-    private readonly View _topBar;
+    private readonly FlexLayout _topBar;
+    private readonly View[] _wideOnly;
     private readonly FlexLayout _statusBar;
-    private readonly EditorHost _host;
     private readonly StatusItemsView _pluginStatus;
     private readonly PanelsView _panels;
-    private IEditorDocument? _hostDocument;
+    private readonly ContentView _panelsBox;
+    private readonly Grid _body;
+    private readonly List<IDisposable> _platformHooks = [];
     private Window? _window;
-    private TextDocument? _document;
-    private ITheme _theme;
+    private EditorView? _shown;
     private bool _started;
 
-    /// <summary>The page, opening <paramref name="path"/> when given (else an empty untitled C# document).</summary>
+    /// <summary>The shell, opening <paramref name="path"/> when given (a folder as the workspace, a file in a tab; else an untitled document).</summary>
     public EditorPage(AppStartup startup, string? path)
     {
         ArgumentNullException.ThrowIfNull(startup);
         _startup = startup;
         _initialPath = path;
-        _theme = EditorThemes.Find(startup.Options.Theme) ?? EditorThemes.Get(EditorThemes.Dark);
-        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this));
+        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this), startup.Settings.Read);
+        _shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(this, ShowSettingsAsync));
         _pluginStatus = new StatusItemsView(_host);
-        _panels = new PanelsView(_host) { WidthRequest = 280 };
+        _panels = new PanelsView(_host);
+        _panelsBox = new ContentView { Content = _panels, WidthRequest = _shell.Options.PanelWidth };
         RegisterAppCommands();
 
-        var open = new Button { Text = "Open" };
-        open.Clicked += OnOpenClicked;
-        _save = new Button { Text = "Save", IsEnabled = false };
-        _save.Clicked += OnSaveClicked;
-        _themeButton = new Button { Text = ThemeButtonText() };
-        _themeButton.Clicked += OnThemeClicked;
+        _tabStrip = new TabStripView(_shell.Tabs);
+        _tabStrip.CloseRequested += (_, tab) => _ = _shell.CloseTabAsync(tab);
+        _tabStrip.ListRequested += (_, _) => _ = PickTabAsync();
+        _tree.Indent = _shell.Options.TreeIndent;
+        _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
+        _treeBox = new ContentView { Content = _tree, WidthRequest = _shell.Options.TreeWidth };
+        _empty = new Label
+        {
+            Text = "No file is open.\nCtrl+O opens a file, Ctrl+Shift+O a folder, Ctrl+R a recent one, Ctrl+N a new file; Ctrl+Shift+P lists every command.",
+            HorizontalTextAlignment = TextAlignment.Center,
+            VerticalTextAlignment = TextAlignment.Center,
+            Margin = new Thickness(24),
+        };
+
+        var menu = CommandButton("☰", "craft.commandPalette", "Every command (Ctrl+Shift+P)");
+        var folder = CommandButton("Folder", ShellCommandIds.OpenFolder, "Open a folder (Ctrl+Shift+O)");
+        var open = CommandButton("Open", ShellCommandIds.OpenFile, "Open a file (Ctrl+O)");
+        var save = CommandButton("Save", ShellCommandIds.Save, "Save (Ctrl+S)");
+        var tree = CommandButton("Tree", ShellCommandIds.ToggleTree, "Show or hide the folder tree (Ctrl+B)");
+        var newFile = CommandButton("New", ShellCommandIds.NewFile, "New file (Ctrl+N)");
+        var saveAs = CommandButton("Save as", ShellCommandIds.SaveAs, "Save as (Ctrl+Shift+S)");
+        var recent = CommandButton("Recent", ShellCommandIds.OpenRecent, "Recent files and folders (Ctrl+R)");
         var find = new Button { Text = "Find" };
+        ToolTipProperties.SetText(find, "Find (Ctrl+F), replace (Ctrl+H)");
         find.Clicked += (_, _) => ShowFind(replace: false, null);
-        var commands = new Button { Text = "Commands" };
-        commands.Clicked += (_, _) => _ = CommandPalette.ShowAsync(this, _host);
-        var plugins = new Button { Text = "Plug-ins" };
-        plugins.Clicked += (_, _) => _ = ShowPluginsAsync();
+        var settings = CommandButton("Settings", ShellCommandIds.Settings, "Settings (Ctrl+Comma)");
+        var theme = CommandButton("Theme", ShellCommandIds.ToggleTheme, "Switch light and dark");
+        var plugins = CommandButton("Plug-ins", "craft.plugins", "The installed plug-ins");
+        _wideOnly = [newFile, saveAs, recent, find, settings, theme, plugins];
         _topBar = new FlexLayout
         {
             Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
             Padding = new Thickness(6, 4),
-            Children = { open, _save, _themeButton, find, commands, plugins },
+            Children = { menu, folder, open, save, tree, newFile, saveAs, recent, find, settings, theme, plugins },
         };
 
         _query = new Entry { Placeholder = "Find", WidthRequest = 220 };
@@ -126,12 +152,14 @@ public sealed class EditorPage : ContentPage
             Children = { _language, _position, _encoding, _lineEnding, _dirty, _paint, _notice, _pluginStatus },
         };
         _statusBar.SetGrow(_pluginStatus, 1);
-        var body = new Grid
+
+        _body = new Grid
         {
-            ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+            ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
         };
-        body.Add(_editor, 0, 0);
-        body.Add(_panels, 1, 0);
+        _body.Add(_treeBox, 0, 0);
+        _body.Add(_editorArea, 1, 0);
+        _body.Add(_panelsBox, 2, 0);
 
         var grid = new Grid
         {
@@ -139,27 +167,36 @@ public sealed class EditorPage : ContentPage
             {
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Star),
                 new RowDefinition(GridLength.Auto),
             },
         };
         grid.Add(_topBar, 0, 0);
-        grid.Add(_findBar, 0, 1);
-        grid.Add(body, 0, 2);
-        grid.Add(_statusBar, 0, 3);
+        grid.Add(_tabStrip, 0, 1);
+        grid.Add(_findBar, 0, 2);
+        grid.Add(_body, 0, 3);
+        grid.Add(_statusBar, 0, 4);
         Content = grid;
 
-        _editor.Options = startup.Options;
-        _editor.Theme = _theme;
-        _editor.SaveRequested += OnSaveRequested;
-        _editor.FindRequested += OnFindRequested;
-        _editor.KeyHandler = _host;
-        _editor.CaretMoved += (_, _) => OnCaretMoved();
-        _editor.Painted += (_, _) => UpdatePaintTime();
+        _shell.Tabs.TabsChanged += OnTabsChanged;
+        _shell.Tabs.ActiveChanged += (_, _) => ShowActive();
+        _shell.Tabs.TabChanged += (_, _) =>
+        {
+            UpdateStatus();
+            UpdateTitle();
+        };
+        _shell.WorkspaceChanged += (_, _) => OnWorkspaceChanged();
+        _shell.OptionsChanged += (_, _) => OnOptionsChanged();
+        _shell.ThemeChanged += (_, _) => ApplyTheme();
+        _shell.Layout.Changed += (_, _) => ApplyLayout();
+        SizeChanged += (_, _) => _shell.Layout.UpdateWidth(Width);
+        ShowActive();
         ApplyTheme();
+        ApplyLayout();
     }
 
-    /// <summary>The window the page is in (its title shows the file and the dirty marker).</summary>
+    /// <summary>The window the page is in (its title shows the file, the dirty marker and the folder).</summary>
     public void AttachWindow(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -177,6 +214,8 @@ public sealed class EditorPage : ContentPage
         }
 
         _started = true;
+        HookPlatform();
+
         // The plug-ins start first, so they see the first document open (the sample's word count counts it).
         foreach (var activation in _host.RefreshPlugins())
         {
@@ -187,18 +226,24 @@ public sealed class EditorPage : ContentPage
             }
         }
 
-        if (_initialPath is not null)
+        if (_initialPath is not null && Directory.Exists(_initialPath))
         {
-            await OpenAsync(_initialPath);
+            await _shell.OpenFolderAsync(_initialPath);
         }
-        else
+        else if (_initialPath is not null)
         {
-            Show(TextDocument.Create("", _startup.Options), EditorLanguages.Find("csharp"));
+            await _shell.OpenFileAsync(_initialPath);
         }
 
-        if (_startup.OptionsError is { } error)
+        if (_shell.Tabs.Tabs.Count == 0 && _shell.Workspace is null)
         {
-            await DisplayAlertAsync("Craft: a setting did not parse", error + " The defaults are used.", "OK");
+            _shell.NewFile();
+        }
+
+        if (_startup.Problems.Count > 0 || _shell.OptionsProblems.Count > 0)
+        {
+            var problems = _startup.Problems.Concat(_shell.OptionsProblems).Distinct(StringComparer.Ordinal);
+            await DisplayAlertAsync("Craft: a setting was not taken", string.Join("\n", problems) + "\nThe settings page (Ctrl+Comma) shows each one.", "OK");
         }
 
         foreach (var plugin in _startup.Plugins)
@@ -211,12 +256,71 @@ public sealed class EditorPage : ContentPage
         }
     }
 
-    /// <summary>The app's own commands, on the same contracts as the plug-ins': the palette (Ctrl+Shift+P) and the Plug-ins list.</summary>
+    private static Label StatusLabel() => new() { Margin = new Thickness(0, 0, 16, 0), FontSize = 12, VerticalTextAlignment = TextAlignment.Center };
+
+    private static string LanguageText(EditorModel model, string? filePath)
+    {
+        if (model.Language is not null || filePath is null)
+        {
+            return model.LanguageName;
+        }
+
+        var extension = Path.GetExtension(filePath);
+        bool csharp = extension.Equals(".cs", StringComparison.OrdinalIgnoreCase) || extension.Equals(".csx", StringComparison.OrdinalIgnoreCase);
+        return csharp ? model.LanguageName + " (the C# plug-in is not installed or is disabled)" : model.LanguageName;
+    }
+
+    // The platform's pieces need the window's native view, which exists once the page has appeared.
+    private void HookPlatform()
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _platformHooks.Add(_startup.Platform.RouteKeys(_window, _host));
+            _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Tabs.HasUnsaved, () => _shell.ConfirmCloseAllAsync()));
+        }
+        catch (InvalidOperationException error)
+        {
+            _notice.Text = error.Message;
+        }
+    }
+
+    /// <summary>The app's own commands, on the same contracts as the plug-ins': the palette (Ctrl+Shift+P) and the Plug-ins list (the shell registers the rest).</summary>
     private void RegisterAppCommands()
     {
         EditorCommands.Register(new EditorCommand("craft.commandPalette", "Show all commands", (_, _) => CommandPalette.ShowAsync(this, _host)));
         EditorCommands.Register(new EditorCommand("craft.plugins", "Show the installed plug-ins", (_, _) => ShowPluginsAsync()));
         EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.P, KeyModifiers.Control | KeyModifiers.Shift), "craft.commandPalette"));
+    }
+
+    private Button CommandButton(string text, string command, string tooltip)
+    {
+        var button = new Button { Text = text };
+        ToolTipProperties.SetText(button, tooltip);
+        button.Clicked += (_, _) => _ = _host.ExecuteCommandAsync(command);
+        return button;
+    }
+
+    private async Task ShowSettingsAsync()
+    {
+        if (Navigation.ModalStack.Count == 0)
+        {
+            await Navigation.PushModalAsync(new SettingsPage(_shell));
+        }
+    }
+
+    private async Task PickTabAsync()
+    {
+        var tabs = _shell.Tabs.Tabs.ToArray();
+        int picked = await new MauiShellUi(this, ShowSettingsAsync).PickAsync("Tabs", [.. tabs.Select(TabStripView.TitleOf)]);
+        if (picked >= 0 && picked < tabs.Length)
+        {
+            _shell.Tabs.Activate(tabs[picked]);
+        }
     }
 
     private Task ShowPluginsAsync()
@@ -242,162 +346,180 @@ public sealed class EditorPage : ContentPage
         return DisplayAlertAsync("Plug-ins", lines.Count == 0 ? "No plug-in is installed." : string.Join("\n", lines), "OK");
     }
 
-    private void OnCaretMoved()
+    // A tab added gets its editor view; a tab removed has its view disposed.
+    private void OnTabsChanged(object? sender, EventArgs e)
     {
-        if (_hostDocument is { } document && _editor.Model is { } model)
+        foreach (var tab in _shell.Tabs.Tabs)
         {
-            _host.UpdateSelection(document, model.Selection);
+            tab.View ??= MakeView(tab);
         }
 
-        UpdateStatus();
-    }
-
-    private static Label StatusLabel() => new() { Margin = new Thickness(0, 0, 16, 0), FontSize = 12, VerticalTextAlignment = TextAlignment.Center };
-
-    private async void OnOpenClicked(object? sender, EventArgs e)
-    {
-        try
+        foreach (var view in _views.ToArray())
         {
-            var result = await FilePicker.Default.PickAsync(new PickOptions
+            if (!_shell.Tabs.Tabs.Any(t => ReferenceEquals(t.View, view)))
             {
-                PickerTitle = "Open a file",
-                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                _views.Remove(view);
+                if (ReferenceEquals(_shown, view))
                 {
-                    [DevicePlatform.WinUI] = [".cs", ".csx", ".txt", "*"],
-                }),
-            });
-            if (result is not null)
-            {
-                await OpenAsync(result.FullPath);
+                    _shown = null;
+                    _editorArea.Content = _empty;
+                }
+
+                view.Dispose();
             }
         }
-        catch (Exception error) when (error is not OutOfMemoryException)
-        {
-            await DisplayAlertAsync("Craft: could not open", error.Message, "OK");
-        }
+
+        UpdateTitle();
     }
 
-    private async Task OpenAsync(string path)
+    private EditorView MakeView(DocumentTab tab)
     {
-        TextDocument document;
-        try
+        var view = new EditorView
         {
-            document = await TextDocument.OpenAsync(path, _startup.Options);
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
+            Options = _shell.Options,
+            Theme = _shell.Theme,
+            KeyHandler = _host,
+        };
+        view.Open(tab.Document, tab.Language);
+        view.SaveRequested += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.Save);
+        view.FindRequested += (_, e) => ShowFind(e.Replace, e.InitialQuery);
+        view.CaretMoved += (_, _) =>
         {
-            await DisplayAlertAsync("Craft: could not open", $"{path}: {error.Message}", "OK");
-            if (_document is null)
+            if (view.Model is { } model && _shell.Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } owner)
             {
-                Show(TextDocument.Create("", _startup.Options), EditorLanguages.Find("csharp"));
+                _host.UpdateSelection(owner.HostDocument, model.Selection);
             }
 
-            return;
-        }
-
-        Show(document, EditorLanguages.ForFile(path));
+            if (ReferenceEquals(view, _shown))
+            {
+                UpdateStatus();
+            }
+        };
+        view.Painted += (_, _) =>
+        {
+            if (ReferenceEquals(view, _shown))
+            {
+                UpdatePaintTime();
+            }
+        };
+        _views.Add(view);
+        return view;
     }
 
-    private void Show(TextDocument document, ILanguage? language)
+    private void ShowActive()
     {
-        var old = _document;
-        if (old is not null)
+        var tab = _shell.Tabs.Active;
+        if (tab is not null)
         {
-            old.StateChanged -= OnDocumentStateChanged;
+            tab.View ??= MakeView(tab);
         }
 
-        _document = document;
-        document.StateChanged += OnDocumentStateChanged;
-        _editor.Open(document, language);
-        if (_hostDocument is { } closing)
+        var view = tab?.View as EditorView;
+        if (!ReferenceEquals(view, _shown) || _editorArea.Content is null)
         {
-            _host.Close(closing);
-        }
+            _shown = view;
+            _editorArea.Content = (View?)view ?? _empty;
+            if (view?.Model is { } model)
+            {
+                if (_findBar.IsVisible)
+                {
+                    ApplyFind(model);
+                }
 
-        _hostDocument = _host.Open(document, language, _editor.Model?.LanguageName);
-        old?.Dispose();
-        if (_findBar.IsVisible && _editor.Model is { } model)
-        {
-            ApplyFind(model);
+                model.EnsureCaretVisible();
+                view.Focus();
+            }
         }
 
         UpdateStatus();
         UpdateTitle();
     }
 
-    private void OnSaveClicked(object? sender, EventArgs e) => _ = SaveAsync();
-
-    private void OnSaveRequested(object? sender, EventArgs e) => _ = SaveAsync();
-
-    private async Task SaveAsync()
+    private void OnWorkspaceChanged()
     {
-        if (_document is not { } document)
-        {
-            return;
-        }
-
-        if (document.FilePath is null)
-        {
-            await DisplayAlertAsync("Craft: not saved", "This document has no file yet. Open a file to edit and save it (Save As comes with the shell, phase E4).", "OK");
-            return;
-        }
-
-        try
-        {
-            if (_hostDocument is { } open)
-            {
-                await _host.SaveAsync(open);
-            }
-            else
-            {
-                await document.SaveAsync();
-            }
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
-        {
-            await DisplayAlertAsync("Craft: could not save", $"{document.FilePath}: {error.Message}", "OK");
-        }
-
-        UpdateStatus();
+        _tree.Tree = _shell.Tree;
         UpdateTitle();
+        ApplyLayout();
     }
 
-    private void OnThemeClicked(object? sender, EventArgs e)
+    private void OnOptionsChanged()
     {
-        _theme = EditorThemes.Get(_theme.IsDark ? EditorThemes.Light : EditorThemes.Dark);
-        _editor.Theme = _theme;
-        _themeButton.Text = ThemeButtonText();
-        ApplyTheme();
+        var options = _shell.Options;
+        foreach (var tab in _shell.Tabs.Tabs)
+        {
+            if (tab.View is EditorView view && !ReferenceEquals(view.Options, options))
+            {
+                // A new model on the new options; the selection is kept.
+                var selection = view.Model?.Selection;
+                view.Options = options;
+                if (selection is { } kept && view.Model is { } model)
+                {
+                    int length = model.Snapshot.Length;
+                    model.Select(Math.Min(kept.Anchor, length), Math.Min(kept.Caret, length));
+                }
+            }
+        }
+
+        _panelsBox.WidthRequest = options.PanelWidth;
+        _tree.Indent = options.TreeIndent;
+        ApplyLayout();
     }
 
-    private string ThemeButtonText() => _theme.IsDark ? "Light theme" : "Dark theme";
+    private void ApplyLayout()
+    {
+        var layout = _shell.Layout;
+        bool narrow = layout.IsNarrow;
+        _treeBox.IsVisible = layout.TreeVisible;
+        _editorArea.IsVisible = layout.EditorVisible;
+        _panelsBox.IsVisible = layout.PanelsVisible;
+        _body.ColumnDefinitions[0].Width = narrow && layout.TreeVisible ? GridLength.Star : GridLength.Auto;
+        _body.ColumnDefinitions[1].Width = layout.EditorVisible ? GridLength.Star : new GridLength(0);
+        _treeBox.WidthRequest = narrow ? -1 : _shell.Options.TreeWidth;
+        _tabStrip.Compact = narrow;
+        foreach (var view in _wideOnly)
+        {
+            view.IsVisible = !narrow;
+        }
+
+        foreach (var label in (ReadOnlySpan<Label>)[_encoding, _lineEnding, _paint])
+        {
+            label.IsVisible = !narrow;
+        }
+    }
 
     private void ApplyTheme()
     {
+        var theme = _shell.Theme;
         if (Application.Current is { } application)
         {
-            application.UserAppTheme = _theme.IsDark ? AppTheme.Dark : AppTheme.Light;
+            application.UserAppTheme = theme.IsDark ? AppTheme.Dark : AppTheme.Light;
         }
 
-        var colors = _theme.Colors;
-        var background = ColorOf(colors.Background);
-        var foreground = ColorOf(colors.Foreground);
-        BackgroundColor = background;
-        _topBar.BackgroundColor = ColorOf(colors.Gutter);
-        _findBar.BackgroundColor = ColorOf(colors.CurrentLine);
-        _statusBar.BackgroundColor = ColorOf(colors.Gutter);
+        foreach (var view in _views)
+        {
+            view.Theme = theme;
+            view.Invalidate();
+        }
+
+        var colors = theme.Colors;
+        var foreground = ThemeColors.Of(colors.Foreground);
+        var bar = ThemeColors.Of(colors.Gutter);
+        BackgroundColor = ThemeColors.Of(colors.Background);
+        _topBar.BackgroundColor = bar;
+        _findBar.BackgroundColor = ThemeColors.Of(colors.CurrentLine);
+        _statusBar.BackgroundColor = bar;
+        _tabStrip.SetColors(foreground, bar, ThemeColors.Of(colors.CurrentLine));
+        _treeBox.BackgroundColor = bar;
+        _tree.TextColor = foreground;
+        _empty.TextColor = ThemeColors.Of(colors.GutterText);
         _pluginStatus.TextColor = foreground;
         _panels.TextColor = foreground;
-        _panels.BackgroundColor = ColorOf(colors.Gutter);
+        _panelsBox.BackgroundColor = bar;
         foreach (var label in (ReadOnlySpan<Label>)[_language, _position, _encoding, _lineEnding, _dirty, _paint, _notice, _matchCount])
         {
             label.TextColor = foreground;
         }
     }
-
-    private static Color ColorOf(uint argb) => Color.FromRgba((byte)(argb >> 16), (byte)(argb >> 8), (byte)argb, (byte)(argb >> 24));
-
-    private void OnFindRequested(object? sender, FindRequestedEventArgs e) => ShowFind(e.Replace, e.InitialQuery);
 
     private void ShowFind(bool replace, string? query)
     {
@@ -408,7 +530,7 @@ public sealed class EditorPage : ContentPage
             _query.Text = query;
         }
 
-        if (_editor.Model is { } model)
+        if (_shown?.Model is { } model)
         {
             ApplyFind(model);
         }
@@ -426,7 +548,7 @@ public sealed class EditorPage : ContentPage
 
     private void OnQueryChanged(object? sender, Microsoft.Maui.Controls.TextChangedEventArgs e)
     {
-        if (_editor.Model is { } model)
+        if (_shown?.Model is { } model)
         {
             ApplyFind(model);
         }
@@ -434,7 +556,7 @@ public sealed class EditorPage : ContentPage
 
     private void OnFindOptionChanged(object? sender, CheckedChangedEventArgs e)
     {
-        if (_editor.Model is { } model)
+        if (_shown?.Model is { } model)
         {
             ApplyFind(model);
         }
@@ -442,25 +564,25 @@ public sealed class EditorPage : ContentPage
 
     private void FindNext()
     {
-        _editor.Model?.Find.FindNext();
+        _shown?.Model?.Find.FindNext();
         UpdateCount();
     }
 
     private void FindPrevious()
     {
-        _editor.Model?.Find.FindPrevious();
+        _shown?.Model?.Find.FindPrevious();
         UpdateCount();
     }
 
     private void OnReplaceClicked(object? sender, EventArgs e)
     {
-        _editor.Model?.Find.ReplaceOne(_replacement.Text ?? "");
+        _shown?.Model?.Find.ReplaceOne(_replacement.Text ?? "");
         UpdateCount();
     }
 
     private void OnReplaceAllClicked(object? sender, EventArgs e)
     {
-        if (_editor.Model is { } model)
+        if (_shown?.Model is { } model)
         {
             int replaced = model.Find.ReplaceAll(_replacement.Text ?? "");
             _notice.Text = string.Create(CultureInfo.InvariantCulture, $"Replaced {replaced}");
@@ -472,17 +594,20 @@ public sealed class EditorPage : ContentPage
     private void OnCloseFindClicked(object? sender, EventArgs e)
     {
         _findBar.IsVisible = false;
-        if (_editor.Model is { } model)
+        foreach (var view in _views)
         {
-            model.Find.IsHighlighting = false;
+            if (view.Model is { } model)
+            {
+                model.Find.IsHighlighting = false;
+            }
         }
 
-        _editor.Invalidate();
+        _shown?.Invalidate();
     }
 
     private void UpdateCount()
     {
-        if (_editor.Model is not { } model || (_query.Text ?? "").Length == 0)
+        if (_shown?.Model is not { } model || (_query.Text ?? "").Length == 0)
         {
             _matchCount.Text = "";
             return;
@@ -493,42 +618,28 @@ public sealed class EditorPage : ContentPage
         _matchCount.Text = string.Create(CultureInfo.InvariantCulture, $"{(count.Capped ? "at least " : "")}{count.Count} {(count.Count == 1 ? "match" : "matches")}{wrapped}");
     }
 
-    private void OnDocumentStateChanged(object? sender, EventArgs e)
-    {
-        UpdateStatus();
-        UpdateTitle();
-    }
-
     private void UpdateStatus()
     {
-        if (_editor.Model is not { } model || _document is not { } document)
+        if (_shown?.Model is not { } model || _shell.Tabs.Active is not { } tab)
         {
+            _language.Text = _position.Text = _encoding.Text = _lineEnding.Text = _dirty.Text = _paint.Text = "";
             return;
         }
 
-        _language.Text = LanguageText(model, document);
+        _language.Text = LanguageText(model, tab.FilePath);
         _position.Text = string.Create(CultureInfo.InvariantCulture, $"Ln {model.CaretLine + 1}, Col {model.CaretColumn + 1}");
-        _encoding.Text = document.Encoding.WebName.ToUpperInvariant() + (document.HasBom ? " with BOM" : "");
-        _lineEnding.Text = document.LineEnding switch { "\r\n" => "CRLF", "\n" => "LF", "\r" => "CR", var other => other };
-        _dirty.Text = document.IsDirty ? "• modified" : "saved";
-        _save.IsEnabled = document.FilePath is not null;
-    }
-
-    private static string LanguageText(EditorModel model, TextDocument document)
-    {
-        if (model.Language is not null || document.FilePath is null)
+        if (tab.Document is TextDocument document)
         {
-            return model.Language is null ? "Plain text — the C# plug-in is not installed or is disabled" : model.LanguageName;
+            _encoding.Text = document.Encoding.WebName.ToUpperInvariant() + (document.HasBom ? " with BOM" : "");
+            _lineEnding.Text = document.LineEnding switch { "\r\n" => "CRLF", "\n" => "LF", "\r" => "CR", var other => other };
         }
 
-        var extension = Path.GetExtension(document.FilePath);
-        bool csharp = extension.Equals(".cs", StringComparison.OrdinalIgnoreCase) || extension.Equals(".csx", StringComparison.OrdinalIgnoreCase);
-        return csharp ? model.LanguageName + " (the C# plug-in is not installed or is disabled)" : model.LanguageName;
+        _dirty.Text = tab.IsDirty ? "• modified" : tab.FilePath is null ? "new" : "saved";
     }
 
     private void UpdatePaintTime()
     {
-        if (_editor.Model is { } model)
+        if (_shown?.Model is { } model && _paint.IsVisible)
         {
             _paint.Text = string.Create(CultureInfo.InvariantCulture, $"input to paint {model.LastInputToPaintMilliseconds:F1} ms (max {model.MaxInputToPaintMilliseconds:F1})");
         }
@@ -541,7 +652,9 @@ public sealed class EditorPage : ContentPage
             return;
         }
 
-        string name = _document?.FilePath is { } path ? Path.GetFileName(path) : "untitled";
-        _window.Title = $"Craft — {name}{(_document?.IsDirty == true ? " •" : "")}";
+        var tab = _shell.Tabs.Active;
+        string name = tab is null ? "no file" : tab.Title + (tab.IsDirty ? " •" : "");
+        string folder = _shell.Workspace is { } workspace ? " — " + Path.GetFileName(workspace.Root) : "";
+        _window.Title = $"Craft — {name}{folder}";
     }
 }

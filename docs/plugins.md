@@ -75,10 +75,11 @@ binding comes first either way. Keys: the letters, `D0` to `D9` (or the digit), 
 ## Settings
 
 A plug-in declares its settings (`IEditorPlugin.Settings`) and reads them with `host.Settings.Get("myplugin", "key")`.
-Each one's value comes from the environment variable `CRAFT_PLUGIN_<PLUGIN>_<KEY>` (upper-cased; any character that is
-not a letter or a digit becomes `_`), else its default: `sample`'s `showCharacters` is
+Each one's value comes from the variable `CRAFT_PLUGIN_<PLUGIN>_<KEY>` (upper-cased; any character that is not a letter or
+a digit becomes `_`): from the environment, else the open folder's `.craft/settings.json`, else the user's
+`settings.json` in the app's data folder (both written by the settings page, Ctrl+Comma), else its default: `sample`'s `showCharacters` is
 `CRAFT_PLUGIN_SAMPLE_SHOWCHARACTERS`. A key the plug-in did not declare is an error naming the declared ones. The
-settings page lists them (`host.Settings.All`, phase E4).
+settings page lists them (`host.Settings.All`) with Craft's own.
 
 ## The folder and plugin.json
 

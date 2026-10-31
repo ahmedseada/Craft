@@ -11,7 +11,7 @@ namespace Craft.Core.Workspaces;
 /// </summary>
 public sealed class Workspace : IDisposable
 {
-    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    private static readonly StringComparer PathComparer = PathKeys.Comparer;
 
     private readonly CraftOptions _options;
     private readonly HashSet<string> _ignore;
@@ -67,6 +67,45 @@ public sealed class Workspace : IDisposable
                 folders.Push(children[i]);
             }
         }
+    }
+
+    /// <summary>
+    /// The entries of one folder of the workspace (<paramref name="folder"/>, relative to the root or full; the root when
+    /// null): its folders first (ignored ones and links to folders left out), then its files, each sorted by name ignoring
+    /// case. Only that folder is read (the folder tree lists a folder when it is expanded); one it cannot read is empty.
+    /// </summary>
+    public IReadOnlyList<WorkspaceEntry> ListFolder(string? folder = null)
+    {
+        var full = folder is null ? Root : FullPath(folder);
+        var options = new EnumerationOptions { IgnoreInaccessible = true, RecurseSubdirectories = false, AttributesToSkip = 0 };
+        var folders = new List<WorkspaceEntry>();
+        var files = new List<WorkspaceEntry>();
+        try
+        {
+            foreach (var entry in new DirectoryInfo(full).EnumerateFileSystemInfos("*", options))
+            {
+                if (entry is DirectoryInfo directory)
+                {
+                    if ((directory.Attributes & FileAttributes.ReparsePoint) == 0 && !_ignore.Contains(directory.Name))
+                    {
+                        folders.Add(new WorkspaceEntry(directory.Name, directory.FullName, true));
+                    }
+                }
+                else
+                {
+                    files.Add(new WorkspaceEntry(entry.Name, entry.FullName, false));
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+
+        folders.Sort(WorkspaceEntry.ByName);
+        files.Sort(WorkspaceEntry.ByName);
+        folders.AddRange(files);
+        return folders;
     }
 
     /// <summary>Whether <paramref name="path"/> lies in the workspace and in no ignored folder.</summary>
@@ -144,4 +183,18 @@ public sealed class Workspace : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         return Path.GetFullPath(path, Root);
     }
+}
+
+/// <summary>A file or folder of a workspace, as its folder lists it.</summary>
+/// <param name="Name">Its name.</param>
+/// <param name="FullPath">Its full path.</param>
+/// <param name="IsFolder">Whether it is a folder.</param>
+public sealed record WorkspaceEntry(string Name, string FullPath, bool IsFolder)
+{
+    /// <summary>By name, ignoring case, then exactly (so the order is the same on every system).</summary>
+    public static Comparison<WorkspaceEntry> ByName { get; } = static (a, b) =>
+    {
+        int order = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        return order != 0 ? order : string.CompareOrdinal(a.Name, b.Name);
+    };
 }

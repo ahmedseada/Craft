@@ -20,6 +20,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 HostLogLines { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
   System.Int32 ProposalPreviewCharacters { get; init; }
+  System.Int32 RecentLimit { get; init; }
   System.Int32 ScrollMarginColumns { get; init; }
   System.Int32 ScrollMarginLines { get; init; }
   System.Int32 TabSize { get; init; }
@@ -28,10 +29,16 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Single DoubleClickDistance { get; init; }
   System.Single FontSize { get; init; }
   System.Single LineSpacing { get; init; }
+  System.Single NarrowWidth { get; init; }
+  System.Single PanelWidth { get; init; }
+  System.Single TreeIndent { get; init; }
+  System.Single TreeWidth { get; init; }
   System.String CrashFolder { get; init; }
+  System.String DataFolder { get; init; }
   System.String FontFamily { get; init; }
   System.String NewLine { get; init; }
   System.String RecoveryFolder { get; init; }
+  System.String ResolveDataFolder()
   System.String Theme { get; init; }
   System.String ToString()
   ctor()
@@ -134,6 +141,54 @@ sealed class Craft.Core.Plugins.PluginManifest : System.IEquatable<Craft.Core.Pl
   const System.String FileName = plugin.json
   ctor()
   static Craft.Core.Plugins.PluginManifest Read(System.ReadOnlySpan<System.Byte> utf8, System.String folderName, out System.Collections.Generic.IReadOnlyList<System.String> problems)
+sealed class Craft.Core.Settings.CraftSettings
+  Craft.Core.CraftOptions BuildOptions(out System.Collections.Generic.IReadOnlyList<System.String> problems)
+  Craft.Core.Settings.SettingSource SourceOf(System.String variable)
+  Craft.Core.Settings.SettingsFile User { get; }
+  Craft.Core.Settings.SettingsFile Workspace { get; set; }
+  System.Boolean Set(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
+  System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> Rows(System.Collections.Generic.IEnumerable<Craft.Core.CraftVariable> extra = null)
+  System.String Describe(Craft.Core.Settings.SettingSource source, System.String variable)
+  System.String Read(System.String variable)
+  const System.String FileName = settings.json
+  const System.String WorkspaceFolderName = .craft
+  ctor(System.Func<System.String, System.String> environment, Craft.Core.Settings.SettingsFile user, Craft.Core.Settings.SettingsFile workspace = null)
+  static System.Boolean Allows(Craft.Core.Settings.SettingLayer layer, System.String variable)
+  static System.String UserFilePath(Craft.Core.CraftOptions options)
+  static System.String Validate(System.String variable, System.String value)
+  static System.String WorkspaceFilePath(System.String root)
+enum Craft.Core.Settings.SettingLayer : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  User = 0
+  Workspace = 1
+sealed class Craft.Core.Settings.SettingRow : System.IEquatable<Craft.Core.Settings.SettingRow>
+  Craft.Core.CraftVariable Variable { get; init; }
+  Craft.Core.Settings.SettingRow <Clone>$()
+  Craft.Core.Settings.SettingSource Source { get; init; }
+  System.Boolean Equals(Craft.Core.Settings.SettingRow other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Note { get; init; }
+  System.String ToString()
+  System.String UserValue { get; init; }
+  System.String Value { get; init; }
+  System.String WorkspaceValue { get; init; }
+  System.Void Deconstruct(out Craft.Core.CraftVariable Variable, out System.String Value, out Craft.Core.Settings.SettingSource Source, out System.String UserValue, out System.String WorkspaceValue, out System.String Note)
+  ctor(Craft.Core.CraftVariable Variable, System.String Value, Craft.Core.Settings.SettingSource Source, System.String UserValue, System.String WorkspaceValue, System.String Note)
+enum Craft.Core.Settings.SettingSource : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Default = 0
+  Environment = 3
+  User = 1
+  Workspace = 2
+sealed class Craft.Core.Settings.SettingsFile
+  System.Boolean Set(System.String variable, System.String value)
+  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Values { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Problems { get; }
+  System.String FilePath { get; }
+  System.String Get(System.String variable)
+  System.Void Save()
+  static Craft.Core.Settings.SettingsFile Load(System.String path)
+  static Craft.Core.Settings.SettingsFile Parse(System.String path, System.ReadOnlySpan<System.Byte> utf8)
+  static System.Boolean IsVariable(System.ReadOnlySpan<System.Char> name)
 sealed class Craft.Core.Text.PieceTableBuffer : Craft.Abstractions.ITextBuffer
   Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
   Craft.Abstractions.ITextSnapshot Current { get; }
@@ -142,13 +197,56 @@ sealed class Craft.Core.Text.PieceTableBuffer : Craft.Abstractions.ITextBuffer
   ctor(System.String text)
   ctor(System.String text, Craft.Core.CraftOptions options)
   event System.EventHandler<Craft.Abstractions.TextChangedEventArgs> Changed
+static class Craft.Core.Workspaces.PathKeys
+  static System.StringComparer Comparer { get; }
+sealed class Craft.Core.Workspaces.RecentEntry : System.IEquatable<Craft.Core.Workspaces.RecentEntry>
+  Craft.Core.Workspaces.RecentEntry <Clone>$()
+  Craft.Core.Workspaces.RecentKind Kind { get; init; }
+  System.Boolean Equals(Craft.Core.Workspaces.RecentEntry other)
+  System.Boolean Equals(System.Object obj)
+  System.DateTimeOffset Opened { get; init; }
+  System.Int32 GetHashCode()
+  System.String Path { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Path, out Craft.Core.Workspaces.RecentKind Kind, out System.DateTimeOffset Opened)
+  ctor(System.String Path, Craft.Core.Workspaces.RecentKind Kind, System.DateTimeOffset Opened)
+enum Craft.Core.Workspaces.RecentKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  File = 0
+  Folder = 1
+sealed class Craft.Core.Workspaces.RecentList
+  System.Boolean Remove(System.String path)
+  System.Collections.Generic.IReadOnlyList<Craft.Core.Workspaces.RecentEntry> Entries { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Problems { get; }
+  System.Int32 Limit { get; set; }
+  System.Int32 RemoveMissing()
+  System.String FilePath { get; }
+  System.Void Add(System.String path, Craft.Core.Workspaces.RecentKind kind, System.DateTimeOffset? opened = null)
+  System.Void Clear()
+  System.Void Save()
+  const System.String FileName = recent.json
+  event System.EventHandler Changed
+  static Craft.Core.Workspaces.RecentList Load(Craft.Core.CraftOptions options)
+  static Craft.Core.Workspaces.RecentList Load(System.String path, System.Int32 limit)
 sealed class Craft.Core.Workspaces.Workspace : System.IDisposable
   Craft.Core.Documents.TextDocument Find(System.String path)
   System.Boolean Close(System.String path)
   System.Boolean Contains(System.String path)
   System.Collections.Generic.IEnumerable<System.String> EnumerateFiles()
   System.Collections.Generic.IReadOnlyCollection<Craft.Core.Documents.TextDocument> Documents { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Core.Workspaces.WorkspaceEntry> ListFolder(System.String folder = null)
   System.String Root { get; }
   System.Threading.Tasks.Task<Craft.Core.Documents.TextDocument> OpenAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispose()
   ctor(System.String root, Craft.Core.CraftOptions options = null)
+sealed class Craft.Core.Workspaces.WorkspaceEntry : System.IEquatable<Craft.Core.Workspaces.WorkspaceEntry>
+  Craft.Core.Workspaces.WorkspaceEntry <Clone>$()
+  System.Boolean Equals(Craft.Core.Workspaces.WorkspaceEntry other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsFolder { get; init; }
+  System.Int32 GetHashCode()
+  System.String FullPath { get; init; }
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String FullPath, out System.Boolean IsFolder)
+  ctor(System.String Name, System.String FullPath, System.Boolean IsFolder)
+  static System.Comparison<Craft.Core.Workspaces.WorkspaceEntry> ByName { get; }

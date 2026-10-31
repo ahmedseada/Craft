@@ -3,7 +3,7 @@
 
 namespace Craft.App;
 
-/// <summary>The MAUI application: one window with the editor page, on the file named on the command line if any.</summary>
+/// <summary>The MAUI application: one window with the shell, on the folder or file named on the command line if any.</summary>
 public sealed class App : Application
 {
     private readonly AppStartup _startup;

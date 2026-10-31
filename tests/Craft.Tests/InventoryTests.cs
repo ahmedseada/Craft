@@ -66,6 +66,9 @@ public static class InventoryTests
             ["CRAFT_GUTTER_PADDING"] = "1", ["CRAFT_AUTO_CLOSE_BRACKETS"] = "true", ["CRAFT_FIND_COUNT_LIMIT"] = "50", ["CRAFT_PARSE_WAIT_MS"] = "0",
             ["CRAFT_PLUGIN_FOLDERS"] = "p1; p2", ["CRAFT_PLUGINS_DISABLED"] = "Craft.CSharp, Other",
             ["CRAFT_KEY_BINDINGS"] = "Ctrl+Shift+W=sample.wordCount;Ctrl+K=", ["CRAFT_HOST_LOG_LINES"] = "20", ["CRAFT_PROPOSAL_PREVIEW_CHARS"] = "40",
+            // Phase E4: the shell.
+            ["CRAFT_DATA_FOLDER"] = "data", ["CRAFT_RECENT_LIMIT"] = "5", ["CRAFT_NARROW_WIDTH"] = "600", ["CRAFT_TREE_WIDTH"] = "300",
+            ["CRAFT_TREE_INDENT"] = "10", ["CRAFT_PANEL_WIDTH"] = "320",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -77,6 +80,7 @@ public static class InventoryTests
             GutterPaddingCells = 1, AutoCloseBrackets = true, FindCountLimit = 50, ParseWaitMilliseconds = 0,
             PluginFolders = options.PluginFolders, DisabledPlugins = options.DisabledPlugins,
             KeyBindings = options.KeyBindings, HostLogLines = 20, ProposalPreviewCharacters = 40,
+            DataFolder = "data", RecentLimit = 5, NarrowWidth = 600, TreeWidth = 300, TreeIndent = 10, PanelWidth = 320,
         }, options, "options read from every variable");
         Check.True(options.KeyBindings is [{ Name: "Ctrl+Shift+W", CommandId: "sample.wordCount" }, { Name: "Ctrl+K", CommandId: "" }], "CRAFT_KEY_BINDINGS parsed, an empty command kept as an unbinding");
         Check.SequenceEqual(["p1", "p2"], options.PluginFolders, "CRAFT_PLUGIN_FOLDERS split at ';'");

@@ -475,7 +475,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E1 | `Craft.Core`: piece table, snapshots, edits, undo and redo (grouped by typing pause), file open and save (encodings and line endings kept), autosave and recovery, workspace folder. | Random-edit equivalence against a plain string; a 100,000-line file opens and edits in the bench with memory ≈ text + pieces. | E0 |
 | E2 | `Craft.CSharp`, syntactic layer: the snapshot as `SourceText`, the incremental parse, classified spans for a line range, Roslyn's classification names mapped to theme classes, light and dark themes; C# shipped as a pre-installed, removable plug-in loaded from `plugins/` (`Craft.Core.Plugins.CraftPlugins`, `CRAFT_PLUGIN_FOLDERS`, `CRAFT_PLUGINS_DISABLED`). | Spans of fixed C# 14 files (every string kind, comments, preprocessor lines, contextual keywords) match; spans after random edits equal a fresh parse; the snapshot-`SourceText` equals `SourceText.From` on random edits. | E1 |
 | E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows. | E2 |
-| E4 | `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
+| E4 | **Built (2026-10-31, "E4 as built" below).** `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
@@ -525,6 +525,51 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
 | Keystroke to render (type or Backspace, then the frame) | 29 ms | 6.6 us | 23 us | 1.0 KB, 1 run string per keystroke |
 | Caret-blink frame | | 5.0 us | 13.5 us | 0 bytes |
 | Scroll frame, one line each | | 5.3 us | 33 us | 0.3 KB, 0.9 run strings per frame |
+
+## E4 as built (2026-10-31)
+
+- **Headless and tested** (group `Shell`): `Craft.Core.Settings` (`SettingsFile`: a JSON object of `CRAFT_*` names to
+  text, read as UTF-8 bytes with comments, trailing commas and a byte-order mark allowed, a bad key or value reported and
+  skipped, written sorted through a temporary file; `CraftSettings`: the layers environment > the workspace's
+  `.craft/settings.json` > the user's `settings.json` in the data folder > the default, `BuildOptions` taking every value
+  that parses and naming each one that does not with its source, `Set` validating before it writes, the page's
+  `Rows`). Decision: a workspace (a folder someone else may have written) sets neither `CRAFT_PLUGIN_FOLDERS` (code to
+  load) nor `CRAFT_PLUGINS_DISABLED`, and `CRAFT_DATA_FOLDER` (where the user's file lives) is from the environment only;
+  each is said so on the page. `Craft.Core.Workspaces`: `RecentList` (`recent.json` in the data folder, latest first,
+  `CRAFT_RECENT_LIMIT`, 0 keeps none), `Workspace.ListFolder` (one folder, folders first, ignored ones left out),
+  `PathKeys`. `Craft.Editor.Shell`: `DocumentTabs` (the tabs own their documents, the active tab is the host's active
+  document, one tab per file, titles with the folder when two files share a name, `TabChanged` only when the dirty
+  marker or the file changes: 20 edits redraw a tab once), `FolderTree` (a folder is listed when first expanded, never
+  below a closed one), `ShellLayout` (narrow below `CRAFT_NARROW_WIDTH`, default 720, of the measured width; each layout
+  keeps its own tree choice), `ShellModel` (the actions, the settings' reload, the theme).
+- **The shell's actions are commands** (`ShellCommandIds`, registered in `EditorCommands` with bindings in
+  `EditorKeyBindings`, on K's public contracts, taken back on dispose): new (Ctrl+N), open file (Ctrl+O), open folder
+  (Ctrl+Shift+O), recent (Ctrl+R), close folder, save (Ctrl+S; the editor's own Ctrl+S runs it), save as (Ctrl+Shift+S),
+  close tab (Ctrl+W, asks Save / Don't save / Cancel), next and previous tab (Ctrl+Tab, Ctrl+Shift+Tab), settings
+  (Ctrl+Comma), toggle tree (Ctrl+B), refresh tree, switch light and dark. Every button runs a command, so the palette
+  lists them all with their chords and `CRAFT_KEY_BINDINGS` rebinds them. `EditorKey.Comma` was added at the enum's end
+  (the contracts stay 1.0: nothing was released against K's 1.0 yet).
+- **Contracts for the UI** (`Craft.Editor.Abstractions`): `IFileDialogs` (folder, file, save path) and `IShellUi`
+  (unsaved question, pick from a list, settings page, message). `Craft.Maui.IShellPlatform` adds the keys pressed outside
+  the editor (sent to the bindings, so Ctrl+O works from the tree) and the close guard. Windows:
+  `Craft.Maui/Platforms/Windows/WindowsShellPlatform.cs` (the Windows App SDK's pickers with `InitializeWithWindow`, a
+  KeyDown handler on the window's content for chords and function keys no control handled, `AppWindow.Closing` asking
+  about every unsaved tab); `Craft.App/ShellPlatforms.cs` declares the factory, `Platforms/Windows` implements it.
+- **Views** (`Craft.Maui`, built here on net10.0): `FolderTreeView` (a virtualized `CollectionView` of the visible rows,
+  typed bindings), `TabStripView` (a strip in the wide layout, one switcher in the narrow one), `MauiShellUi` (MAUI's
+  dialogs), `SettingsPage` (every option and every plug-in setting: variable, meaning, default, value in effect and its
+  source, the environment's shown as overriding; written to the workspace's or the user's file, refused with the reason
+  when it does not parse; a change applies at once, the six read at start say so; search). **`Craft.App`**: `EditorPage`
+  is now the shell: one `EditorView` per tab, only the active one in the page (a tab keeps its parse, caret and find
+  state; a switch makes no new model and no new parse), the tree in the wide layout beside the editor and in the narrow
+  one in its place, the side panels and most buttons only in the wide layout. The app takes a folder or a file on the
+  command line. Settings added: `CRAFT_DATA_FOLDER`, `CRAFT_RECENT_LIMIT`, `CRAFT_NARROW_WIDTH`, `CRAFT_TREE_WIDTH`,
+  `CRAFT_TREE_INDENT`, `CRAFT_PANEL_WIDTH`.
+- **Tests**: `Shell`, `Workspace`, `ApiGuard`, `Inventory`, `PluginKit`, `Editor`: 43 passed on the CPU here. Craft.App and
+  the Windows files are not compiled here (Windows only).
+- **Not yet**: the recovery copies are not offered at start yet (`RecoveryStore` exists, the shell does not use it); the
+  tree does not watch the disk (Refresh); a settings value is typed as text (no per-type editors); the tab strip has no
+  drag to reorder; the save picker cannot start in the document's folder (a Windows picker limit).
 
 ## K as built (2026-10-31)
 

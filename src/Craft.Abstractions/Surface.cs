@@ -249,6 +249,11 @@ public enum EditorKey
 
     /// <summary>F12.</summary>
     F12,
+
+    // Phase E4: the comma, for the settings' Ctrl+Comma (added at the end, so the values above keep theirs).
+
+    /// <summary>The comma key of the main keyboard.</summary>
+    Comma,
 }
 
 /// <summary>Where the platform's input goes: the editor implements it, a <see cref="ITextInputAdapter"/> calls it.</summary>

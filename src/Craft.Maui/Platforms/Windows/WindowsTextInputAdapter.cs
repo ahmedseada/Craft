@@ -57,7 +57,8 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
     private static bool IsDown(VirtualKey key) =>
         (InputKeyboardSource.GetKeyStateForCurrentThread(key) & CoreVirtualKeyStates.Down) == CoreVirtualKeyStates.Down;
 
-    private static EditorKey Map(VirtualKey key) => key switch
+    /// <summary>The editor's key for a Windows virtual key (<see cref="EditorKey.None"/> for one it does not name).</summary>
+    internal static EditorKey Map(VirtualKey key) => key switch
     {
         VirtualKey.Left => EditorKey.Left,
         VirtualKey.Right => EditorKey.Right,
@@ -122,6 +123,7 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
         VirtualKey.F10 => EditorKey.F10,
         VirtualKey.F11 => EditorKey.F11,
         VirtualKey.F12 => EditorKey.F12,
+        (VirtualKey)0xBC => EditorKey.Comma, // VK_OEM_COMMA, which VirtualKey does not name
         _ => EditorKey.None,
     };
 

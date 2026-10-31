@@ -14,7 +14,7 @@ public sealed record CraftVariable(string Name, string Default, string Meaning);
 
 /// <summary>
 /// The editor's settings. Every one has a default and an environment variable (<see cref="Variables"/>); the app's
-/// settings page and a workspace's <c>.craft/settings.json</c> set them too (phase E4). Nothing the editor does is fixed
+/// settings page, the user's <c>settings.json</c> and a workspace's <c>.craft/settings.json</c> set them too (<c>Craft.Core.Settings.CraftSettings</c>). Nothing the editor does is fixed
 /// where someone may need to adjust it.
 /// </summary>
 public sealed record CraftOptions
@@ -124,6 +124,36 @@ public sealed record CraftOptions
     /// <summary>The characters of an edit's new text a proposal's confirmation shows before it cuts (<c>CRAFT_PROPOSAL_PREVIEW_CHARS</c>).</summary>
     public int ProposalPreviewCharacters { get; init; } = 200;
 
+    // Phase E4: the app's shell (its data folder, the recent list, the layout's widths).
+
+    /// <summary>
+    /// The folder the app keeps its own files in (the recent list, the user's <c>settings.json</c>); null for the user's
+    /// local application data folder, under "Craft". Read from the environment only (<c>CRAFT_DATA_FOLDER</c>).
+    /// </summary>
+    public string? DataFolder { get; init; }
+
+    /// <summary>The recent files and folders kept; 0 keeps none (<c>CRAFT_RECENT_LIMIT</c>).</summary>
+    public int RecentLimit { get; init; } = 20;
+
+    /// <summary>
+    /// The window width, in device-independent units, below which the shell shows its narrow (phone) layout: the folder
+    /// tree in place of the editor, the tabs as one switcher, no side panels. Measured from the window, never the platform (<c>CRAFT_NARROW_WIDTH</c>).
+    /// </summary>
+    public float NarrowWidth { get; init; } = 720;
+
+    /// <summary>The folder tree's width in the wide layout, in device-independent units (<c>CRAFT_TREE_WIDTH</c>).</summary>
+    public float TreeWidth { get; init; } = 260;
+
+    /// <summary>The indent of each level of the folder tree, in device-independent units (<c>CRAFT_TREE_INDENT</c>).</summary>
+    public float TreeIndent { get; init; } = 14;
+
+    /// <summary>The plug-ins' side panels' width in the wide layout, in device-independent units (<c>CRAFT_PANEL_WIDTH</c>).</summary>
+    public float PanelWidth { get; init; } = 280;
+
+    /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
+    public string ResolveDataFolder() =>
+        Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
+
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
     [
@@ -157,6 +187,12 @@ public sealed record CraftOptions
         new("CRAFT_KEY_BINDINGS", "(none)", "The user's key bindings, 'Chord=command' separated by ';' (Ctrl+Shift+W=sample.wordCount); they run before the editor's keys; an empty command unbinds a plug-in's chord."),
         new("CRAFT_HOST_LOG_LINES", "500", "Lines of the editor host's log (plug-ins' lines included) kept for the log view; 0 keeps none."),
         new("CRAFT_PROPOSAL_PREVIEW_CHARS", "200", "Characters of a proposed edit's new text its confirmation shows before it cuts."),
+        new("CRAFT_DATA_FOLDER", "(local app data)/Craft", "The folder of the app's own files (the recent list, the user's settings.json); from the environment only."),
+        new("CRAFT_RECENT_LIMIT", "20", "The recent files and folders kept; 0 keeps none."),
+        new("CRAFT_NARROW_WIDTH", "720", "The window width (device-independent units) below which the narrow (phone) layout shows."),
+        new("CRAFT_TREE_WIDTH", "260", "The folder tree's width in the wide layout (device-independent units)."),
+        new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units)."),
+        new("CRAFT_PANEL_WIDTH", "280", "The plug-ins' side panels' width in the wide layout (device-independent units)."),
     ];
 
     /// <summary>
@@ -323,6 +359,37 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_PROPOSAL_PREVIEW_CHARS") is { } preview)
         {
             options = options with { ProposalPreviewCharacters = Whole(preview, "CRAFT_PROPOSAL_PREVIEW_CHARS", 0, 1_000_000) };
+        }
+
+        // Phase E4: the shell.
+        if (Text(read, "CRAFT_DATA_FOLDER") is { } dataFolder)
+        {
+            options = options with { DataFolder = dataFolder };
+        }
+
+        if (Text(read, "CRAFT_RECENT_LIMIT") is { } recent)
+        {
+            options = options with { RecentLimit = Whole(recent, "CRAFT_RECENT_LIMIT", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_NARROW_WIDTH") is { } narrow)
+        {
+            options = options with { NarrowWidth = Positive(narrow, "CRAFT_NARROW_WIDTH", 0, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_TREE_WIDTH") is { } treeWidth)
+        {
+            options = options with { TreeWidth = Positive(treeWidth, "CRAFT_TREE_WIDTH", 40, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_TREE_INDENT") is { } treeIndent)
+        {
+            options = options with { TreeIndent = Positive(treeIndent, "CRAFT_TREE_INDENT", 0, 200) };
+        }
+
+        if (Text(read, "CRAFT_PANEL_WIDTH") is { } panelWidth)
+        {
+            options = options with { PanelWidth = Positive(panelWidth, "CRAFT_PANEL_WIDTH", 40, 10_000) };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

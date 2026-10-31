@@ -371,7 +371,9 @@ public static class TerminalTests
         var host = TerminalHosts.Get(TerminalHosts.Pipe);
         var shell = host.DefaultShell();
         return OperatingSystem.IsWindows()
-            ? (shell, "set /p L=\rtyped-text\recho echo:%L%\rexit 3\r")
+            // Not "set /p": cmd reading a pipe takes a whole buffer for it and drops every line after the first, so the
+            // lines after it (echo, exit) never ran and cmd waited for more (the owner's Windows run).
+            ? (shell, "set L=typed-text\recho echo:%L%\rexit 3\r")
             : (shell, "read line\rtyped-text\recho \"echo:$line\"\rexit 3\r");
     }
 

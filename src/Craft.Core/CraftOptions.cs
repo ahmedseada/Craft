@@ -377,6 +377,34 @@ public sealed record CraftOptions
     /// <summary>The fewest milliseconds between two updates of the activities and notifications on screen (<c>CRAFT_ACTIVITY_FRAME_MS</c>; 16: once a frame).</summary>
     public int ActivityFrameMilliseconds { get; init; } = 16;
 
+    /// <summary>
+    /// Whether the run keeps a breadcrumb trail in the crash folder (<c>CRAFT_CRASH_TRAIL</c>, the owner's note 21): the
+    /// last UI work, commands, key names (never the text typed), first-chance exceptions and Output lines, flushed as they
+    /// happen, for the problem report after a crash.
+    /// </summary>
+    public bool CrashTrail { get; init; } = true;
+
+    /// <summary>The most the trail's two files hold together, in KiB (<c>CRAFT_CRASH_TRAIL_KB</c>).</summary>
+    public int CrashTrailKilobytes { get; init; } = 512;
+
+    /// <summary>The most first-chance exceptions the trail records a second (<c>CRAFT_CRASH_TRAIL_EXCEPTIONS</c>); 0 records none.</summary>
+    public int CrashTrailExceptionsPerSecond { get; init; } = 20;
+
+    /// <summary>The trail's last lines a problem report holds (<c>CRAFT_CRASH_TICKET_TRAIL_LINES</c>).</summary>
+    public int CrashTicketTrailLines { get; init; } = 600;
+
+    /// <summary>Whether the next start after a run that did not close cleanly offers a problem report (<c>CRAFT_CRASH_TICKET_OFFER</c>).</summary>
+    public bool CrashTicketOffer { get; init; } = true;
+
+    /// <summary>The runs that died kept with their trails for a report (<c>CRAFT_CRASH_RUNS_KEPT</c>); older ones are removed.</summary>
+    public int CrashRunsKept { get; init; } = 5;
+
+    /// <summary>What reads the platform's record of a crash (<c>CRAFT_CRASH_RECORDS</c>): auto (the platform's: Windows' event log), none, or a registered source.</summary>
+    public string CrashRecords { get; init; } = "auto";
+
+    /// <summary>Whether Ctrl+C in a terminal copies its selection when there is one (else it is the shell's interrupt) (<c>CRAFT_TERMINAL_CTRL_C_COPIES</c>).</summary>
+    public bool TerminalCtrlCCopies { get; init; } = true;
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -468,6 +496,15 @@ public sealed record CraftOptions
         new("CRAFT_ACTIVITY_FRAME_MS", "16", "The fewest milliseconds between two updates of the running operations and notifications on screen.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Activity updates at most every", 1, 1000, "ms", "Notifications") },
         new("CRAFT_KEYMAP", "vscode", "The default shortcuts: vscode (VS Code's), visualstudio (Visual Studio's where the two differ), or a registered keymap; your own bindings come first.") { Shape = SettingShape.From(SettingSections.Keyboard, "Keymap", SettingChoiceSources.KeyMaps, null, false, null) },
         new("CRAFT_ZOOM_STEP", "1", "What Ctrl+= and Ctrl+- add to or take from the code font's size (written to your settings; Ctrl+0 takes it back).") { Shape = SettingShape.Number(SettingSections.Appearance, "Zoom step (Ctrl+= and Ctrl+-)", 0.5, 10, 0.5, "units", "Fonts") },
+        // The owner's note 21: the crash reporter that needs no hook (the run marker, the trail, the problem report).
+        new("CRAFT_CRASH_TRAIL", "true", "Whether the run keeps a breadcrumb trail beside the crash reports (the last UI work, commands, key names never the text typed, first-chance exceptions, Output lines), flushed as it happens, for the problem report after a crash. Applied at the next start.") { Shape = SettingShape.Toggle(SettingSections.Files, "Keep a breadcrumb trail for crash reports", "Crash reports") },
+        new("CRAFT_CRASH_TRAIL_KB", "512", "The most the trail's two files hold together, in KiB (the older half is dropped first).") { Shape = SettingShape.Whole(SettingSections.Files, "Trail size", 16, 1_048_576, "KiB", "Crash reports", step: 64) },
+        new("CRAFT_CRASH_TRAIL_EXCEPTIONS", "20", "The most first-chance exceptions the trail records a second (cancellations are never recorded); 0 records none.") { Shape = SettingShape.Whole(SettingSections.Files, "Exceptions recorded a second", 0, 10_000, null, "Crash reports") },
+        new("CRAFT_CRASH_TICKET_TRAIL_LINES", "600", "The trail's last lines a problem report holds.") { Shape = SettingShape.Whole(SettingSections.Files, "Trail lines in a report", 0, 1_000_000, "lines", "Crash reports", step: 100) },
+        new("CRAFT_CRASH_TICKET_OFFER", "true", "Whether the start after a run that did not close cleanly offers to write a problem report (Help › Report a problem always can).") { Shape = SettingShape.Toggle(SettingSections.Files, "Offer a report after a crash", "Crash reports") },
+        new("CRAFT_CRASH_RUNS_KEPT", "5", "The runs that did not close cleanly kept with their trails for a report; older ones are removed.") { Shape = SettingShape.Whole(SettingSections.Files, "Crashed runs kept", 0, 1000, null, "Crash reports") },
+        new("CRAFT_CRASH_RECORDS", "auto", "What reads the platform's own record of a crash for the report: auto (Windows' Application event log on Windows), none, or a registered source.") { Shape = SettingShape.Text(SettingSections.Files, "Read the platform's crash record with", "Crash reports") },
+        new("CRAFT_TERMINAL_CTRL_C_COPIES", "true", "Whether Ctrl+C in a terminal copies the selection when there is one (with none it is the shell's interrupt, ^C).") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Ctrl+C copies the selection", "Keys") },
     ];
 
     /// <summary>
@@ -915,6 +952,46 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_ACTIVITY_FRAME_MS") is { } frame)
         {
             options = options with { ActivityFrameMilliseconds = Whole(frame, "CRAFT_ACTIVITY_FRAME_MS", 1, 1000) };
+        }
+
+        if (Text(read, "CRAFT_CRASH_TRAIL") is { } trail)
+        {
+            options = options with { CrashTrail = Flag(trail, "CRAFT_CRASH_TRAIL") };
+        }
+
+        if (Text(read, "CRAFT_CRASH_TRAIL_KB") is { } trailKb)
+        {
+            options = options with { CrashTrailKilobytes = Whole(trailKb, "CRAFT_CRASH_TRAIL_KB", 16, 1_048_576) };
+        }
+
+        if (Text(read, "CRAFT_CRASH_TRAIL_EXCEPTIONS") is { } trailExceptions)
+        {
+            options = options with { CrashTrailExceptionsPerSecond = Whole(trailExceptions, "CRAFT_CRASH_TRAIL_EXCEPTIONS", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_CRASH_TICKET_TRAIL_LINES") is { } ticketLines)
+        {
+            options = options with { CrashTicketTrailLines = Whole(ticketLines, "CRAFT_CRASH_TICKET_TRAIL_LINES", 0, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_CRASH_TICKET_OFFER") is { } ticketOffer)
+        {
+            options = options with { CrashTicketOffer = Flag(ticketOffer, "CRAFT_CRASH_TICKET_OFFER") };
+        }
+
+        if (Text(read, "CRAFT_CRASH_RUNS_KEPT") is { } runsKept)
+        {
+            options = options with { CrashRunsKept = Whole(runsKept, "CRAFT_CRASH_RUNS_KEPT", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_CRASH_RECORDS") is { } records)
+        {
+            options = options with { CrashRecords = records };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_CTRL_C_COPIES") is { } ctrlC)
+        {
+            options = options with { TerminalCtrlCCopies = Flag(ctrlC, "CRAFT_TERMINAL_CTRL_C_COPIES") };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

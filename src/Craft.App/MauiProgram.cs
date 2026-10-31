@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
 using Craft.Core;
+using Craft.Core.Diagnostics;
 using Craft.Core.Plugins;
 using Craft.Core.Settings;
 using Craft.Core.Workspaces;
@@ -25,11 +26,15 @@ public static class MauiProgram
         WinUI.CrashDialog.Options = options;
 #endif
 
+        // The owner's note 21: the run's marker and breadcrumb trail in the crash folder, before anything else can fail; a
+        // clean exit removes them, so the next start knows a run that died, whatever killed it.
+        var crashes = CrashWatch.Begin(options);
+
         // The pre-installed plug-ins (plugins/<Name>/<Name>.dll beside the program; C# is one, removable): a plug-in that
         // fails is reported on the page, never a crash.
         var plugins = CraftPlugins.LoadInstalled(options);
         var recent = RecentList.Load(options);
-        var startup = new ShellStartup(options, settings, plugins, recent, ShellPlatforms.Create(), [.. problems, .. recent.Problems]);
+        var startup = new ShellStartup(options, settings, plugins, recent, ShellPlatforms.Create(), [.. problems, .. recent.Problems]) { Crashes = crashes };
         var builder = MauiApp.CreateBuilder();
         builder.UseMauiApp(_ => new App(startup));
 #if WINDOWS

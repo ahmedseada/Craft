@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.Core;
+using Craft.Core.Diagnostics;
 using Craft.Editor.Terminal;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Dispatching;
@@ -317,7 +318,22 @@ public sealed class TerminalView : ContentView, IDisposable
         }
     }
 
+    // Raised from the platform's pointer callback: nothing may leave it (the owner's note 20).
     private void OnStartInteraction(object? sender, TouchEventArgs e)
+    {
+        try
+        {
+            OnStartInteractionCore(e);
+        }
+#pragma warning disable CA1031 // Reported by the guard; the terminal goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the terminal: a pointer", error);
+        }
+    }
+
+    private void OnStartInteractionCore(TouchEventArgs e)
     {
         if (_terminal is null || e.Touches.Length == 0)
         {
@@ -329,7 +345,22 @@ public sealed class TerminalView : ContentView, IDisposable
         _graphics.Invalidate();
     }
 
+    // Raised from the platform's pointer callback: nothing may leave it (the owner's note 20).
     private void OnDragInteraction(object? sender, TouchEventArgs e)
+    {
+        try
+        {
+            OnDragInteractionCore(e);
+        }
+#pragma warning disable CA1031 // Reported by the guard; the terminal goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the terminal: a pointer", error);
+        }
+    }
+
+    private void OnDragInteractionCore(TouchEventArgs e)
     {
         if (_terminal is null || e.Touches.Length == 0 || _anchor is not { } anchor)
         {
@@ -341,7 +372,22 @@ public sealed class TerminalView : ContentView, IDisposable
         _graphics.Invalidate();
     }
 
+    // Raised from the platform's pointer callback: nothing may leave it (the owner's note 20).
     private void OnEndInteraction(object? sender, TouchEventArgs e)
+    {
+        try
+        {
+            OnEndInteractionCore();
+        }
+#pragma warning disable CA1031 // Reported by the guard; the terminal goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the terminal: a pointer", error);
+        }
+    }
+
+    private void OnEndInteractionCore()
     {
         _anchor = null;
         if (_terminal?.Selection is { IsEmpty: true })

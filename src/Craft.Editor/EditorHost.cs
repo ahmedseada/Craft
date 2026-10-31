@@ -144,6 +144,17 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <summary>The labels of the UI work running (every dispatch of the host runs under one; the UI watchdog names them).</summary>
     public UiWorkLabels Labels { get; }
 
+    /// <summary>
+    /// The run's breadcrumb trail (the owner's note 21), or null: each key's name (never the text typed), each command and
+    /// each log line go to it, and the UI work labels through <see cref="UiWorkLabels.Trail"/>. Recording is a struct put
+    /// on a channel: nothing is written on the UI thread.
+    /// </summary>
+    public Craft.Core.Diagnostics.CrashTrail? Trail
+    {
+        get => Labels.Trail;
+        set => Labels.Trail = value;
+    }
+
     /// <summary>The running operations (phase U): the status bar's activity and its list.</summary>
     public ActivityCenter ActivityCenter { get; }
 
@@ -452,6 +463,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
             return false;
         }
 
+        Labels.Trail?.Command(command.Name);
         long start = Stopwatch.GetTimestamp();
         try
         {
@@ -498,6 +510,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
             return false;
         }
 
+        Labels.Trail?.Key(key, modifiers);
         var chord = new KeyChord(key, modifiers);
         if (!_keyPressed.IsEmpty)
         {
@@ -685,7 +698,24 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     {
         ArgumentNullException.ThrowIfNull(action);
         string named = string.IsNullOrWhiteSpace(label) ? "host: dispatch" : label;
-        _dispatch(() => Labels.Run(named, action));
+        _dispatch(() => RunDispatched(named, action));
+    }
+
+    // The dispatcher's callback (the owner's note 20): what the action throws is reported and logged, never left to leave
+    // the platform's callback (WinUI can end the process for it with no managed handler seeing it).
+    private void RunDispatched(string label, Action action)
+    {
+        try
+        {
+            Labels.Run(label, action);
+        }
+#pragma warning disable CA1031 // Nothing may leave the dispatcher's callback: reported, logged, and the editor goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            Craft.Core.Diagnostics.CallbackGuard.Report("the UI dispatcher: " + label, error);
+            Log(HostSource, EditorLogLevel.Error, $"The UI work '{label}' failed: {error.Message}", error);
+        }
     }
 
     /// <inheritdoc />
@@ -928,6 +958,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     internal void Log(string source, EditorLogLevel level, string message, Exception? error)
     {
         var entry = new EditorLogEntry(DateTimeOffset.Now, level, source, message, error);
+        Labels.Trail?.Output(level.ToString(), source, error is null ? message : message + "  (" + error.GetType().Name + ": " + error.Message + ")");
         if (Options.HostLogLines > 0)
         {
             if (_log.Count >= Options.HostLogLines)

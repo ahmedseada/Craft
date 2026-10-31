@@ -3,6 +3,7 @@
 
 #if WINDOWS
 using Craft.Abstractions;
+using Craft.Core.Diagnostics;
 using Craft.Editor.Abstractions;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -36,6 +37,9 @@ public sealed class WindowsShellPlatform : IShellPlatform
 
     /// <inheritdoc />
     public IDrawnFonts? DrawnFonts { get; } = new WindowsDrawnFonts();
+
+    /// <inheritdoc />
+    public Craft.Core.Abstractions.ICrashRecordSource? CrashRecords { get; } = new WindowsEventLogCrashRecords();
 
     /// <inheritdoc />
     public IDisposable RouteKeys(MauiWindow window, IEditorKeyHandler handler)
@@ -103,19 +107,29 @@ public sealed class WindowsShellPlatform : IShellPlatform
 
         private void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            var key = WindowsTextInputAdapter.Map(e.Key);
-            if (key == EditorKey.None)
+            try
             {
-                return;
-            }
+                var key = WindowsTextInputAdapter.Map(e.Key);
+                if (key == EditorKey.None)
+                {
+                    return;
+                }
 
-            // Every key no control took goes to the handler, which decides (the shell's DialogQueue.Before: an open Craft
-            // dialog takes Escape, Enter, Tab and every other key; with none open only chords and function keys reach the
-            // key bindings, so a plain key typed into a text box stays that box's).
-            var modifiers = WindowsTextInputAdapter.Modifiers();
-            if (_handler.HandleKey(key, modifiers, null))
+                // Every key no control took goes to the handler, which decides (the shell's DialogQueue.Before: an open Craft
+                // dialog takes Escape, Enter, Tab and every other key; with none open only chords and function keys reach the
+                // key bindings, so a plain key typed into a text box stays that box's).
+                var modifiers = WindowsTextInputAdapter.Modifiers();
+                if (_handler.HandleKey(key, modifiers, null))
+                {
+                    e.Handled = true;
+                }
+            }
+#pragma warning disable CA1031 // Nothing may leave a WinUI callback (the owner's note 20).
+            catch (Exception error)
+#pragma warning restore CA1031
             {
                 e.Handled = true;
+                CallbackGuard.Report("the window: a key no control took", error);
             }
         }
     }
@@ -170,6 +184,12 @@ public sealed class WindowsShellPlatform : IShellPlatform
                     _confirmed = true;
                     MauiApplication.Current?.CloseWindow(_window);
                 }
+            }
+#pragma warning disable CA1031 // An async void WinUI callback: nothing may leave it (the owner's note 20).
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                CallbackGuard.Report("the window: closing", error);
             }
             finally
             {

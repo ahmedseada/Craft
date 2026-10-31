@@ -36,17 +36,27 @@ internal static class ComposerKeys
             Hooked.Add(box, composer);
             box.PreviewKeyDown += (_, e) =>
             {
-                var key = WindowsTextInputAdapter.Map(e.Key);
-                if (key == EditorKey.None || composer.RouteKey is not { } route)
+                try
                 {
-                    return;
-                }
+                    var key = WindowsTextInputAdapter.Map(e.Key);
+                    if (key == EditorKey.None || composer.RouteKey is not { } route)
+                    {
+                        return;
+                    }
 
-                var modifiers = WindowsTextInputAdapter.Modifiers();
-                bool chord = (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) != 0;
-                if ((key is EditorKey.Enter or EditorKey.Escape || chord) && route(key, modifiers))
+                    var modifiers = WindowsTextInputAdapter.Modifiers();
+                    bool chord = (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) != 0;
+                    if ((key is EditorKey.Enter or EditorKey.Escape || chord) && route(key, modifiers))
+                    {
+                        e.Handled = true;
+                    }
+                }
+#pragma warning disable CA1031 // Nothing may leave a WinUI callback (the owner's note 20).
+                catch (Exception error)
+#pragma warning restore CA1031
                 {
                     e.Handled = true;
+                    Craft.Core.Diagnostics.CallbackGuard.Report("the composer: a key press", error);
                 }
             };
         });

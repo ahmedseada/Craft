@@ -2066,16 +2066,19 @@ the owner's machine, not only headless.
 
 **Second Windows run (2026-10-31, late), queued for the next free slot, broken first**
 19. **The Output panel's text cannot be copied**: selectable lines, Ctrl+C, a Copy all, as the chat's messages (note 4).
+    **Built (2026-10-31)**, with Problems and Idrak telemetry: see "Notes 19-21 as built".
 20. **Copying in the terminal crashed the app with no crash report**: a native (WinUI/COM) fail-fast skips every managed
     handler, so the crash dialog never ran. Likely the clipboard touched off the UI thread, or the terminal's Ctrl+C;
-    found and fixed where it lives, with a test where it can be headless.
+    found and fixed where it lives, with a test where it can be headless. **Built (2026-10-31)**: the cause could not be
+    proven on Linux (no Windows record of that crash); every path of the terminal's copy is hardened, see "Notes 19-21 as
+    built". The next such crash leaves its record (note 21).
 21. **A global crash reporter that needs no hook ("an audit or a support ticket")**: a run marker written at start and
     removed on a clean exit, so the next start knows the last run died whatever killed it; a breadcrumb trail flushed to
     disk as it happens (the last UI work, commands, key names never typed text, first-chance exceptions, output lines);
     on Windows, the next start reads the Application event log's entry for that process (faulting module and code, or
     the .NET Runtime stack); and a "Report a problem" ticket (offered at the next start and in Help) bundling all of it
     with the app and system details into `CRAFT_CRASH_FOLDER`, shown for the owner to review and paste. Nothing is sent
-    anywhere. Every option per the option rule.
+    anywhere. Every option per the option rule. **Built (2026-10-31)**: see "Notes 19-21 as built".
 
 **From the run with a C# error (2026-10-31, on ebe717f and 8dcc3de)**
 22. **"C# worked but when I introduced a C# error it crashed"**, with the log's `AI: Fix CS1002 failed` and `The agent run
@@ -2142,6 +2145,65 @@ files showing in the tree, the side panel gone, every panel collapsible and resi
 whether voice dictation goes through the diff view (not answered yet).
 
 The held phases (M Android, L more languages, A3 remote models) stay held for the owner's word.
+
+## Notes 19-21 as built (2026-10-31)
+
+- **19, copy from the bottom panel** (`Craft.Maui.BottomPanelView`, `Craft.Editor.Shell.PanelCopy`): Output's and the
+  telemetry's rows are the chat's `SelectableLabel` (Windows: `Platforms/Windows/SelectableText.cs`, the TextBlock takes
+  text selection: a part of a line copies with Ctrl+C or the context menu); the lists choose rows (`SelectionMode.Multiple`)
+  and Ctrl+C that no control took copies the chosen rows in the list's order (`ShellPage.PanelCopyKeys`, before the key
+  bindings, only with no editor focused); "Copy all" in the panel's header copies the tab's whole list. Problems: the
+  message selectable, a Copy per row and Ctrl+C on the row chosen last, as a build tool writes it
+  (`Program.cs(12,5): error CS1002: ; expected`); Copy all copies every row. The lists stay virtualized (CollectionView)
+  and bounded (`CRAFT_HOST_LOG_LINES`, `CRAFT_PROBLEMS_LIMIT`).
+- **20, the terminal's copy crash.** Read end to end: the drag selection (`TerminalView`, GraphicsView pointer events),
+  `TerminalScreen.TextOf` (its ranges are clamped: a selection past the buffer cannot throw), Ctrl+C (it sent ^C to the
+  shell even with a selection; Ctrl+Shift+C was the copy), no context menu, and the clipboard (`MauiEditorClipboard`,
+  called synchronously inside the WinUI `PreviewKeyDown` that ran the command; the chat's Copy called
+  `Clipboard.Default` inside an `async void` click). Not provable here: no Windows record of the owner's crash exists, and
+  every managed exception on that path was already caught by `ExecuteCommandAsync`, which points at a native failure of
+  the clipboard inside the input callback or an exception escaping a WinUI callback (both fail-fast with 0xC000027B and
+  skip every managed handler). Hardened where it lives: (1) `Craft.Editor.DispatchedClipboard`: every clipboard call is
+  queued on the UI dispatcher (never inside the key or pointer handler that asked, never off the UI thread) and any
+  throw, at once or later, becomes the task's failure, logged; `MauiEditorClipboard.Shared` is the one every view uses
+  (editor, terminal, chat, panel, report). (2) Ctrl+C in a terminal copies the selection when there is one and ends it,
+  else ^C goes to the shell (`TerminalManager.TryCopyOnCtrlC`, `CRAFT_TERMINAL_CTRL_C_COPIES`); a failed copy is said in
+  Output. (3) No exception leaves a WinRT callback: `Craft.Core.Diagnostics.CallbackGuard` catches in the keyboard
+  adapter's PreviewKeyDown, CharacterReceived and PointerPressed, the window's KeyDown and closing, the composer's keys,
+  the terminal view's pointer handlers and every host dispatch (`EditorHost.Dispatch`); each failure is noted in the
+  trail, written once per place and type as `callback-<time>.txt`, and logged. (4) ConPTY: `ClosePseudoConsole` (which
+  can wait for its output to drain) runs off the UI thread, after waiting for a running exit callback, so the exit
+  callback never reads a freed process handle; the exit callback is guarded. Audit: the other clipboard users (the
+  editor's copy, cut and paste, the chat's Copy) go through the same dispatched clipboard.
+- **21, the crash reporter that needs no hook** (`Craft.Core.Diagnostics`): `CrashWatch.Begin` (Craft.App's MauiProgram,
+  before anything else) writes `run-<pid>.json` (pid, process, start, version, trail) to `CRAFT_CRASH_FOLDER`; the page's
+  dispose (the clean exit) removes it and the trail. The next start finds a marker whose process is gone (same id, name
+  and start time) and keeps it as `run-<pid>-<start>.died.json` with its trail renamed beside it (`CRAFT_CRASH_RUNS_KEPT`
+  of them). `CrashTrail`: the breadcrumbs, a struct put on a bounded channel (nothing allocated per key: tested, 20,000
+  keys), one writer off the UI thread appending to a ring of two files (`CRAFT_CRASH_TRAIL_KB`), flushed to the system
+  after each batch; it holds the UI work labels (`UiWorkLabels.Trail`), the commands, the key names (never typed text),
+  the first-chance exceptions (type, message, top frames; `CRAFT_CRASH_TRAIL_EXCEPTIONS` a second, cancellations left
+  out), the Output lines and the crash dialog's crash (flushed before its message box). Windows' record:
+  `Craft.Core.Abstractions.ICrashRecordSource` in the `CrashRecordSources` registry (library default `none`;
+  `CRAFT_CRASH_RECORDS`, auto the platform's); Windows registers `windows-eventlog`
+  (`Platforms/Windows/WindowsEventLogCrashRecords.cs`, EvtQuery/EvtNext/EvtRender through LibraryImport, read only), whose
+  XML `EventLogCrashXml` reads (Application Error 1000 by the pid: module, code with its meaning, offset; Application
+  Hang 1002; .NET Runtime 1023/1025/1026 by the app's name and the run's time, with the managed stack). The ticket:
+  `Craft.Editor.Shell.ProblemReport` offers it at the start after an unclean exit (`CRAFT_CRASH_TICKET_OFFER`) and from
+  Help › Report a problem (the run that died, or this one); it gathers off the UI thread as an activity
+  (`CrashTicket.Gather`: the marker, the record, the run's crash, stall and callback reports, the trail's last
+  `CRAFT_CRASH_TICKET_TRAIL_LINES`, the app, .NET and OS, the plug-ins with versions), writes `ticket-<time>.txt`,
+  and shows it for review with Copy, Open folder and Open the report. The profile folder, the user and machine names and
+  any e-mail address are replaced; nothing is sent. Every option declares its shape (Files › Crash reports; Terminal).
+- **Tests**: groups `CrashWatch` (9: the trail's lines and repeats, its ring, no allocation per key, a died run found once
+  and kept, the event XML, the ticket and its scrubbing, the offer, review and Copy, the registry, the callback guard)
+  and `Copy` (4: the dispatched clipboard, the panels' text, Ctrl+C in a terminal, a failed copy logged), with
+  `CrashReports`, `Terminal`, `Settings`, `Keys`, `Shell`, `ApiGuard`, `Inventory`.
+- **Not compiled here** (Windows only): `src/Craft.App` (MauiProgram's `CrashWatch.Begin` and `Crashes`,
+  CrashDialog's trail note and flush), `src/Craft.Maui/Platforms/Windows/WindowsEventLogCrashRecords.cs` (new),
+  `WindowsTextInputAdapter.cs` (the guarded handlers), `WindowsShellPlatform.cs` (`CrashRecords`, the guarded KeyDown and
+  closing), `ComposerKeys.cs` (the guarded PreviewKeyDown), `ConPtyTerminalHost.cs` (the dispose off the UI thread, the
+  guarded exit).
 
 ## Notes 13 and 16 as built (2026-10-31)
 

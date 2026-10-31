@@ -36,7 +36,8 @@ internal static partial class CrashDialog
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
             // A task nobody awaited failed: reported, and the app goes on (it would not close for it).
-            CrashReports.Write(Options, e.Exception, "a task nobody awaited (the app went on)");
+            var path = CrashReports.Write(Options, e.Exception, "a task nobody awaited (the app went on)");
+            CrashWatch.CurrentTrail?.Note($"A task nobody awaited failed: {e.Exception.GetBaseException().GetType().Name}: {e.Exception.GetBaseException().Message} (report {path})");
             e.SetObserved();
         };
     }
@@ -50,6 +51,14 @@ internal static partial class CrashDialog
 
         var path = CrashReports.Write(Options, error, source, extra);
         var text = CrashReports.Format(error, source, extra);
+
+        // The owner's note 21: the crash goes into the trail, flushed before the dialog (the process ends after it). A bounded
+        // wait on the crash path only: the trail's writer runs on the thread pool, never on this thread.
+        if (CrashWatch.CurrentTrail is { } trail)
+        {
+            trail.Note($"Craft crashed ({source}): {error.GetType().FullName}: {error.Message} (report {path})");
+            _ = trail.FlushAsync().Wait(TimeSpan.FromMilliseconds(500));
+        }
         if (text.Length > MaxShown)
         {
             text = string.Concat(text.AsSpan(0, MaxShown), "\n…");

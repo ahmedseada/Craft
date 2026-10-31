@@ -562,7 +562,16 @@ public sealed class ConversationsView : ContentView, IDisposable
             string? copy = text ?? (button.Parent?.Parent as MessageView)?.Text;
             if (!string.IsNullOrEmpty(copy))
             {
-                await Clipboard.Default.SetTextAsync(copy);
+                try
+                {
+                    await MauiEditorClipboard.Shared.SetTextAsync(copy);
+                }
+#pragma warning disable CA1031 // A copy that fails is noted; an exception never leaves a click's handler (the owner's note 20).
+                catch (Exception error)
+#pragma warning restore CA1031
+                {
+                    ToolTipProperties.SetText(button, "The copy failed: " + error.Message);
+                }
             }
         };
         return button;

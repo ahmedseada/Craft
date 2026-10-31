@@ -3,6 +3,7 @@
 
 #if WINDOWS
 using Craft.Abstractions;
+using Craft.Core.Diagnostics;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -177,15 +178,56 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
             _element.RemoveHandler(UIElement.PointerPressedEvent, _pointerPressed);
         }
 
+        // Each handler below is a WinUI callback: what its body throws is caught and reported (CallbackGuard), because an
+        // exception leaving it can end the process natively with no managed handler seeing it (the owner's note 20).
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            if (_element is Control control)
+            try
             {
-                control.Focus(FocusState.Pointer);
+                if (_element is Control control)
+                {
+                    control.Focus(FocusState.Pointer);
+                }
+            }
+#pragma warning disable CA1031 // Nothing may leave a WinUI callback.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                CallbackGuard.Report("the keyboard adapter: a pointer press", error);
             }
         }
 
         private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            try
+            {
+                PreviewKeyDown(e);
+            }
+#pragma warning disable CA1031 // Nothing may leave a WinUI callback.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                e.Handled = true;                                    // the key's work failed: it goes no further
+                CallbackGuard.Report("the keyboard: a key press", error);
+            }
+        }
+
+        private void OnCharacterReceived(UIElement sender, CharacterReceivedRoutedEventArgs e)
+        {
+            try
+            {
+                CharacterReceived(e);
+            }
+#pragma warning disable CA1031 // Nothing may leave a WinUI callback.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                e.Handled = true;
+                CallbackGuard.Report("the keyboard: a typed character", error);
+            }
+        }
+
+        private void PreviewKeyDown(KeyRoutedEventArgs e)
         {
             var key = Map(e.Key);
             var modifiers = Modifiers();
@@ -201,7 +243,7 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
             }
         }
 
-        private void OnCharacterReceived(UIElement sender, CharacterReceivedRoutedEventArgs e)
+        private void CharacterReceived(CharacterReceivedRoutedEventArgs e)
         {
             char c = e.Character;
             if (char.IsControl(c))

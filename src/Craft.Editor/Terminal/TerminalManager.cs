@@ -364,7 +364,38 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
     {
         if (ActiveTerminal?.SelectedText() is { Length: > 0 } text)
         {
+            await CopyTextAsync(text);
+        }
+    }
+
+    /// <summary>
+    /// Ctrl+C in a terminal (the owner's note 20): with a selection and <see cref="CraftOptions.TerminalCtrlCCopies"/>, the
+    /// selection goes to the clipboard and ends (the key does not reach the shell); with none, false: the shell gets ^C.
+    /// </summary>
+    public bool TryCopyOnCtrlC()
+    {
+        if (!_options().TerminalCtrlCCopies || ActiveTerminal is not { } terminal || terminal.SelectedText() is not { Length: > 0 } text)
+        {
+            return false;
+        }
+
+        terminal.ClearSelection();
+        _ = CopyTextAsync(text);
+        return true;
+    }
+
+    // The clipboard is reached through the dispatcher (DispatchedClipboard): a failure is logged, never thrown into the key's handler.
+    private async Task CopyTextAsync(string text)
+    {
+        try
+        {
             await _clipboard.SetTextAsync(text);
+        }
+#pragma warning disable CA1031 // A copy that fails is said in Output; the terminal goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(EditorLogLevel.Warning, $"Terminal: the selection could not be copied: {error.Message}", error);
         }
     }
 
@@ -550,7 +581,8 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
     private sealed class TerminalSink(TerminalManager owner) : IEditorInputSink
     {
         public bool OnKey(EditorKey key, KeyModifiers modifiers) =>
-            !owner.KeepsChord(new KeyChord(key, modifiers)) && (owner.ActiveTerminal?.HandleKey(key, modifiers) ?? false);
+            (key == EditorKey.C && modifiers == KeyModifiers.Control && owner.TryCopyOnCtrlC())
+            || (!owner.KeepsChord(new KeyChord(key, modifiers)) && (owner.ActiveTerminal?.HandleKey(key, modifiers) ?? false));
 
         public void OnText(string text) => owner.ActiveTerminal?.SendText(text);
     }

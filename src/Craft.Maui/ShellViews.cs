@@ -521,4 +521,10 @@ public interface IShellPlatform
 
     /// <summary>The bundled code font as the platform's drawn surface reaches it (the owner's note 14: Windows names its files), or null.</summary>
     IDrawnFonts? DrawnFonts => null;
+
+    /// <summary>
+    /// The platform's own record of a crash (the owner's note 21: Windows' Application event log), registered in
+    /// <see cref="Craft.Core.Abstractions.CrashRecordSources"/> while the shell runs; null when it has none.
+    /// </summary>
+    Craft.Core.Abstractions.ICrashRecordSource? CrashRecords => null;
 }

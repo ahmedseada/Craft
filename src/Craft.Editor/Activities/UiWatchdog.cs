@@ -20,6 +20,9 @@ public sealed class UiWorkLabels
     private long _lastTicks;
     private int _next;
 
+    /// <summary>The run's breadcrumb trail each label entered is recorded in (the owner's note 21), or null.</summary>
+    public Craft.Core.Diagnostics.CrashTrail? Trail { get; set; }
+
     /// <summary>The label of the UI work running now, or null when the UI thread is idle or runs unlabelled work.</summary>
     public string? Current => Volatile.Read(ref _current);
 
@@ -55,6 +58,7 @@ public sealed class UiWorkLabels
     {
         var outer = Volatile.Read(ref _current);
         Volatile.Write(ref _current, label);
+        Trail?.Label(label);
         int at = _next;
         _recent[at % RecentCount] = label;
         Volatile.Write(ref _next, (at + 1) % RecentCount);

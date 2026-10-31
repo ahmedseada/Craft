@@ -26,7 +26,7 @@ public sealed class EditorView : ContentView, IDisposable
     private readonly GraphicsView _graphics;
     private readonly MauiTextMeasurer _measurer = new();
     private readonly EditorDrawable _drawable;
-    private readonly MauiEditorClipboard _clipboard = new();
+    private readonly MauiEditorClipboard _clipboard = MauiEditorClipboard.Shared;
     private readonly InputForwarder _input;
     private IDisposable? _inputConnection;
     private IDispatcherTimer? _blink;

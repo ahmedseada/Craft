@@ -261,6 +261,18 @@ public sealed class TerminalInstance : IDisposable
         }
     }
 
+    /// <summary>Takes the selection away and redraws (a copy by Ctrl+C ends the selection, as a terminal does).</summary>
+    public void ClearSelection()
+    {
+        if (Selection is null)
+        {
+            return;
+        }
+
+        Selection = null;
+        RequestInvalidate();
+    }
+
     /// <summary>Tells the screen and the shell the view's size in cells.</summary>
     public void Resize(TerminalSize size)
     {

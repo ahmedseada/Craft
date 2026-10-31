@@ -159,6 +159,7 @@ public sealed class ShellModel : IDisposable
     public static IReadOnlySet<string> AppliedAtStart { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "CRAFT_PLUGIN_FOLDERS", "CRAFT_PLUGINS_DISABLED", "CRAFT_HOST_LOG_LINES", "CRAFT_PROPOSAL_PREVIEW_CHARS", "CRAFT_DATA_FOLDER",
+        "CRAFT_CRASH_TRAIL", "CRAFT_CRASH_TRAIL_KB", "CRAFT_CRASH_TRAIL_EXCEPTIONS", "CRAFT_CRASH_RUNS_KEPT", "CRAFT_CRASH_TICKET_OFFER",
     };
 
     private readonly IFileDialogs _dialogs;

@@ -370,27 +370,62 @@ public sealed partial class ConPtyTerminalHost : ITerminalHost
                 _disposed = true;
             }
 
-            _wait.Unregister(null);
             if (!_exited.Task.IsCompleted)
             {
                 _ = TerminateProcess(_process, 1);
             }
 
-            CloseConsole();
-            _input.Dispose();
-            _output.Dispose();
-            _exited.TrySetResult(-1);
-            _processWait.Dispose();
-            _process.Dispose();
+            // ClosePseudoConsole can wait until its output is drained (before Windows 11 24H2): never on the UI thread, which
+            // disposes a terminal when its tab closes (the owner's note 20). Writes and resizes already see _disposed.
+            _ = Task.Run(Release);
+        }
+
+        private void Release()
+        {
+            try
+            {
+                // Waits for an exit callback that is running now, so it never reads a process handle freed here.
+                using var unregistered = new ManualResetEvent(false);
+                if (_wait.Unregister(unregistered))
+                {
+                    _ = unregistered.WaitOne(TimeSpan.FromSeconds(5));
+                }
+
+                CloseConsole();
+                _input.Dispose();
+                _output.Dispose();
+            }
+#pragma warning disable CA1031 // A thread pool callback: nothing may leave it; the session is gone either way.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                Craft.Core.Diagnostics.CallbackGuard.Report("the terminal: closing the pseudo-console", error);
+            }
+            finally
+            {
+                _exited.TrySetResult(-1);
+                _processWait.Dispose();
+                _process.Dispose();
+            }
         }
 
         private void OnExited()
         {
-            int code = GetExitCodeProcess(_process, out uint exit) ? unchecked((int)exit) : -1;
-            _exited.TrySetResult(code);
+            try
+            {
+                int code = GetExitCodeProcess(_process, out uint exit) ? unchecked((int)exit) : -1;
+                _exited.TrySetResult(code);
 
-            // Closing the pseudo-console lets its output end (the reader is still reading what is left, so it cannot block for good).
-            CloseConsole();
+                // Closing the pseudo-console lets its output end (the reader is still reading what is left, so it cannot block for good).
+                CloseConsole();
+            }
+#pragma warning disable CA1031 // A registered wait's callback on the thread pool: an exception there ends the process.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                _exited.TrySetResult(-1);
+                Craft.Core.Diagnostics.CallbackGuard.Report("the terminal: the shell's exit", error);
+            }
         }
 
         private void CloseConsole()

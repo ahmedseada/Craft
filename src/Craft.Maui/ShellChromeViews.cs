@@ -649,6 +649,9 @@ public sealed record ProblemRow(string Text, string Place, Color Color, string M
 
     /// <summary>Whether a code action provider is registered (the row shows Fix and Explain).</summary>
     public bool HasActions { get; init; }
+
+    /// <summary>The row as Copy puts it on the clipboard: file(line,column): severity code: message (<see cref="PanelCopy.Problem"/>).</summary>
+    public string CopyText { get; init; } = "";
 }
 
 /// <summary>
@@ -665,6 +668,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly HorizontalStackLayout _tabs = new() { Spacing = 18, Padding = new Thickness(16, 0) };
     private readonly ContentView _body = new();
     private readonly Button _collapse;
+    private readonly Button _copyAll;
     private readonly CollectionView _problems;
     private readonly CollectionView _output;
     private readonly CollectionView _measures;
@@ -677,6 +681,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private int _problemCount;
     private int _shownCount = -1;
     private List<ProblemRow>? _shownRows;
+    private IReadOnlyList<ProblemRow> _problemRows = [];
+    private IReadOnlyList<TextRow> _measureRows = [];
+    private ProblemRow? _lastProblem;
 
     /// <summary>The panel over <paramref name="host"/>; a problem's row moves the caret through <paramref name="problemChosen"/>.</summary>
     public BottomPanelView(EditorHost host, ShellPalette palette, Action<int> problemChosen)
@@ -690,8 +697,11 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _telemetry = new TelemetryLog(host);
         _problems = new CollectionView { SelectionMode = SelectionMode.Single, ItemTemplate = new DataTemplate(MakeProblemRow) };
         _problems.SelectionChanged += OnProblemSelected;
-        _output = new CollectionView { ItemsSource = _outputLines, ItemTemplate = new DataTemplate(MakeTextRow), ItemsUpdatingScrollMode = ItemsUpdatingScrollMode.KeepLastItemInView };
-        _measures = new CollectionView { ItemTemplate = new DataTemplate(MakeTextRow) };
+        // The owner's note 19: each line is selectable text (Ctrl+C or the context menu copies a part of it), rows are chosen
+        // (a click; Ctrl or Shift for more) and Ctrl+C copies them, Copy all the whole list. The lists stay virtualized
+        // (only the rows on screen are made) and bounded (CRAFT_HOST_LOG_LINES, CRAFT_PROBLEMS_LIMIT).
+        _output = new CollectionView { ItemsSource = _outputLines, ItemTemplate = new DataTemplate(MakeTextRow), ItemsUpdatingScrollMode = ItemsUpdatingScrollMode.KeepLastItemInView, SelectionMode = SelectionMode.Multiple };
+        _measures = new CollectionView { ItemTemplate = new DataTemplate(MakeTextRow), SelectionMode = SelectionMode.Multiple };
         _terminal = palette.Label("No terminal host is available here.", palette.Secondary);
         _terminal.Margin = new Thickness(16, 8);
         _noMeasures = palette.Label("Nothing recorded yet: the plug-ins' and the library's measures (IEditorHost.Record) show here.", palette.Secondary);
@@ -709,9 +719,15 @@ public sealed class BottomPanelView : ContentView, IDisposable
         ToolTipProperties.SetText(_collapse, "Hide the panel (Ctrl+J)");
         SemanticProperties.SetDescription(_collapse, "Hide the bottom panel");
         _collapse.Clicked += (_, _) => CollapseRequested?.Invoke(this, EventArgs.Empty);
-        var strip = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)] };
+        _copyAll = palette.Flat("Copy all", palette.Secondary, 28, palette.SmallSize);
+        _copyAll.Padding = new Thickness(10, 0);
+        ToolTipProperties.SetText(_copyAll, "Copy the whole list (Ctrl+C copies the rows chosen)");
+        SemanticProperties.SetDescription(_copyAll, "Copy the whole list to the clipboard");
+        _copyAll.Clicked += (_, _) => _ = CopyAsync(AllText());
+        var strip = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)] };
         strip.Add(_tabs, 0, 0);
-        strip.Add(_collapse, 1, 0);
+        strip.Add(_copyAll, 1, 0);
+        strip.Add(_collapse, 2, 0);
         var grid = new Grid { RowDefinitions = [new RowDefinition(new GridLength(32)), new RowDefinition(GridLength.Star)] };
         grid.Add(strip, 0, 0);
         grid.Add(_body, 0, 1);
@@ -759,10 +775,65 @@ public sealed class BottomPanelView : ContentView, IDisposable
         };
         if (tab == BottomTab.Telemetry)
         {
-            _measures.ItemsSource = _telemetry.Rows.Select(r => new TextRow(r.Text)).ToArray();
+            _measureRows = [.. _telemetry.Rows.Select(r => new TextRow(r.Text))];
+            _measures.ItemsSource = _measureRows;
         }
 
+        _copyAll.IsVisible = tab != BottomTab.Terminal;
         RebuildTabs();
+    }
+
+    /// <summary>
+    /// Ctrl+C on the panel (a key no control took): the chosen rows of Output or the telemetry in the list's order, or the
+    /// Problems row chosen last, to the clipboard; false when the tab shown has none chosen.
+    /// </summary>
+    public bool CopyChosen()
+    {
+        string? text = Tab switch
+        {
+            BottomTab.Output => Joined(PanelCopy.InListOrder<TextRow>(_outputLines, _output.SelectedItems.OfType<TextRow>())),
+            BottomTab.Telemetry => Joined(PanelCopy.InListOrder(_measureRows, _measures.SelectedItems.OfType<TextRow>())),
+            BottomTab.Problems => _lastProblem?.CopyText,
+            _ => null,
+        };
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        _ = CopyAsync(text);
+        return true;
+
+        static string? Joined(IReadOnlyList<TextRow> rows) => rows.Count == 0 ? null : PanelCopy.Lines(rows.Select(r => r.Text));
+    }
+
+    // The tab's whole list as text.
+    private string AllText() => Tab switch
+    {
+        BottomTab.Output => PanelCopy.Lines(_outputLines.Select(r => r.Text)),
+        BottomTab.Telemetry => PanelCopy.Lines(_measureRows.Select(r => r.Text)),
+        BottomTab.Problems => PanelCopy.Lines(_problemRows.Select(r => r.CopyText)),
+        _ => "",
+    };
+
+    // Through the dispatched clipboard: a failure is said in Output, never thrown into a click's or a key's handler.
+    private async Task CopyAsync(string text)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await MauiEditorClipboard.Shared.SetTextAsync(text);
+        }
+#pragma warning disable CA1031 // A copy that fails is said; the panel goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(EditorLogLevel.Warning, $"The copy did not reach the clipboard: {error.Message}", error);
+        }
     }
 
     /// <summary>Shows <paramref name="model"/>'s problems (errors first, then by place), at most <c>CRAFT_PROBLEMS_LIMIT</c> rows.</summary>
@@ -772,6 +843,8 @@ public sealed class BottomPanelView : ContentView, IDisposable
         {
             _problems.ItemsSource = null;
             _shownRows = null;
+            _problemRows = [];
+            _lastProblem = null;
             _problemCount = 0;
             _shownCount = 0;
             RebuildTabs();
@@ -808,6 +881,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
             {
                 Diagnostic = diagnostic,
                 HasActions = actions,
+                CopyText = PanelCopy.Problem(fileName, line + 1, column + 1, diagnostic.Severity, diagnostic.Id, diagnostic.Message),
             });
         }
 
@@ -817,6 +891,8 @@ public sealed class BottomPanelView : ContentView, IDisposable
         if (!SameRows(_shownRows, rows))
         {
             _shownRows = rows;
+            _problemRows = rows;
+            _lastProblem = null;
             _problems.ItemsSource = rows;
         }
 
@@ -854,6 +930,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _terminal.TextColor = palette.Secondary;
         _noMeasures.TextColor = palette.Secondary;
         _collapse.TextColor = palette.Secondary;
+        _copyAll.TextColor = palette.Secondary;
         RebuildTabs();
     }
 
@@ -907,7 +984,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         var mark = new Label { FontSize = _palette.FontSize, VerticalTextAlignment = TextAlignment.Center, WidthRequest = 18 };
         mark.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Mark);
         mark.SetBinding(Label.TextColorProperty, static (ProblemRow row) => row.Color);
-        var text = _palette.Label("");
+        var text = new SelectableLabel { FontFamily = _palette.Font(), FontSize = _palette.FontSize, TextColor = _palette.Text, VerticalTextAlignment = TextAlignment.Center, LineBreakMode = LineBreakMode.TailTruncation };
         text.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Text);
         var place = _palette.Label("", _palette.Secondary);
         place.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Place);
@@ -925,12 +1002,23 @@ public sealed class BottomPanelView : ContentView, IDisposable
             };
         }
 
-        return new HorizontalStackLayout { Spacing = 10, Padding = new Thickness(16, 4), Children = { mark, text, place, fix, explain } };
+        var copy = _palette.SecondaryButton("Copy", 26);
+        ToolTipProperties.SetText(copy, "Copy the problem: file(line,column): severity code: message");
+        copy.Clicked += (sender, e) =>
+        {
+            if (sender is Button { BindingContext: ProblemRow row })
+            {
+                _lastProblem = row;
+                _ = CopyAsync(row.CopyText);
+            }
+        };
+
+        return new HorizontalStackLayout { Spacing = 10, Padding = new Thickness(16, 4), Children = { mark, text, place, copy, fix, explain } };
     }
 
-    private Label MakeTextRow()
+    private SelectableLabel MakeTextRow()
     {
-        var label = _palette.Label("", _palette.Text, _palette.SmallSize);
+        var label = new SelectableLabel { TextColor = _palette.Text, FontSize = _palette.SmallSize, VerticalTextAlignment = TextAlignment.Center, LineBreakMode = LineBreakMode.TailTruncation };
         label.FontFamily = _palette.Options.FontFamily;
         label.Padding = new Thickness(16, 1);
         label.SetBinding(Label.TextProperty, static (TextRow row) => row.Text);
@@ -944,6 +1032,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
             return;
         }
 
+        _lastProblem = row;
         Dispatcher.DispatchLabelled("problems: go to the problem", () =>
         {
             _problems.SelectedItem = null;

@@ -58,7 +58,9 @@ public sealed class CraftSettings
 
     private static readonly HashSet<string> EnvironmentOnly = new(StringComparer.Ordinal) { "CRAFT_DATA_FOLDER" };
     private static readonly HashSet<string> NotFromWorkspace = new(StringComparer.Ordinal) { "CRAFT_DATA_FOLDER", "CRAFT_PLUGIN_FOLDERS", "CRAFT_PLUGINS_DISABLED",
-        "CRAFT_TERMINAL_SHELL", "CRAFT_TERMINAL_ARGS", "CRAFT_TERMINAL_ENV", "CRAFT_TERMINAL_HOST" };
+        "CRAFT_TERMINAL_SHELL", "CRAFT_TERMINAL_ARGS", "CRAFT_TERMINAL_ENV", "CRAFT_TERMINAL_HOST",
+        // The crash watch starts before a workspace is read (the owner's note 21).
+        "CRAFT_CRASH_TRAIL", "CRAFT_CRASH_TRAIL_KB", "CRAFT_CRASH_TRAIL_EXCEPTIONS", "CRAFT_CRASH_RUNS_KEPT", "CRAFT_CRASH_TICKET_OFFER" };
 
     private readonly Func<string, string?> _environment;
 

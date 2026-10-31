@@ -129,6 +129,7 @@ sealed class Craft.Editor.Activities.UiWatchdog : System.IDisposable
   ctor(System.Action<System.Action> dispatch, Craft.Editor.Activities.UiWorkLabels labels, System.Int32 tickMilliseconds, System.Int32 stallMilliseconds)
   event System.EventHandler<Craft.Editor.Activities.UiStall> Stalled
 sealed class Craft.Editor.Activities.UiWorkLabels
+  Craft.Core.Diagnostics.CrashTrail Trail { get; set; }
   Craft.Editor.Activities.UiWorkLabels.Scope Enter(System.String label)
   System.Collections.Generic.IReadOnlyList<System.String> Recent()
   System.String Current { get; }
@@ -170,6 +171,10 @@ sealed class Craft.Editor.CompletionController : System.IDisposable
 sealed class Craft.Editor.DefinitionRequestedEventArgs : System.EventArgs
   Craft.Abstractions.DefinitionLocation Location { get; }
   ctor(Craft.Abstractions.DefinitionLocation location)
+sealed class Craft.Editor.DispatchedClipboard : Craft.Editor.Abstractions.IEditorClipboard
+  System.Threading.Tasks.Task SetTextAsync(System.String text)
+  System.Threading.Tasks.Task<System.String> GetTextAsync()
+  ctor(Craft.Editor.Abstractions.IEditorClipboard platform, System.Action<System.Action> post, System.Action<System.Exception> failed = null)
 sealed class Craft.Editor.EditProposal : System.IEquatable<Craft.Editor.EditProposal>
   Craft.Abstractions.IEditorDocument Document { get; init; }
   Craft.Abstractions.TextDiff Diff { get; init; }
@@ -218,6 +223,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   Craft.Abstractions.KeyChord? PendingChord { get; }
   Craft.Abstractions.SelectionState Selection { get; }
   Craft.Core.CraftOptions Options { get; }
+  Craft.Core.Diagnostics.CrashTrail Trail { get; set; }
   Craft.Editor.Abstractions.IEditorPresenter Presenter { get; set; }
   Craft.Editor.Activities.ActivityCenter ActivityCenter { get; }
   Craft.Editor.Activities.NotificationCenter Notifications { get; }
@@ -786,6 +792,10 @@ sealed class Craft.Editor.Shell.PageTabs
   ctor()
   event System.EventHandler Changed
   event System.EventHandler<Craft.Editor.Shell.PageTab> Closed
+static class Craft.Editor.Shell.PanelCopy
+  static System.Collections.Generic.IReadOnlyList<T> InListOrder<T>(System.Collections.Generic.IReadOnlyList<T> rows, System.Collections.Generic.IEnumerable<T> chosen)
+  static System.String Lines(System.Collections.Generic.IEnumerable<System.String> lines)
+  static System.String Problem(System.String file, System.Int32 line, System.Int32 column, Craft.Abstractions.DiagnosticSeverity severity, System.String code, System.String message)
 sealed class Craft.Editor.Shell.PanelLayout
   System.Boolean IsOpen(Craft.Editor.Shell.ShellPanel panel)
   System.Double Clamp(System.Double size, System.Double room)
@@ -837,6 +847,14 @@ enum Craft.Editor.Shell.PluginState : System.IComparable, System.IConvertible, S
   Off = 3
   Outdated = 1
   Problem = 2
+sealed class Craft.Editor.Shell.ProblemReport : System.IDisposable
+  System.String LastPath { get; }
+  System.Threading.Tasks.Task OfferAsync()
+  System.Threading.Tasks.Task ReportAsync()
+  System.Threading.Tasks.Task<System.ValueTuple<System.String, System.String>?> WriteAsync(Craft.Core.Diagnostics.RunMarker run, System.Boolean died, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Dispose()
+  const System.String CommandId = craft.reportProblem
+  ctor(Craft.Editor.EditorHost host, Craft.Core.Diagnostics.CrashWatch watch, System.Collections.Generic.IReadOnlyList<Craft.Core.Diagnostics.TicketPlugin> plugins, Craft.Editor.Abstractions.IEditorClipboard clipboard, System.Func<System.String, System.Threading.Tasks.Task> openFolder = null, System.Func<System.String, System.Threading.Tasks.Task> openFile = null)
 sealed class Craft.Editor.Shell.QuickOpen
   System.Boolean Capped { get; }
   System.Boolean IsIndexing { get; }
@@ -1249,6 +1267,7 @@ sealed class Craft.Editor.Terminal.TerminalInstance : System.IDisposable
   System.Threading.Tasks.Task Writes { get; }
   System.Threading.Tasks.Task<System.Int32> Exited { get; }
   System.Void Clear()
+  System.Void ClearSelection()
   System.Void Dispose()
   System.Void Paste(System.String text)
   System.Void Resize(Craft.Abstractions.TerminalSize size)
@@ -1278,6 +1297,7 @@ sealed class Craft.Editor.Terminal.TerminalManager : Craft.Abstractions.IEditorT
   Craft.Editor.Terminal.TerminalInstance ActiveTerminal { get; }
   Craft.Editor.Terminal.TerminalInstance Open(System.String folder = null, Craft.Abstractions.EditorTerminalRequest request = null)
   System.Boolean KeepsChord(Craft.Abstractions.KeyChord chord)
+  System.Boolean TryCopyOnCtrlC()
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Terminal.TerminalInstance> Terminals { get; }
   System.Func<System.Collections.IDictionary> ParentEnvironment { get; set; }
   System.String HomeFolder { get; set; }

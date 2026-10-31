@@ -94,6 +94,9 @@ public static class InventoryTests
             ["CRAFT_WORKSPACE_WATCHER"] = "none", ["CRAFT_WORKSPACE_WATCH_MS"] = "40",
             // The owner's note 16: the keymap and the zoom.
             ["CRAFT_KEYMAP"] = "visualstudio", ["CRAFT_ZOOM_STEP"] = "2",
+            // The owner's note 21: the crash watch and its report; note 20: Ctrl+C in a terminal.
+            ["CRAFT_CRASH_TRAIL"] = "false", ["CRAFT_CRASH_TRAIL_KB"] = "64", ["CRAFT_CRASH_TRAIL_EXCEPTIONS"] = "3", ["CRAFT_CRASH_TICKET_TRAIL_LINES"] = "50",
+            ["CRAFT_CRASH_TICKET_OFFER"] = "false", ["CRAFT_CRASH_RUNS_KEPT"] = "2", ["CRAFT_CRASH_RECORDS"] = "none", ["CRAFT_TERMINAL_CTRL_C_COPIES"] = "false",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -119,6 +122,8 @@ public static class InventoryTests
             ActivityMinimumMilliseconds = 0, ActivityFrameMilliseconds = 33,
             ExplorerOpen = false, ChatOpen = false, BottomPanelOpen = false, PanelMinimumSize = 80, WorkspaceWatcher = "none", WorkspaceWatchMilliseconds = 40,
             KeyMap = "visualstudio", ZoomStep = 2,
+            CrashTrail = false, CrashTrailKilobytes = 64, CrashTrailExceptionsPerSecond = 3, CrashTicketTrailLines = 50, CrashTicketOffer = false, CrashRunsKept = 2,
+            CrashRecords = "none", TerminalCtrlCCopies = false,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

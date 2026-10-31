@@ -4,6 +4,8 @@
 using System.Globalization;
 using Craft.Abstractions;
 using Craft.Core;
+using Craft.Core.Abstractions;
+using Craft.Core.Diagnostics;
 using Craft.Core.Documents;
 using Craft.Core.Plugins;
 using Craft.Core.Settings;
@@ -28,7 +30,11 @@ namespace Craft.Maui;
 /// <param name="Recent">The recent files and folders.</param>
 /// <param name="Platform">The platform's file dialogs, key routing and close guard.</param>
 /// <param name="Problems">What did not parse in the settings (each naming its variable and where it came from).</param>
-public sealed record ShellStartup(CraftOptions Options, CraftSettings Settings, IReadOnlyList<PluginLoadResult> Plugins, RecentList Recent, IShellPlatform Platform, IReadOnlyList<string> Problems);
+public sealed record ShellStartup(CraftOptions Options, CraftSettings Settings, IReadOnlyList<PluginLoadResult> Plugins, RecentList Recent, IShellPlatform Platform, IReadOnlyList<string> Problems)
+{
+    /// <summary>The run's crash watch (the owner's note 21: its marker, its trail), started before the window; null when none.</summary>
+    public CrashWatch? Crashes { get; init; }
+}
 
 /// <summary>
 /// The app's shell (phase D: the approved design, docs/design/Main.dc.html, on E4's <see cref="ShellModel"/> and K's
@@ -81,6 +87,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly PopupLayer _popup = new();
     private readonly CraftDialog _dialog;
     private readonly IEditorKeyHandler _keys;
+    private readonly ProblemReport _report;
     private readonly RailView _rail;
     private readonly BottomPanelView _bottom;
     private readonly TerminalManager _terminals;
@@ -131,7 +138,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         _dialog = new CraftDialog(new ShellPalette(EditorThemes.Get(EditorThemes.Dark), startup.Options), action => Dispatcher.DispatchLabelled("dialog: next", action));
         _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, _dialog, () => shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
         UiDispatch.Labels = _host.Labels;                    // the views' dispatches run labelled (the watchdog names them)
-        _keys = _dialog.Queue.Before(_host);
+        // The owner's note 19: Ctrl+C that no control took copies the bottom panel's chosen rows, before the key bindings.
+        _keys = new PanelCopyKeys(_dialog.Queue.Before(_host), () => _bottom?.CopyChosen() ?? false);
+        // The owner's note 21: the keys' names, the commands, the UI work and the log lines go to the run's trail.
+        _host.Trail = startup.Crashes?.Trail;
+        CallbackGuard.Options = startup.Options;
+        CallbackGuard.Failed += OnCallbackFailed;
         _dialog.FallbackFocus = () => _shown;
         shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog));
         _shell = shell;
@@ -156,6 +168,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         // A plug-in's IEditorHost.OpenExternalAsync (the learning plug-in's folder): the system's own launcher, any platform.
         _host.OpenExternal = path => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(new Uri(path));
         RegisterAppCommands();
+        if (startup.Platform.CrashRecords is { } crashRecords)
+        {
+            CrashRecordSources.Register(crashRecords);
+        }
+
+        _report = new ProblemReport(_host, startup.Crashes, TicketPlugin.Of(startup.Plugins), MauiEditorClipboard.Shared,
+            folder => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(new Uri(folder)),
+            path => _shell.OpenFileAsync(path));
 
         _titleWide = new TitleBarView(_palette);
         _titleNarrow = new TitleBarView(_palette);
@@ -247,7 +267,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             TerminalHosts.Register(terminalHost);
         }
 
-        _terminals = new TerminalManager(_host, () => _shell.Options, new MauiEditorClipboard());
+        _terminals = new TerminalManager(_host, () => _shell.Options, MauiEditorClipboard.Shared);
         _host.Terminals = _terminals;
         _terminalPanel = new TerminalPanelView(_terminals, _palette);
         _bottom.TerminalContent = _terminalPanel;
@@ -372,6 +392,12 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _disposed = true;
         _watchdog?.Dispose();
+        CallbackGuard.Failed -= OnCallbackFailed;
+        _report.Dispose();
+        if (_startup.Platform.CrashRecords is { } crashRecords)
+        {
+            CrashRecordSources.Unregister(crashRecords.Name);
+        }
         _noticeTimer?.Stop();
         _host.Notifications.Changed -= OnNotificationsChanged;
         _host.Notifications.Toast -= OnToast;
@@ -410,6 +436,23 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _editCommands.Dispose();
         _shell.Dispose();
+        _host.Trail = null;
+        _startup.Crashes?.EndCleanly();                              // the clean exit: the run's marker and trail go
+    }
+
+    // A platform callback threw and was caught (the owner's note 20): said in Output, the app goes on.
+    private void OnCallbackFailed(object? sender, CallbackFailure failure)
+    {
+        var line = $"A platform callback failed and was caught ({failure.Where}): {failure.Error.GetType().Name}: {failure.Error.Message}"
+            + (failure.ReportPath is { } path ? " Report: " + path : "");
+        _host.Dispatch("shell: a caught callback failure", () => _host.Log(EditorLogLevel.Error, line, failure.Error));
+    }
+
+    /// <summary>Ctrl+C that reached the window with no control taking it (no editor): the bottom panel's chosen rows first.</summary>
+    private sealed class PanelCopyKeys(IEditorKeyHandler inner, Func<bool> copy) : IEditorKeyHandler
+    {
+        public bool HandleKey(EditorKey key, KeyModifiers modifiers, IEditorInputSink? editor) =>
+            (editor is null && key == EditorKey.C && modifiers == KeyModifiers.Control && copy()) || inner.HandleKey(key, modifiers, editor);
     }
 
     /// <inheritdoc />
@@ -496,6 +539,18 @@ public sealed class ShellPage : ContentPage, IDisposable
                 _host.Notify("A setting was not taken", string.Join("\n", problems) + "\nThe settings page (Ctrl+Comma) shows each one.", NotificationSeverity.Error,
                     [new NotificationAction("Open settings", _ => _host.ExecuteCommandAsync(ShellCommandIds.Settings), Primary: true)]);
             }
+        }
+
+        // The owner's note 21: the last run did not close cleanly, so its problem report is offered.
+        try
+        {
+            await _report.OfferAsync();
+        }
+#pragma warning disable CA1031 // The offer never ends the start.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(EditorLogLevel.Error, $"The problem report's offer failed: {error.Message}", error);
         }
     }
 

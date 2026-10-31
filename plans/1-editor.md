@@ -3,7 +3,8 @@
 **Status (2026-11-01, Craft `main` c3cfaed, Idrak `main` 5b5854d):** E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2, the
 owner's notes 1-26 and X slices 1-3 are built (see "Now" below). Next, in this order: the bugs B1-B5 of the third
 Windows run, then the X restart (note 27, X parts 4 and 5, the rest of X), then phase W (the web languages), then P
-batch 2. See "The owner's third Windows run (2026-11-01)" at the end.
+batch 2 last, once W is done (the owner: the Idrak plug-ins in the editor are a later priority). See "The owner's third
+Windows run (2026-11-01)" at the end.
 
 ## Now (2026-11-01)
 
@@ -15,7 +16,7 @@ batch 2. See "The owner's third Windows run (2026-11-01)" at the end.
 | 4 | Note 27, X part 4, X part 5 | Lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
-| 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | After W starts, the owner's word ("resume the Idrak plug-ins from phase P") |
+| 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
 | 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
 | 9 | M (Android), A3 (remote models) | Held for the owner's word |
 | 10 | Does voice dictation go through the diff view? | The owner's call |
@@ -2811,7 +2812,8 @@ work" stalls at start-up (the plug-ins' rail, menus and models; the window's res
 1. B1-B5, three slots: B1 and B2 (the canvas), B3 and B4 (the plug-ins), B5 (Idrak, then Craft's use of it).
 2. The X restart: note 27, X part 4, X part 5, then the rest of X (planned below by its agent).
 3. W, the moment X is done (planned below by its agent).
-4. P batch 2 (planned below by its agent).
+4. P batch 2, last: only once W is done (the owner, 2026-11-01: "make Idrak's plug-ins in the editor a later
+   priority"); planned below by its agent.
 
 Every slot follows Craft's new build-and-test rule (`CLAUDE.md`): all the work, one build, all the tests, one run,
 fixes as a batch, the full filter once, then push.

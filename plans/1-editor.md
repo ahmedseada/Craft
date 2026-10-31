@@ -2178,6 +2178,29 @@ the owner's machine, not only headless.
     - Tests headless: read-only refuses every edit path, append keeps the selection and the follow rule, the trim keeps
       the view's place; and a scan that no `SelectionMode.Multiple` list is left in the shell.
 
+27. **The agent wrote its tool calls as text and stopped** (the owner's run, 2026-11-01, Qwen2.5-Coder-7B-Instruct,
+    "Create C# class For House with float 3 props and + float price": the reply described `write_file`, `read_file`
+    and `run_command` in markdown json fences, ended "You created a new House.cs…", and no file was written or offered;
+    "why the agent didn't continue and why the file never written or asked to be written?"). Causes:
+    - The model wrote the calls as fenced ```json blocks instead of its template's `<tool_call>…</tool_call>`, which
+      is the only place Idrak's "json" parser reads for this template; the first call also had one `}` too many.
+    - A turn with no call is the run's final answer, so the run ended after one turn with nothing done and the model's
+      claim unchallenged.
+    Fix in Idrak (on its `main`, by its rules: `IDRAK_DEVICES=cpu`, targeted filters), then used from Craft. Next free
+    slot, before note 25:
+    - A tolerant read (an option, on for the coding agent): when a reply has no call in the template's markers, a fenced
+      or bare JSON object or list shaped `{"name", "arguments"}` whose name is one of the request's tools is taken as a
+      call, the first complete JSON value read (trailing junk such as the extra brace ignored); a JSON example naming no
+      offered tool stays text.
+    - The coding agent's nudge: a turn that ends without a call but holds call-like text gets a correction message
+      (the format the template wants, with an example) and the run goes on; the number of nudges an option
+      (`CodingAgent`'s options and Craft's `agentNudges`), so a run never ends silently on a malformed call.
+    - Craft's agent panel says so when a run ends with no tool calls and no changes ("the model wrote no tool calls;
+      nothing was changed"), never letting the model's claim stand alone.
+    - Tests: the owner's reply verbatim parses into the three calls (the extra brace tolerated); a JSON example with
+      an unknown name stays text; a scripted model that answers in fences first, then properly after the nudge, writes
+      the file through the diff; the nudge limit ends the run with the message.
+
 **Already planned and still owed** (from the earlier notes, in U and U2 above): the notification centre, every
 operation in the status bar, the window never freezing, the settings and Models pages not covering the menus, new
 files showing in the tree, the side panel gone, every panel collapsible and resizable, and the open question of

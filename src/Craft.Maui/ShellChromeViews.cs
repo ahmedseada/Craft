@@ -581,7 +581,14 @@ public sealed record TextRow(string Text);
 /// <param name="Color">The severity's colour.</param>
 /// <param name="Mark">The severity's mark ("✕", "⚠", "ℹ").</param>
 /// <param name="Position">Where the caret goes when it is chosen.</param>
-public sealed record ProblemRow(string Text, string Place, Color Color, string Mark, int Position);
+public sealed record ProblemRow(string Text, string Place, Color Color, string Mark, int Position)
+{
+    /// <summary>The diagnostic (the row's code actions are asked for it).</summary>
+    public EditorDiagnostic Diagnostic { get; init; }
+
+    /// <summary>Whether a code action provider is registered (the row shows Fix and Explain).</summary>
+    public bool HasActions { get; init; }
+}
 
 /// <summary>
 /// The bottom panel (docs/design/Main.dc.html): the tabs Problems (with the count), Terminal (phase T), Output (the host's
@@ -641,6 +648,12 @@ public sealed class BottomPanelView : ContentView, IDisposable
     /// <summary>The tab shown.</summary>
     public BottomTab Tab { get; private set; }
 
+    /// <summary>
+    /// A Problems row's Fix or Explain (the design's buttons) was pressed: its diagnostic and the code action kind
+    /// (<see cref="CodeActionKinds.Fix"/>, <see cref="CodeActionKinds.Explain"/>); the page runs the registered providers' action.
+    /// </summary>
+    public Action<EditorDiagnostic, string>? CodeActionRequested { get; set; }
+
     /// <summary>Shows <paramref name="tab"/>.</summary>
     public void Select(BottomTab tab)
     {
@@ -685,6 +698,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _problemCount = shown.Count;
         int limit = model.Options.ProblemsListLimit;
         var rows = new List<ProblemRow>(Math.Min(limit, shown.Count));
+        bool actions = CodeActionProviders.All.Count > 0;
         foreach (var diagnostic in shown.Take(limit))
         {
             int start = Math.Clamp(diagnostic.Start, 0, snapshot.Length);
@@ -696,7 +710,11 @@ public sealed class BottomPanelView : ContentView, IDisposable
                 DiagnosticSeverity.Warning => (_palette.Warning, "⚠"),
                 _ => (_palette.Info, "ℹ"),
             };
-            rows.Add(new ProblemRow($"{diagnostic.Id}  {diagnostic.Message}", string.Create(CultureInfo.InvariantCulture, $"{fileName}  {line + 1}:{column + 1}"), color, mark, start));
+            rows.Add(new ProblemRow($"{diagnostic.Id}  {diagnostic.Message}", string.Create(CultureInfo.InvariantCulture, $"{fileName}  {line + 1}:{column + 1}"), color, mark, start)
+            {
+                Diagnostic = diagnostic,
+                HasActions = actions,
+            });
         }
 
         _problems.ItemsSource = rows;
@@ -760,7 +778,21 @@ public sealed class BottomPanelView : ContentView, IDisposable
         text.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Text);
         var place = _palette.Label("", _palette.Secondary);
         place.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Place);
-        return new HorizontalStackLayout { Spacing = 10, Padding = new Thickness(16, 4), Children = { mark, text, place } };
+        var fix = _palette.SecondaryButton("Fix", 26);
+        var explain = _palette.SecondaryButton("Explain", 26);
+        foreach (var (button, kind) in (ReadOnlySpan<(Button, string)>)[(fix, CodeActionKinds.Fix), (explain, CodeActionKinds.Explain)])
+        {
+            button.SetBinding(IsVisibleProperty, static (ProblemRow row) => row.HasActions);
+            button.Clicked += (sender, _) =>
+            {
+                if (sender is Button { BindingContext: ProblemRow row })
+                {
+                    CodeActionRequested?.Invoke(row.Diagnostic, kind);
+                }
+            };
+        }
+
+        return new HorizontalStackLayout { Spacing = 10, Padding = new Thickness(16, 4), Children = { mark, text, place, fix, explain } };
     }
 
     private Label MakeTextRow()

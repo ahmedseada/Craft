@@ -23,6 +23,7 @@ public sealed class EditorRenderer : IDisposable
     private readonly Dictionary<int, LineRuns> _lines = [];
     private readonly Dictionary<int, string> _numbers = [];
     private readonly EditorPopupRenderer _popups = new();
+    private readonly GhostTextRenderer _ghost = new();
     private TokenSpan[] _clipped = ArrayPool<TokenSpan>.Shared.Rent(64);
     private EditorModel? _model;
     private ITheme? _theme;
@@ -45,6 +46,12 @@ public sealed class EditorRenderer : IDisposable
 
     /// <summary>The squiggle segments the last frame drew (only for diagnostics on its visible lines).</summary>
     public int SquiggleSegmentsDrawn { get; private set; }
+
+    /// <summary>The ghost lines of an inline completion drawn in the last frame.</summary>
+    public int GhostLinesDrawn => _ghost.LinesDrawn;
+
+    /// <summary>Whether the inline completion's hint bar was drawn in the last frame.</summary>
+    public bool GhostHintDrawn => _ghost.HintDrawn;
 
     /// <summary>
     /// Draws <paramref name="model"/> scrolled to (<paramref name="scrollX"/>, <paramref name="scrollY"/>) in a viewport of
@@ -227,6 +234,7 @@ public sealed class EditorRenderer : IDisposable
             }
         }
 
+        _ghost.Draw(canvas, model, scrollX, scrollY, viewportWidth, viewportHeight);
         _popups.Draw(canvas, model);
         model.NotePainted();
     }

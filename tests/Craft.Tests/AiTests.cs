@@ -282,6 +282,12 @@ public static class AiTests
             ["readLines"] = "10", ["searchResults"] = "5", ["searchFileKb"] = "64", ["ignore"] = "out; dist", ["patchFolder"] = "patches", ["toolsFolder"] = "/work",
             ["mcpAddress"] = "127.0.0.1:7777", ["mcpToken"] = "none", ["mcpOnStart"] = "true", ["model"] = "store:coder", ["device"] = "cpu", ["context"] = "4096",
             ["weights"] = "int8", ["keepAliveMinutes"] = "0", ["threads"] = "2", ["cpuMemoryMb"] = "512", ["gpuMemoryMb"] = "1024", ["idrakPlugins"] = "",
+            // Phase A2: completion, chat, placement, agent.
+            ["modelProvider"] = "remote", ["completion"] = "false", ["completionModel"] = "store:fim", ["completionDelayMs"] = "150", ["completionMaxTokens"] = "40",
+            ["completionMaxLines"] = "3", ["completionSuffixChars"] = "128", ["completionPrefixChars"] = "4000", ["completionChunk"] = "2", ["completionTemperature"] = "0.2",
+            ["chatMaxTokens"] = "300", ["chatToolRounds"] = "2", ["chatKeep"] = "false", ["chatFile"] = "c.json", ["chatHistory"] = "10", ["placement"] = "csharp-tokens",
+            ["placementMaxError"] = "0.1", ["agentSandbox"] = "container", ["agentMaxTurns"] = "5", ["agentMinutes"] = "3", ["agentMaxTokens"] = "500",
+            ["agentFolder"] = "/copies", ["agentCopyIgnore"] = "bin",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -290,7 +296,12 @@ public static class AiTests
             ReadLines: 10, SearchResults: 5, SearchFileKilobytes: 64, PatchFolder: "patches", ToolsFolder: "/work", McpAddress: "127.0.0.1:7777", McpToken: "none",
             McpOnStart: true, Model: "store:coder", Device: "cpu", Context: 4096, Weights: "int8", KeepAliveMinutes: 0, Threads: 2, CpuMemoryMegabytes: 512,
             GpuMemoryMegabytes: 1024, IdrakPlugins.Count: 0,
-        } && settings.Ignore.SequenceEqual(["out", "dist"]), "each value is read");
+            ModelProvider: "remote", Completion: false, CompletionModel: "store:fim", CompletionDelayMilliseconds: 150, CompletionMaxTokens: 40, CompletionMaxLines: 3,
+            CompletionSuffixCharacters: 128, CompletionPrefixCharacters: 4000, CompletionChunk: 2, ChatMaxTokens: 300, ChatToolRounds: 2, ChatKeep: false,
+            ChatFile: "c.json", ChatHistory: 10, Placement: "csharp-tokens", PlacementMaxError: 0.1, AgentSandbox: "container", AgentMaxTurns: 5, AgentMinutes: 3,
+            AgentMaxTokens: 500, AgentFolder: "/copies",
+        } && settings.Ignore.SequenceEqual(["out", "dist"]) && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
+            "each value is read");
         var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "readLines" ? "many" : null), "a bad value");
         Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_READLINES", StringComparison.Ordinal), "the error names the variable");
     }

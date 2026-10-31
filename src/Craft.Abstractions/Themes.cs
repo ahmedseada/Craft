@@ -92,6 +92,9 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
 
     /// <summary>Text drawn on the accent (the primary button's label).</summary>
     public uint AccentInk { get; init; } = Background;
+
+    /// <summary>Ghost text: an inline completion not yet accepted, drawn italic (the design's #717A8A lifted to 4.8:1 on the dark editor ground).</summary>
+    public uint GhostText { get; init; } = 0xFF7D8696;
 }
 
 /// <summary>
@@ -407,7 +410,7 @@ public static class EditorThemes
                 Ground = ground, Surface = surface, Border = 0xFFD0D7DE, SecondaryText = Fit(0xFF57606A), Accent = accent, Success = Fit(0xFF0E7A6B),
                 DiffAdded = 0xFFDDF4EC, DiffRemoved = 0xFFFCE4E6,
                 Raised = raised, RaisedHigh = raisedHigh, InterfaceSelection = selection, BorderStrong = 0xFF8C959F, Text = 0xFF1F2328,
-                AccentInk = 0xFFFFFFFF,
+                AccentInk = 0xFFFFFFFF, GhostText = Fit(0xFF6E7781),
             },
             // The same class mapping as the dark theme's (every type name one hue, parameters as locals, punctuation plain).
             Styles(keyword: 0xFF0B4FC6, type: 0xFF0E7A6B, @string: 0xFF9A4A06, comment: 0xFF5F6B78, number: 0xFF8A2BB8, method: 0xFF795E00,

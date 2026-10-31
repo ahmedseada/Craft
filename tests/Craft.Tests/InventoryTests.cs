@@ -79,6 +79,8 @@ public static class InventoryTests
             ["CRAFT_FONT_FALLBACK"] = "Consolas", ["CRAFT_INTERFACE_FONT"] = "Segoe UI", ["CRAFT_INTERFACE_FONT_SIZE"] = "14", ["CRAFT_ACCENT"] = "#82AAFF",
             ["CRAFT_BOTTOM_PANEL_HEIGHT"] = "200", ["CRAFT_QUICK_OPEN_FILES"] = "1000", ["CRAFT_QUICK_OPEN_ROWS"] = "8", ["CRAFT_TOUCH_TARGET"] = "48",
             ["CRAFT_TITLE_BAR"] = "page",
+            // Phase A2: inline completion's provider, the chat column.
+            ["CRAFT_INLINE_COMPLETION_PROVIDER"] = "ai", ["CRAFT_CHAT_WIDTH"] = "400",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -97,6 +99,7 @@ public static class InventoryTests
             SourceGenerators = false, SemanticColorsDelayMilliseconds = -1, MemoryMonitor = "none",
             FontFallback = "Consolas", InterfaceFont = "Segoe UI", InterfaceFontSize = 14, Accent = AccentColors.Blue, BottomPanelHeight = 200,
             QuickOpenFiles = 1000, QuickOpenRows = 8, TouchTarget = 48, TitleBar = "page",
+            InlineCompletionProvider = "ai", ChatWidth = 400,
         }, options, "options read from every variable");
         Check.SequenceEqual(["loose", "csproj"], options.WorkspaceReaders, "CRAFT_WORKSPACE_READERS split at ','");
         var settings = options.ToLanguageSettings();

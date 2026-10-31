@@ -24,6 +24,12 @@ public sealed partial class EditorModel
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
         bool control = (modifiers & KeyModifiers.Control) != 0;
         bool alt = (modifiers & KeyModifiers.Alt) != 0;
+        if (!Completion.IsOpen && InlineCompletion.HandleKey(key, modifiers))
+        {
+            NoteInput();
+            return true;
+        }
+
         if (OnSemanticKey(key, modifiers))
         {
             NoteInput();
@@ -80,6 +86,7 @@ public sealed partial class EditorModel
         }
 
         NoteInput();
+        InlineCompletion.TypeThrough(text);
         var selection = _selection;
         var snapshot = Snapshot;
         if (text.Length == 1 && selection.IsEmpty && TryOvertypeClose(text[0]))
@@ -144,6 +151,7 @@ public sealed partial class EditorModel
         _lastClickX = viewX;
         _lastClickY = viewY;
         _pointerDown = true;
+        InlineCompletion.Dismiss();
 
         if (PopupRowAt(viewX, viewY) is { } row)
         {

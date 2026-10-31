@@ -150,6 +150,15 @@ public sealed record CraftOptions
     /// <summary>The rows the completion list shows before it scrolls (<c>CRAFT_COMPLETION_ROWS</c>).</summary>
     public int CompletionRows { get; init; } = 10;
 
+    /// <summary>
+    /// The inline completion provider the editor asks for ghost text (<c>CRAFT_INLINE_COMPLETION_PROVIDER</c>): a name in
+    /// Craft.Abstractions' InlineCompletionProviders; empty: the first registered one that accepts the document; "none": off.
+    /// </summary>
+    public string InlineCompletionProvider { get; init; } = "";
+
+    /// <summary>The chat column's width in the wide layout, device-independent units (<c>CRAFT_CHAT_WIDTH</c>).</summary>
+    public float ChatWidth { get; init; } = 360;
+
     /// <summary>Milliseconds the pointer rests on a symbol before its description shows (<c>CRAFT_HOVER_DELAY_MS</c>).</summary>
     public int HoverDelayMilliseconds { get; init; } = 500;
 
@@ -327,6 +336,8 @@ public sealed record CraftOptions
         new("CRAFT_WORKSPACE_CONFIGURATION", "Debug", "The build configuration a project is read for (Debug defines DEBUG)."),
         new("CRAFT_COMPLETION_DELAY_MS", "50", "Milliseconds after typing an identifier character or '.' before the completion list is asked for."),
         new("CRAFT_COMPLETION_ROWS", "10", "The rows the completion list shows before it scrolls."),
+        new("CRAFT_INLINE_COMPLETION_PROVIDER", "", "The inline completion (ghost text) provider: a registered name; empty: the first that accepts the document; none: off."),
+        new("CRAFT_CHAT_WIDTH", "360", "The chat column's width in the wide layout (device-independent units)."),
         new("CRAFT_PROBLEMS_LIMIT", "500", "The most rows the problems list shows (the counts stay exact)."),
         new("CRAFT_HOVER_DELAY_MS", "500", "Milliseconds the pointer rests on a symbol before its description shows."),
         new("CRAFT_SOURCE_GENERATORS", "true", "Whether the projects' source generators run in the semantic model (their generated code counts, as in the build)."),
@@ -629,6 +640,16 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_COMPLETION_ROWS") is { } rows)
         {
             options = options with { CompletionRows = Whole(rows, "CRAFT_COMPLETION_ROWS", 1, 100) };
+        }
+
+        if (Text(read, "CRAFT_INLINE_COMPLETION_PROVIDER") is { } inlineProvider)
+        {
+            options = options with { InlineCompletionProvider = inlineProvider };
+        }
+
+        if (Text(read, "CRAFT_CHAT_WIDTH") is { } chatWidth)
+        {
+            options = options with { ChatWidth = Positive(chatWidth, "CRAFT_CHAT_WIDTH", 120, 10_000) };
         }
 
         if (Text(read, "CRAFT_PROBLEMS_LIMIT") is { } problems)

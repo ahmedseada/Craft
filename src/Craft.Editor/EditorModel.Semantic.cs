@@ -522,6 +522,14 @@ public sealed partial class EditorModel
         }
     }
 
+    /// <summary>Inserts an accepted inline completion at <paramref name="position"/> as one undo step, the caret after it.</summary>
+    internal void ApplyAcceptedText(int position, string text)
+    {
+        var edit = new TextEdit(position, 0, text);
+        ApplyEdits(new ReadOnlySpan<TextEdit>(in edit), EditKind.Command, SelectionState.At(position + text.Length));
+        EnsureCaretVisible();
+    }
+
     /// <summary>Applies a committed completion item as one undo step, the caret at <paramref name="caret"/>.</summary>
     internal void ApplyCompletion(TextEdit edit, int caret)
     {
@@ -587,6 +595,7 @@ public sealed partial class EditorModel
         if (key == EditorKey.Backspace || key == EditorKey.Delete)
         {
             Completion.OnDeleted();
+            InlineCompletion.OnEdited();
         }
         else
         {
@@ -603,6 +612,7 @@ public sealed partial class EditorModel
     private void AfterTyped(string text)
     {
         Completion.OnTyped(text);
+        InlineCompletion.OnEdited();
         char last = text[^1];
         if (last is '(' or ',')
         {

@@ -62,6 +62,12 @@ public sealed class ModelLease : IDisposable
     /// <summary>The model as a text model, or null.</summary>
     public ITextModel? Text { get; }
 
+    /// <summary>
+    /// The model's tokenizer, or null when the provider does not give it: a plug-in detects the model's fill-in-the-middle
+    /// format from it (Idrak's <c>FillInMiddleFormats.Detect</c>) and lays its prompts out with it.
+    /// </summary>
+    public IPretrainedTokenizer? Tokenizer { get; init; }
+
     /// <summary>Its context window in tokens.</summary>
     public int ContextLength { get; }
 

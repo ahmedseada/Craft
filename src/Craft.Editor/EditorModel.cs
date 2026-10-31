@@ -66,6 +66,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         Metrics = Measure();
         LanguageName = language?.Name ?? PlainTextName(document.FilePath);
         Find = new EditorFind(this);
+        WorkspaceRoot = workspaceRoot;
+        InlineCompletion = new InlineCompletionController(this);
         _session = language?.Open(document.Buffer, new LanguageOpenContext(document.FilePath, workspaceRoot, Options.ToLanguageSettings()));
         if (_session is not null)
         {
@@ -120,6 +122,14 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
     /// <summary>Find and replace.</summary>
     public EditorFind Find { get; }
+
+    /// <summary>The ghost text of an inline completion provider at the caret.</summary>
+    public InlineCompletionController InlineCompletion { get; }
+
+    /// <summary>The open folder the document belongs to, or null.</summary>
+    public string? WorkspaceRoot { get; }
+
+    internal TimeProvider Time => _time;
 
     /// <summary>The selection (its caret is where typing goes).</summary>
     public SelectionState Selection => _selection;
@@ -396,6 +406,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         _disposed = true;
         _document.Buffer.Changed -= OnBufferChanged;
+        InlineCompletion.Dispose();
         DisposeSemantic();
         if (_session is not null)
         {
@@ -506,6 +517,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         }
 
         OnSemanticBufferChanged(e);
+        InlineCompletion.OnChanged();
         Invalidate();
     }
 

@@ -166,6 +166,11 @@ public sealed class PanelsView : ScrollView, IDisposable
         _stack.Children.Clear();
         foreach (var panel in _host.Panels)
         {
+            if (panel is IConversationPanel)
+            {
+                continue;   // the chat column's (ConversationsView)
+            }
+
             panel.Changed += OnPanelChanged;
             _shown.Add(panel);
             _stack.Children.Add(new Label { Text = panel.Title, FontAttributes = FontAttributes.Bold, TextColor = _textColor, Margin = new Thickness(0, 6, 0, 2) });

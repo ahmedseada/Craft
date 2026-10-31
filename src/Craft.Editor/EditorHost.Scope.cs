@@ -72,6 +72,17 @@ public sealed partial class EditorHost
             _closed ? Task.FromResult(false)
                 : host.ProposeCoreAsync(document, (proposal ?? throw new ArgumentNullException(nameof(proposal))) with { Title = $"{name}: {proposal.Title}" }, name, cancellationToken);
 
+        public void ShowPanel(string panelId)
+        {
+            if (!_closed)
+            {
+                host.ShowPanel(panelId);
+            }
+        }
+
+        public Task<IEditorDocument?> OpenDocumentAsync(string path, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult<IEditorDocument?>(null) : host.OpenDocumentAsync(path, cancellationToken);
+
         public Task<bool> ExecuteCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ExecuteCommandAsync(commandId, cancellationToken);
 

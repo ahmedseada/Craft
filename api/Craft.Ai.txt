@@ -1,3 +1,92 @@
+sealed class Craft.Ai.AgentChange : System.IEquatable<Craft.Ai.AgentChange>
+  Craft.Ai.AgentChange <Clone>$()
+  System.Boolean Equals(Craft.Ai.AgentChange other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsNew { get; init; }
+  System.Int32 Added { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Removed { get; init; }
+  System.String Counts { get; }
+  System.String Path { get; init; }
+  System.String Relative { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Path, out System.String Relative, out System.Boolean IsNew, out System.Int32 Added, out System.Int32 Removed)
+  ctor(System.String Path, System.String Relative, System.Boolean IsNew, System.Int32 Added, System.Int32 Removed)
+sealed class Craft.Ai.AgentWorkspace : System.IDisposable
+  Craft.Ai.AgentChange ChangeOf(System.String relative)
+  System.Int32 Files { get; }
+  System.String BaseText(System.String path)
+  System.String Copy { get; }
+  System.String CopyOf(System.String path)
+  System.String NewText(System.String path)
+  System.String Workspace { get; }
+  System.String WorkspacePath(System.String relative)
+  System.Void Discard()
+  System.Void Dispose()
+  System.Void Settle(System.String path, System.String text)
+  static Craft.Ai.AgentWorkspace Create(System.String workspace, System.String folder, System.Collections.Generic.IReadOnlyList<System.String> ignore, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> unsaved, System.Threading.CancellationToken cancellationToken = null)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits(System.String current, System.String target)
+sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, System.IDisposable
+  Craft.Ai.AgentWorkspace WorkingCopy { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Ai.AgentChange> Changes { get; }
+  System.String Placeholder { get; }
+  System.Threading.Tasks.Task Run { get; }
+  System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ReviewAsync(Craft.Ai.AgentChange change, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ReviewAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Void DiscardAll()
+  System.Void Dispose()
+  System.Void Stop()
+  const System.String PanelId = ai.agent
+  ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
+sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, System.IDisposable
+  Craft.Abstractions.ConversationEntry CodeEntry(System.String code, System.String language)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ChatMessage> History { get; }
+  System.Func<System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Boolean>> RunAction { get; set; }
+  System.String Placeholder { get; }
+  System.Threading.Tasks.Task AskAsync(System.String message, System.Threading.CancellationToken cancellationToken = null, System.String context = null)
+  System.Threading.Tasks.Task LastReply { get; }
+  System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ApplyAsync(System.String code, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Dispose()
+  System.Void NewChat()
+  System.Void RemoveChip(System.String id)
+  System.Void Stop()
+  const System.String PanelId = ai.chat
+  ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
+sealed class Craft.Ai.AiCodeActions : Craft.Abstractions.ICodeActionProvider, Idrak.Abstraction.IKind
+  System.Boolean? LastAccepted { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeAction> ActionsFor(Craft.Abstractions.CodeActionContext context)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Boolean> RunAsync(System.String kind, System.Threading.CancellationToken cancellationToken)
+  const System.String ProviderName = ai
+  ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models, Craft.Ai.AiChatPanel chat)
+  static Craft.Abstractions.CodeActionContext AtSelection(Craft.Abstractions.IEditorHost host)
+  static System.String FirstBlock(System.String reply)
+sealed class Craft.Ai.AiInlineCompletion : Craft.Abstractions.IInlineCompletionProvider, Idrak.Abstraction.IKind
+  Craft.Ai.CompletionMode Mode { get; }
+  System.Boolean Accepts(Craft.Abstractions.InlineCompletionRequest request)
+  System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.InlineCompletionPiece> CompleteAsync(Craft.Abstractions.InlineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
+  System.Int32 DelayMilliseconds { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.ValueTuple<System.String, System.Collections.Generic.IReadOnlyList<System.String>> Layout(Craft.Abstractions.InlineCompletionRequest request, Craft.Abstractions.ModelLease lease, Craft.Ai.AiSettings settings)
+  const System.String ProviderName = ai
+  ctor(System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models, System.Func<System.Boolean> active = null)
+  event System.EventHandler<Craft.Ai.CompletionMode> ModeChanged
+  event System.EventHandler<Idrak.Abstraction.Generation.GenerationStats> Completed
+  static System.Int32 PrefixStart(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 caret, System.Int32 budget)
+sealed class Craft.Ai.AiModels : System.IDisposable
+  System.Boolean HasCompletionModel { get; }
+  System.IProgress<Craft.Abstractions.ModelLoadStatus> Progress { get; set; }
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> ChatAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> CompletionAsync(System.Threading.CancellationToken cancellationToken)
+  System.Void Dispose()
+  System.Void Release()
+  ctor(System.Func<Craft.Ai.AiSettings> settings)
 sealed class Craft.Ai.AiPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
   System.String Name { get; }
@@ -7,10 +96,22 @@ sealed class Craft.Ai.AiPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstrac
   System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
   System.String Name { get; }
   System.String Summary { get; }
+  const System.String AgentDiscardCommand = ai.agentDiscard
+  const System.String AgentReviewCommand = ai.agentReview
+  const System.String AgentStopCommand = ai.agentStop
+  const System.String DocumentCommand = ai.documentSelection
+  const System.String ExplainCommand = ai.explainSelection
+  const System.String ExplainProblemCommand = ai.explainProblem
+  const System.String FixCommand = ai.fixProblem
   const System.String LoadModelCommand = ai.loadModel
   const System.String McpShowCommand = ai.mcpShow
   const System.String McpStartCommand = ai.mcpStart
   const System.String McpStopCommand = ai.mcpStop
+  const System.String NewChatCommand = ai.newChat
+  const System.String RefactorCommand = ai.refactorSelection
+  const System.String ShowAgentCommand = craft.agent
+  const System.String ShowChatCommand = ai.showChat
+  const System.String TestsCommand = ai.writeTests
   static Craft.Ai.AiPlugin Instance { get; }
   static Craft.Ai.AiSession Current { get; }
   static Craft.Ai.LocalModelProvider Local { get; }
@@ -19,20 +120,45 @@ sealed class Craft.Ai.AiRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Id
   ctor()
   protected System.Void RegisterParts()
 sealed class Craft.Ai.AiSession : System.IDisposable
+  Craft.Ai.AiAgentPanel Agent { get; }
+  Craft.Ai.AiChatPanel Chat { get; }
+  Craft.Ai.AiCodeActions Actions { get; }
+  Craft.Ai.AiInlineCompletion Completion { get; }
+  Craft.Ai.AiModels Models { get; }
   Craft.Ai.AiSettings Settings { get; }
   Craft.Ai.EditorMcpServer Mcp { get; }
+  System.Boolean HasProblemAtCaret { get; }
+  System.Boolean HasSelection { get; }
   System.Threading.Tasks.Task LoadModelAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task ShowMcpAsync()
   System.Threading.Tasks.Task StartMcpAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task StopMcpAsync()
+  System.Threading.Tasks.Task<System.Boolean> RunActionAsync(System.String kind, System.Threading.CancellationToken cancellationToken)
   System.Void Dispose()
+  System.Void ShowPanel(System.String id)
 sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   Craft.Ai.AiSettings <Clone>$()
+  System.Boolean ChatKeep { get; init; }
+  System.Boolean Completion { get; init; }
   System.Boolean Equals(Craft.Ai.AiSettings other)
   System.Boolean Equals(System.Object obj)
   System.Boolean McpOnStart { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> AgentCopyIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> IdrakPlugins { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> Ignore { get; init; }
+  System.Double PlacementMaxError { get; init; }
+  System.Int32 AgentMaxTokens { get; init; }
+  System.Int32 AgentMaxTurns { get; init; }
+  System.Int32 AgentMinutes { get; init; }
+  System.Int32 ChatHistory { get; init; }
+  System.Int32 ChatMaxTokens { get; init; }
+  System.Int32 ChatToolRounds { get; init; }
+  System.Int32 CompletionChunk { get; init; }
+  System.Int32 CompletionDelayMilliseconds { get; init; }
+  System.Int32 CompletionMaxLines { get; init; }
+  System.Int32 CompletionMaxTokens { get; init; }
+  System.Int32 CompletionPrefixCharacters { get; init; }
+  System.Int32 CompletionSuffixCharacters { get; init; }
   System.Int32 Context { get; init; }
   System.Int32 GetHashCode()
   System.Int32 KeepAliveMinutes { get; init; }
@@ -42,11 +168,18 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Int32 Threads { get; init; }
   System.Int64 CpuMemoryMegabytes { get; init; }
   System.Int64 GpuMemoryMegabytes { get; init; }
+  System.Single CompletionTemperature { get; init; }
+  System.String AgentFolder { get; init; }
+  System.String AgentSandbox { get; init; }
+  System.String ChatFile { get; init; }
+  System.String CompletionModel { get; init; }
   System.String Device { get; init; }
   System.String McpAddress { get; init; }
   System.String McpToken { get; init; }
   System.String Model { get; init; }
+  System.String ModelProvider { get; init; }
   System.String PatchFolder { get; init; }
+  System.String Placement { get; init; }
   System.String ToString()
   System.String ToolsFolder { get; init; }
   System.String Weights { get; init; }
@@ -56,6 +189,45 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   static Craft.Ai.AiSettings FromEnvironment()
   static Craft.Ai.AiSettings Read(System.Func<System.String, System.String> value)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+sealed class Craft.Ai.CompletionMode : System.IEquatable<Craft.Ai.CompletionMode>
+  Craft.Ai.CompletionMode <Clone>$()
+  System.Boolean Equals(Craft.Ai.CompletionMode other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Format { get; init; }
+  System.String Model { get; init; }
+  System.String Reason { get; init; }
+  System.String Text { get; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Format, out System.String Model, out System.String Reason)
+  ctor(System.String Format, System.String Model, System.String Reason)
+abstract class Craft.Ai.ConversationPanel : Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel
+  Craft.Abstractions.IEditorHost Host { get; }
+  System.Boolean IsBusy { get; set; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ContextChip> Chips { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationEntry> Entries { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+  System.String Id { get; }
+  System.String Placeholder { get; }
+  System.String Status { get; set; }
+  System.String Subtitle { get; set; }
+  System.String Title { get; set; }
+  System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Void RemoveChip(System.String id)
+  event System.EventHandler Changed
+  event System.EventHandler<Craft.Abstractions.ConversationChangedEventArgs> ConversationChanged
+  protected System.Int32 Add(Craft.Abstractions.ConversationEntry entry)
+  protected System.Void ClearEntries()
+  protected System.Void Post(System.Action action)
+  protected System.Void RaiseReset()
+  protected System.Void ReplaceFrom(System.Int32 start, System.Collections.Generic.IEnumerable<Craft.Abstractions.ConversationEntry> entries)
+  protected System.Void SetChips(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ContextChip> chips)
+  protected System.Void Update(System.Int32 index, Craft.Abstractions.ConversationEntry entry)
+  protected ctor(Craft.Abstractions.IEditorHost host, System.String id, System.String title)
+  static System.Collections.Generic.List<Craft.Abstractions.ConversationEntry> Split(System.String reply, System.Func<System.String, System.String, Craft.Abstractions.ConversationEntry> code)
+  static System.String Rate(System.Int32 tokens, System.Double seconds)
+  static System.String Summarize(Idrak.Abstraction.Generation.ToolResult result, System.Int32 width = 90)
 sealed class Craft.Ai.EditorMcpServer : System.IAsyncDisposable
   System.Int32 ToolCount { get; }
   System.String Address { get; }
@@ -89,3 +261,6 @@ sealed class Craft.Ai.LocalModelProvider : Craft.Abstractions.IModelProvider, Id
   System.Void Dispose()
   ctor()
   event System.EventHandler StatusChanged
+static class Craft.Ai.SnippetPlacement
+  const System.Int64 MatchWorkLimit = 400000000
+  static System.ValueTuple<Craft.Abstractions.TextEdit, System.String> Place(Craft.Abstractions.ITextSnapshot snapshot, Craft.Abstractions.SelectionState selection, System.String snippet, Craft.Ai.AiSettings settings)

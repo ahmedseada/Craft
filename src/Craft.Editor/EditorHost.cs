@@ -78,6 +78,52 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <remarks>Set by the shell when a folder opens or closes (the full path, or null).</remarks>
     public string? WorkspaceFolder { get; set; }
 
+    /// <summary>
+    /// How <see cref="OpenDocumentAsync"/> opens a file in the editor (the shell sets it: a tab, a new document for a path
+    /// with no file yet); null: the host opens nothing and the call gives null.
+    /// </summary>
+    public Func<string, CancellationToken, Task<IEditorDocument?>>? OpenFile { get; set; }
+
+    /// <inheritdoc />
+    public void ShowPanel(string panelId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(panelId);
+        PanelShowRequested?.Invoke(this, panelId);
+    }
+
+    /// <inheritdoc />
+    public Task<IEditorDocument?> OpenDocumentAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+        IEditorDocument? ignoringCase = null;
+        foreach (var document in _documents)
+        {
+            if (document.FilePath is not { } file)
+            {
+                continue;
+            }
+
+            var own = Path.GetFullPath(file);
+            if (string.Equals(own, full, StringComparison.Ordinal))
+            {
+                return Task.FromResult<IEditorDocument?>(document);
+            }
+
+            if (ignoringCase is null && string.Equals(own, full, StringComparison.OrdinalIgnoreCase))
+            {
+                ignoringCase = document;   // a file system that ignores case names the same file
+            }
+        }
+
+        if (ignoringCase is not null)
+        {
+            return Task.FromResult<IEditorDocument?>(ignoringCase);
+        }
+
+        return OpenFile is { } open ? open(full, cancellationToken) : Task.FromResult<IEditorDocument?>(null);
+    }
+
     /// <inheritdoc />
     public IReadOnlyList<IEditorCommand> Commands => EditorCommands.All;
 
@@ -104,6 +150,9 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
 
     /// <summary>Raised when a panel was added or removed.</summary>
     public event EventHandler? PanelsChanged;
+
+    /// <summary>A plug-in asked to bring a panel into view (<see cref="ShowPanel"/>): the panel's id.</summary>
+    public event EventHandler<string>? PanelShowRequested;
 
     /// <summary>Raised when long work started, reported or ended.</summary>
     public event EventHandler<EditorProgressItem>? ProgressChanged;

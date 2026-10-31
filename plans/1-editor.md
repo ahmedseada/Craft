@@ -627,7 +627,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | **Built (2026-10-31, "A1 as built" below).** `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
-| A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
+| A2 | **Built (2026-10-31, "A2 as built" below; Idrak 6eb11a2 for the agent's steering note). Left: the owner's run on a real model.** The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
 | V | Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
 | R0 | **Built (2026-10-31, Idrak f419399).** Idrak: preference learning from episodes ("Idrak library gaps", R0): `PreferencePairSources` ("group", "verdict"), the preference losses by name ("dpo", "orpo", "simpo") over the existing `FineTuningLosses`, iterative preference training usable by `idrak reinforce`, the suite and the bench. | Pairs from a scored rollout train a tiny model with the DPO loss falling and the margin rising; memory flat over many rounds; `idrak reinforce --pairs group --loss dpo` runs. | A0 (a slot in Idrak); before R |
@@ -1048,6 +1048,110 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
   page's device is a setting typed as text (no device list from the library yet), and tokens per second and device
   memory stay empty until the provider measures them (A2's generation); the settings page has no sections yet (the
   Models page's other sections open it whole); A1's "Models and devices" side panel is still shown beside the page.
+
+## A2 as built (2026-10-31)
+
+- **Idrak (6eb11a2, on `main`, by its rules):** `CodingAgent.Steer(note)` and `PendingNotes`: a note from any thread is
+  added as a user message ("Note from the user: …") before the agent's next model request and stays in the conversation
+  (test "coding agent: a steering note…", `IDRAK_DEVICES=cpu IDRAK_FILTER="coding agent|public API"`: 6 passed; the
+  `api/Idrak.Text.txt` dump regenerated). Nothing else was missing: FIM through `FillInMiddleFormats.Detect`/`Create`,
+  `KeepCache`, the generator's per-step cancellation, `ChatTools.WithTools`, `CodingAgent`/`CodingTools`,
+  `CommandSandboxes` and `TextMatchers` are used as they are.
+- **Contracts added (Craft.Abstractions, additive, contracts still 1.0):** `IInlineCompletionProvider : IKind` in
+  `InlineCompletionProviders` (`DelayMilliseconds`, `Accepts`, `CompleteAsync` streaming `InlineCompletionPiece`s for an
+  `InlineCompletionRequest`; the plan's `CompletionProviders`, named so it is not taken for E5's completion list);
+  `ICodeActionProvider : IKind` in `CodeActionProviders` (`CodeActionContext`, `CodeAction` with `CodeActionKinds`,
+  `ActionsFor` gathering every provider's, one that throws left out); `IConversationPanel : IEditorPanel` (entries by
+  `ConversationRole`, `PanelAction`, `ContextChip`, status, header buttons, `SubmitAsync`, `ConversationChanged` with one
+  `EntryUpdated` per streamed piece) so a plug-in describes a chat-like panel UI-free and the host draws it;
+  `IEditorHost.OpenDocumentAsync` (default null; `EditorHost.OpenFile`, set by the shell: the file's tab, or a new document
+  for a path with no file yet); `IEditorHost.ShowPanel(id)` (default nothing; `EditorHost.PanelShowRequested`, which the
+  page answers by showing the chat column or sheet with that panel); `ModelLease.Tokenizer` (the local provider passes the model's `IPretrainedTokenizer`, from
+  which the FIM format is detected); `EditorColors.GhostText` (dark #7D8696: the design's #717A8A lifted to 4.8:1 on the
+  editor ground; light #6E7781, 4.5:1). Options: `CRAFT_INLINE_COMPLETION_PROVIDER` (empty: the first that accepts;
+  `none`: off), `CRAFT_CHAT_WIDTH` (360).
+- **Inline completion.** `Craft.Editor.InlineCompletionController` (`EditorModel.InlineCompletion`): after typed text or
+  a deletion it waits the provider's pause (a debounce timer, the request built on the UI thread from the immutable
+  snapshot), runs the provider on the thread pool and posts each piece back; any other key, text that is not the ghost's
+  start, a click or a change from elsewhere cancels the request at once and removes the ghost (late pieces are counted,
+  never shown); Tab inserts it all as one `EditKind.Command` step, Ctrl+Right the next word (white space then a word,
+  one other character, or a line break with the next line's indentation; the rest keeps streaming), Escape dismisses,
+  typing what the ghost starts with types through it. The completion list, when open, hides it and keeps its keys.
+  `GhostTextRenderer` draws the first line after the caret and the others over the lines below (an overlay: the text
+  moves only on accept), italic in `GhostText`, then the design's hint bar (Completion · Tab accept · Ctrl+→ word · Esc
+  dismiss · tok/s · first token ms) under it, only inside the viewport. `AiInlineCompletion` ("ai"): the model of
+  `completionModel` (else `model`) through the provider of `modelProvider`; the format by `FillInMiddleFormats.Detect` on
+  the lease's tokenizer, else prefix-only (stop at a blank line) and the status bar says "Completion: prefix-only" with the
+  reason (no tokenizer, or the registered formats none of whose tokens it has); the suffix is `completionSuffixChars`
+  (512: A0's per-request cost on a prefix-first model) cut to whole lines; the prefix's budget is the model's context less
+  the answer and the suffix (counted by the tokenizer), and it starts at a block boundary (a quarter of the budget, then a
+  line start), so consecutive requests share their prompt up to the format's `PrefixEnd` and `KeepCache` reuses it (over
+  200 characters typed the start moved once, in the test); `completionChunk` 1 streams each token; `completionMaxTokens`,
+  `completionMaxLines`, `completionTemperature`; the prompt's, cached and rate figures recorded as telemetry.
+- **Chat panel** (`AiChatPanel`, "ai.chat"): the chat model through `AiModels` (one lease per provider and name, kept for
+  the session, a failed load not kept), the editor's live tools offered through `ChatTools.WithTools` over an observing
+  registry, so each call is a row ("Called get_diagnostics → its first line"); the reply streams into one entry, then is
+  split at its fenced blocks: each a Code entry with "Apply as diff" (placed by `SnippetPlacement`: the setting's Idrak
+  `TextMatchers` matcher, `placement` "semi-global", within `placementMaxError` of the snippet; else the selection; else the
+  caret; placed again if the text changed meanwhile; proposed through `ProposeAsync`, its placement and origin in the diff
+  view) and Copy; then "N tokens · R tok/s". Chips: the active file (±40 lines around the caret go with the message; the
+  rest through `read_document`), the selection, its problems; a tap removes one for the next message; `@selection`,
+  `@problems`, `@file`, `@PATH` add; `/explain`, `/fix`, `/doc`, `/refactor`, `/tests` run the code action. Stop cancels;
+  `chatHistory` messages are sent back; kept per workspace in `chatFile` (`.craft/chat.json`) when `chatKeep`, read back
+  with its code blocks still applicable; New chat clears it.
+- **Code actions** (`AiCodeActions`, "ai"): for a diagnostic, Fix (its lines rewritten by the chat model, no tools, with
+  ±15 lines of context, the first fenced block proposed as one edit over those lines) and Explain (a chat turn); for a
+  selection, Explain, Add doc comments, Refactor (both rewrites, as Fix) and Write tests (a chat turn whose code applies as
+  a diff). Commands in the palette: `ai.explainSelection`, `ai.documentSelection`, `ai.refactorSelection`, `ai.writeTests`,
+  `ai.fixProblem`, `ai.explainProblem` (at the caret), `ai.newChat`, `ai.showChat`, and `craft.agent` (D's rail item runs
+  it, so the Agent item shows while the plug-in is active); the bottom panel's Problems rows show Fix and Explain while a
+  provider is registered and run the first action of that kind every registered provider offers. Roslyn's check before accepting is the diff view's (A1).
+- **Agent** (`AiAgentPanel`, "ai.agent", desktop): Idrak's `CodingAgent` with `CodingTools` over a working copy of the open
+  folder (`AgentWorkspace`: copied once into `agentFolder`, else the temporary folder's `craft-agent`, leaving out
+  `agentCopyIgnore`, obj kept so a build needs no restore; the open documents' unsaved text written over their copies), so
+  every edit is held: after each `edit_file`/`write_file` the file's change against the workspace (+added −removed, new)
+  is listed under CHANGED FILES with Review diff (each file proposed in the editor through `OpenDocumentAsync` and
+  `ProposeAsync`, one edit per changed run of lines so hunks are accepted one by one; a new file opens as a new document
+  to save; what is accepted leaves the list, a part keeps the rest) and Discard all (the copy goes; the user's files were
+  never touched). Commands run through the sandbox `agentSandbox` names in `CommandSandboxes` ("approve-each", P5's);
+  none registered under it, a refusing sandbox answers every command with why and the panel says so (the seam: P5
+  registers its sandbox under that name and asks the user; the agent panel shows the command waiting, its limits, and
+  then its exit or refusal). Header: Turn N of `agentMaxTurns` · tokens · tok/s · Elapsed m:ss (a one-second tick while
+  running) · Sandbox; "Waiting for you" while a command waits; Stop; what is sent while it runs is a steering note
+  (`CodingAgent.Steer`). `agentMinutes`, `agentMaxTokens`. The model is leased before the tools are made, so the Idrak
+  libraries and the families' coding languages are registered by then (`IdrakLibraries.EnsureIncluded`).
+- **The window** (Craft.Maui, compiled here with nullable analysis since D moved the page there: `ConversationsView` and
+  D's `ShellPage`): the host's conversation panels as the design's chat column (a tab per panel, title, subtitle, header
+  buttons, entries drawn by role, status, chips, the input and Send; colours from the theme; a streamed piece replaces
+  one entry's view), `CRAFT_CHAT_WIDTH` wide at the body's end after a divider; in the narrow layout a sheet over the
+  body's lower 62%. `craft.chat` (Ctrl+Alt+I) shows or hides it; a plug-in's `ShowPanel` brings a panel forward;
+  `PanelsView` leaves conversation panels to it. Rebased onto D (a9285d9): the ghost colour joined D's tokens (the light
+  one through `ColorContrast.Ensure`).
+- **Settings added** (plug-in "ai", `CRAFT_PLUGIN_AI_*`, on the settings page): `modelProvider` (local), `completion`
+  (true), `completionModel`, `completionDelayMs` (300), `completionMaxTokens` (64), `completionMaxLines` (8),
+  `completionSuffixChars` (512), `completionPrefixChars` (0: from the context), `completionChunk` (1),
+  `completionTemperature` (0), `chatMaxTokens` (1024), `chatToolRounds` (6), `chatKeep` (true), `chatFile`
+  (.craft/chat.json), `chatHistory` (40), `placement` (semi-global), `placementMaxError` (0.35), `agentSandbox`
+  (approve-each), `agentMaxTurns` (20), `agentMinutes` (20), `agentMaxTokens` (2048), `agentFolder`, `agentCopyIgnore`.
+- **Tests** (group `AiPlugins`, headless): with a fake text model and a test FIM format its tokenizer has, the ghost text
+  appears after the pause, laid out prefix-suffix-middle, is drawn after the caret in the ghost colour with the hint bar,
+  and Tab inserts it as one undo step; a keystroke cancels the request and the model samples at most one token after the
+  cancellation; Ctrl+Right takes a word, typing through keeps the rest, Escape dismisses, prefix-only is said; the prefix
+  start moves once a block; with a fake chat model the reply streams (several entry updates), a get_diagnostics row shows,
+  the code block's Apply as diff arrives in the diff view (semi-global placement) and is one undo step, the conversation is
+  kept and read back; a code action's diff is accepted as one undo step; the agent's edit is held (the user's file
+  unchanged) and listed +1 −1, its command waits in a fake approving sandbox ("Waiting for you"), is refused when denied
+  and the agent is told, the steering note reaches the next turn, Review diff accepts the file into the editor in one
+  step, Discard all drops the copy; with no sandbox registered under the setting the agent runs no command and says so.
+  With `Ai`, `ApiGuard`, `Inventory`, `PluginKit`, `Editor`, `Shell`, `Design`: 83 passed here after the rebase onto D
+  (`api/*.txt` and `plans/inventory.md` regenerated: two new registries).
+- **Not yet / the owner's:** no real model was run here (the owner's run: ghost text and its rate on a FIM model, a chat
+  reply applied, an agent task with each command approved once P5's sandbox is registered); the window itself (the chat
+  column, the sheet, the ghost text drawn by Win2D) is the owner's to see; the model chip's tok/s (D's
+  `IModelProvider.Status`) is not fed from the AI plug-ins' generation yet; the editor has no
+  context menu yet, so the selection actions are palette commands; Roslyn's own code fixes are not offered (Craft.CSharp
+  could register a provider); the chat's apply goes to the active document; the agent's working copy is a full copy of the
+  folder (fine for a project, heavy for a very large tree: `agentCopyIgnore` trims it).
 
 ## Commands for the owner (once a phase is built)
 

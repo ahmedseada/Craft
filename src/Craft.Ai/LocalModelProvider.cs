@@ -127,7 +127,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         progress?.Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
             ? string.Create(CultureInfo.InvariantCulture, $"{key.Model} loaded on {model.Device} in {lease.LoadDuration.TotalSeconds:F1} s, context {model.ContextLength}")
             : $"{key.Model} on {model.Device} (loaded already)"));
-        return new ModelLease(key.Model, model.Chat, model.Text, model.ContextLength, lease.LoadDuration, lease);
+        return new ModelLease(key.Model, model.Chat, model.Text, model.ContextLength, lease.LoadDuration, lease) { Tokenizer = model.Tokenizer };
     }
 
     private ModelHost<LocalModel> Host(AiSettings settings)
@@ -167,7 +167,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             var layout = KeyValueLayouts.Get("float32");
             IChatModel? chat = model.ChatTemplate is null ? null : model.CreateChat(layout, context);
             ITextModel text = model.CreateGenerator(layout, context);
-            return new LocalModel(model, chat, text, context, device.ToString());
+            return new LocalModel(model, chat, text, context, device.ToString()) { Tokenizer = model.Tokenizer as IPretrainedTokenizer };
         }
         catch
         {
@@ -238,6 +238,8 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         public int ContextLength { get; } = contextLength;
 
         public string Device { get; } = device;
+
+        public IPretrainedTokenizer? Tokenizer { get; init; }
 
         public void Dispose() => model.Dispose();
     }

@@ -136,6 +136,21 @@ public interface IEditorHost
     Task<bool> ProposeAsync(IEditorDocument document, ProposedEdits proposal, CancellationToken cancellationToken = default) =>
         ProposeEditsAsync(document, (proposal ?? throw new ArgumentNullException(nameof(proposal))).Edits, proposal.Title, cancellationToken);
 
+    /// <summary>
+    /// The open document of the file <paramref name="path"/>, opening it in the editor when it is not open (a path with no
+    /// file yet opens a new, empty document the user saves there); null when the host cannot open documents or the file
+    /// cannot be read. A plug-in that proposes edits to a closed file (the agent's) opens it this way first.
+    /// </summary>
+    Task<IEditorDocument?> OpenDocumentAsync(string path, CancellationToken cancellationToken = default) => Task.FromResult<IEditorDocument?>(null);
+
+    /// <summary>
+    /// Brings the panel <paramref name="panelId"/> (one the plug-in added) into view: the host shows its area (the chat
+    /// column, the sheet in the narrow layout) and selects it. A host that cannot does nothing.
+    /// </summary>
+    void ShowPanel(string panelId)
+    {
+    }
+
     /// <summary>The registered commands (<see cref="EditorCommands"/>), in order.</summary>
     IReadOnlyList<IEditorCommand> Commands { get; }
 

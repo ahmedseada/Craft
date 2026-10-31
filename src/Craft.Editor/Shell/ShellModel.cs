@@ -177,6 +177,9 @@ public sealed class ShellModel : IDisposable
         Theme = ThemeOf(Options);
         Tabs = new DocumentTabs(host);
         Layout = new ShellLayout(Options);
+        // A plug-in's IEditorHost.OpenDocumentAsync (the agent's changed files): the file's tab, or a new document for a path
+        // with no file yet (the user saves it there; the plug-in's proposal fills it).
+        host.OpenFile = async (path, token) => File.Exists(path) ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument : NewFile().HostDocument;
         RegisterCommands();
         WatchMemory();
     }

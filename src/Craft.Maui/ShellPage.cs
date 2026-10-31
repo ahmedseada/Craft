@@ -76,6 +76,9 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly StatusBarView _status;
     private readonly PanelsView _panels;
     private readonly ContentView _panelsBox;
+    private readonly ConversationsView _conversations;
+    private readonly ContentView _chatBox;
+    private readonly BoxView _chatLine;
     private readonly Grid _body;
     private readonly Grid _center;
     private readonly BoxView _railLine;
@@ -89,6 +92,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private ShellPalette _palette;
     private TitleBar? _windowTitleBar;
     private bool _bottomVisible = true;
+    private bool _chatOpen = true;
+    private bool _chatSheetOpen;
     private bool _keysRouted;
     private bool _closeGuarded;
     private bool _disposed;
@@ -113,6 +118,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         _pluginStatus = new StatusItemsView(_host);
         _panels = new PanelsView(_host);
         _panelsBox = new ContentView { Content = _panels, WidthRequest = _shell.Options.PanelWidth };
+        // The plug-ins' conversation panels (the AI plug-in's chat and agent run): the design's chat column when wide, a
+        // sheet over the editor when narrow (PhoneChat.dc.html); craft.chat (Ctrl+Alt+I) shows or hides it, a plug-in's
+        // IEditorHost.ShowPanel brings one forward.
+        _conversations = new ConversationsView(_host, _shell.Options.FontFamily);
+        _chatBox = new ContentView { Content = _conversations, WidthRequest = _shell.Options.ChatWidth };
+        _conversations.PanelsChanged += (_, _) => ApplyLayout();
+        _host.PanelShowRequested += OnPanelShowRequested;
         RegisterAppCommands();
 
         _titleWide = new TitleBarView(_palette);
@@ -187,13 +199,14 @@ public sealed class ShellPage : ContentPage, IDisposable
             },
         };
 
-        _bottom = new BottomPanelView(_host, _palette, OnProblemChosen);
+        _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested };
         _status = new StatusBarView(_palette, _pluginStatus);
         _status.ProblemsTapped += (_, _) => ShowBottom(BottomTab.Problems);
 
         _railLine = _palette.Line(vertical: true);
         _explorerLine = _palette.Line(vertical: true);
         _panelsLine = _palette.Line(vertical: true);
+        _chatLine = _palette.Line(vertical: true);
         _bottomLine = _palette.Line();
         _statusLine = _palette.Line();
         _titleLine = _palette.Line();
@@ -219,6 +232,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             [
                 new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto),
                 new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto),
             ],
         };
         _body.Add(_rail, 0, 0);
@@ -228,6 +242,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _body.Add(_center, 4, 0);
         _body.Add(_panelsLine, 5, 0);
         _body.Add(_panelsBox, 6, 0);
+        _body.Add(_chatLine, 7, 0);
+        _body.Add(_chatBox, 8, 0);
 
         var root = new Grid
         {
@@ -285,6 +301,8 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _disposed = true;
         EditorMenus.Changed -= OnMenusChanged;
+        _host.PanelShowRequested -= OnPanelShowRequested;
+        _conversations.Dispose();
         foreach (var provider in _watchedProviders)
         {
             provider.StatusChanged -= OnModelStatusChanged;
@@ -450,6 +468,87 @@ public sealed class ShellPage : ContentPage, IDisposable
         EditorCommands.Register(new EditorCommand(ShellCommandIds.CommandPalette, "View: Show all commands", (_, _) => CommandPalette.ShowAsync(this, _host)));
         EditorCommands.Register(new EditorCommand(ShellCommandIds.Plugins, "Plug-ins: Show the installed plug-ins", (_, _) => ShowPluginsAsync()));
         EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.P, KeyModifiers.Control | KeyModifiers.Shift), ShellCommandIds.CommandPalette));
+        EditorCommands.Register(new EditorCommand("craft.chat", "View: Show or hide the chat", (_, _) =>
+        {
+            ToggleChat();
+            return Task.CompletedTask;
+        }, _ => _conversations.HasPanels, "The plug-ins' chat column (a sheet in the narrow layout)"));
+        EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.I, KeyModifiers.Control | KeyModifiers.Alt), "craft.chat"));
+    }
+
+    private void ToggleChat()
+    {
+        if (_shell.Layout.IsNarrow)
+        {
+            _chatSheetOpen = !_chatSheetOpen;
+        }
+        else
+        {
+            _chatOpen = !_chatOpen;
+        }
+
+        ApplyLayout();
+        if (_chatBox.IsVisible)
+        {
+            _conversations.FocusInput();
+        }
+    }
+
+    private void OnPanelShowRequested(object? sender, string panelId)
+    {
+        if (!_conversations.Show(panelId))
+        {
+            return;
+        }
+
+        if (_shell.Layout.IsNarrow)
+        {
+            _chatSheetOpen = true;
+        }
+        else
+        {
+            _chatOpen = true;
+        }
+
+        ApplyLayout();
+        _conversations.FocusInput();
+    }
+
+    // A Problems row's Fix or Explain: the first action of that kind the registered providers offer for the diagnostic.
+    // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
+    private void OnCodeActionRequested(EditorDiagnostic diagnostic, string kind)
+    {
+        if (_shell.Tabs.Active is not { } active)
+        {
+            return;
+        }
+
+        var context = new CodeActionContext(active.HostDocument, diagnostic.Start, diagnostic.End, [diagnostic]);
+        var actions = CodeActionProviders.ActionsFor(context, (name, error) => _host.Log(EditorLogLevel.Warning, $"The code actions of {name} failed.", error));
+        if (actions.FirstOrDefault(a => a.Kind == kind) is not { } action)
+        {
+            _status.Notice.Text = $"No plug-in offers to {kind} this problem.";
+            return;
+        }
+
+        if (kind is CodeActionKinds.Explain)
+        {
+            OnPanelShowRequested(this, "ai.chat");
+        }
+
+        _ = RunCodeActionAsync(action);
+    }
+
+    private async Task RunCodeActionAsync(CodeAction action)
+    {
+        try
+        {
+            await action.RunAsync(CancellationToken.None);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            _host.Log(EditorLogLevel.Error, $"The code action '{action.Title}' failed.", error);
+        }
     }
 
     private async Task ShowSettingsAsync()
@@ -904,6 +1003,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _quickOpen.Rows = options.QuickOpenRows;
         _quickOpen.CraftOptionsLimit = options.QuickOpenFiles;
         _panelsBox.WidthRequest = options.PanelWidth;
+        _chatBox.WidthRequest = options.ChatWidth;
         _tree.Indent = options.TreeIndent;
         ApplyTheme();
         ApplyLayout();
@@ -929,6 +1029,25 @@ public sealed class ShellPage : ContentPage, IDisposable
         _center.IsVisible = layout.EditorVisible;
         _panelsBox.IsVisible = layout.PanelsVisible && _panels.IsVisible;
         _panelsLine.IsVisible = _panelsBox.IsVisible;
+        _chatBox.IsVisible = _conversations.HasPanels && (narrow ? _chatSheetOpen : _chatOpen);
+        _chatLine.IsVisible = _chatBox.IsVisible && !narrow;
+        if (narrow)
+        {
+            // The sheet: over the body's lower part, the width of the window.
+            Grid.SetColumn(_chatBox, 0);
+            Grid.SetColumnSpan(_chatBox, 9);
+            _chatBox.WidthRequest = -1;
+            _chatBox.VerticalOptions = LayoutOptions.End;
+            _chatBox.HeightRequest = Math.Max(240, Height * 0.62);
+        }
+        else
+        {
+            Grid.SetColumn(_chatBox, 8);
+            Grid.SetColumnSpan(_chatBox, 1);
+            _chatBox.WidthRequest = _shell.Options.ChatWidth;
+            _chatBox.VerticalOptions = LayoutOptions.Fill;
+            _chatBox.HeightRequest = -1;
+        }
         _bottom.IsVisible = _bottomLine.IsVisible = _bottomVisible && !narrow;
         _breadcrumb.IsVisible = !narrow;
         _body.ColumnDefinitions[2].Width = narrow && layout.TreeVisible ? GridLength.Star : GridLength.Auto;
@@ -996,7 +1115,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             entry.PlaceholderColor = p.Secondary;
         }
 
-        foreach (var line in (ReadOnlySpan<BoxView>)[_railLine, _explorerLine, _panelsLine, _bottomLine, _statusLine, _titleLine])
+        foreach (var line in (ReadOnlySpan<BoxView>)[_railLine, _explorerLine, _panelsLine, _chatLine, _bottomLine, _statusLine, _titleLine])
         {
             line.Color = p.Border;
         }
@@ -1004,6 +1123,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _pluginStatus.TextColor = p.Secondary;
         _panels.TextColor = p.Text;
         _panelsBox.BackgroundColor = p.Surface;
+        _conversations.ApplyTheme(theme);
+        _chatBox.BackgroundColor = p.Surface;
         UpdateProblems();
         UpdateModel();
     }

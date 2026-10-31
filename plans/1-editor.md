@@ -1,8 +1,9 @@
 # Plan 1: Craft, a code editor (C# first) with AI plug-ins on Idrak's contracts
 
 **Status:** planned 2026-10-31 against Idrak `main` d01a3b1 and Craft `main` e68f88b. Nothing is built. The owner's
-answers (2026-10-31): the editor lives in Craft; .NET MAUI with Craft's own drawn editor control; Windows and Android
-first; Roslyn from the start. Next: E0, when the owner says.
+answers (2026-10-31): the editor lives in Craft; .NET MAUI with Craft's own drawn editor control; Windows built and
+run first, with every project compiling for Android from E0 (the Android runs are phase M); Roslyn from the start; the
+plug-ins of phase P test Idrak's plug-in points. Next: E0, when the owner says.
 
 ## Why
 
@@ -51,7 +52,8 @@ served) drives it.
 | `Craft.CSharp` | C# on Roslyn (`Microsoft.CodeAnalysis.CSharp.Workspaces` and `.Features`): syntactic and semantic classification, diagnostics, completion, signature help, hover, go to definition, formatting. It is registered as the "csharp" language, on both the desktop and the phone. |
 | `Craft.Ai` | The AI plug-ins on Idrak's contracts: inline completion, chat panel, code actions, agent, and the editor's tools. |
 | `Craft.Maui` | The editor control and the pages: drawn surface, input adapters per platform, and features registered into Idrak.Maui. |
-| `Craft.App` | The app: Windows and Android first. It makes the registrations and hosts the models. |
+| `Craft.App` | The app: Windows first, Android compiled alongside from E0 and run in phase M. It makes the registrations and hosts the models. |
+| `Craft.Plugins.*` | The plug-ins of phase P, each its own assembly (see "Plug-ins that test Idrak's plug-in points"). |
 | `Craft.Tests` | Targeted groups (`CRAFT_FILTER`), with the same runner conventions as Idrak's tests. |
 
 Idrak comes in as packages. A build switch points at a local Idrak clone instead, as `apps/Directory.Build.targets`
@@ -69,7 +71,11 @@ already does, so a library fix is tested in the editor before a release.
 | `IEditorHost` | n/a | What a plug-in reaches: documents, selection, `ApplyEdits` (always shown as a diff for the user to accept), diagnostics, commands, panels, ghost text, settings, progress and telemetry. |
 | `IInlineCompletionProvider` | `CompletionProviders` | Ghost text at the caret, streamed and cancelled by the next keystroke. |
 | `ICodeActionProvider` | `CodeActionProviders` | Actions over a selection or a diagnostic (explain, fix, refactor, document, write tests), returning edits. |
-| `IModelSource : IKind` | `ModelSources` | Where the plug-ins' `IChatModel` and `ITextModel` come from: a local model through Idrak (`ModelHost`, the Idrak.Maui model store), or a remote endpoint (phase A3). |
+| `IModelProvider : IKind` | `ModelProviders` | How the plug-ins' `IChatModel` and `ITextModel` are reached: "local" (a model name resolved by Idrak's `ModelSources`, loaded once by Idrak's `ModelHost`) or "remote" (an endpoint, phase A3). It never resolves model names itself. |
+
+Model names are always resolved by Idrak's `ModelSources` (an existing folder, `store:name`, a `.gguf` file, a Hugging
+Face id), the same list the `idrak` tool uses, so a name that works in the CLI works in the editor. Craft adds no name
+registry of its own; a new kind of name (such as `craft:`, plug-in P10) is a source registered into `ModelSources`.
 
 Each registry is a `SlotTable` with library defaults and app overrides. Craft gets its own inventory test and its own
 public API guard (`api/Craft.txt`), as Idrak has.
@@ -113,6 +119,21 @@ public API guard (`api/Craft.txt`), as Idrak has.
   `/v1/completions`). It is generic, so it would belong in `Idrak.Abstraction` or `Idrak.Text`. It is held until the
   owner says whether the phone should reach a desktop's model (A3).
 
+### Windows first, Android-ready code
+
+Windows is built and run first. The code never shuts out Android:
+
+- Every project builds for `net10.0-android` from E0, beside `net10.0` and the Windows target, as Idrak.Maui does. A
+  build that breaks the Android target is a broken build.
+- Platform code lives only under `Platforms/Windows` and `Platforms/Android`, behind Craft's contracts. The text input
+  (`ITextInputAdapter`: keys, composition, selection handles, the clipboard), the file picker and the window or screen
+  size are contracts, with the Windows implementations built in E3 and the Android ones in M.
+- The layout is chosen from the measured window width, not the platform, so a narrow Windows window already shows the
+  phone layout. That layout is built and checked on Windows before M.
+- Nothing calls a Windows-only API (Win32, WinUI types) outside `Platforms/Windows`, and the agent's need for a shell
+  is a registered `CommandSandboxes` entry, not an assumption.
+- Every library added must be AOT- and trim-checked for Android when it is added, not in M.
+
 ### Speed and memory (docs/optimization.md applies to every phase)
 
 - The buffer is a piece table with a line index. A keystroke costs the edit plus the re-lex of the lines it changed,
@@ -133,7 +154,7 @@ public API guard (`api/Craft.txt`), as Idrak has.
 - Roslyn on Android: its MEF composition (`MefHostServices`) uses reflection, so Roslyn's assemblies are kept whole by
   the trimmer (`TrimmerRootAssembly`). The APK size, the cold start (first classification, first completion) and the
   warm costs are measured with full AOT and with profiled AOT (`IdrakAndroidAot`), and the numbers are written into
-  this plan.
+  this plan (phase M).
 - The benches measure, card-agnostic and cold and warm separately:
   - keystroke to paint;
   - scrolling a 100,000-line file;
@@ -147,6 +168,39 @@ public API guard (`api/Craft.txt`), as Idrak has.
   context size sent, the device, the model, the font, the tab size, the theme. That includes the AI's context budget,
   which is measured from the model's context length, not fixed.
 
+## Plug-ins that test Idrak's plug-in points (phase P)
+
+Each plug-in is a real feature of the editor and, at the same time, a test of one of Idrak's registries. Together they
+check five things:
+
+1. **A new kind:** a name added to a registry works end to end.
+2. **An override:** an app registration shadows a library default, the slot's guard reports it, and `Unregister`
+   brings the default back.
+3. **A missing name:** an unregistered name fails with "not registered"; nothing falls back silently.
+4. **Loaded from outside:** a plug-in assembly dropped into a folder loads through `IdrakPlugins.Load` (what the CLI's
+   `-P` uses), with no rebuild of the editor.
+5. **One assembly, every host:** the same plug-in works in the editor, the `idrak` CLI and `idrak mcp serve`.
+
+| # | Plug-in | Idrak contract | Checks |
+|---|---|---|---|
+| P1 | **Editor tools**: `read_document`, `get_selection`, `get_diagnostics`, `find_symbol`, `propose_edit` (approved by the user) | `IToolProvider`, `[assembly: ToolProvider]` | 5: listed by `idrak tools list`, run by `idrak tools test`, served by `idrak mcp serve` |
+| P2 | **A coder model family** not yet in `Idrak.Text.Plugins`, with its fill-in-the-middle format | `IIdrakPlugin` / `IdrakPlugins`, the FIM registry (A0) | 4 and 3: loaded from a folder; without it, completion says "not registered" |
+| P3 | **Bracket-balanced completion sampler**: masks tokens that close a brace or a string the prefix never opened | `TokenSamplers` (over the built-in default) | 2 on the hottest path: its state through a generation, its cost in tokens per second |
+| P4 | **C#-aware edit placement**: places a model's "replace this snippet" draft by Roslyn tokens, ignoring whitespace | `TextMatchers` | 1 and 2 against the library's `SemiGlobal` |
+| P5 | **Approve-each-command sandbox**: the agent's commands run in the editor's terminal panel, each approved | `CommandSandboxes` | 1 and 3: where none is registered (a phone), the agent is refused loudly |
+| P6 | **Code search**: Roslyn-shaped chunks (type, member), camelCase-split identifiers, keyword index plus embeddings | `KeywordIndexes`, `PretrainedEncoders` / `SequencePoolers` | 1 in retrieval; feeds the chat panel's context |
+| P7 | **Voice dictation and commands** ("go to line 40", "rename this") | `SpeechFamilies`, `AudioCaptures` | another domain (audio) through the same editor host |
+| P8 | **Photo or screenshot to code** | `VisionFamilies`, `IChatModel.PartKinds` with "image" | image parts through the chat contract; a model without "image" refuses, never ignores the picture |
+| P9 | **Status-bar progress and telemetry**: model pull and load progress, tokens per second, device memory | `ProgressReporters`, telemetry | 1 on a registry without a guard |
+| P10 | **Workspace model names**: `craft:` names resolved from the project's `.craft/model.json` | `ModelSources` | 1 on model name resolution |
+
+P1, P2, P3 and P5 come first: together they cover all five checks. Where `Idrak.Abstraction.Testing` has a
+conformance check for the contract (the sampler for P3), the plug-in runs it.
+
+On Android, whether an assembly loaded at run time works under the app's ahead-of-time setting (`IdrakAndroidAot`), and
+whether trimming removes what a plug-in needs, is measured in M. If it does not work, Android plug-ins are compiled into
+the app and registered through `RegisterAll()`, and loading from a folder stays a desktop feature.
+
 ## Phases
 
 Phases are a dependency order, not a barrier. At most two agents work at a time.
@@ -156,13 +210,15 @@ Phases are a dependency order, not a barrier. At most two agents work at a time.
 | E0 | Craft skeleton: solution, `Directory.Build.props` with Idrak's settings (net10.0, nullable, warnings as errors), the Idrak package reference and its local-clone switch, `Craft.Abstractions` with the registries, the inventory test and the API guard. | answers |
 | E1 | `Craft.Core`: piece table, snapshots, edits, undo and redo (grouped by typing pause), file open and save (encodings, line endings kept), workspace folder. Tests on fixed and random edit sequences against a plain string model. | E0 |
 | E2 | `Craft.CSharp` on Roslyn, the syntactic layer: `SourceText` kept in step with the buffer, the incremental parse, classified spans for a line range, Roslyn's classification names mapped to theme classes, and the light and dark themes. Tests prove the spans of fixed C# 14 files (strings of every kind, comments, preprocessor lines, contextual keywords) and that the spans after random edits equal those of a fresh parse. | E1 |
-| E3 | `Craft.Maui` editor control: drawn surface, caret, selection, scrolling, gutter with line numbers, bracket match. Keyboard and mouse on Windows; soft keyboard, IME composition and touch selection handles on Android. Find and replace. | E2 |
-| E4 | `Craft.App` shell: folder tree, tabs, settings page (every setting above), recent files, light and dark. Windows and Android. | E3 |
-| E5 | `Craft.CSharp` on Roslyn, the semantic layer: a workspace per folder (`.csproj` read for its sources and references, loose files as a script-like project), semantic colours over the syntactic ones, diagnostics as squiggles and in a list, the completion list, signature help, hover, go to definition, format document. Memory, APK size and cold start measured on Windows and on an Android phone. | E3 (parallel with E4) |
+| E3 | `Craft.Maui` editor control: drawn surface, caret, selection, scrolling, gutter with line numbers, bracket match. Keyboard, mouse and IME on Windows behind `ITextInputAdapter`. Find and replace. The Android target compiles. | E2 |
+| E4 | `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, and the narrow (phone) layout chosen by width. | E3 |
+| E5 | `Craft.CSharp` on Roslyn, the semantic layer: a workspace per folder (`.csproj` read for its sources and references, loose files as a script-like project), semantic colours over the syntactic ones, diagnostics as squiggles and in a list, the completion list, signature help, hover, go to definition, format document. Memory and cold start measured on Windows. | E3 (parallel with E4) |
 | A0 | Idrak: the FIM contract and registry, the formats of the coder families already supported (in `Idrak.Text.Plugins`), the reuse and cancellation bench, and fixes for what it finds. | answers (parallel with E1-E2) |
-| A1 | `Craft.Ai` host: `IEditorPlugin`, `IEditorHost`, the diff-and-accept view, the editor's tools as an `IToolProvider`, `IModelSource` with the local source (Idrak.Maui's model store). | E4, A0 |
+| A1 | `Craft.Ai` host: `IEditorPlugin`, `IEditorHost`, the diff-and-accept view, the editor's tools as an `IToolProvider`, `IModelProvider` with the "local" provider (names through `ModelSources`, models through `ModelHost` and Idrak.Maui's model store). | E4, A0 |
 | A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | A1 |
-| A3 | Held: the remote model source (a desktop's `idrak serve` from the phone), iOS and macOS. | the owner |
+| P | The plug-ins above: P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P7 and P8. Each with its targeted tests and, where it applies, the conformance check. | A1 (P2 also A0) |
+| M | Android: the `ITextInputAdapter` for the soft keyboard, IME composition and touch selection handles; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); loading plug-ins at run time under AOT, or compiled in. | E5, A2 |
+| A3 | Held: the "remote" model provider (a desktop's `idrak serve` from the phone), iOS and macOS. | the owner |
 
 ## Commands for the owner (once a phase is built)
 
@@ -174,6 +230,10 @@ targeted runs with `--no-build`, outputs under `test-output\`.
 1. **Where:** the Craft repository, referencing Idrak as packages, with a switch to a local clone.
 2. **UI stack:** .NET MAUI with Craft's own drawn editor control. Avalonia and a Monaco web view were weighed and set
    aside.
-3. **Platforms first:** Windows and Android; iOS and macOS are held (A3).
+3. **Platforms first:** Windows built and run first; the code compiles for Android from E0 and the Android runs are
+   phase M; iOS and macOS are held (A3).
 4. **C# intelligence:** Roslyn from the start, on both platforms. There is no hand-written lexer unless a measurement
    asks for one (Speed and memory, above).
+5. **Plug-ins:** the phase P set, to test Idrak's plug-in points.
+6. **Model names:** resolved by Idrak's `ModelSources`; Craft's own contract (`IModelProvider`) only chooses local or
+   remote.

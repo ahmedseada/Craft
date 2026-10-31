@@ -125,7 +125,7 @@ public sealed class EditorPage : ContentPage
             Padding = new Thickness(8, 2),
             Children = { _language, _position, _encoding, _lineEnding, _dirty, _paint, _notice, _pluginStatus },
         };
-        FlexLayout.SetGrow((IView)_pluginStatus, 1);
+        _statusBar.SetGrow(_pluginStatus, 1);
         var body = new Grid
         {
             ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },

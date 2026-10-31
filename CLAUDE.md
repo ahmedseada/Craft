@@ -93,7 +93,11 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
   ```
   Every test run shows the live progress line and saves only the failed lines (each FAIL line with its message lines
-  and the summary) into `test-output\` for the owner to paste. A change in Idrak gets Idrak's list, in Idrak's shape.
+  and the summary) into `test-output\` for the owner to paste.
+  Whenever a new version is ready to rebuild (an agent's work merged), the owner gets this list at once, unasked, with
+  one pull of each repository that changed since the last list: Idrak's first (`cd D:\Projects\Idrak; git checkout
+  main; git pull origin main`, because Craft builds against the clone), then Craft's; a repository with nothing new is
+  not pulled. Then the one build and the runs, as above. A change in Idrak gets Idrak's list, in Idrak's shape.
 - **Output files go under `test-output\`.** Every file a run writes for the owner (a failures file, a log, a trace, a
   bench's results, an app's output) goes under `test-output\` at the repository root (git ignores it); commands name
   paths there, never the repository root or a source folder.

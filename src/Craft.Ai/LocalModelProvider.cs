@@ -67,6 +67,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                     new ModelRole("Inline completion", model, model is null ? "none set" : "the chat model (fill-in-the-middle when its family registers a format)"),
                 ],
                 Device = _device,
+                Loaded = [.. Loaded.Select(m => $"{m.Name.Split('\n')[0]} · {(m.ActiveUsers > 0 ? "in use" : "idle")}")],
                 LoadCommand = AiPlugin.LoadModelCommand,
                 ModelSetting = new ModelSettingField(Variable("model"), "Model name: a folder, store:name, a .gguf file, a Hugging Face id"),
                 DeviceSetting = new ModelSettingField(Variable("device"), "Run on", "auto (the fastest found)"),
@@ -90,6 +91,9 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         _stateIsProblem = isProblem;
         StatusChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>Raises <see cref="StatusChanged"/> (the models loaded or the settings changed).</summary>
+    internal void Changed() => StatusChanged?.Invoke(this, EventArgs.Empty);
 
     private static string Variable(string key) => PluginSetting.VariableName(AiSettings.PluginName, key);
 

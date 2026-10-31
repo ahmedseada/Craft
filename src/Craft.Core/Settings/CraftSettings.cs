@@ -196,6 +196,31 @@ public sealed class CraftSettings
     }
 
     /// <summary>
+    /// As <see cref="Set"/>, but the file is written on the thread pool (the UI thread never waits on the disk: a panel's
+    /// size after a splitter drag); the value is checked and held at once, so <see cref="Read"/> sees it before the write ends.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">That layer has no file.</exception>
+    /// <exception cref="ArgumentException">The file may not set the variable, or the value does not parse.</exception>
+    public Task StoreAsync(SettingLayer layer, string variable, string? value)
+    {
+        ArgumentNullException.ThrowIfNull(variable);
+        var file = (layer == SettingLayer.User ? User : Workspace)
+            ?? throw new InvalidOperationException(layer == SettingLayer.User ? "There is no user settings file (no data folder)." : "No folder is open, so there is no workspace settings file.");
+        var name = variable.Trim().ToUpperInvariant();
+        if (!Allows(layer, name) && !string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException($"{name} cannot be set in that file.", nameof(variable));
+        }
+
+        if (Validate(name, value) is { } error)
+        {
+            throw new ArgumentException(error, nameof(value));
+        }
+
+        return file.Set(name, value) ? file.SaveAsync() : Task.CompletedTask;
+    }
+
+    /// <summary>
     /// The rows of the settings page: every Craft option (<see cref="CraftOptions.Variables"/>) in order, then
     /// <paramref name="extra"/> (the plug-ins' declared settings), each with its value in effect and where it comes from.
     /// </summary>

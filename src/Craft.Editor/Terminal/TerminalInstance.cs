@@ -31,8 +31,9 @@ public sealed class TerminalInstance : IDisposable
     private int _disposed;
     private int _scrollBack;
 
-    private TerminalInstance(int id, ITerminalSession session, TerminalScreen screen, TerminalShell shell, string folder, string hostName, string? name, Action<Action> dispatch)
+    private TerminalInstance(int id, ITerminalSession session, TerminalScreen screen, TerminalShell shell, string folder, string hostName, string? name, Action<Action> dispatch, bool readOnly = false)
     {
+        IsReadOnly = readOnly;
         Id = id;
         Session = session;
         Screen = screen;
@@ -89,6 +90,9 @@ public sealed class TerminalInstance : IDisposable
             return title ?? TerminalLaunch.TitleOf(Shell, folder ?? WorkingDirectory);
         }
     }
+
+    /// <summary>Whether it is a plug-in's output (<see cref="Output"/>): no shell, and nothing typed goes anywhere.</summary>
+    public bool IsReadOnly { get; }
 
     /// <summary>The shell's exit code once it ended, else null.</summary>
     public int? ExitCode { get; private set; }
@@ -149,6 +153,20 @@ public sealed class TerminalInstance : IDisposable
         return new TerminalInstance(id, session, screen, start.Shell, start.WorkingDirectory, host.Name, name, dispatch);
     }
 
+    /// <summary>
+    /// A read-only terminal over <paramref name="session"/> (a plug-in's output, <see cref="IEditorTerminals.OpenOutput"/>):
+    /// its bytes are read and drawn like a shell's, and keys, text and pastes go nowhere.
+    /// </summary>
+    public static TerminalInstance Output(int id, ITerminalSession session, TerminalSize size, int scrollback, Action<Action> dispatch, string name, string folder)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(dispatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        size = size.Clamped();
+        var screen = new TerminalScreen(size.Columns, size.Rows, scrollback);
+        return new TerminalInstance(id, session, screen, new TerminalShell(name), folder, OutputTerminalSession.HostName, name, dispatch, readOnly: true);
+    }
+
     /// <summary>Sends <paramref name="input"/> to the shell as it is (nothing once it ended).</summary>
     public void Write(ReadOnlySpan<byte> input)
     {
@@ -173,7 +191,7 @@ public sealed class TerminalInstance : IDisposable
             }
         }
 
-        if (text.Length == 0 || HasExited)
+        if (text.Length == 0 || HasExited || IsReadOnly)
         {
             return;
         }
@@ -187,7 +205,7 @@ public sealed class TerminalInstance : IDisposable
     public bool HandleKey(EditorKey key, KeyModifiers modifiers)
     {
         _suppressText = -1;
-        if (HasExited)
+        if (HasExited || IsReadOnly)
         {
             return false;
         }
@@ -214,7 +232,7 @@ public sealed class TerminalInstance : IDisposable
     public void Paste(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        if (text.Length == 0 || HasExited)
+        if (text.Length == 0 || HasExited || IsReadOnly)
         {
             return;
         }
@@ -353,7 +371,11 @@ public sealed class TerminalInstance : IDisposable
             code = -1;
         }
 
-        Feed(System.Text.Encoding.UTF8.GetBytes(string.Create(CultureInfo.InvariantCulture, $"\r\n\e[0m\e[2m[the shell ended with exit code {code}]\e[0m\r\n")));
+        if (!IsReadOnly)
+        {
+            Feed(System.Text.Encoding.UTF8.GetBytes(string.Create(CultureInfo.InvariantCulture, $"\r\n\e[0m\e[2m[the shell ended with exit code {code}]\e[0m\r\n")));
+        }
+
         _dispatch(() =>
         {
             ExitCode = code;

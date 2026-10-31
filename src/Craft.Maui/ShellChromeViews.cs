@@ -368,12 +368,14 @@ public sealed class RailView : ContentView
     private Grid Button(RailItem item)
     {
         bool active = string.Equals(item.Id, _active, StringComparison.OrdinalIgnoreCase);
-        var icon = new StrokeIcon(item.Icon) { Color = active ? _palette.Text : _palette.Secondary, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+        // The icon (a stroked Path) and the accent line are input-transparent, so a click anywhere on the button reaches the
+        // cell's tap, never a child shape that swallows it (the owner's note 7: the explorer button did nothing).
+        var icon = new StrokeIcon(item.Icon) { Color = active ? _palette.Text : _palette.Secondary, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center, InputTransparent = true };
         var cell = new Grid { WidthRequest = 44, HeightRequest = 44, HorizontalOptions = LayoutOptions.Center, BackgroundColor = active ? _palette.RaisedHigh : Colors.Transparent };
         cell.Add(icon);
         if (active)
         {
-            cell.Add(new BoxView { Color = _palette.Accent, WidthRequest = 2, HorizontalOptions = LayoutOptions.Start });
+            cell.Add(new BoxView { Color = _palette.Accent, WidthRequest = 2, HorizontalOptions = LayoutOptions.Start, InputTransparent = true });
         }
 
         ToolTipProperties.SetText(cell, item.Title);
@@ -593,7 +595,9 @@ public sealed record ProblemRow(string Text, string Place, Color Color, string M
 /// <summary>
 /// The bottom panel (docs/design/Main.dc.html): the tabs Problems (with the count), Terminal (the terminals, <see cref="TerminalContent"/>), Output (the host's
 /// log, live) and Idrak telemetry (the measures recorded through the host), the active one in the text colour over the
-/// accent's line. Each list is a virtualized list (only the rows on screen are made).
+/// accent's line. Each list is a virtualized list (only the rows on screen are made). Phase U2: the chevron at the strip's
+/// end and a click on the active tab ask the shell to collapse it (<see cref="CollapseRequested"/>, as Ctrl+J does); its
+/// height is its <see cref="SplitPanel"/>'s (a drag of the splitter above it, kept per workspace).
 /// </summary>
 public sealed class BottomPanelView : ContentView, IDisposable
 {
@@ -601,6 +605,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly TelemetryLog _telemetry;
     private readonly HorizontalStackLayout _tabs = new() { Spacing = 18, Padding = new Thickness(16, 0) };
     private readonly ContentView _body = new();
+    private readonly Button _collapse;
     private readonly CollectionView _problems;
     private readonly CollectionView _output;
     private readonly CollectionView _measures;
@@ -637,17 +642,28 @@ public sealed class BottomPanelView : ContentView, IDisposable
 
         host.Logged += OnLogged;
         _telemetry.Changed += OnMeasured;
+        _collapse = palette.Flat("⌄", palette.Secondary, 28, palette.FontSize + 2);
+        _collapse.WidthRequest = 32;
+        _collapse.Padding = new Thickness(0);
+        ToolTipProperties.SetText(_collapse, "Hide the panel (Ctrl+J)");
+        SemanticProperties.SetDescription(_collapse, "Hide the bottom panel");
+        _collapse.Clicked += (_, _) => CollapseRequested?.Invoke(this, EventArgs.Empty);
+        var strip = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)] };
+        strip.Add(_tabs, 0, 0);
+        strip.Add(_collapse, 1, 0);
         var grid = new Grid { RowDefinitions = [new RowDefinition(new GridLength(32)), new RowDefinition(GridLength.Star)] };
-        grid.Add(_tabs, 0, 0);
+        grid.Add(strip, 0, 0);
         grid.Add(_body, 0, 1);
         Content = grid;
-        HeightRequest = palette.Options.BottomPanelHeight;
         Apply(palette);
         Select(BottomTab.Problems);
     }
 
     /// <summary>The tab shown.</summary>
     public BottomTab Tab { get; private set; }
+
+    /// <summary>Raised when the chevron or the active tab is clicked: the shell collapses the panel.</summary>
+    public event EventHandler? CollapseRequested;
 
     /// <summary>
     /// A Problems row's Fix or Explain (the design's buttons) was pressed: its diagnostic and the code action kind
@@ -744,7 +760,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         BackgroundColor = palette.Surface;
         _terminal.TextColor = palette.Secondary;
         _noMeasures.TextColor = palette.Secondary;
-        HeightRequest = palette.Options.BottomPanelHeight;
+        _collapse.TextColor = palette.Secondary;
         RebuildTabs();
     }
 
@@ -778,8 +794,19 @@ public sealed class BottomPanelView : ContentView, IDisposable
             cell.Add(new BoxView { Color = active ? _palette.Accent : Colors.Transparent, HeightRequest = 1 }, 0, 1);
             var tap = new TapGestureRecognizer();
             var chosen = tab;
-            tap.Tapped += (_, _) => Select(chosen);
+            tap.Tapped += (_, _) =>
+            {
+                if (chosen == Tab)
+                {
+                    CollapseRequested?.Invoke(this, EventArgs.Empty);   // the active tab again: the panel folds away
+                }
+                else
+                {
+                    Select(chosen);
+                }
+            };
             cell.GestureRecognizers.Add(tap);
+            ToolTipProperties.SetText(cell, active ? "Click again to hide the panel (Ctrl+J)" : title);
             _tabs.Children.Add(cell);
         }
     }

@@ -41,7 +41,7 @@ public sealed class AiRegistration() : IdrakPlugin(AiSettings.PluginName)
 /// <summary>
 /// The AI host as an editor plug-in (plan phase A1, "ai"): it declares the settings (<see cref="AiSettings"/>), serves the
 /// editor's live tools over MCP when asked (off by default; the command <c>ai.mcpStart</c>, or <c>mcpOnStart</c>), shows
-/// the server's address in the status bar, and holds the "local" model provider with a "Models and devices" panel. The AI
+/// the server's address in the status bar, and holds the "local" model provider whose status the Models page shows. The AI
 /// plug-ins of phase A2 build on it through the same public contracts.
 /// </summary>
 public sealed class AiPlugin : IEditorPlugin
@@ -164,12 +164,11 @@ public sealed class AiPlugin : IEditorPlugin
     }
 }
 
-/// <summary>The AI host in one editor host: its MCP server, its status items and its models panel. Used on the UI thread.</summary>
+/// <summary>The AI host in one editor host: its MCP server, its status items and the model status the Models page reads. Used on the UI thread.</summary>
 public sealed class AiSession : IDisposable
 {
     private readonly IEditorHost _host;
     private readonly Action _closed;
-    private readonly ListPanel _models = new("ai.models", "Models and devices");
     private readonly StatusItem _mcpStatus = new("ai.mcp", "", StatusAlignment.Right, 10, AiPlugin.McpShowCommand);
     private IDisposable? _mcpShown;
     private readonly StatusItem _completionStatus = new("ai.completion", "", StatusAlignment.Right, 9);
@@ -212,7 +211,6 @@ public sealed class AiSession : IDisposable
         CodeActionProviders.Register(Actions);
         _host.AddPanel(Chat);
         _host.AddPanel(Agent);
-        _host.AddPanel(_models);
         RefreshModels();
         if (settings.McpOnStart)
         {
@@ -314,7 +312,7 @@ public sealed class AiSession : IDisposable
         ? server.Describe()
         : $"The MCP server is off. Run 'AI: Serve the editor's tools over MCP'; it listens at {Settings.McpAddress} (CRAFT_PLUGIN_AI_MCPADDRESS).");
 
-    /// <summary>Loads the local model of the settings, its progress in the status bar, its state in the models panel.</summary>
+    /// <summary>Loads the local model of the settings, its progress in the status bar, its state on the Models page.</summary>
     public async Task LoadModelAsync(CancellationToken cancellationToken)
     {
         var settings = Settings;
@@ -392,6 +390,7 @@ public sealed class AiSession : IDisposable
 
         // The status bar shows the load as AiModels' activity; here the panel's and the centre's state line.
         _modelState = status.Message;
+        AiPlugin.Local.SetState(status.Message);
         RefreshModels();
     }
 
@@ -412,46 +411,14 @@ public sealed class AiSession : IDisposable
         }
     }
 
-    // The design's "Models and devices" (docs/design/Models.dc.html) as a panel: where models run, the model by role, the
-    // device and the limits, and how a name is resolved. The full page is phase D's.
+    // Phase U2: the right-hand "Models and devices" panel is gone. What it said (where models run, the model by role and
+    // its state, the device, the limits, how a name is resolved, what is loaded) is the provider's status, which the
+    // Models page (a tab of the editor area) and the model chip read, and the model's state line in phase U's
+    // notification centre (IEditorHost.ShowStatus); a load's progress is an activity in the status bar.
     private void RefreshModels()
     {
         var settings = Settings;
-        var items = new List<PanelItem>
-        {
-            new("Where models run: Local (this machine)", "Remote endpoint: later (A3)"),
-            new($"Chat and agent: {(settings.Model.Length == 0 ? "(none set)" : settings.Model)}", _modelState, AiPlugin.LoadModelCommand),
-            new($"Device: {settings.Device}", settings.Device.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "the fastest found" : null),
-            new("Limits: " + Limits(settings), "A limit here sets Idrak's ComputeResources"),
-            new("How a name is resolved: " + string.Join(", ", ModelSources.Names), "Idrak's model sources, asked in order; the same names work in the idrak tool"),
-        };
-        foreach (var loaded in AiPlugin.Local.Loaded)
-        {
-            items.Add(new PanelItem("Loaded: " + loaded.Name.Split('\n')[0], loaded.ActiveUsers > 0 ? "in use" : "idle"));
-        }
-
-        _models.SetItems(items);
+        AiPlugin.Local.Changed();
         _modelStatus.Update($"{(settings.Model.Length == 0 ? "(none set)" : settings.Model)} · {_modelState} · device {settings.Device}");
-    }
-
-    private static string Limits(AiSettings settings)
-    {
-        var parts = new List<string>(3);
-        if (settings.Threads > 0)
-        {
-            parts.Add(string.Create(CultureInfo.InvariantCulture, $"{settings.Threads} CPU threads"));
-        }
-
-        if (settings.CpuMemoryMegabytes > 0)
-        {
-            parts.Add(string.Create(CultureInfo.InvariantCulture, $"CPU memory {settings.CpuMemoryMegabytes} MiB"));
-        }
-
-        if (settings.GpuMemoryMegabytes > 0)
-        {
-            parts.Add(string.Create(CultureInfo.InvariantCulture, $"device memory {settings.GpuMemoryMegabytes} MiB"));
-        }
-
-        return parts.Count == 0 ? "none set: Craft uses what the device has" : string.Join(", ", parts);
     }
 }

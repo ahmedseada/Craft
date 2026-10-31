@@ -23,20 +23,26 @@ public enum CommandApproval
 /// <summary>
 /// The approve-each sandbox in one editor host: it asks the user (on the host's UI thread), remembers the programs allowed
 /// for this run (until the command "Sandbox: end this run", or a gap between commands longer than the setting
-/// <c>runGapMinutes</c>), and runs an allowed command in the inner sandbox with each line of its output in the terminal
-/// panel as it comes (a batch of lines per UI turn, never one dispatch per line), the last <c>panelLines</c> kept.
+/// <c>runGapMinutes</c>), and runs an allowed command in the inner sandbox with each line of its output in the read-only
+/// terminal tab "Agent sandbox" of the bottom panel's Terminal tab (<see cref="IEditorTerminals.OpenOutput"/>, phase U2;
+/// opened on the first command, a batch of lines per UI turn, never one dispatch per line); the last <c>panelLines</c> are
+/// also kept here (what a host without terminals still has).
 /// </summary>
 internal sealed class SandboxSession : IDisposable
 {
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
 
     private readonly IEditorHost _host;
-    private readonly ListPanel _panel = new("sandbox.terminal", "Terminal (sandbox)");
+    /// <summary>The terminal tab's name.</summary>
+    public const string OutputName = "Agent sandbox";
+
+    private const string Intro = "Commands an agent runs through the approve-each sandbox show here, each after you allow it.";
     private readonly Lock _gate = new();
     private readonly List<string> _lines = [];
+    private readonly List<string> _unsent = [];
     private readonly HashSet<string> _allowed = new(StringComparer.OrdinalIgnoreCase);
-    private readonly IDisposable _panelShown;
     private readonly IEditorNotification _status;
+    private IEditorTerminalOutput? _output;
     private SandboxSettings _settings;
     private long _lastCommand;
     private bool _flushPending;
@@ -46,17 +52,25 @@ internal sealed class SandboxSession : IDisposable
     {
         _host = host;
         _settings = SandboxSettings.From(host.Settings);
-        _panelShown = host.AddPanel(_panel);
-        // Phase U: the last command as a status line of the notification centre (U2 moves the side panel there).
+        // Phase U: the last command as a status line of the notification centre; U2: its output in the "Agent sandbox"
+        // terminal tab (the side panel is gone).
         _status = host.ShowStatus("Sandbox: the last command", "none yet");
-        Append("Commands an agent runs through the approve-each sandbox show here, each after you allow it.");
     }
 
     /// <summary>The settings as the host gave them last (read on its UI thread when the plug-in starts and before each command).</summary>
     public SandboxSettings Settings => Volatile.Read(ref _settings);
 
-    /// <summary>The panel (the tests read it).</summary>
-    public ListPanel Panel => _panel;
+    /// <summary>The lines kept (the last <c>panelLines</c>), oldest first.</summary>
+    public IReadOnlyList<string> Lines
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _lines];
+            }
+        }
+    }
 
     /// <summary>The programs allowed for this run, as "folder|program".</summary>
     public IReadOnlyCollection<string> Allowed
@@ -98,15 +112,16 @@ internal sealed class SandboxSession : IDisposable
         Append("— the run ended: the next command asks again —");
     }
 
-    /// <summary>Empties the terminal panel.</summary>
+    /// <summary>Empties the kept lines and the terminal tab (its screen and scrollback).</summary>
     public void Clear()
     {
         lock (_gate)
         {
             _lines.Clear();
+            _unsent.Clear();
         }
 
-        Flush();
+        _output?.Append("\e[3J\e[2J\e[H");
     }
 
     public async Task<CommandResult> RunAsync(IReadOnlyList<string> command, string directory, CommandLimits limits, CancellationToken cancellationToken)
@@ -214,8 +229,8 @@ internal sealed class SandboxSession : IDisposable
         }
 
         _disposed = true;
-        _panelShown.Dispose();
         _status.Dispose();
+        _output = null;
     }
 
     // The question, asked on the UI thread; a dismissed one (or a host that cannot ask) is a denial.
@@ -294,10 +309,16 @@ internal sealed class SandboxSession : IDisposable
             }
 
             _lines.Add(text);
+            _unsent.Add(text);
             int keep = Settings.PanelLines;
             if (_lines.Count > keep)
             {
                 _lines.RemoveRange(0, _lines.Count - keep);
+            }
+
+            if (_unsent.Count > keep)
+            {
+                _unsent.RemoveRange(0, _unsent.Count - keep);
             }
 
             schedule = !_flushPending;
@@ -310,16 +331,36 @@ internal sealed class SandboxSession : IDisposable
         }
     }
 
+    // The UI thread: the lines since the last turn go to the "Agent sandbox" tab in one append; the tab opens on the first
+    // command (and again after the user closed it), shown without taking the keyboard.
     private void Flush()
     {
-        PanelItem[] items;
+        string text;
         lock (_gate)
         {
             _flushPending = false;
-            items = [.. _lines.Select(l => new PanelItem(l))];
+            if (_disposed || _unsent.Count == 0)
+            {
+                return;
+            }
+
+            text = string.Join('\n', _unsent) + "\n";
+            _unsent.Clear();
         }
 
-        _panel.SetItems(items);
+        if (_output is not { IsOpen: true })
+        {
+            _output = _host.Terminals?.OpenOutput(OutputName);
+            if (_output is null)
+            {
+                return;                      // a host without terminals: the lines stay in Lines only
+            }
+
+            _output.Append("\e[2m" + Intro + "\e[0m\n");
+            _output.Show();
+        }
+
+        _output.Append(text);
     }
 
     // The command as a line the user reads: each word quoted when it holds a space or a quote.

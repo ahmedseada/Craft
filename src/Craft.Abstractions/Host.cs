@@ -172,8 +172,18 @@ public interface IEditorHost
     Task<IEditorDocument?> OpenDocumentAsync(string path, CancellationToken cancellationToken = default) => Task.FromResult<IEditorDocument?>(null);
 
     /// <summary>
-    /// Brings the panel <paramref name="panelId"/> (one the plug-in added) into view: the host shows its area (the chat
-    /// column, the sheet in the narrow layout) and selects it. A host that cannot does nothing.
+    /// Saves <paramref name="document"/> to its file (or to <paramref name="path"/>, which becomes its file) and raises
+    /// <see cref="DocumentSaved"/>, so the editor's tab, its language and the folder tree follow at once. A plug-in saves
+    /// only what the user accepted to write (the agent's accepted new file); by default the document saves itself.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The document has no file and no path was given.</exception>
+    Task SaveAsync(IEditorDocument document, string? path = null, CancellationToken cancellationToken = default) =>
+        (document ?? throw new ArgumentNullException(nameof(document))).Document.SaveAsync(path, cancellationToken);
+
+    /// <summary>
+    /// Brings the panel <paramref name="panelId"/> (one the plug-in added) into view: the host shows its area (a
+    /// conversation panel in the chat column, or the sheet in the narrow layout; any other panel as the side view of its
+    /// rail item, in the explorer's place) and selects it. A host that cannot does nothing.
     /// </summary>
     void ShowPanel(string panelId)
     {
@@ -222,7 +232,12 @@ public interface IEditorHost
     /// <summary>Shows <paramref name="item"/> in the status bar until the result is disposed (or the plug-in is deactivated).</summary>
     IDisposable AddStatusItem(IStatusItem item);
 
-    /// <summary>Shows <paramref name="panel"/> in the side area until the result is disposed (or the plug-in is deactivated).</summary>
+    /// <summary>
+    /// Shows <paramref name="panel"/> until the result is disposed (or the plug-in is deactivated): an
+    /// <see cref="IConversationPanel"/> as a tab of the chat column; any other panel as a side view of the activity rail
+    /// (its own rail item, the panel's title, opens it in the explorer's place; a rail item the plug-in registers under
+    /// the panel's id replaces that item). There is no fixed column of panels.
+    /// </summary>
     IDisposable AddPanel(IEditorPanel panel);
 
     /// <summary>The plug-ins' declared settings.</summary>

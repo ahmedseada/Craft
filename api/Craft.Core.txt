@@ -2,9 +2,12 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   Craft.Abstractions.LanguageSettings ToLanguageSettings()
   Craft.Core.CraftOptions <Clone>$()
   System.Boolean AutoCloseBrackets { get; init; }
+  System.Boolean BottomPanelOpen { get; init; }
+  System.Boolean ChatOpen { get; init; }
   System.Boolean DiffCheck { get; init; }
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean ExplorerOpen { get; init; }
   System.Boolean InsertSpaces { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
@@ -50,6 +53,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 UiStallReports { get; init; }
   System.Int32 UiWatchdogMilliseconds { get; init; }
   System.Int32 UndoGroupMilliseconds { get; init; }
+  System.Int32 WorkspaceWatchMilliseconds { get; init; }
   System.Single BottomPanelHeight { get; init; }
   System.Single CaretWidth { get; init; }
   System.Single ChatWidth { get; init; }
@@ -58,7 +62,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Single InterfaceFontSize { get; init; }
   System.Single LineSpacing { get; init; }
   System.Single NarrowWidth { get; init; }
-  System.Single PanelWidth { get; init; }
+  System.Single PanelMinimumSize { get; init; }
   System.Single TerminalLineSpacing { get; init; }
   System.Single TouchTarget { get; init; }
   System.Single TreeIndent { get; init; }
@@ -81,6 +85,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String TitleBar { get; init; }
   System.String ToString()
   System.String WorkspaceConfiguration { get; init; }
+  System.String WorkspaceWatcher { get; init; }
   System.UInt32? Accent { get; init; }
   ctor()
   static Craft.Core.CraftOptions FromEnvironment(Craft.Core.CraftOptions baseline = null)
@@ -194,6 +199,7 @@ sealed class Craft.Core.Settings.CraftSettings
   System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> Rows(System.Collections.Generic.IEnumerable<Craft.Core.CraftVariable> extra = null)
   System.String Describe(Craft.Core.Settings.SettingSource source, System.String variable)
   System.String Read(System.String variable)
+  System.Threading.Tasks.Task StoreAsync(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
   const System.String FileName = settings.json
   const System.String WorkspaceFolderName = .craft
   ctor(System.Func<System.String, System.String> environment, Craft.Core.Settings.SettingsFile user, Craft.Core.Settings.SettingsFile workspace = null)
@@ -229,6 +235,7 @@ sealed class Craft.Core.Settings.SettingsFile
   System.Collections.Generic.IReadOnlyList<System.String> Problems { get; }
   System.String FilePath { get; }
   System.String Get(System.String variable)
+  System.Threading.Tasks.Task SaveAsync()
   System.Void Save()
   static Craft.Core.Settings.SettingsFile Load(System.String path)
   static Craft.Core.Settings.SettingsFile Parse(System.String path, System.ReadOnlySpan<System.Byte> utf8)

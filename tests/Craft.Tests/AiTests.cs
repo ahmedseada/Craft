@@ -265,7 +265,8 @@ public static class AiTests
             using var host = new EditorHost(presenter: new DiffPresenter(), readVariable: name => variables.GetValueOrDefault(name));
             host.RefreshPlugins();
             Check.True(host.Plugins.Any(p => p is { Name: "ai", Active: true }), "it activates");
-            Check.True(host.Panels.Any(p => p.Id == "ai.models"), "the models panel is shown");
+            Check.True(!host.Panels.Any(p => p.Id == "ai.models") && ModelProviders.Get(ModelProviders.Local).Status.Roles.Count > 0,
+                "no models side panel (phase U2): the model state is the provider's status, which the Models page reads");
             Check.True(host.Settings.All.Count(s => s.Plugin == "ai") == AiSettings.Declared.Count, "its settings are on the settings page");
             Check.True(!host.StatusItems.Any(i => i.Id == "ai.mcp"), "the MCP server is off by default");
             Check.True(await host.ExecuteCommandAsync(AiPlugin.McpStartCommand), "the command starts it");

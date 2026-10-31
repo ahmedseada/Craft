@@ -199,6 +199,33 @@ public interface IEditorTerminals
     /// <summary>Opens a terminal.</summary>
     /// <exception cref="InvalidOperationException">No shell could be started (the message says why).</exception>
     IEditorTerminal Open(EditorTerminalRequest request);
+
+    /// <summary>
+    /// The read-only terminal tab named <paramref name="name"/> ("Agent sandbox"), opened when it is not open: no shell
+    /// runs in it and nothing the user types reaches anything; the plug-in appends text (VT colours included) and the
+    /// Terminal tab shows it with its scrollback, selection and copy. One tab per name; null when the host has none.
+    /// </summary>
+    IEditorTerminalOutput? OpenOutput(string name) => null;
+}
+
+/// <summary>
+/// A read-only terminal tab a plug-in writes to (<see cref="IEditorTerminals.OpenOutput"/>): its output, never a shell.
+/// <see cref="Append"/> may be called from any thread. The handle stops working once the user closed the tab (ask
+/// <see cref="IEditorTerminals.OpenOutput"/> again for a new one) or the plug-in was deactivated.
+/// </summary>
+public interface IEditorTerminalOutput
+{
+    /// <summary>Its tab's title.</summary>
+    string Title { get; }
+
+    /// <summary>Whether the tab is still open (false once the user closed it).</summary>
+    bool IsOpen { get; }
+
+    /// <summary>Appends <paramref name="text"/> (a line break is "\n"; VT sequences colour it); false once the tab closed.</summary>
+    bool Append(string text);
+
+    /// <summary>Shows the tab in the bottom panel's Terminal tab, without taking the keyboard.</summary>
+    void Show();
 }
 
 /// <summary>

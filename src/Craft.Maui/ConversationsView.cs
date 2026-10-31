@@ -20,6 +20,8 @@ namespace Craft.Maui;
 /// </summary>
 public sealed class ConversationsView : ContentView, IDisposable
 {
+    // Near the end counts as at the end (a line's worth), so a reply that grows by a few units keeps being followed.
+    private const double FollowSlack = 24;
     private readonly EditorHost _host;
     private readonly string _codeFont;
     private readonly HorizontalStackLayout _tabs = new() { Spacing = 4 };
@@ -32,6 +34,8 @@ public sealed class ConversationsView : ContentView, IDisposable
     private readonly FlexLayout _chips = new() { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
     private readonly Microsoft.Maui.Controls.Editor _input = new() { AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = 44 };
     private readonly Button _send = new() { Text = "→", WidthRequest = 44, HeightRequest = 44, Padding = 0, FontAttributes = FontAttributes.Bold };
+    private readonly Button _close = new() { Text = "✕", WidthRequest = 32, HeightRequest = 32, Padding = 0, BackgroundColor = Colors.Transparent, BorderWidth = 0 };
+    private bool _follow = true;
     private IConversationPanel? _shown;
     private EditorColors _colors = EditorThemes.Get(EditorThemes.Dark).Colors;
     private bool _disposed;
@@ -53,9 +57,19 @@ public sealed class ConversationsView : ContentView, IDisposable
             Padding = new Thickness(14, 4),
             MinimumHeightRequest = 40,
         };
+        header.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         header.Add(_title, 0, 0);
         header.Add(_subtitle, 1, 0);
         header.Add(_headerActions, 2, 0);
+        header.Add(_close, 3, 0);
+        ToolTipProperties.SetText(_close, "Close the chat (Ctrl+Alt+I opens it again)");
+        SemanticProperties.SetDescription(_close, "Close the chat column");
+        _close.Clicked += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
+
+        // The owner's note 5: while a reply streams the column follows the newest text, unless the user scrolled up; it
+        // scrolls once the new text is laid out (the content's size changed), never before.
+        _scroll.Scrolled += (_, e) => _follow = e.ScrollY >= _scroll.ContentSize.Height - _scroll.Height - FollowSlack;
+        _entries.SizeChanged += (_, _) => ScrollToEnd();
         var inputRow = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 8 };
         inputRow.Add(_input, 0, 0);
         inputRow.Add(_send, 1, 0);
@@ -87,6 +101,9 @@ public sealed class ConversationsView : ContentView, IDisposable
     /// <summary>Raised when <see cref="HasPanels"/> may have changed.</summary>
     public event EventHandler? PanelsChanged;
 
+    /// <summary>Raised when the column's close button is clicked (the shell closes the column and keeps that per workspace).</summary>
+    public event EventHandler? CloseRequested;
+
     /// <summary>Shows the panel <paramref name="id"/> ("ai.chat", "ai.agent"); false when none has that id.</summary>
     public bool Show(string id)
     {
@@ -116,6 +133,7 @@ public sealed class ConversationsView : ContentView, IDisposable
         _input.PlaceholderColor = C(_colors.SecondaryText);
         _send.BackgroundColor = C(_colors.Accent);
         _send.TextColor = C(_colors.Ground);
+        _close.TextColor = C(_colors.SecondaryText);
         RebuildTabs();
         RebuildAll();
     }
@@ -191,9 +209,15 @@ public sealed class ConversationsView : ContentView, IDisposable
 
     private void ScrollToEnd()
     {
-        if (_entries.Children.Count > 0 && _entries.Children[^1] is Element last)
+        if (!_follow)
         {
-            _ = _scroll.ScrollToAsync(last, ScrollToPosition.End, animated: false);
+            return;                          // the user scrolled up to read: stay there
+        }
+
+        double bottom = Math.Max(0, _scroll.ContentSize.Height - _scroll.Height);
+        if (bottom > _scroll.ScrollY + 0.5)
+        {
+            _ = _scroll.ScrollToAsync(0, bottom, animated: false);
         }
     }
 
@@ -227,6 +251,7 @@ public sealed class ConversationsView : ContentView, IDisposable
         _entries.Children.Clear();
         _chips.Children.Clear();
         _headerActions.Children.Clear();
+        _follow = true;
         if (_shown is not { } panel)
         {
             _title.Text = "";

@@ -34,7 +34,11 @@ public sealed record ShellStartup(CraftOptions Options, CraftSettings Settings, 
 /// contracts): the title bar (the logo, the menus of registered commands, the search box for quick open, the model chip),
 /// the activity rail, the explorer with the semantic layer's card, the tabs, the breadcrumb, the editor (one
 /// <see cref="EditorView"/> per tab, only the active one in the page), the bottom panel (Problems, Terminal, Output, Idrak
-/// telemetry), the plug-ins' panels, and the status bar. Every colour comes from the theme's tokens
+/// telemetry), the chat and agent column, and the status bar. Phase U2: the settings, Models and Plug-ins pages are tabs
+/// of the editor area (<see cref="PageTabs"/>), never over the window; there is no right-hand column of panels (a plug-in
+/// panel is a side view of the rail, in the explorer's place); the side view, the chat column and the bottom panel each
+/// sit in a <see cref="SplitPanel"/> that collapses and resizes, sizes kept per workspace (<see cref="PanelLayout"/>).
+/// Every colour comes from the theme's tokens
 /// (<see cref="ShellPalette"/>), every action is a command (the menus, the rail and the palette run the same ones), and the
 /// layout follows the window's measured width (<c>CRAFT_NARROW_WIDTH</c>): narrow, the phone's top bar, the tree in the
 /// editor's place, the tabs as one switcher, 44-unit touch targets, no rail, panels or bottom panel. No platform code (the
@@ -85,25 +89,20 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly UiStallReports _stallReports;
     private UiWatchdog? _watchdog;
     private IDispatcherTimer? _noticeTimer;
-    private readonly PanelsView _panels;
-    private readonly ContentView _panelsBox;
     private readonly ConversationsView _conversations;
-    private readonly ContentView _chatBox;
-    private readonly BoxView _chatLine;
+    private readonly SplitPanel _sideSplit = new(SplitEdge.End);
+    private readonly SplitPanel _chatSplit = new(SplitEdge.Start);
+    private readonly SplitPanel _bottomSplit = new(SplitEdge.Top);
+    private readonly Dictionary<string, PanelView> _sideViews = new(StringComparer.Ordinal);
     private readonly Grid _body;
     private readonly Grid _center;
     private readonly BoxView _railLine;
-    private readonly BoxView _explorerLine;
-    private readonly BoxView _panelsLine;
-    private readonly BoxView _bottomLine;
     private readonly BoxView _statusLine;
     private readonly BoxView _titleLine;
     private readonly List<IDisposable> _platformHooks = [];
     private readonly List<IModelProvider> _watchedProviders = [];
     private ShellPalette _palette;
     private TitleBar? _windowTitleBar;
-    private bool _bottomVisible = true;
-    private bool _chatOpen = true;
     private bool _chatSheetOpen;
     private bool _keysRouted;
     private bool _closeGuarded;
@@ -121,21 +120,21 @@ public sealed class ShellPage : ContentPage, IDisposable
         _initialPath = path;
         ShellModel? shell = null;
         _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, () => shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
-        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(this, ShowSettingsAsync));
+        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(this));
         _shell = shell;
         _palette = new ShellPalette(_shell.Theme, _shell.Options);
         _editCommands = new ShellEditCommands(() => _shown?.Model);
         _quickOpen = new QuickOpen(_host, _shell.Options.QuickOpenRows) { CraftOptionsLimit = _shell.Options.QuickOpenFiles };
         _pluginStatus = new StatusItemsView(_host);
-        _panels = new PanelsView(_host);
-        _panelsBox = new ContentView { Content = _panels, WidthRequest = _shell.Options.PanelWidth };
-        // The plug-ins' conversation panels (the AI plug-in's chat and agent run): the design's chat column when wide, a
-        // sheet over the editor when narrow (PhoneChat.dc.html); craft.chat (Ctrl+Alt+I) shows or hides it, a plug-in's
-        // IEditorHost.ShowPanel brings one forward.
+        // The plug-ins' conversation panels (the AI plug-in's chat and agent run): the design's chat column when wide (its
+        // splitter and close button, phase U2), a sheet over the editor when narrow (PhoneChat.dc.html); craft.chat
+        // (Ctrl+Alt+I) shows or hides it, a plug-in's IEditorHost.ShowPanel brings one forward.
         _conversations = new ConversationsView(_host, _shell.Options.FontFamily);
-        _chatBox = new ContentView { Content = _conversations, WidthRequest = _shell.Options.ChatWidth };
+        _chatSplit.Panel = _conversations;
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
+        _conversations.CloseRequested += (_, _) => CloseChat();
         _host.PanelShowRequested += OnPanelShowRequested;
+        _host.PanelsChanged += OnHostPanelsChanged;
         _host.SelectionRequested += OnSelectionRequested;
         // A plug-in's IEditorHost.OpenExternalAsync (the learning plug-in's folder): the system's own launcher, any platform.
         _host.OpenExternal = path => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(new Uri(path));
@@ -147,7 +146,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         foreach (var bar in (ReadOnlySpan<TitleBarView>)[_titleWide, _titleNarrow])
         {
             bar.MenuRequested += (_, request) => ShowMenu(request.Menu, request.Anchor);
-            bar.ChipTapped += (_, _) => _ = ShowModelsAsync();
+            bar.ChipTapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.Models);
             bar.NarrowFilesTapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.ToggleTree);
             bar.NarrowUndoTapped += (_, _) => _shown?.Model?.OnKey(EditorKey.Z, KeyModifiers.Control);
             bar.NarrowCommandsTapped += (_, _) => _ = CommandPalette.ShowAsync(this, _host);
@@ -161,9 +160,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         _rail = new RailView(_host, _palette);
         _tree.Indent = _shell.Options.TreeIndent;
         _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
-        _explorer = new ExplorerView(_tree, _palette) { WidthRequest = _shell.Options.TreeWidth };
+        _explorer = new ExplorerView(_tree, _palette);
         _explorer.SetFolder(null);
-        _tabStrip = new TabStripView(_shell.Tabs);
+        _sideSplit.Panel = _explorer;
+        _tabStrip = new TabStripView(_shell.Tabs, _shell.Pages);
         _tabStrip.CloseRequested += (_, tab) => _ = _shell.CloseTabAsync(tab);
         _tabStrip.ListRequested += (_, _) => _ = PickTabAsync();
         _breadcrumb = new BreadcrumbView(_palette);
@@ -214,6 +214,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
 
         _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested };
+        _bottom.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
+        _bottomSplit.Panel = _bottom;
+
+        // Each panel's splitter: a drag kept within what the panel and the editor share, written to the workspace's
+        // settings when it ends (not on every move).
+        Wire(_sideSplit, ShellPanel.Explorer, () => Width - _rail.Width - (_chatSplit.IsVisible ? _chatSplit.Width : 0));
+        Wire(_chatSplit, ShellPanel.Chat, () => Width - _rail.Width - (_sideSplit.IsVisible ? _sideSplit.Width : 0));
+        Wire(_bottomSplit, ShellPanel.Bottom, () => _center.Height - _tabStrip.Height - _breadcrumb.Height);
 
         // Phase T: the terminals in the Terminal tab, on the platform's host (ConPTY on Windows) when it has one.
         if (startup.Platform.TerminalHost is { } terminalHost)
@@ -244,10 +252,6 @@ public sealed class ShellPage : ContentPage, IDisposable
         _status.ProblemsTapped += (_, _) => ShowBottom(BottomTab.Problems);
 
         _railLine = _palette.Line(vertical: true);
-        _explorerLine = _palette.Line(vertical: true);
-        _panelsLine = _palette.Line(vertical: true);
-        _chatLine = _palette.Line(vertical: true);
-        _bottomLine = _palette.Line();
         _statusLine = _palette.Line();
         _titleLine = _palette.Line();
 
@@ -256,34 +260,30 @@ public sealed class ShellPage : ContentPage, IDisposable
             RowDefinitions =
             [
                 new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star),
-                new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
             ],
         };
         _center.Add(_tabStrip, 0, 0);
         _center.Add(_breadcrumb, 0, 1);
         _center.Add(_findBar, 0, 2);
         _center.Add(_editorArea, 0, 3);
-        _center.Add(_bottomLine, 0, 4);
-        _center.Add(_bottom, 0, 5);
+        _center.Add(_bottomSplit, 0, 4);
 
+        // The rail, its side view (the explorer or a plug-in panel), the editor area, the chat column: no fixed column of
+        // panels at the right (phase U2).
         _body = new Grid
         {
             ColumnDefinitions =
             [
-                new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto),
-                new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto),
-                new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto),
             ],
         };
         _body.Add(_rail, 0, 0);
         _body.Add(_railLine, 1, 0);
-        _body.Add(_explorer, 2, 0);
-        _body.Add(_explorerLine, 3, 0);
-        _body.Add(_center, 4, 0);
-        _body.Add(_panelsLine, 5, 0);
-        _body.Add(_panelsBox, 6, 0);
-        _body.Add(_chatLine, 7, 0);
-        _body.Add(_chatBox, 8, 0);
+        _body.Add(_sideSplit, 2, 0);
+        _body.Add(_center, 3, 0);
+        _body.Add(_chatSplit, 4, 0);
 
         var root = new Grid
         {
@@ -312,6 +312,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         _shell.ThemeChanged += (_, _) => ApplyTheme();
         _shell.ViewRequested += (_, view) => OnViewRequested(view);
         _shell.Layout.Changed += (_, _) => ApplyLayout();
+        _shell.Panels.Changed += (_, _) => ApplyLayout();
+        _shell.Pages.Changed += (_, _) => ShowActive();
+        _shell.Pages.Closed += (_, page) =>
+        {
+            (page.View as IDisposable)?.Dispose();
+            page.View = null;
+        };
         EditorMenus.Changed += OnMenusChanged;
         SizeChanged += (_, _) => _shell.Layout.UpdateWidth(Width);
         ShowActive();
@@ -350,8 +357,15 @@ public sealed class ShellPage : ContentPage, IDisposable
         _centre.Dispose();
         EditorMenus.Changed -= OnMenusChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
+        _host.PanelsChanged -= OnHostPanelsChanged;
         _host.SelectionRequested -= OnSelectionRequested;
         _conversations.Dispose();
+        foreach (var view in _sideViews.Values)
+        {
+            view.Dispose();
+        }
+
+        _sideViews.Clear();
         foreach (var provider in _watchedProviders)
         {
             provider.StatusChanged -= OnModelStatusChanged;
@@ -606,7 +620,11 @@ public sealed class ShellPage : ContentPage, IDisposable
     private void RegisterAppCommands()
     {
         EditorCommands.Register(new EditorCommand(ShellCommandIds.CommandPalette, "View: Show all commands", (_, _) => CommandPalette.ShowAsync(this, _host)));
-        EditorCommands.Register(new EditorCommand(ShellCommandIds.Plugins, "Plug-ins: Show the installed plug-ins", (_, _) => ShowPluginsAsync()));
+        EditorCommands.Register(new EditorCommand(ShellCommandIds.Plugins, "Plug-ins: Show the installed plug-ins", (_, _) =>
+        {
+            _shell.Pages.Open(ShellPageIds.Plugins, "Plug-ins");
+            return Task.CompletedTask;
+        }));
         EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.P, KeyModifiers.Control | KeyModifiers.Shift), ShellCommandIds.CommandPalette));
         EditorCommands.Register(new EditorCommand("craft.chat", "View: Show or hide the chat", (_, _) =>
         {
@@ -626,17 +644,90 @@ public sealed class ShellPage : ContentPage, IDisposable
         if (_shell.Layout.IsNarrow)
         {
             _chatSheetOpen = !_chatSheetOpen;
+            ApplyLayout();
         }
         else
         {
-            _chatOpen = !_chatOpen;
+            _ = _shell.Panels.ToggleAsync(ShellPanel.Chat);   // kept per workspace; Changed lays the page out
         }
 
-        ApplyLayout();
-        if (_chatBox.IsVisible)
+        if (_chatSplit.IsVisible)
         {
             _conversations.FocusInput();
         }
+    }
+
+    // The chat column's close button.
+    private void CloseChat()
+    {
+        if (_shell.Layout.IsNarrow)
+        {
+            _chatSheetOpen = false;
+            ApplyLayout();
+        }
+        else
+        {
+            _ = _shell.Panels.SetOpenAsync(ShellPanel.Chat, false);
+        }
+
+        _shown?.Focus();
+    }
+
+    // A splitter's drag: within the room the panel and the editor share; its end written to the settings once.
+    private void Wire(SplitPanel split, ShellPanel panel, Func<double> room)
+    {
+        split.Clamp = size => _shell.Panels.Clamp(size, room());
+        split.Resized += (_, size) =>
+        {
+            _shell.Panels.Resize(panel, size);
+            _ = _shell.Panels.CommitAsync(panel);
+        };
+    }
+
+    // A plug-in panel as the rail's side view, made when first shown and kept while the panel is the host's.
+    private PanelView? SideViewOf(string id)
+    {
+        if (_sideViews.TryGetValue(id, out var view))
+        {
+            return view;
+        }
+
+        if (_host.Panels.FirstOrDefault(p => p.Id == id && p is not IConversationPanel) is not { } panel)
+        {
+            return null;
+        }
+
+        view = new PanelView(_host, panel) { BackgroundColor = _palette.Surface };
+        view.SetColors(_palette.Text, _palette.Secondary);
+        _sideViews[id] = view;
+        return view;
+    }
+
+    private void OnHostPanelsChanged(object? sender, EventArgs e)
+    {
+        foreach (var (id, view) in _sideViews.ToArray())
+        {
+            if (!_host.Panels.Any(p => ReferenceEquals(p, view.Panel)))
+            {
+                view.Dispose();
+                _sideViews.Remove(id);
+            }
+        }
+
+        ApplyLayout();
+    }
+
+    // A page tab's view, made when the page is first shown.
+    private View PageViewOf(PageTab page)
+    {
+        page.View ??= page.Id switch
+        {
+            ShellPageIds.Settings => new SettingsPage(_shell),
+            ShellPageIds.Models => new ModelsPage(_shell),
+            ShellPageIds.Plugins => new PluginsPage(_shell, () => PluginList.Rows(CraftPlugins.Installed, _host.Plugins)),
+            _ => _palette.Label($"No view for the page '{page.Id}'.", _palette.Secondary),
+        };
+        return (View)page.View;
     }
 
     private void OnPanelShowRequested(object? sender, string panelId)
@@ -652,7 +743,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
         else
         {
-            _chatOpen = true;
+            _ = _shell.Panels.SetOpenAsync(ShellPanel.Chat, true);
         }
 
         ApplyLayout();
@@ -696,34 +787,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
-    private async Task ShowSettingsAsync()
-    {
-        if (Navigation.ModalStack.Count == 0)
-        {
-            await Navigation.PushModalAsync(new SettingsPage(_shell));
-        }
-    }
-
-    private async Task ShowPluginsAsync()
-    {
-        if (Navigation.ModalStack.Count == 0)
-        {
-            await Navigation.PushModalAsync(new PluginsPage(_shell, () => PluginList.Rows(CraftPlugins.Installed, _host.Plugins)));
-        }
-    }
-
-    private async Task ShowModelsAsync()
-    {
-        if (Navigation.ModalStack.Count == 0)
-        {
-            await Navigation.PushModalAsync(new ModelsPage(_shell, ShowSettingsAsync));
-        }
-    }
-
     private async Task PickTabAsync()
     {
         var tabs = _shell.Tabs.Tabs.ToArray();
-        int picked = await new MauiShellUi(this, ShowSettingsAsync).PickAsync("Tabs", [.. tabs.Select(TabStripView.TitleOf)]);
+        int picked = await new MauiShellUi(this).PickAsync("Tabs", [.. tabs.Select(TabStripView.TitleOf)]);
         if (picked >= 0 && picked < tabs.Length)
         {
             _shell.Tabs.Activate(tabs[picked]);
@@ -906,9 +973,7 @@ public sealed class ShellPage : ContentPage, IDisposable
                 ShowQuickOpen(_titleWide.Search.Text ?? "");
                 break;
             case ShellViewNames.TogglePanel:
-                _bottomVisible = !_bottomVisible;
-                ApplyLayout();
-                break;
+                break;                       // the command toggled the panel's state (PanelLayout); Changed laid it out
             case ShellViewNames.Problems:
                 ShowBottom(BottomTab.Problems);
                 break;
@@ -921,29 +986,28 @@ public sealed class ShellPage : ContentPage, IDisposable
             case ShellViewNames.Telemetry:
                 ShowBottom(BottomTab.Telemetry);
                 break;
-            case ShellViewNames.Models:
-                _ = ShowModelsAsync();
-                break;
         }
     }
 
     private void OnTerminalView(TerminalViewRequest request)
     {
-        if (request == TerminalViewRequest.Toggle && _bottomVisible && _bottom.Tab == BottomTab.Terminal)
+        if (request == TerminalViewRequest.Toggle && _shell.Panels.IsOpen(ShellPanel.Bottom) && _bottom.Tab == BottomTab.Terminal)
         {
-            _bottomVisible = false;
-            ApplyLayout();
+            _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
             return;
         }
 
         ShowBottom(BottomTab.Terminal);
-        _host.Dispatch("shell: focus the terminal", _terminalPanel.FocusTerminal);
+        if (request != TerminalViewRequest.Reveal)
+        {
+            _host.Dispatch("shell: focus the terminal", _terminalPanel.FocusTerminal);   // a plug-in's output tab shows without taking the keyboard
+        }
     }
 
     private void ShowBottom(BottomTab tab)
     {
-        _bottomVisible = true;
         _bottom.Select(tab);
+        _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, true);
         ApplyLayout();
     }
 
@@ -989,7 +1053,10 @@ public sealed class ShellPage : ContentPage, IDisposable
                 if (ReferenceEquals(_shown, view))
                 {
                     _shown = null;
-                    _editorArea.Content = _empty;
+                    if (_shell.Pages.Active is null)
+                    {
+                        _editorArea.Content = _empty;
+                    }
                 }
 
                 view.Dispose();
@@ -1051,19 +1118,23 @@ public sealed class ShellPage : ContentPage, IDisposable
         return view;
     }
 
+    // The editor area: the page tab shown (settings, Models, Plug-ins), else the active document's editor, else the hint.
     private void ShowActive()
     {
+        var page = _shell.Pages.Active;
         var tab = _shell.Tabs.Active;
-        if (tab is not null)
+        if (tab is not null && page is null)
         {
             tab.View ??= MakeView(tab);
         }
 
-        var view = tab?.View as EditorView;
-        if (!ReferenceEquals(view, _shown) || _editorArea.Content is null)
+        var view = page is null ? tab?.View as EditorView : null;
+        var content = page is not null ? PageViewOf(page) : (View?)view ?? _empty;
+        _breadcrumb.IsVisible = !_shell.Layout.IsNarrow && page is null;
+        if (!ReferenceEquals(view, _shown) || !ReferenceEquals(_editorArea.Content, content))
         {
             _shown = view;
-            _editorArea.Content = (View?)view ?? _empty;
+            _editorArea.Content = content;
             if (view?.Model is { } model)
             {
                 if (_findBar.IsVisible)
@@ -1176,8 +1247,6 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _quickOpen.Rows = options.QuickOpenRows;
         _quickOpen.CraftOptionsLimit = options.QuickOpenFiles;
-        _panelsBox.WidthRequest = options.PanelWidth;
-        _chatBox.WidthRequest = options.ChatWidth;
         _tree.Indent = options.TreeIndent;
         ApplyTheme();
         ApplyLayout();
@@ -1186,6 +1255,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private void ApplyLayout()
     {
         var layout = _shell.Layout;
+        var panels = _shell.Panels;
         bool narrow = layout.IsNarrow;
         bool windowBar = _windowTitleBar is not null && !narrow;
         if (_window is not null)
@@ -1197,36 +1267,54 @@ public sealed class ShellPage : ContentPage, IDisposable
         _titleRow.IsVisible = _titleRow.Content is not null;
         _titleLine.IsVisible = _titleRow.IsVisible;
         _rail.IsVisible = _railLine.IsVisible = !narrow;
-        _rail.Active = layout.TreeVisible ? "craft.explorer" : null;
-        _explorer.IsVisible = layout.TreeVisible;
-        _explorerLine.IsVisible = layout.TreeVisible && !narrow;
+
+        // The side view: the explorer, or (wide only) the plug-in panel the rail chose; the narrow layout's tree as before.
+        View side = _explorer;
+        if (!narrow && panels.SideView != PanelLayout.ExplorerView && SideViewOf(panels.SideView) is { } panelView)
+        {
+            side = panelView;
+        }
+
+        bool sideVisible = narrow ? layout.TreeVisible : panels.IsOpen(ShellPanel.Explorer) && (!ReferenceEquals(side, _explorer) || layout.TreeVisible);
+        if (!ReferenceEquals(_sideSplit.Panel, side))
+        {
+            _sideSplit.Panel = side;
+        }
+
+        _sideSplit.IsVisible = sideVisible;
+        _sideSplit.Fill = narrow;
+        _sideSplit.Resizable = !narrow;
+        _sideSplit.Size = panels.SizeOf(ShellPanel.Explorer);
+        _rail.Active = !narrow && sideVisible ? (ReferenceEquals(side, _explorer) ? "craft.explorer" : panels.SideView) : null;
         _center.IsVisible = layout.EditorVisible;
-        _panelsBox.IsVisible = layout.PanelsVisible && _panels.IsVisible;
-        _panelsLine.IsVisible = _panelsBox.IsVisible;
-        _chatBox.IsVisible = _conversations.HasPanels && (narrow ? _chatSheetOpen : _chatOpen);
-        _chatLine.IsVisible = _chatBox.IsVisible && !narrow;
+
+        _chatSplit.IsVisible = _conversations.HasPanels && (narrow ? _chatSheetOpen : panels.IsOpen(ShellPanel.Chat));
         if (narrow)
         {
-            // The sheet: over the body's lower part, the width of the window.
-            Grid.SetColumn(_chatBox, 0);
-            Grid.SetColumnSpan(_chatBox, 9);
-            _chatBox.WidthRequest = -1;
-            _chatBox.VerticalOptions = LayoutOptions.End;
-            _chatBox.HeightRequest = Math.Max(240, Height * 0.62);
+            // The sheet: over the body's lower part, the width of the window, no splitter.
+            Grid.SetColumn(_chatSplit, 0);
+            Grid.SetColumnSpan(_chatSplit, 5);
+            _chatSplit.Fill = true;
+            _chatSplit.Resizable = false;
+            _chatSplit.VerticalOptions = LayoutOptions.End;
+            _chatSplit.HeightRequest = Math.Max(240, Height * 0.62);
         }
         else
         {
-            Grid.SetColumn(_chatBox, 8);
-            Grid.SetColumnSpan(_chatBox, 1);
-            _chatBox.WidthRequest = _shell.Options.ChatWidth;
-            _chatBox.VerticalOptions = LayoutOptions.Fill;
-            _chatBox.HeightRequest = -1;
+            Grid.SetColumn(_chatSplit, 4);
+            Grid.SetColumnSpan(_chatSplit, 1);
+            _chatSplit.Fill = false;
+            _chatSplit.Resizable = true;
+            _chatSplit.Size = panels.SizeOf(ShellPanel.Chat);
+            _chatSplit.VerticalOptions = LayoutOptions.Fill;
+            _chatSplit.HeightRequest = -1;
         }
-        _bottom.IsVisible = _bottomLine.IsVisible = _bottomVisible && !narrow;
-        _breadcrumb.IsVisible = !narrow;
+
+        _bottomSplit.IsVisible = panels.IsOpen(ShellPanel.Bottom) && !narrow;
+        _bottomSplit.Size = panels.SizeOf(ShellPanel.Bottom);
+        _breadcrumb.IsVisible = !narrow && _shell.Pages.Active is null;
         _body.ColumnDefinitions[2].Width = narrow && layout.TreeVisible ? GridLength.Star : GridLength.Auto;
-        _body.ColumnDefinitions[4].Width = layout.EditorVisible ? GridLength.Star : new GridLength(0);
-        _explorer.WidthRequest = narrow ? -1 : _shell.Options.TreeWidth;
+        _body.ColumnDefinitions[3].Width = layout.EditorVisible ? GridLength.Star : new GridLength(0);
         _tabStrip.Compact = narrow;
         _status.SetNarrow(narrow);
         if (_popup.IsOpen)
@@ -1294,16 +1382,25 @@ public sealed class ShellPage : ContentPage, IDisposable
             entry.PlaceholderColor = p.Secondary;
         }
 
-        foreach (var line in (ReadOnlySpan<BoxView>)[_railLine, _explorerLine, _panelsLine, _chatLine, _bottomLine, _statusLine, _titleLine])
+        foreach (var line in (ReadOnlySpan<BoxView>)[_railLine, _statusLine, _titleLine])
         {
             line.Color = p.Border;
         }
 
+        foreach (var split in (ReadOnlySpan<SplitPanel>)[_sideSplit, _chatSplit, _bottomSplit])
+        {
+            split.SetColors(p.Border, p.Accent);
+        }
+
+        foreach (var view in _sideViews.Values)
+        {
+            view.BackgroundColor = p.Surface;
+            view.SetColors(p.Text, p.Secondary);
+        }
+
         _pluginStatus.TextColor = p.Secondary;
-        _panels.TextColor = p.Text;
-        _panelsBox.BackgroundColor = p.Surface;
         _conversations.ApplyTheme(theme);
-        _chatBox.BackgroundColor = p.Surface;
+        _chatSplit.BackgroundColor = p.Surface;
         UpdateProblems();
         UpdateModel();
     }

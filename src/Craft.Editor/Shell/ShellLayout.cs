@@ -8,7 +8,7 @@ namespace Craft.Editor.Shell;
 /// <summary>The shell's two layouts.</summary>
 public enum ShellLayoutKind
 {
-    /// <summary>The folder tree beside the editor, the tabs as a strip, the plug-ins' panels on the side, every button.</summary>
+    /// <summary>The rail and its side view (the folder tree, or a plug-in panel) beside the editor, the tabs as a strip, the chat column and the bottom panel, every button.</summary>
     Wide,
 
     /// <summary>A phone's: the folder tree in place of the editor when shown, the tabs as one switcher, no side panels, few buttons.</summary>
@@ -91,8 +91,22 @@ public sealed class ShellLayout
     /// <summary>Whether the editor shows (in the narrow layout the tree takes its place).</summary>
     public bool EditorVisible => !IsNarrow || !TreeVisible;
 
-    /// <summary>Whether the plug-ins' side panels show (the wide layout only).</summary>
-    public bool PanelsVisible => !IsNarrow;
+    /// <summary>
+    /// Whether the side view (the tree, or a plug-in panel) is open in the wide layout: the shell keeps it with the panels'
+    /// sizes (<see cref="PanelLayout"/>, <c>CRAFT_PANEL_EXPLORER_OPEN</c>); setting it raises <see cref="Changed"/>.
+    /// </summary>
+    public bool WideTreeOpen
+    {
+        get => _wideTree;
+        set
+        {
+            if (value != _wideTree)
+            {
+                _wideTree = value;
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
 
     /// <summary>Raised when what shows changed.</summary>
     public event EventHandler? Changed;

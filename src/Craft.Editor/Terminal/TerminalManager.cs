@@ -47,6 +47,9 @@ public enum TerminalViewRequest
 
     /// <summary>Hide the bottom panel when the Terminal tab shows, else show it.</summary>
     Toggle,
+
+    /// <summary>Show the Terminal tab, leaving the keyboard where it is (a plug-in's output tab).</summary>
+    Reveal,
 }
 
 /// <summary>
@@ -66,6 +69,7 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
     private readonly Func<string?> _workspaceFolder;
     private readonly List<TerminalInstance> _terminals = [];
     private readonly Dictionary<TerminalInstance, Handle> _handles = [];
+    private readonly Dictionary<TerminalInstance, Output> _outputs = [];
     private readonly List<string> _commandIds = [];
     private readonly List<KeyBinding> _bindings = [];
     private readonly List<(string Menu, string Command)> _menuItems = [];
@@ -164,6 +168,38 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         return terminal;
     }
 
+    /// <summary>
+    /// The read-only output tab named <paramref name="name"/> (one per name, opened when missing, not made active over a
+    /// shell the user is in): what a plug-in appends shows there, nothing typed goes anywhere.
+    /// </summary>
+    public IEditorTerminalOutput OpenOutput(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        foreach (var open in _terminals)
+        {
+            if (open.IsReadOnly && string.Equals(open.Title, name, StringComparison.Ordinal) && _outputs.TryGetValue(open, out var existing))
+            {
+                return existing;
+            }
+        }
+
+        var session = new OutputTerminalSession();
+        var terminal = TerminalInstance.Output(_nextId, session, LastSize, _options().TerminalScrollback, _host.Dispatch, name, _workspaceFolder() ?? HomeFolder);
+        _nextId++;
+        terminal.TitleChanged += OnTerminalChanged;
+        terminal.ExitedChanged += OnTerminalChanged;
+        _terminals.Add(terminal);
+        ActiveTerminal ??= terminal;
+        var output = new Output(this, terminal, session);
+        _outputs[terminal] = output;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return output;
+    }
+
+    /// <inheritdoc />
+    IEditorTerminalOutput? IEditorTerminals.OpenOutput(string name) => OpenOutput(name);
+
     /// <inheritdoc />
     IEditorTerminal IEditorTerminals.Open(EditorTerminalRequest request)
     {
@@ -200,6 +236,7 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
 
         _terminals.RemoveAt(index);
         _handles.Remove(terminal);
+        _outputs.Remove(terminal);
         terminal.TitleChanged -= OnTerminalChanged;
         terminal.ExitedChanged -= OnTerminalChanged;
         terminal.Dispose();
@@ -254,6 +291,7 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
 
         _terminals.Clear();
         _handles.Clear();
+        _outputs.Clear();
         ActiveTerminal = null;
         foreach (var binding in _bindings)
         {
@@ -358,7 +396,18 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
             text = snapshot.GetText(selection.Start, selection.Length);
         }
 
-        if (text.Trim().Length == 0 || (ActiveTerminal is null && !TryOpen()))
+        if (text.Trim().Length == 0)
+        {
+            return;
+        }
+
+        // A shell's terminal: the active one, else the last shell open, else a new one (an output tab runs nothing).
+        if (ActiveTerminal is not { IsReadOnly: false } && _terminals.LastOrDefault(t => !t.IsReadOnly) is { } shellTerminal)
+        {
+            Activate(shellTerminal);
+        }
+
+        if (ActiveTerminal is not { IsReadOnly: false } && !TryOpen())
         {
             return;
         }
@@ -380,9 +429,9 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         }, null, "Ctrl+Shift+Backquote");
         Command(TerminalCommandIds.Toggle, "Terminal: Show or hide the terminal", () =>
         {
-            if (_terminals.Count == 0 && !TryOpen())
+            if (!_terminals.Exists(t => !t.IsReadOnly) && !TryOpen())
             {
-                return;
+                return;                      // only output tabs: the toggle opens the user's shell as before
             }
 
             ViewRequested?.Invoke(this, TerminalViewRequest.Toggle);
@@ -462,6 +511,25 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
             {
                 owner.Activate(terminal);
                 owner.ViewRequested?.Invoke(owner, TerminalViewRequest.Show);
+            }
+        }
+    }
+
+    /// <summary>A plug-in's hold on its read-only output tab: it appends (any thread) and shows; it stops once the tab closed.</summary>
+    private sealed class Output(TerminalManager owner, TerminalInstance terminal, OutputTerminalSession session) : IEditorTerminalOutput
+    {
+        public string Title => terminal.Title;
+
+        public bool IsOpen => session.IsOpen;
+
+        public bool Append(string text) => session.Append(text);
+
+        public void Show()
+        {
+            if (owner._terminals.Contains(terminal))
+            {
+                owner.Activate(terminal);
+                owner.ViewRequested?.Invoke(owner, TerminalViewRequest.Reveal);
             }
         }
     }

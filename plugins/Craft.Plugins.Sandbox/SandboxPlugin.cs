@@ -47,7 +47,7 @@ public sealed record SandboxSettings
     /// <summary>Minutes between two commands after which "for this run" ends and the next command asks again (<c>runGapMinutes</c>).</summary>
     public int RunGapMinutes { get; init; } = 15;
 
-    /// <summary>Lines the terminal panel keeps (<c>panelLines</c>).</summary>
+    /// <summary>Lines the sandbox keeps of its commands and output (<c>panelLines</c>).</summary>
     public int PanelLines { get; init; } = 400;
 
     /// <summary>The settings it declares.</summary>
@@ -55,7 +55,7 @@ public sealed record SandboxSettings
     [
         new("inner", CommandSandboxes.Process, "The sandbox a command runs in once you allow it: process (a plain process), container (the network off; Idrak.Reinforcement.Plugins)."),
         new("runGapMinutes", "15", "Minutes between two commands after which 'Allow PROGRAM for this run' ends and the next command asks again."),
-        new("panelLines", "400", "Lines the sandbox terminal panel keeps."),
+        new("panelLines", "400", "Lines the sandbox keeps of its commands and their output (its \"Agent sandbox\" terminal tab keeps CRAFT_TERMINAL_SCROLLBACK)."),
     ];
 
     /// <summary>The settings from the host's.</summary>
@@ -97,7 +97,7 @@ public sealed class SandboxPlugin : IEditorPlugin
     /// <summary>Forgets the programs allowed for this run.</summary>
     public const string EndRunCommand = "sandbox.endRun";
 
-    /// <summary>Empties the terminal panel.</summary>
+    /// <summary>Empties the Agent sandbox terminal tab.</summary>
     public const string ClearCommand = "sandbox.clear";
 
     private SandboxPlugin()
@@ -119,7 +119,7 @@ public sealed class SandboxPlugin : IEditorPlugin
         {
             ApproveEachSandbox.Session?.Clear();
             return Task.CompletedTask;
-        }, _ => ApproveEachSandbox.Session is not null, "Empties the sandbox terminal panel"),
+        }, _ => ApproveEachSandbox.Session is not null, "Empties the Agent sandbox terminal tab"),
     ];
 
     /// <inheritdoc />

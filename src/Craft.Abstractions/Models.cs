@@ -168,6 +168,9 @@ public sealed record ModelProviderStatus
     /// <summary>The limits the user may set (threads, memory caps), each a setting.</summary>
     public IReadOnlyList<ModelSettingField> Limits { get; init; } = [];
 
+    /// <summary>The models loaded now, each as the user reads it ("store:coder · in use"), for the Models page.</summary>
+    public IReadOnlyList<string> Loaded { get; init; } = [];
+
     /// <summary>The chat model's name, or null.</summary>
     public string? ChatModel => Roles.Count > 0 ? Roles[0].Model : null;
 }

@@ -70,18 +70,18 @@ public static class InventoryTests
             // Phase A1: the diff view.
             ["CRAFT_DIFF_CONTEXT_LINES"] = "1", ["CRAFT_DIFF_LINE_LIMIT"] = "50", ["CRAFT_DIFF_CHECK"] = "false",
             // Phase E4: the shell.
-            ["CRAFT_DATA_FOLDER"] = "data", ["CRAFT_RECENT_LIMIT"] = "5", ["CRAFT_NARROW_WIDTH"] = "600", ["CRAFT_TREE_WIDTH"] = "300",
-            ["CRAFT_TREE_INDENT"] = "10", ["CRAFT_PANEL_WIDTH"] = "320",
+            ["CRAFT_DATA_FOLDER"] = "data", ["CRAFT_RECENT_LIMIT"] = "5", ["CRAFT_NARROW_WIDTH"] = "600", ["CRAFT_PANEL_EXPLORER_WIDTH"] = "300",
+            ["CRAFT_TREE_INDENT"] = "10",
             ["CRAFT_DIAGNOSTICS_DELAY_MS"] = "250", ["CRAFT_SEMANTIC_MAX_CHARS"] = "1000", ["CRAFT_WORKSPACE_READERS"] = "loose, csproj",
             ["CRAFT_WORKSPACE_CONFIGURATION"] = "Release", ["CRAFT_COMPLETION_DELAY_MS"] = "0", ["CRAFT_COMPLETION_ROWS"] = "7",
             ["CRAFT_PROBLEMS_LIMIT"] = "20", ["CRAFT_HOVER_DELAY_MS"] = "100",
             ["CRAFT_SOURCE_GENERATORS"] = "false", ["CRAFT_SEMANTIC_COLORS_DELAY_MS"] = "-1", ["CRAFT_MEMORY_MONITOR"] = "none",
             // Phase D: the approved design's shell.
             ["CRAFT_FONT_FALLBACK"] = "Consolas", ["CRAFT_INTERFACE_FONT"] = "Segoe UI", ["CRAFT_INTERFACE_FONT_SIZE"] = "14", ["CRAFT_ACCENT"] = "#82AAFF",
-            ["CRAFT_BOTTOM_PANEL_HEIGHT"] = "200", ["CRAFT_QUICK_OPEN_FILES"] = "1000", ["CRAFT_QUICK_OPEN_ROWS"] = "8", ["CRAFT_TOUCH_TARGET"] = "48",
+            ["CRAFT_PANEL_BOTTOM_HEIGHT"] = "200", ["CRAFT_QUICK_OPEN_FILES"] = "1000", ["CRAFT_QUICK_OPEN_ROWS"] = "8", ["CRAFT_TOUCH_TARGET"] = "48",
             ["CRAFT_TITLE_BAR"] = "page",
             // Phase A2: inline completion's provider, the chat column.
-            ["CRAFT_INLINE_COMPLETION_PROVIDER"] = "ai", ["CRAFT_CHAT_WIDTH"] = "400",
+            ["CRAFT_INLINE_COMPLETION_PROVIDER"] = "ai", ["CRAFT_PANEL_CHAT_WIDTH"] = "400",
             // Phase T: the terminal.
             ["CRAFT_TERMINAL_SHELL"] = "bash", ["CRAFT_TERMINAL_ARGS"] = "-l", ["CRAFT_TERMINAL_ENV"] = "A=1|B=2", ["CRAFT_TERMINAL_CWD"] = "start",
             ["CRAFT_TERMINAL_SCROLLBACK"] = "200", ["CRAFT_TERMINAL_HOST"] = "pipe", ["CRAFT_TERMINAL_LINE_SPACING"] = "1.5",
@@ -89,6 +89,9 @@ public static class InventoryTests
             // Phase U: the watchdog, activities and notifications.
             ["CRAFT_UI_WATCHDOG_MS"] = "50", ["CRAFT_UI_STALL_MS"] = "500", ["CRAFT_UI_STALL_REPORTS"] = "3", ["CRAFT_NOTIFICATIONS_KEEP"] = "10",
             ["CRAFT_TOAST_MS"] = "0", ["CRAFT_ACTIVITY_MIN_MS"] = "0", ["CRAFT_ACTIVITY_FRAME_MS"] = "33",
+            // Phase U2: panels and layout, the tree following the disk.
+            ["CRAFT_PANEL_EXPLORER_OPEN"] = "false", ["CRAFT_PANEL_CHAT_OPEN"] = "false", ["CRAFT_PANEL_BOTTOM_OPEN"] = "false", ["CRAFT_PANEL_MIN_SIZE"] = "80",
+            ["CRAFT_WORKSPACE_WATCHER"] = "none", ["CRAFT_WORKSPACE_WATCH_MS"] = "40",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -101,7 +104,7 @@ public static class InventoryTests
             PluginFolders = options.PluginFolders, DisabledPlugins = options.DisabledPlugins,
             KeyBindings = options.KeyBindings, HostLogLines = 20, ProposalPreviewCharacters = 40,
             DiffContextLines = 1, DiffLineLimit = 50, DiffCheck = false,
-            DataFolder = "data", RecentLimit = 5, NarrowWidth = 600, TreeWidth = 300, TreeIndent = 10, PanelWidth = 320,
+            DataFolder = "data", RecentLimit = 5, NarrowWidth = 600, TreeWidth = 300, TreeIndent = 10,
             DiagnosticsDelayMilliseconds = 250, SemanticMaxCharacters = 1000, WorkspaceReaders = options.WorkspaceReaders, WorkspaceConfiguration = "Release",
             CompletionDelayMilliseconds = 0, CompletionRows = 7, ProblemsListLimit = 20, HoverDelayMilliseconds = 100,
             SourceGenerators = false, SemanticColorsDelayMilliseconds = -1, MemoryMonitor = "none",
@@ -112,6 +115,7 @@ public static class InventoryTests
             TerminalScrollback = 200, TerminalHost = "pipe", TerminalLineSpacing = 1.5f, TerminalEditorCommands = options.TerminalEditorCommands,
             UiWatchdogMilliseconds = 50, UiStallMilliseconds = 500, UiStallReports = 3, NotificationsKeep = 10, ToastMilliseconds = 0,
             ActivityMinimumMilliseconds = 0, ActivityFrameMilliseconds = 33,
+            ExplorerOpen = false, ChatOpen = false, BottomPanelOpen = false, PanelMinimumSize = 80, WorkspaceWatcher = "none", WorkspaceWatchMilliseconds = 40,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

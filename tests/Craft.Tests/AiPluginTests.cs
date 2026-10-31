@@ -9,8 +9,10 @@ using Craft.Abstractions;
 using Craft.Ai;
 using Craft.Core;
 using Craft.Core.Documents;
+using Craft.Core.Workspaces;
 using Craft.Editor;
 using Craft.Editor.Abstractions;
+using Craft.Editor.Shell;
 using Craft.Plugins.Tools;
 using Craft.Tests.Editor;
 using Craft.Tests.Runner;
@@ -283,6 +285,57 @@ public static class AiPluginTests
     }
 
     [Test]
+    public static async Task AnAcceptedNewFileOfTheAgentIsCreatedAndShowsInTheTreeWithinASecond()
+    {
+        string root = Folder();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "a.txt"), "alpha\n");
+            var presenter = new AcceptingPresenter();
+            var ui = Serial();                                               // the "UI thread": the host's and the tree's
+            using var host = new EditorHost(dispatch: ui, presenter: presenter) { WorkspaceFolder = root };
+            // As the shell does: an existing file opens; a path with no file yet opens a new, untitled document.
+            host.OpenFile = async (path, token) => File.Exists(path) ? host.Open(await TextDocument.OpenAsync(path, cancellationToken: token), null) : host.Open(TextDocument.Create(""), null);
+            var tree = new FolderTree(new Workspace(root));
+            using var watch = new FolderTreeWatch(tree, FolderWatchers.Get(FolderWatchers.System), 50, ui);
+            bool Shows(string path)
+            {
+                bool shown = false;
+                ui(() => shown = tree.IndexOf(path) >= 0);
+                return shown;
+            }
+
+            var chat = new ScriptedChatModel(
+                new ChatMessage("assistant", ToolCalls: [new ToolCall("write_file", new JsonObject { ["path"] = "Example.cs", ["content"] = "class Example { }\n" })]),
+                new ChatMessage("assistant", "Done."));
+            using var fixture = new ChatFixture(chat, agentFolder: root + "-copies");
+            using var panel = new AiAgentPanel(host, () => fixture.Settings, fixture.Models);
+            await panel.SubmitAsync("Add Example.cs");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(10));
+            string created = Path.Combine(root, "Example.cs");
+            Check.True(panel.Changes is [{ Relative: "Example.cs", IsNew: true }] && !File.Exists(created), "the new file is held as a change; nothing is written before the user accepts");
+            Check.True(!Shows(created), "so the tree does not show it");
+
+            Check.True(await panel.ReviewAsync(), "Review diff: the new file's diff is proposed and accepted");
+            Check.True(presenter.Proposals.Single().Placement!.Contains("accepting it creates Example.cs", StringComparison.Ordinal), "the diff says accepting creates the file");
+            var clock = Stopwatch.StartNew();
+            Check.Equal("class Example { }\n", await File.ReadAllTextAsync(created), "accepted whole, the file is created through the host (IEditorHost.SaveAsync)");
+            Check.True(host.Documents.Any(d => d.Document.FilePath == created), "the document is the file now (its tab takes the name)");
+            await Until(() => Shows(created), "the accepted file shows in the tree");
+            Check.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"within a second of the accept ({clock.Elapsed.TotalMilliseconds:F0} ms; the watch's delay is 50 ms)");
+            Check.True(panel.Entries.Any(e => e.Role == ConversationRole.Note && e.Text.Contains("the file is created", StringComparison.Ordinal)), "the agent's column says so");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root + "-copies"))
+            {
+                Directory.Delete(root + "-copies", recursive: true);
+            }
+        }
+    }
+
+    [Test]
     public static async Task WithNoSandboxRegisteredTheAgentRunsNoCommandAndSaysSo()
     {
         string root = Folder();
@@ -326,7 +379,7 @@ public static class AiPluginTests
             "the A2 settings read");
         Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "placementMaxError" ? "2" : null), "a share above 1 is refused, naming the variable");
         Check.True(AiSettings.Declared.Any(s => s.Key == "completionSuffixChars") && AiSettings.Declared.Any(s => s.Key == "agentSandbox"), "they are declared for the settings page");
-        var options = CraftOptions.FromVariables(name => name switch { "CRAFT_INLINE_COMPLETION_PROVIDER" => "none", "CRAFT_CHAT_WIDTH" => "400", _ => null });
+        var options = CraftOptions.FromVariables(name => name switch { "CRAFT_INLINE_COMPLETION_PROVIDER" => "none", "CRAFT_PANEL_CHAT_WIDTH" => "400", _ => null });
         Check.True(options is { InlineCompletionProvider: "none", ChatWidth: 400 }, "the editor's options: the provider and the chat column's width");
         var request = new InlineCompletionRequest(TextDocument.Create("x").Buffer.Current, 1, null, "Plain text", null);
         Check.Throws<NotRegisteredException>(() => InlineCompletionProviders.For(request, "a2-missing"), "an unregistered provider is not registered");

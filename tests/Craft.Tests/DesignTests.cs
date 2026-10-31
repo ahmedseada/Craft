@@ -329,8 +329,6 @@ public static class DesignTests
 
         public Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default) => Task.FromResult(-1);
 
-        public Task ShowSettingsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task ShowMessageAsync(string title, string message) => Task.CompletedTask;
     }
 }

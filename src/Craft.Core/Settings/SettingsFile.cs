@@ -19,6 +19,9 @@ public sealed class SettingsFile
 {
     private readonly SortedDictionary<string, string> _values = new(StringComparer.Ordinal);
     private readonly List<string> _problems = [];
+    private readonly Lock _writing = new();
+    private long _version;
+    private long _written;
 
     private SettingsFile(string path) => FilePath = Path.GetFullPath(path);
 
@@ -103,6 +106,37 @@ public sealed class SettingsFile
     /// <summary>Writes the values to <see cref="FilePath"/> (its folder made when missing), through a temporary file moved over it.</summary>
     public void Save()
     {
+        long version = Interlocked.Increment(ref _version);
+        Write([.. _values], version);
+    }
+
+    /// <summary>
+    /// Writes the values as they are now on the thread pool (the caller, the UI thread, never waits on the disk): they are
+    /// copied here, and a later save's copy is never overwritten by an earlier one that finishes after it.
+    /// </summary>
+    public Task SaveAsync()
+    {
+        long version = Interlocked.Increment(ref _version);
+        KeyValuePair<string, string>[] values = [.. _values];
+        return Task.Run(() => Write(values, version));
+    }
+
+    private void Write(KeyValuePair<string, string>[] values, long version)
+    {
+        lock (_writing)
+        {
+            if (version <= _written)
+            {
+                return;                      // a later copy was written already
+            }
+
+            WriteFile(values);
+            _written = version;
+        }
+    }
+
+    private void WriteFile(KeyValuePair<string, string>[] values)
+    {
         var folder = Path.GetDirectoryName(FilePath)!;
         Directory.CreateDirectory(folder);
         var temporary = FilePath + ".tmp";
@@ -110,7 +144,7 @@ public sealed class SettingsFile
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
         {
             writer.WriteStartObject();
-            foreach (var (name, value) in _values)
+            foreach (var (name, value) in values)
             {
                 writer.WriteString(name, value);
             }

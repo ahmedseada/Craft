@@ -166,6 +166,9 @@ public static class RailIcons
 
     /// <summary>A gear.</summary>
     public const string Settings = "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1";
+
+    /// <summary>A plug-in panel's side view (three lines of a list): the rail item the shell gives a panel that brings none.</summary>
+    public const string Panel = "M4 6h16M4 12h16M4 18h10";
 }
 
 /// <summary>The activity rail's items, by id (ignoring case). The app registers its own; a plug-in adds one in its registration's parts.</summary>

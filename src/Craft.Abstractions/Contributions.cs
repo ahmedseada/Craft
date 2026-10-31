@@ -98,8 +98,8 @@ public sealed class StatusItem(string id, string text, StatusAlignment alignment
 public sealed record PanelItem(string Text, string? Detail = null, string? CommandId = null);
 
 /// <summary>
-/// A panel a plug-in adds to the side area (<see cref="IEditorHost.AddPanel"/>): a title and a list of items, each a line
-/// of text that may run a command. The host draws it; the panel describes only what it holds, so it stays UI-free.
+/// A panel a plug-in adds (<see cref="IEditorHost.AddPanel"/>), shown as a side view of the activity rail in the
+/// explorer's place: a title and a list of items, each a line of text that may run a command. The host draws it; the panel describes only what it holds, so it stays UI-free.
 /// Raise <see cref="Changed"/> (on the UI thread) when <see cref="Title"/> or <see cref="Items"/> changes.
 /// </summary>
 public interface IEditorPanel

@@ -14,9 +14,10 @@ namespace Craft.Maui;
 /// <c>.craft/settings.json</c>, or the environment, which overrides both files and is shown as such). A value is written
 /// into the file picked at the top (the workspace's when a folder is open, else the user's), checked first: one that does
 /// not parse is refused with the reason and nothing is written. "Clear" takes it out of that file. Written values apply at
-/// once, except those read at start (said so). A search filters by variable or meaning.
+/// once, except those read at start (said so). A search filters by variable or meaning. Phase U2: it is a tab of the
+/// editor area (<see cref="ShellPageIds.Settings"/>), never a page over the window, so the menus stay in reach.
 /// </summary>
-public sealed class SettingsPage : ContentPage
+public sealed class SettingsPage : ContentView, IDisposable
 {
     private readonly ShellModel _shell;
     private readonly VerticalStackLayout _rows = new() { Spacing = 10, Padding = new Thickness(12, 4, 12, 16) };
@@ -34,9 +35,8 @@ public sealed class SettingsPage : ContentPage
         ArgumentNullException.ThrowIfNull(shell);
         _shell = shell;
         _search.Text = search ?? "";
-        Title = "Settings";
         var close = new Button { Text = "Close" };
-        close.Clicked += async (_, _) => await Navigation.PopModalAsync();
+        close.Clicked += (_, _) => _shell.Pages.Close(ShellPageIds.Settings);
         _search.TextChanged += (_, _) => Rebuild();
         _layer.SelectedIndexChanged += (_, _) => Rebuild();
         var header = new FlexLayout
@@ -69,9 +69,8 @@ public sealed class SettingsPage : ContentPage
     }
 
     /// <inheritdoc />
-    protected override void OnDisappearing()
+    public void Dispose()
     {
-        base.OnDisappearing();
         _shell.OptionsChanged -= OnShellChanged;
         _shell.WorkspaceChanged -= OnWorkspaceChanged;
         _shell.ThemeChanged -= OnThemeChanged;

@@ -339,10 +339,14 @@ public static class PhasePTests
             Check.True(refused is { Refused: true, ExitCode: null }, $"with no editor the command is refused ({refused.Output})");
 
             var presenter = new AskingPresenter();
+            var options = new Craft.Core.CraftOptions();
             using var host = new EditorHost(presenter: presenter);
+            using var terminals = new Craft.Editor.Terminal.TerminalManager(host, () => options, new Craft.Tests.Editor.FakeClipboard());
+            host.Terminals = terminals;
             host.RefreshPlugins();
             Check.True(host.Plugins.Any(p => p is { Name: "sandbox", Active: true }), "the editor plug-in activates");
-            var panel = host.Panels.Single(p => p.Id == "sandbox.terminal");
+            Check.True(!host.Panels.Any(p => p.Id == "sandbox.terminal") && terminals.Terminals.Count == 0,
+                "no side panel (phase U2), and no terminal tab until a command comes");
 
             presenter.Answers.Enqueue(0);                                     // Allow once
             var once = await sandbox.RunAsync(["dotnet", "--version"], workspace, limits);
@@ -351,9 +355,20 @@ public static class PhasePTests
             Check.True(question.Title == "The agent wants to run a command" && question.Message == "dotnet --version", $"the card: {question.Title} / {question.Message}");
             Check.SequenceEqual(["Allow once", "Allow dotnet for this run", "Deny and tell the agent"], question.Choices, "its answers");
             Check.SequenceEqual(["Program: dotnet (allowed: dotnet)", "Time limit: 60 s", "Network: on", "Folder: the workspace", "Runs in: the process sandbox"], question.Details, "its facts");
-            var lines = panel.Items.Select(i => i.Text).ToList();
-            Check.True(lines.Contains("$ dotnet --version") && lines.Contains(once.Output.Trim()) && lines.Any(l => l.Contains("exit code 0", StringComparison.Ordinal)),
-                $"the terminal panel shows the command, its output and its end ({string.Join(" | ", lines)})");
+            var output = terminals.Terminals.Single(t => t.Title == "Agent sandbox");
+            Check.True(output.IsReadOnly && !output.HandleKey(EditorKey.A, KeyModifiers.None), "the sandbox's output is its own read-only terminal tab, \"Agent sandbox\"");
+            string text = "";
+            for (int i = 0; i < 200 && !(text.Contains("$ dotnet --version", StringComparison.Ordinal) && text.Contains("exit code 0", StringComparison.Ordinal)); i++)
+            {
+                await Task.Delay(10);
+                lock (output.Screen.Sync)
+                {
+                    text = output.Screen.TextOf(output.Screen.FirstLine, 0, output.Screen.ScreenTop + output.Screen.Rows - 1, output.Screen.Columns);
+                }
+            }
+
+            Check.True(text.Contains("$ dotnet --version", StringComparison.Ordinal) && text.Contains(once.Output.Trim(), StringComparison.Ordinal) && text.Contains("exit code 0", StringComparison.Ordinal),
+                $"the Agent sandbox tab shows the command, its output and its end ({text.Trim()})");
 
             presenter.Answers.Enqueue(2);                                     // Deny
             var denied = await sandbox.RunAsync(["dotnet", "--info"], workspace, limits);

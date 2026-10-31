@@ -108,93 +108,86 @@ public sealed class StatusItemsView : FlexLayout, IDisposable
 }
 
 /// <summary>
-/// The plug-ins' panels of an <see cref="EditorHost"/>, one under the other in a scrolling column: each its title and its
-/// items (a click on an item with a command runs it). It hides itself when there is no panel.
+/// A plug-in panel (<see cref="IEditorPanel"/>, not a conversation) as a side view of the rail (phase U2: there is no fixed
+/// column of panels): its title, then its items in a scrolling column (a click on an item with a command runs it). It is
+/// drawn again when the panel raises <see cref="IEditorPanel.Changed"/>, through the dispatcher when that comes off the UI thread.
 /// </summary>
-public sealed class PanelsView : ScrollView, IDisposable
+public sealed class PanelView : ContentView, IDisposable
 {
     private readonly EditorHost _host;
-    private readonly VerticalStackLayout _stack = new() { Spacing = 4, Padding = new Thickness(8) };
-    private readonly List<IEditorPanel> _shown = [];
+    private readonly VerticalStackLayout _stack = new() { Spacing = 4, Padding = new Thickness(12, 8) };
+    private readonly Label _title = new() { FontAttributes = FontAttributes.Bold, Margin = new Thickness(12, 10, 12, 2) };
     private Color _textColor = Colors.Gray;
+    private Color _secondary = Colors.Gray;
 
-    /// <summary>The panels of <paramref name="host"/>.</summary>
-    public PanelsView(EditorHost host)
+    /// <summary>The view of <paramref name="panel"/>; its commands run through <paramref name="host"/>.</summary>
+    public PanelView(EditorHost host, IEditorPanel panel)
     {
         ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(panel);
         _host = host;
-        Content = _stack;
-        host.PanelsChanged += OnPanelsChanged;
+        Panel = panel;
+        var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
+        grid.Add(_title, 0, 0);
+        grid.Add(new ScrollView { Content = _stack }, 0, 1);
+        Content = grid;
+        panel.Changed += OnPanelChanged;
         Rebuild();
     }
 
-    /// <summary>The text's colour.</summary>
-    public Color TextColor
+    /// <summary>The panel shown.</summary>
+    public IEditorPanel Panel { get; }
+
+    /// <summary>Takes the text colours.</summary>
+    public void SetColors(Color text, Color secondary)
     {
-        get => _textColor;
-        set
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(secondary);
+        _textColor = text;
+        _secondary = secondary;
+        Rebuild();
+    }
+
+    /// <inheritdoc />
+    public void Dispose() => Panel.Changed -= OnPanelChanged;
+
+    private void OnPanelChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.IsDispatchRequired)
         {
-            _textColor = value;
+            Dispatcher.Dispatch(Rebuild);
+        }
+        else
+        {
             Rebuild();
         }
     }
 
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        _host.PanelsChanged -= OnPanelsChanged;
-        Unsubscribe();
-    }
-
-    private void OnPanelsChanged(object? sender, EventArgs e) => Rebuild();
-
-    private void OnPanelChanged(object? sender, EventArgs e) => Rebuild();
-
-    private void Unsubscribe()
-    {
-        foreach (var panel in _shown)
-        {
-            panel.Changed -= OnPanelChanged;
-        }
-
-        _shown.Clear();
-    }
-
     private void Rebuild()
     {
-        Unsubscribe();
+        _title.Text = Panel.Title;
+        _title.TextColor = _textColor;
         _stack.Children.Clear();
-        foreach (var panel in _host.Panels)
+        foreach (var item in Panel.Items)
         {
-            if (panel is IConversationPanel)
+            var text = new Label { Text = item.Text, FontSize = 12, TextColor = _textColor, LineBreakMode = LineBreakMode.WordWrap };
+            var row = new VerticalStackLayout { Spacing = 0, Padding = new Thickness(0, 2) };
+            row.Children.Add(text);
+            if (item.Detail is { } detail)
             {
-                continue;   // the chat column's (ConversationsView)
+                row.Children.Add(new Label { Text = detail, FontSize = 11, TextColor = _secondary, LineBreakMode = LineBreakMode.WordWrap });
             }
 
-            panel.Changed += OnPanelChanged;
-            _shown.Add(panel);
-            _stack.Children.Add(new Label { Text = panel.Title, FontAttributes = FontAttributes.Bold, TextColor = _textColor, Margin = new Thickness(0, 6, 0, 2) });
-            foreach (var item in panel.Items)
+            if (item.CommandId is { } command)
             {
-                var label = new Label
-                {
-                    Text = item.Detail is null ? item.Text : $"{item.Text}  {item.Detail}",
-                    FontSize = 12,
-                    TextColor = _textColor,
-                    LineBreakMode = LineBreakMode.TailTruncation,
-                };
-                if (item.CommandId is { } command)
-                {
-                    var tap = new TapGestureRecognizer();
-                    tap.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(command);
-                    label.GestureRecognizers.Add(tap);
-                }
-
-                _stack.Children.Add(label);
+                var tap = new TapGestureRecognizer();
+                tap.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(command);
+                row.GestureRecognizers.Add(tap);
+                ToolTipProperties.SetText(row, EditorCommands.Find(command)?.Title ?? command);
             }
+
+            _stack.Children.Add(row);
         }
-
-        IsVisible = _shown.Count > 0;
     }
 }
 

@@ -156,7 +156,7 @@ public sealed record CraftOptions
     /// </summary>
     public string InlineCompletionProvider { get; init; } = "";
 
-    /// <summary>The chat column's width in the wide layout, device-independent units (<c>CRAFT_CHAT_WIDTH</c>).</summary>
+    /// <summary>The chat and agent column's width in the wide layout, device-independent units; a splitter drag sets it per workspace (<c>CRAFT_PANEL_CHAT_WIDTH</c>).</summary>
     public float ChatWidth { get; init; } = 360;
 
     /// <summary>Milliseconds the pointer rests on a symbol before its description shows (<c>CRAFT_HOVER_DELAY_MS</c>).</summary>
@@ -242,22 +242,37 @@ public sealed record CraftOptions
 
     /// <summary>
     /// The window width, in device-independent units, below which the shell shows its narrow (phone) layout: the folder
-    /// tree in place of the editor, the tabs as one switcher, no side panels. Measured from the window, never the platform (<c>CRAFT_NARROW_WIDTH</c>).
+    /// tree in place of the editor, the tabs as one switcher, no rail, side views or bottom panel. Measured from the window, never the platform (<c>CRAFT_NARROW_WIDTH</c>).
     /// </summary>
     public float NarrowWidth { get; init; } = 720;
 
-    /// <summary>The folder tree's width in the wide layout, in device-independent units (<c>CRAFT_TREE_WIDTH</c>).</summary>
+    /// <summary>The explorer's (the side views') width in the wide layout, device-independent units; a splitter drag sets it per workspace (<c>CRAFT_PANEL_EXPLORER_WIDTH</c>).</summary>
     public float TreeWidth { get; init; } = 260;
 
     /// <summary>The indent of each level of the folder tree, in device-independent units (<c>CRAFT_TREE_INDENT</c>).</summary>
     public float TreeIndent { get; init; } = 14;
 
-    /// <summary>The plug-ins' side panels' width in the wide layout, in device-independent units (<c>CRAFT_PANEL_WIDTH</c>).</summary>
-    public float PanelWidth { get; init; } = 280;
+    /// <summary>Whether the explorer (the rail's side view) is open in the wide layout; Ctrl+B and the rail set it per workspace (<c>CRAFT_PANEL_EXPLORER_OPEN</c>).</summary>
+    public bool ExplorerOpen { get; init; } = true;
+
+    /// <summary>Whether the chat and agent column is open in the wide layout; its close button and Ctrl+Alt+I set it per workspace (<c>CRAFT_PANEL_CHAT_OPEN</c>).</summary>
+    public bool ChatOpen { get; init; } = true;
+
+    /// <summary>Whether the bottom panel is open; its chevron, Ctrl+J and a click on its active tab set it per workspace (<c>CRAFT_PANEL_BOTTOM_OPEN</c>).</summary>
+    public bool BottomPanelOpen { get; init; } = true;
+
+    /// <summary>The smallest size a splitter drag leaves a panel, and the least it leaves the editor, device-independent units (<c>CRAFT_PANEL_MIN_SIZE</c>).</summary>
+    public float PanelMinimumSize { get; init; } = 120;
+
+    /// <summary>What tells the folder tree a file or folder was made, removed or renamed (<c>CRAFT_WORKSPACE_WATCHER</c>): system, none, or a registered watcher.</summary>
+    public string WorkspaceWatcher { get; init; } = "system";
+
+    /// <summary>Milliseconds the folder tree gathers the disk's changes before it reads the folders they touched once (<c>CRAFT_WORKSPACE_WATCH_MS</c>).</summary>
+    public int WorkspaceWatchMilliseconds { get; init; } = 150;
 
     // Phase D: the approved design's shell.
 
-    /// <summary>The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), in device-independent units (<c>CRAFT_BOTTOM_PANEL_HEIGHT</c>).</summary>
+    /// <summary>The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), device-independent units; a splitter drag sets it per workspace (<c>CRAFT_PANEL_BOTTOM_HEIGHT</c>).</summary>
     public float BottomPanelHeight { get; init; } = 132;
 
     /// <summary>The most files quick open (Ctrl+P) lists from the workspace; the rest are said to be left out (<c>CRAFT_QUICK_OPEN_FILES</c>).</summary>
@@ -387,10 +402,15 @@ public sealed record CraftOptions
         new("CRAFT_DATA_FOLDER", "(local app data)/Craft", "The folder of the app's own files (the recent list, the user's settings.json); from the environment only."),
         new("CRAFT_RECENT_LIMIT", "20", "The recent files and folders kept; 0 keeps none."),
         new("CRAFT_NARROW_WIDTH", "720", "The window width (device-independent units) below which the narrow (phone) layout shows."),
-        new("CRAFT_TREE_WIDTH", "260", "The folder tree's width in the wide layout (device-independent units)."),
+        new("CRAFT_PANEL_EXPLORER_WIDTH", "260", "The explorer's (the rail's side views') width in the wide layout, device-independent units; a splitter drag writes it to the workspace's settings."),
         new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units)."),
-        new("CRAFT_PANEL_WIDTH", "280", "The plug-ins' side panels' width in the wide layout (device-independent units)."),
-        new("CRAFT_BOTTOM_PANEL_HEIGHT", "132", "The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), device-independent units."),
+        new("CRAFT_PANEL_EXPLORER_OPEN", "true", "Whether the explorer (the rail's side view) is open in the wide layout; Ctrl+B and the rail write it to the workspace's settings."),
+        new("CRAFT_PANEL_CHAT_OPEN", "true", "Whether the chat and agent column is open in the wide layout; its close button and Ctrl+Alt+I write it to the workspace's settings."),
+        new("CRAFT_PANEL_BOTTOM_OPEN", "true", "Whether the bottom panel is open; its chevron, Ctrl+J and a click on its active tab write it to the workspace's settings."),
+        new("CRAFT_PANEL_MIN_SIZE", "120", "The smallest size a splitter drag leaves a panel, and the least it leaves the editor (device-independent units)."),
+        new("CRAFT_PANEL_BOTTOM_HEIGHT", "132", "The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), device-independent units; a splitter drag writes it to the workspace's settings."),
+        new("CRAFT_WORKSPACE_WATCHER", "system", "What tells the folder tree a file or folder was made, removed or renamed: system (the platform's file watcher), none, or a registered watcher."),
+        new("CRAFT_WORKSPACE_WATCH_MS", "150", "Milliseconds the folder tree gathers the disk's changes before it reads the folders they touched, once."),
         new("CRAFT_QUICK_OPEN_FILES", "200000", "The most files quick open (Ctrl+P) lists from the workspace."),
         new("CRAFT_QUICK_OPEN_ROWS", "12", "The rows quick open shows."),
         new("CRAFT_TOUCH_TARGET", "44", "The smallest touch target of the narrow layout (device-independent units)."),
@@ -402,7 +422,7 @@ public sealed record CraftOptions
         new("CRAFT_COMPLETION_DELAY_MS", "50", "Milliseconds after typing an identifier character or '.' before the completion list is asked for."),
         new("CRAFT_COMPLETION_ROWS", "10", "The rows the completion list shows before it scrolls."),
         new("CRAFT_INLINE_COMPLETION_PROVIDER", "", "The inline completion (ghost text) provider: a registered name; empty: the first that accepts the document; none: off."),
-        new("CRAFT_CHAT_WIDTH", "360", "The chat column's width in the wide layout (device-independent units)."),
+        new("CRAFT_PANEL_CHAT_WIDTH", "360", "The chat and agent column's width in the wide layout, device-independent units; a splitter drag writes it to the workspace's settings."),
         new("CRAFT_PROBLEMS_LIMIT", "500", "The most rows the problems list shows (the counts stay exact)."),
         new("CRAFT_HOVER_DELAY_MS", "500", "Milliseconds the pointer rests on a symbol before its description shows."),
         new("CRAFT_SOURCE_GENERATORS", "true", "Whether the projects' source generators run in the semantic model (their generated code counts, as in the build)."),
@@ -623,9 +643,9 @@ public sealed record CraftOptions
             options = options with { NarrowWidth = Positive(narrow, "CRAFT_NARROW_WIDTH", 0, 100_000) };
         }
 
-        if (Text(read, "CRAFT_TREE_WIDTH") is { } treeWidth)
+        if (Text(read, "CRAFT_PANEL_EXPLORER_WIDTH") is { } treeWidth)
         {
-            options = options with { TreeWidth = Positive(treeWidth, "CRAFT_TREE_WIDTH", 40, 10_000) };
+            options = options with { TreeWidth = Positive(treeWidth, "CRAFT_PANEL_EXPLORER_WIDTH", 40, 10_000) };
         }
 
         if (Text(read, "CRAFT_TREE_INDENT") is { } treeIndent)
@@ -633,9 +653,34 @@ public sealed record CraftOptions
             options = options with { TreeIndent = Positive(treeIndent, "CRAFT_TREE_INDENT", 0, 200) };
         }
 
-        if (Text(read, "CRAFT_PANEL_WIDTH") is { } panelWidth)
+        if (Text(read, "CRAFT_PANEL_EXPLORER_OPEN") is { } explorerOpen)
         {
-            options = options with { PanelWidth = Positive(panelWidth, "CRAFT_PANEL_WIDTH", 40, 10_000) };
+            options = options with { ExplorerOpen = Flag(explorerOpen, "CRAFT_PANEL_EXPLORER_OPEN") };
+        }
+
+        if (Text(read, "CRAFT_PANEL_CHAT_OPEN") is { } chatOpen)
+        {
+            options = options with { ChatOpen = Flag(chatOpen, "CRAFT_PANEL_CHAT_OPEN") };
+        }
+
+        if (Text(read, "CRAFT_PANEL_BOTTOM_OPEN") is { } bottomOpen)
+        {
+            options = options with { BottomPanelOpen = Flag(bottomOpen, "CRAFT_PANEL_BOTTOM_OPEN") };
+        }
+
+        if (Text(read, "CRAFT_PANEL_MIN_SIZE") is { } panelMinimum)
+        {
+            options = options with { PanelMinimumSize = Positive(panelMinimum, "CRAFT_PANEL_MIN_SIZE", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_WATCHER") is { } watcher)
+        {
+            options = options with { WorkspaceWatcher = watcher };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_WATCH_MS") is { } watchDelay)
+        {
+            options = options with { WorkspaceWatchMilliseconds = Whole(watchDelay, "CRAFT_WORKSPACE_WATCH_MS", 0, 60_000) };
         }
 
         if (Text(read, "CRAFT_FONT_FALLBACK") is { } fallback)
@@ -662,9 +707,9 @@ public sealed record CraftOptions
             };
         }
 
-        if (Text(read, "CRAFT_BOTTOM_PANEL_HEIGHT") is { } bottomHeight)
+        if (Text(read, "CRAFT_PANEL_BOTTOM_HEIGHT") is { } bottomHeight)
         {
-            options = options with { BottomPanelHeight = Positive(bottomHeight, "CRAFT_BOTTOM_PANEL_HEIGHT", 40, 10_000) };
+            options = options with { BottomPanelHeight = Positive(bottomHeight, "CRAFT_PANEL_BOTTOM_HEIGHT", 40, 10_000) };
         }
 
         if (Text(read, "CRAFT_QUICK_OPEN_FILES") is { } quickFiles)
@@ -727,9 +772,9 @@ public sealed record CraftOptions
             options = options with { InlineCompletionProvider = inlineProvider };
         }
 
-        if (Text(read, "CRAFT_CHAT_WIDTH") is { } chatWidth)
+        if (Text(read, "CRAFT_PANEL_CHAT_WIDTH") is { } chatWidth)
         {
-            options = options with { ChatWidth = Positive(chatWidth, "CRAFT_CHAT_WIDTH", 120, 10_000) };
+            options = options with { ChatWidth = Positive(chatWidth, "CRAFT_PANEL_CHAT_WIDTH", 120, 10_000) };
         }
 
         if (Text(read, "CRAFT_PROBLEMS_LIMIT") is { } problems)

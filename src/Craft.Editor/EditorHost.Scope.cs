@@ -100,6 +100,9 @@ public sealed partial class EditorHost
         public Task<IEditorDocument?> OpenDocumentAsync(string path, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult<IEditorDocument?>(null) : host.OpenDocumentAsync(path, cancellationToken);
 
+        public Task SaveAsync(IEditorDocument document, string? path = null, CancellationToken cancellationToken = default) =>
+            _closed ? Task.CompletedTask : host.SaveAsync(document, path, cancellationToken);
+
         public bool TypeText(IEditorDocument document, string text) => !_closed && host.TypeCore(document, text, name);
 
         public bool Select(IEditorDocument document, SelectionState selection) => !_closed && host.Select(document, selection);
@@ -223,6 +226,26 @@ public sealed partial class EditorHost
 
         public IEditorTerminal Open(EditorTerminalRequest request) =>
             scope.IsClosed ? throw new InvalidOperationException("The plug-in is not active: it cannot open a terminal.") : new ScopedTerminal(terminals.Open(request), scope);
+
+        public IEditorTerminalOutput? OpenOutput(string name) =>
+            scope.IsClosed ? null : terminals.OpenOutput(name) is { } output ? new ScopedOutput(output, scope) : null;
+    }
+
+    private sealed class ScopedOutput(IEditorTerminalOutput output, PluginScope scope) : IEditorTerminalOutput
+    {
+        public string Title => output.Title;
+
+        public bool IsOpen => !scope.IsClosed && output.IsOpen;
+
+        public bool Append(string text) => !scope.IsClosed && output.Append(text);
+
+        public void Show()
+        {
+            if (!scope.IsClosed)
+            {
+                output.Show();
+            }
+        }
     }
 
     private sealed class ScopedTerminal(IEditorTerminal terminal, PluginScope scope) : IEditorTerminal

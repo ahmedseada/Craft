@@ -46,9 +46,6 @@ public interface IShellUi
     /// <summary>Asks for one of <paramref name="items"/> under <paramref name="title"/>; its index, or -1 when none was picked.</summary>
     Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default);
 
-    /// <summary>Shows the settings page; completes when it is shown (it stays open until the user closes it).</summary>
-    Task ShowSettingsAsync(CancellationToken cancellationToken = default);
-
     /// <summary>Shows a message; completes when the user dismissed it.</summary>
     Task ShowMessageAsync(string title, string message);
 }

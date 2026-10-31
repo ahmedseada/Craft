@@ -159,18 +159,18 @@ public static class ShellTests
         var layout = new ShellLayout(new CraftOptions());
         int changes = 0;
         layout.Changed += (_, _) => changes++;
-        Check.True(!layout.TreeVisible && layout.EditorVisible && layout.PanelsVisible, "wide, no folder: no tree");
+        Check.True(!layout.TreeVisible && layout.EditorVisible, "wide, no folder: no tree");
         layout.HasFolder = true;
         Check.True(layout.TreeVisible && layout.EditorVisible, "wide with a folder: the tree beside the editor");
         Check.True(layout.UpdateWidth(500) && layout.IsNarrow, "a narrow window: the narrow layout");
         Check.True(!layout.UpdateWidth(510), "still narrow: no change");
-        Check.True(layout.TreeVisible && !layout.EditorVisible && !layout.PanelsVisible, "narrow, a folder just opened: the tree in the editor's place, no panels");
+        Check.True(layout.TreeVisible && !layout.EditorVisible && layout.IsNarrow, "narrow, a folder just opened: the tree in the editor's place");
         layout.FileOpenedFromTree();
         Check.True(!layout.TreeVisible && layout.EditorVisible, "a file opened from the tree: back to the editor");
         layout.ToggleTree();
         Check.True(layout.TreeVisible && !layout.EditorVisible, "toggled: the tree again");
         layout.UpdateWidth(1200);
-        Check.True(layout.TreeVisible && layout.EditorVisible && layout.PanelsVisible, "wide again: the wide layout's own choice (shown)");
+        Check.True(layout.TreeVisible && layout.EditorVisible && !layout.IsNarrow, "wide again: the wide layout's own choice (shown)");
         layout.ToggleTree();
         layout.UpdateWidth(500);
         Check.True(layout.TreeVisible, "hiding it in the wide layout leaves the narrow one's choice");
@@ -331,7 +331,7 @@ public static class ShellTests
             Check.Equal("// class P {}", await File.ReadAllTextAsync(folder.File("Program.cs")), "Save writes the file");
 
             Check.True(await host.ExecuteCommandAsync(ShellCommandIds.ToggleTree) && !shell.Layout.TreeVisible, "Ctrl+B's command hides the tree");
-            Check.True(await host.ExecuteCommandAsync(ShellCommandIds.Settings) && ui.SettingsShown == 1, "the settings page is asked for");
+            Check.True(await host.ExecuteCommandAsync(ShellCommandIds.Settings) && shell.Pages.Active?.Id == ShellPageIds.Settings, "the settings page opens as a tab of the editor area");
             ui.Pick = 1;
             await shell.OpenRecentAsync();
             Check.True(ui.Picked.Count == 3 && ui.Picked[1].StartsWith("File: ", StringComparison.Ordinal), "the recent list is offered, kinds named");
@@ -368,8 +368,6 @@ public static class ShellTests
 
         public IReadOnlyList<string> Picked { get; private set; } = [];
 
-        public int SettingsShown { get; private set; }
-
         public List<string> Messages { get; } = [];
 
         public Task<UnsavedChoice> AskUnsavedAsync(string title, CancellationToken cancellationToken = default)
@@ -382,12 +380,6 @@ public static class ShellTests
         {
             Picked = items;
             return Task.FromResult(Pick);
-        }
-
-        public Task ShowSettingsAsync(CancellationToken cancellationToken = default)
-        {
-            SettingsShown++;
-            return Task.CompletedTask;
         }
 
         public Task ShowMessageAsync(string title, string message)

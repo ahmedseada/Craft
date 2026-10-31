@@ -595,6 +595,29 @@ static class Craft.Abstractions.EditorToolSets
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.String Origin(System.String name)
   static System.Void Register(Craft.Abstractions.IEditorToolSet set)
+struct Craft.Abstractions.FolderChange : System.IEquatable<Craft.Abstractions.FolderChange>
+  Craft.Abstractions.FolderChangeKind Kind { get; init; }
+  System.Boolean Equals(Craft.Abstractions.FolderChange other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String OldPath { get; init; }
+  System.String Path { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Abstractions.FolderChangeKind Kind, out System.String Path, out System.String OldPath)
+  ctor(Craft.Abstractions.FolderChangeKind Kind, System.String Path, System.String OldPath = null)
+enum Craft.Abstractions.FolderChangeKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Created = 0
+  Deleted = 1
+  Renamed = 2
+  Rescan = 3
+static class Craft.Abstractions.FolderWatchers
+  const System.String None = none
+  const System.String System = system
+  static Craft.Abstractions.IFolderWatcher Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IFolderWatcher Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.IFolderWatcher watcher)
 struct Craft.Abstractions.FontMetrics : System.IEquatable<Craft.Abstractions.FontMetrics>
   System.Boolean Equals(Craft.Abstractions.FontMetrics other)
   System.Boolean Equals(System.Object obj)
@@ -682,6 +705,7 @@ interface Craft.Abstractions.IEditorHost
   System.IDisposable AddStatusItem(Craft.Abstractions.IStatusItem item)
   System.String DataFolder { get; }
   System.String WorkspaceFolder { get; }
+  System.Threading.Tasks.Task SaveAsync(Craft.Abstractions.IEditorDocument document, System.String path = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
   System.Threading.Tasks.Task<Craft.Abstractions.IEditorDocument> OpenDocumentAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ExecuteCommandAsync(System.String commandId, System.Threading.CancellationToken cancellationToken = null)
@@ -724,13 +748,21 @@ interface Craft.Abstractions.IEditorTerminal
   System.String WorkingDirectory { get; }
   System.Threading.Tasks.Task<System.Int32> Exited { get; }
   System.Void Show()
+interface Craft.Abstractions.IEditorTerminalOutput
+  System.Boolean Append(System.String text)
+  System.Boolean IsOpen { get; }
+  System.String Title { get; }
+  System.Void Show()
 interface Craft.Abstractions.IEditorTerminals
   Craft.Abstractions.IEditorTerminal Active { get; }
   Craft.Abstractions.IEditorTerminal Open(Craft.Abstractions.EditorTerminalRequest request)
+  Craft.Abstractions.IEditorTerminalOutput OpenOutput(System.String name)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorTerminal> All { get; }
 interface Craft.Abstractions.IEditorToolSet : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder)
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host)
+interface Craft.Abstractions.IFolderWatcher : Idrak.Abstraction.IKind
+  System.IDisposable Watch(System.String folder, System.Action<Craft.Abstractions.FolderChange> changed)
 interface Craft.Abstractions.IInlineCompletionProvider : Idrak.Abstraction.IKind
   System.Boolean Accepts(Craft.Abstractions.InlineCompletionRequest request)
   System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.InlineCompletionPiece> CompleteAsync(Craft.Abstractions.InlineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
@@ -1007,6 +1039,7 @@ sealed class Craft.Abstractions.ModelProviderStatus : System.IEquatable<Craft.Ab
   System.Boolean Equals(System.Object obj)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ModelRole> Roles { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ModelSettingField> Limits { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Loaded { get; init; }
   System.Double? TokensPerSecond { get; init; }
   System.Int32 GetHashCode()
   System.Int64? DeviceMemoryBytes { get; init; }
@@ -1165,6 +1198,7 @@ sealed class Craft.Abstractions.ProposedEdits : System.IEquatable<Craft.Abstract
 static class Craft.Abstractions.RailIcons
   const System.String Agent = M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z
   const System.String Explorer = M4 4h6l2 2h8v13H4z
+  const System.String Panel = M4 6h16M4 12h16M4 18h10
   const System.String Plugins = M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4
   const System.String Search = M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5
   const System.String Settings = M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1

@@ -18,6 +18,13 @@ namespace Craft.Maui;
 /// <summary>The design pages' shared parts: the header row (the logo, "Craft", the page's place, a close button).</summary>
 internal static class PageParts
 {
+    /// <summary>Closes the page's tab (phase U2: the pages are tabs of the editor area).</summary>
+    public static Task Close(ShellModel shell, string pageId)
+    {
+        shell.Pages.Close(pageId);
+        return Task.CompletedTask;
+    }
+
     public static Grid Header(ShellPalette palette, string place, Func<Task> close)
     {
         var logo = new GraphicsView { Drawable = new LogoDrawable { Accent = palette.Accent }, WidthRequest = 20, HeightRequest = 20 };
@@ -77,7 +84,7 @@ internal static class PageParts
 /// "Load from folder…" (a user plug-in folder, <c>CRAFT_PLUGIN_FOLDERS</c>, taken at the next start), the table (plug-in,
 /// registry, source, state), and the chosen plug-in's details with its problem and "disable at the next start".
 /// </summary>
-public sealed class PluginsPage : ContentPage
+public sealed class PluginsPage : ContentView
 {
     private readonly ShellModel _shell;
     private readonly Func<IReadOnlyList<PluginRow>> _rows;
@@ -100,7 +107,6 @@ public sealed class PluginsPage : ContentPage
         _rows = rows;
         _palette = new ShellPalette(shell.Theme, shell.Options);
         var p = _palette;
-        Title = "Plug-ins";
         BackgroundColor = p.Ground;
         _filterText = p.Input("Filter by name or registry", 32);
         _filterText.WidthRequest = 320;
@@ -133,7 +139,7 @@ public sealed class PluginsPage : ContentPage
         body.Add(p.Line(vertical: true), 1, 0);
         body.Add(side, 2, 0);
         var page = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(new GridLength(1)), new RowDefinition(GridLength.Star)] };
-        page.Add(PageParts.Header(p, "Plug-ins", () => Navigation.PopModalAsync()), 0, 0);
+        page.Add(PageParts.Header(p, "Plug-ins", () => PageParts.Close(shell, ShellPageIds.Plugins)), 0, 0);
         page.Add(p.Line(), 0, 1);
         page.Add(body, 0, 2);
         Content = page;
@@ -327,27 +333,23 @@ public sealed class PluginsPage : ContentPage
 /// (Idrak's <see cref="ModelSources"/>, in order), the device and what it measured, and the limits (the provider's
 /// settings, Idrak's ComputeResources). With no provider it says so, and every section stays empty rather than guessed.
 /// </summary>
-public sealed class ModelsPage : ContentPage
+public sealed class ModelsPage : ContentView, IDisposable
 {
     private static readonly string[] Sections = ["Editor", "C# and Roslyn", "Models and devices", "Completion", "Agent and sandbox", "Plug-ins", "Appearance"];
     private readonly ShellModel _shell;
-    private readonly Func<Task> _showSettings;
     private readonly ShellPalette _palette;
     private readonly VerticalStackLayout _main = new() { Spacing = 24, Padding = new Thickness(32, 24) };
     private readonly VerticalStackLayout _side = new() { Spacing = 16, Padding = new Thickness(24) };
     private readonly Label _notice;
     private IModelProvider? _provider;
 
-    /// <summary>The page in <paramref name="shell"/>'s theme; a section other than this one opens the settings page through <paramref name="showSettings"/>.</summary>
-    public ModelsPage(ShellModel shell, Func<Task> showSettings)
+    /// <summary>The page in <paramref name="shell"/>'s theme, a tab of the editor area; a section other than this one opens the settings tab.</summary>
+    public ModelsPage(ShellModel shell)
     {
         ArgumentNullException.ThrowIfNull(shell);
-        ArgumentNullException.ThrowIfNull(showSettings);
         _shell = shell;
-        _showSettings = showSettings;
         _palette = new ShellPalette(shell.Theme, shell.Options);
         var p = _palette;
-        Title = "Models and devices";
         BackgroundColor = p.Ground;
         _notice = p.Label("", p.Secondary, p.SmallSize);
         _notice.LineBreakMode = LineBreakMode.WordWrap;
@@ -383,30 +385,18 @@ public sealed class ModelsPage : ContentPage
             body.ColumnDefinitions[4].Width = narrow ? new GridLength(0) : new GridLength(340);
         };
         var page = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(new GridLength(1)), new RowDefinition(GridLength.Star)] };
-        page.Add(PageParts.Header(p, "Settings › Models and devices", () => Navigation.PopModalAsync()), 0, 0);
+        page.Add(PageParts.Header(p, "Settings › Models and devices", () => PageParts.Close(shell, ShellPageIds.Models)), 0, 0);
         page.Add(p.Line(), 0, 1);
         page.Add(body, 0, 2);
         Content = page;
         _shell.Host.ProgressChanged += OnProgress;
+        Watch();
         Refresh();
     }
 
     /// <inheritdoc />
-    protected override void OnAppearing()
+    public void Dispose()
     {
-        base.OnAppearing();
-        if (ShellText.ModelStatus() is { } found && !ReferenceEquals(found.Provider, _provider))
-        {
-            _provider = found.Provider;
-            _provider.StatusChanged += OnStatusChanged;
-            Refresh();
-        }
-    }
-
-    /// <inheritdoc />
-    protected override void OnDisappearing()
-    {
-        base.OnDisappearing();
         if (_provider is not null)
         {
             _provider.StatusChanged -= OnStatusChanged;
@@ -416,20 +406,35 @@ public sealed class ModelsPage : ContentPage
         _shell.Host.ProgressChanged -= OnProgress;
     }
 
+    // The provider whose status the page shows (the first one; a plug-in that registered later is taken on the next refresh).
+    private void Watch()
+    {
+        if (ShellText.ModelStatus() is { } found && !ReferenceEquals(found.Provider, _provider))
+        {
+            if (_provider is not null)
+            {
+                _provider.StatusChanged -= OnStatusChanged;
+            }
+
+            _provider = found.Provider;
+            _provider.StatusChanged += OnStatusChanged;
+        }
+    }
+
     private void OnStatusChanged(object? sender, EventArgs e) => Dispatcher.Dispatch(Refresh);
 
     private void OnProgress(object? sender, EditorProgressItem e) => Dispatcher.Dispatch(Refresh);
 
     private async Task OpenSectionAsync(string section)
     {
-        await Navigation.PopModalAsync();
         _ = section;
-        await _showSettings();
+        await _shell.Host.ExecuteCommandAsync(ShellCommandIds.Settings);
     }
 
     private void Refresh()
     {
         var p = _palette;
+        Watch();
         var found = ShellText.ModelStatus();
         var status = found?.Status;
         _main.Children.Clear();
@@ -516,6 +521,17 @@ public sealed class ModelsPage : ContentPage
             },
         };
         _main.Children.Add(Section("How a name is resolved", resolved));
+        if (status is { Loaded.Count: > 0 })
+        {
+            // What the right-hand "Models and devices" panel listed before phase U2.
+            var loaded = new VerticalStackLayout { Spacing = 6 };
+            foreach (var model in status.Loaded)
+            {
+                loaded.Children.Add(Mono(model, p.Text));
+            }
+
+            _main.Children.Add(Section("Loaded now", loaded));
+        }
 
         // The side: the device and what it measured, then the limits.
         _side.Children.Add(Heading("Device"));

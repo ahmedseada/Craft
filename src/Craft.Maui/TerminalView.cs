@@ -399,7 +399,7 @@ public sealed class TerminalView : ContentView, IDisposable
 /// <summary>
 /// The bottom panel's Terminal tab (phase T): a strip of the open terminals (each its title, ✕ to kill it, the active one
 /// over the accent's line), "+" for a new one, and the active terminal's <see cref="TerminalView"/>; with none open, where
-/// the next one starts and how to open it.
+/// the next one starts and how to open it. A plug-in's read-only output tab (phase U2: "Agent sandbox") is marked so.
 /// </summary>
 public sealed class TerminalPanelView : ContentView, IDisposable
 {
@@ -460,8 +460,12 @@ public sealed class TerminalPanelView : ContentView, IDisposable
         foreach (var terminal in _manager.Terminals)
         {
             bool active = ReferenceEquals(terminal, _manager.ActiveTerminal);
-            string title = terminal.HasExited ? $"{terminal.Title} (ended {terminal.ExitCode})" : terminal.Title;
+            string title = terminal.IsReadOnly ? terminal.Title + " · read-only" : terminal.HasExited ? $"{terminal.Title} (ended {terminal.ExitCode})" : terminal.Title;
             var label = _palette.Label(title, active ? _palette.Text : _palette.Secondary, _palette.CaptionSize);
+            if (terminal.IsReadOnly)
+            {
+                ToolTipProperties.SetText(label, "A plug-in's output: nothing typed here runs (✕ closes it; it opens again with the next output)");
+            }
             var close = _palette.Label("✕", _palette.Secondary, _palette.CaptionSize);
             var row = new HorizontalStackLayout { Spacing = 6, Children = { label, close } };
             var cell = new Grid { RowDefinitions = [new RowDefinition(GridLength.Star), new RowDefinition(new GridLength(1))] };

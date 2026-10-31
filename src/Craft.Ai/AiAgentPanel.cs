@@ -144,7 +144,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         RaiseAnswered();
         var proposal = new ProposedEdits(edits, change.IsNew ? $"Agent: new file {change.Relative}" : $"Agent: {change.Relative}")
         {
-            Placement = change.IsNew ? $"a new file: save it as {change.Relative}" : "the agent's copy of the file against the editor's text, line by line",
+            Placement = change.IsNew ? $"a new file: accepting it creates {change.Relative}" : "the agent's copy of the file against the editor's text, line by line",
             Origin = "Agent · " + (Subtitle ?? "the model"),
         };
         bool accepted = await Host.ProposeAsync(document, proposal, cancellationToken).ConfigureAwait(true);
@@ -153,12 +153,12 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         {
             Judge(AiVerdicts.Accepted);
             string settled = now.GetText(0, now.Length);
-            var left = await Task.Run(() =>
+            var rest = await Task.Run(() =>
             {
                 copy.Settle(change.Path, settled);
                 return copy.ChangeOf(change.Relative);
             }, CancellationToken.None).ConfigureAwait(true);
-            if (left is { } rest)
+            if (rest is not null)
             {
                 _changes[change.Relative] = rest;      // some hunks only: the rest stays to review
             }
@@ -167,7 +167,24 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
                 _changes.Remove(change.Relative);
             }
 
-            Log(new ConversationEntry(ConversationRole.Note, $"{change.Relative}: accepted into the editor (one undo step){(change.IsNew ? "; save it to create the file" : "")}."));
+            // A new file the user accepted whole is the file the user agreed to create: it is written through the host, so
+            // the tab takes its name and language and the folder tree shows it at once (phase U2). An existing file's
+            // accepted change stays in the editor, unsaved, as any edit.
+            bool created = false;
+            if (change.IsNew && rest is null && document.Document.FilePath is null)
+            {
+                try
+                {
+                    await Host.SaveAsync(document, change.Path, cancellationToken).ConfigureAwait(true);
+                    created = true;
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+                {
+                    Log(new ConversationEntry(ConversationRole.Error, $"{change.Relative}: accepted, but the file could not be created ({error.Message}); save it from the editor."));
+                }
+            }
+
+            Log(new ConversationEntry(ConversationRole.Note, $"{change.Relative}: accepted into the editor (one undo step){(created ? "; the file is created" : change.IsNew ? "; save it to create the file" : "")}."));
         }
 
         ShowChanges();

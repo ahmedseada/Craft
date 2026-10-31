@@ -76,8 +76,11 @@ public static class ShellCommandIds
     /// <summary>The bottom panel's Idrak telemetry tab (the measures recorded through the host).</summary>
     public const string ShowTelemetry = "craft.showTelemetry";
 
-    /// <summary>The Models and devices page.</summary>
+    /// <summary>The Models and devices page (a tab of the editor area).</summary>
     public const string Models = "craft.models";
+
+    /// <summary>The prefix of the command each plug-in panel's rail item runs: shows that panel as the side view ("craft.sideView." + its id).</summary>
+    public const string SideViewPrefix = "craft.sideView.";
 
     /// <summary>The plug-in guide (where docs/plugins.md is).</summary>
     public const string PluginGuide = "craft.pluginGuide";
@@ -115,9 +118,6 @@ public static class ShellViewNames
 
     /// <summary>The bottom panel's Idrak telemetry tab.</summary>
     public const string Telemetry = "panel.telemetry";
-
-    /// <summary>The Models and devices page.</summary>
-    public const string Models = "models";
 }
 
 /// <summary>
@@ -126,7 +126,7 @@ public static class ShellViewNames
 /// key bindings in <see cref="EditorKeyBindings"/> (<see cref="ShellCommandIds"/>), registered on the same public
 /// contracts a plug-in uses, so they show in the command palette, a user's <c>CRAFT_KEY_BINDINGS</c> can rebind them, and
 /// a plug-in can run them. What needs the user goes through <see cref="IFileDialogs"/> (the platform's) and
-/// <see cref="IShellUi"/> (the prompts and pages). Disposing it takes its commands and bindings back and closes the tabs.
+/// <see cref="IShellUi"/> (the prompts); its pages (settings, Models, Plug-ins) open as tabs of the editor area (<see cref="Pages"/>). Disposing it takes its commands and bindings back and closes the tabs.
 /// Used on the UI thread.
 /// </summary>
 public sealed class ShellModel : IDisposable
@@ -144,6 +144,8 @@ public sealed class ShellModel : IDisposable
     private readonly List<KeyBinding> _bindings = [];
     private readonly List<(string Menu, string Command)> _menuItems = [];
     private readonly List<string> _railItems = [];
+    private readonly Dictionary<string, (string Command, bool Rail)> _sideViews = new(StringComparer.Ordinal);
+    private FolderTreeWatch? _treeWatch;
     private string _optionsSignature;
     private bool _disposed;
     private IDisposable? _memoryWatch;
@@ -177,6 +179,15 @@ public sealed class ShellModel : IDisposable
         Theme = ThemeOf(Options);
         Tabs = new DocumentTabs(host);
         Layout = new ShellLayout(Options);
+        Pages = new PageTabs();
+        Panels = new PanelLayout(settings, Options, (message, error) => host.Dispatch(() => host.Log(EditorLogLevel.Warning, message, error)));
+        Layout.WideTreeOpen = Panels.IsOpen(ShellPanel.Explorer);
+        Panels.Changed += (_, _) => Layout.WideTreeOpen = Panels.IsOpen(ShellPanel.Explorer);
+        // A document chosen or opened shows in the editor area again (a page tab stays open beside it).
+        Tabs.ActiveChanged += (_, _) => Pages.ShowDocument();
+        host.DocumentSaved += OnDocumentSaved;
+        host.PanelsChanged += OnPanelsChanged;
+        host.PanelShowRequested += OnPanelShowRequested;
         // A plug-in's IEditorHost.OpenDocumentAsync (the agent's changed files): the file's tab, or a new document for a path
         // with no file yet (the user saves it there; the plug-in's proposal fills it).
         host.OpenFile = async (path, token) => File.Exists(path) ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument : NewFile().HostDocument;
@@ -231,6 +242,18 @@ public sealed class ShellModel : IDisposable
     /// <summary>The layout and what shows in it.</summary>
     public ShellLayout Layout { get; }
 
+    /// <summary>The pages open as tabs of the editor area (settings, Models and devices, Plug-ins).</summary>
+    public PageTabs Pages { get; }
+
+    /// <summary>The panels' open states and sizes (kept per workspace) and the rail's side view.</summary>
+    public PanelLayout Panels { get; }
+
+    /// <summary>What keeps the tree following the disk while a folder is open, or null (none, or <c>CRAFT_WORKSPACE_WATCHER</c> is "none" or not registered).</summary>
+    public FolderTreeWatch? TreeWatch => _treeWatch;
+
+    /// <summary>The command the rail item of plug-in panel <paramref name="panelId"/> runs (it shows the panel as the side view).</summary>
+    public static string SideViewCommand(string panelId) => ShellCommandIds.SideViewPrefix + panelId;
+
     /// <summary>The open folder, or null.</summary>
     public Workspace? Workspace { get; private set; }
 
@@ -284,6 +307,7 @@ public sealed class ShellModel : IDisposable
             return false;
         }
 
+        StopWatching();
         Workspace?.Dispose();
         Settings.Workspace = SettingsFile.Load(CraftSettings.WorkspaceFilePath(workspace.Root));
         ReloadOptions();
@@ -293,6 +317,7 @@ public sealed class ShellModel : IDisposable
         Workspace = new Workspace(workspace.Root, Options);
         Host.WorkspaceFolder = Workspace.Root;
         Tree = new FolderTree(Workspace);
+        Watch();
         Recent.Add(Workspace.Root, RecentKind.Folder);
         Layout.HasFolder = true;
         Branch = GitBranch.Read(Workspace.Root);
@@ -308,6 +333,7 @@ public sealed class ShellModel : IDisposable
             return;
         }
 
+        StopWatching();
         Workspace.Dispose();
         Workspace = null;
         Host.WorkspaceFolder = null;
@@ -420,10 +446,16 @@ public sealed class ShellModel : IDisposable
 
     /// <summary>
     /// Closes <paramref name="tab"/> (the active one when null), first asking what to do with its unsaved changes: save
-    /// (a new document asks where), discard, or keep it open. True when it closed.
+    /// (a new document asks where), discard, or keep it open. True when it closed. With no tab given while a page shows,
+    /// the page's tab closes.
     /// </summary>
     public async Task<bool> CloseTabAsync(DocumentTab? tab = null, CancellationToken cancellationToken = default)
     {
+        if (tab is null && Pages.Active is { } page)
+        {
+            return Pages.Close(page.Id);
+        }
+
         tab ??= Tabs.Active;
         if (tab is null)
         {
@@ -541,6 +573,7 @@ public sealed class ShellModel : IDisposable
 
         Recent.Limit = options.RecentLimit;
         Layout.Options = options;
+        Panels.Load(options);
         OptionsChanged?.Invoke(this, EventArgs.Empty);
         if (themeChanged)
         {
@@ -584,9 +617,122 @@ public sealed class ShellModel : IDisposable
             EditorRailItems.Unregister(rail);
         }
 
+        foreach (var (command, rail) in _sideViews.Values)
+        {
+            EditorCommands.Unregister(command);
+            if (rail)
+            {
+                EditorRailItems.Unregister(command[ShellCommandIds.SideViewPrefix.Length..]);
+            }
+        }
+
+        _sideViews.Clear();
+        Host.DocumentSaved -= OnDocumentSaved;
+        Host.PanelsChanged -= OnPanelsChanged;
+        Host.PanelShowRequested -= OnPanelShowRequested;
+        StopWatching();
         _memoryWatch?.Dispose();
+        Pages.CloseAll();
         Tabs.Dispose();
         Workspace?.Dispose();
+    }
+
+    // The tree follows the disk (phase U2): the options' watcher; an unknown one is an options problem, never a crash.
+    private void Watch()
+    {
+        StopWatching();
+        if (Tree is not { } tree)
+        {
+            return;
+        }
+
+        try
+        {
+            _treeWatch = new FolderTreeWatch(tree, FolderWatchers.Get(Options.WorkspaceWatcher), Options.WorkspaceWatchMilliseconds, Host.Dispatch);
+        }
+        catch (NotRegisteredException e)
+        {
+            OptionsProblems = [.. OptionsProblems, $"CRAFT_WORKSPACE_WATCHER: {e.Message}"];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or PlatformNotSupportedException)
+        {
+            Host.Log(EditorLogLevel.Warning, $"The folder tree does not follow the disk ({e.Message}); Refresh reads it again.", e);
+        }
+    }
+
+    private void StopWatching()
+    {
+        _treeWatch?.Dispose();
+        _treeWatch = null;
+    }
+
+    // Any save through the host (the editor's, a plug-in's accepted new file): the tree shows the file at once, and the
+    // tab takes the language of the file's name.
+    private void OnDocumentSaved(object? sender, EditorDocumentEventArgs e)
+    {
+        if (e.Document.Document.FilePath is not { } path)
+        {
+            return;
+        }
+
+        _treeWatch?.Touch(path);
+        if (Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && EditorLanguages.ForFile(path) is var language && !ReferenceEquals(language, tab.Language))
+        {
+            Tabs.SetLanguage(tab, language);
+        }
+    }
+
+    // Each plug-in panel that is not a conversation is a side view of the rail (phase U2: there is no fixed column of
+    // panels): a command shows it, and a rail item runs that command unless the plug-in registered a rail item of the
+    // panel's id itself.
+    private void OnPanelsChanged(object? sender, EventArgs e)
+    {
+        var present = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var panel in Host.Panels)
+        {
+            if (panel is IConversationPanel)
+            {
+                continue;
+            }
+
+            present.Add(panel.Id);
+            if (_sideViews.ContainsKey(panel.Id))
+            {
+                continue;
+            }
+
+            string id = panel.Id;
+            string command = SideViewCommand(id);
+            EditorCommands.Register(new EditorCommand(command, $"View: {panel.Title}", (_, _) => Panels.ToggleSide(id), null, $"The plug-in panel '{panel.Title}' as the side view"));
+            bool rail = EditorRailItems.Find(id) is null;
+            if (rail)
+            {
+                EditorRailItems.Register(new RailItem(id, panel.Title, command, RailIcons.Panel, 20));
+            }
+
+            _sideViews[id] = (command, rail);
+        }
+
+        foreach (var gone in _sideViews.Keys.Where(k => !present.Contains(k)).ToArray())
+        {
+            var (command, rail) = _sideViews[gone];
+            EditorCommands.Unregister(command);
+            if (rail)
+            {
+                EditorRailItems.Unregister(gone);
+            }
+
+            _sideViews.Remove(gone);
+            Panels.Forget(gone);
+        }
+    }
+
+    private void OnPanelShowRequested(object? sender, string panelId)
+    {
+        if (_sideViews.ContainsKey(panelId) && !Layout.IsNarrow)
+        {
+            _ = Panels.ShowSide(panelId);
+        }
     }
 
     private static ITheme ThemeOf(CraftOptions options) => Accented(EditorThemes.Find(options.Theme) ?? EditorThemes.Get(EditorThemes.Dark), options);
@@ -666,20 +812,20 @@ public sealed class ShellModel : IDisposable
         Command(ShellCommandIds.CloseFolder, "File: Close the folder", (_, _) => { CloseFolder(); return Task.CompletedTask; }, _ => Workspace is not null, null);
         Command(ShellCommandIds.Save, "File: Save", (_, token) => SaveAsync(null, token), _ => Tabs.Active is not null, "Ctrl+S");
         Command(ShellCommandIds.SaveAs, "File: Save as", (_, token) => SaveAsAsync(null, token), _ => Tabs.Active is not null, "Ctrl+Shift+S");
-        Command(ShellCommandIds.CloseTab, "Tab: Close", (_, token) => CloseTabAsync(null, token), _ => Tabs.Active is not null, "Ctrl+W");
+        Command(ShellCommandIds.CloseTab, "Tab: Close", (_, token) => CloseTabAsync(null, token), _ => Tabs.Active is not null || Pages.Active is not null, "Ctrl+W");
         Command(ShellCommandIds.NextTab, "Tab: Next", (_, _) => { Tabs.Next(); return Task.CompletedTask; }, _ => Tabs.Tabs.Count > 1, "Ctrl+Tab");
         Command(ShellCommandIds.PreviousTab, "Tab: Previous", (_, _) => { Tabs.Previous(); return Task.CompletedTask; }, _ => Tabs.Tabs.Count > 1, "Ctrl+Shift+Tab");
-        Command(ShellCommandIds.Settings, "Settings: Open", (_, token) => _ui.ShowSettingsAsync(token), null, "Ctrl+Comma");
-        Command(ShellCommandIds.ToggleTree, "View: Show or hide the folder tree", (_, _) => { Layout.ToggleTree(); return Task.CompletedTask; }, _ => Workspace is not null, "Ctrl+B");
+        Command(ShellCommandIds.Settings, "Settings: Open", (_, _) => { Pages.Open(ShellPageIds.Settings, "Settings"); return Task.CompletedTask; }, null, "Ctrl+Comma");
+        Command(ShellCommandIds.ToggleTree, "View: Show or hide the folder tree", (_, _) => ToggleTree(), _ => Workspace is not null || !Layout.IsNarrow, "Ctrl+B");
         Command(ShellCommandIds.RefreshTree, "View: Refresh the folder tree", (_, _) => { Tree?.Refresh(); return Task.CompletedTask; }, _ => Tree is not null, null);
         Command(ShellCommandIds.ToggleTheme, "View: Switch light and dark", (_, _) => { ToggleTheme(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.QuickOpen, "Go: Open a file by name ('>' for a command)", (_, _) => View(ShellViewNames.QuickOpen), null, "Ctrl+P");
-        Command(ShellCommandIds.TogglePanel, "View: Show or hide the bottom panel", (_, _) => View(ShellViewNames.TogglePanel), null, "Ctrl+J");
+        Command(ShellCommandIds.TogglePanel, "View: Show or hide the bottom panel", (_, _) => { _ = Panels.ToggleAsync(ShellPanel.Bottom); return View(ShellViewNames.TogglePanel); }, null, "Ctrl+J");
         Command(ShellCommandIds.ShowProblems, "View: Problems", (_, _) => View(ShellViewNames.Problems), null, null);
         Command(ShellCommandIds.ShowTerminal, "View: Terminal", (_, _) => View(ShellViewNames.Terminal), null, null);
         Command(ShellCommandIds.ShowOutput, "View: Output", (_, _) => View(ShellViewNames.Output), null, null);
         Command(ShellCommandIds.ShowTelemetry, "View: Idrak telemetry", (_, _) => View(ShellViewNames.Telemetry), null, null);
-        Command(ShellCommandIds.Models, "Settings: Models and devices", (_, _) => View(ShellViewNames.Models), null, null);
+        Command(ShellCommandIds.Models, "Settings: Models and devices", (_, _) => { Pages.Open(ShellPageIds.Models, "Models and devices"); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.PluginGuide, "Help: Writing a plug-in", (_, _) => _ui.ShowMessageAsync("Writing a Craft plug-in",
             "The guide is docs/plugins.md in Craft's repository; the template is templates/craft-plugin (dotnet new craft-plugin). " +
             "A plug-in adds commands, key bindings, menu items (EditorMenus), rail items (EditorRailItems), status items, panels, settings, languages and themes."), null, null);
@@ -720,6 +866,20 @@ public sealed class ShellModel : IDisposable
         Rail(new RailItem("craft.agent", "Agent", ShellCommandIds.Agent, RailIcons.Agent, 30));
         Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
+    }
+
+    // Ctrl+B and the rail's Explorer: the narrow layout's tree in the editor's place; the wide layout's side view (the
+    // explorer shown when another view is, else opened or closed).
+    private Task ToggleTree()
+    {
+        if (Layout.IsNarrow)
+        {
+            Layout.ToggleTree();
+            return Task.CompletedTask;
+        }
+
+        _ = Panels.ToggleSide(PanelLayout.ExplorerView);
+        return Task.CompletedTask;
     }
 
     private Task View(string name)

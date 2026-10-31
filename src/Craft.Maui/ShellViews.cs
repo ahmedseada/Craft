@@ -21,18 +21,22 @@ public static class ThemeColors
 /// <param name="Text">The marker and the name.</param>
 /// <param name="Indent">The row's indent.</param>
 /// <param name="Color">The text's colour.</param>
-/// <param name="Index">The row's index in the tree.</param>
+/// <param name="Path">The entry's full path (a row is found by it, so rows after an inserted one stay the same items).</param>
 /// <param name="Background">The row's fill (the active file's is the selection's).</param>
 /// <param name="FontFamily">The interface's font.</param>
-public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, int Index, Color Background, string? FontFamily);
+public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, Color Background, string? FontFamily);
 
 /// <summary>
 /// The folder tree (<see cref="FolderTree"/>) as a virtualized list (only the rows on screen are made): a folder's row
-/// opens or closes it, a file's row raises <see cref="FileActivated"/>.
+/// opens or closes it, a file's row raises <see cref="FileActivated"/>. A change replaces only the rows that differ
+/// (<see cref="RowChange"/>: a folder opened inserts its children, the active file moves two fills, a file the disk added
+/// inserts one row), so the list keeps its scroll and the rows on screen are not made again (the owner's note 9); the
+/// active file's row is scrolled into view when it changes.
 /// </summary>
 public sealed class FolderTreeView : ContentView
 {
     private readonly CollectionView _list;
+    private readonly System.Collections.ObjectModel.ObservableCollection<FolderTreeItem> _items = [];
     private FolderTree? _tree;
     private Color _textColor = Colors.Gray;
     private float _indent = 14;
@@ -47,6 +51,7 @@ public sealed class FolderTreeView : ContentView
         {
             SelectionMode = SelectionMode.Single,
             ItemTemplate = new DataTemplate(MakeRow),
+            ItemsSource = _items,
         };
         _list.SelectionChanged += OnSelectionChanged;
         Content = _list;
@@ -127,6 +132,7 @@ public sealed class FolderTreeView : ContentView
             {
                 _activePath = value;
                 Refresh();
+                Reveal();
             }
         }
     }
@@ -149,9 +155,9 @@ public sealed class FolderTreeView : ContentView
         var openInTerminal = new MenuFlyoutItem { Text = "Open in terminal" };
         openInTerminal.Clicked += (_, _) =>
         {
-            if (row.BindingContext is FolderTreeItem item && _tree is { } tree && item.Index < tree.Rows.Count)
+            if (row.BindingContext is FolderTreeItem item && _tree is { } tree && tree.IndexOf(item.Path) is >= 0 and var index)
             {
-                var entry = tree.Rows[item.Index].Entry;
+                var entry = tree.Rows[index].Entry;
                 var folder = entry.IsFolder ? entry.FullPath : System.IO.Path.GetDirectoryName(entry.FullPath);
                 if (!string.IsNullOrEmpty(folder))
                 {
@@ -167,24 +173,60 @@ public sealed class FolderTreeView : ContentView
 
     private void Refresh()
     {
-        if (_tree is null)
-        {
-            _list.ItemsSource = null;
-            return;
-        }
-
-        var rows = _tree.Rows;
+        var rows = _tree?.Rows ?? [];
         var items = new FolderTreeItem[rows.Count];
         for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
             var marker = row.Entry.IsFolder ? row.IsExpanded ? "▾ " : "▸ " : "   ";
             bool active = !row.Entry.IsFolder && string.Equals(row.Entry.FullPath, _activePath, StringComparison.OrdinalIgnoreCase);
-            items[i] = new FolderTreeItem(marker + row.Entry.Name, new Thickness(14 + (row.Depth * _indent), 0, 14, 0), _textColor, i,
+            items[i] = new FolderTreeItem(marker + row.Entry.Name, new Thickness(14 + (row.Depth * _indent), 0, 14, 0), _textColor, row.Entry.FullPath,
                 active ? _selected : Colors.Transparent, _fontFamily);
         }
 
-        _list.ItemsSource = items;
+        // Only the run that differs is replaced; the rows before and after it stay the same items on screen.
+        var change = RowChange.Between(_items, items);
+        if (change.IsEmpty)
+        {
+            return;
+        }
+
+        int common = Math.Min(change.Removed, change.Inserted);
+        for (int i = 0; i < common; i++)
+        {
+            if (!_items[change.Start + i].Equals(items[change.Start + i]))
+            {
+                _items[change.Start + i] = items[change.Start + i];   // the active file moved: its old and new rows only
+            }
+        }
+
+        for (int i = change.Removed - 1; i >= common; i--)
+        {
+            _items.RemoveAt(change.Start + i);
+        }
+
+        for (int i = common; i < change.Inserted; i++)
+        {
+            _items.Insert(change.Start + i, items[change.Start + i]);
+        }
+    }
+
+    // The active file's row into view (only when it is shown: a file outside the tree scrolls nothing).
+    private void Reveal()
+    {
+        if (_activePath is null)
+        {
+            return;
+        }
+
+        foreach (var item in _items)
+        {
+            if (string.Equals(item.Path, _activePath, StringComparison.OrdinalIgnoreCase))
+            {
+                _list.ScrollTo(item, position: ScrollToPosition.MakeVisible, animate: false);
+                return;
+            }
+        }
     }
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -198,15 +240,15 @@ public sealed class FolderTreeView : ContentView
         Dispatcher.Dispatch(() =>
         {
             _list.SelectedItem = null;
-            if (_tree is not { } tree || item.Index >= tree.Rows.Count)
+            if (_tree is not { } tree || tree.IndexOf(item.Path) is not (>= 0 and var index))
             {
                 return;
             }
 
-            var row = tree.Rows[item.Index];
+            var row = tree.Rows[index];
             if (row.Entry.IsFolder)
             {
-                tree.Toggle(item.Index);
+                tree.Toggle(index);
             }
             else
             {
@@ -221,22 +263,31 @@ public sealed class FolderTreeView : ContentView
 /// the active tab on the surface under the accent's line, each its title, a dot when it has unsaved changes, and a close
 /// button; in the <see cref="Compact"/> (narrow) layout one switcher of touch targets: previous, the active tab's title and
 /// place (which asks for the list), next, close. A click activates; a close raises <see cref="CloseRequested"/>, so the
-/// shell asks about unsaved changes. A tab is redrawn only when its title or dirty marker changes.
+/// shell asks about unsaved changes. A tab is redrawn only when its title or dirty marker changes. Phase U2: the pages
+/// open as tabs (<see cref="PageTabs"/>: settings, Models and devices, Plug-ins) follow the documents' tabs, each with its
+/// close button; a page shown makes its tab the active one, a document's tab clicked shows the document again.
 /// </summary>
 public sealed class TabStripView : ContentView, IDisposable
 {
     private readonly DocumentTabs _tabs;
+    private readonly PageTabs? _pages;
     private readonly HorizontalStackLayout _strip = new() { Spacing = 0 };
     private readonly ScrollView _scroll;
     private readonly Dictionary<DocumentTab, (Label Title, Ellipse Dot)> _titles = [];
     private bool _compact;
     private ShellPalette? _palette;
 
-    /// <summary>The strip of <paramref name="tabs"/>.</summary>
-    public TabStripView(DocumentTabs tabs)
+    /// <summary>The strip of <paramref name="tabs"/>, and of <paramref name="pages"/> when given.</summary>
+    public TabStripView(DocumentTabs tabs, PageTabs? pages = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
         _tabs = tabs;
+        _pages = pages;
+        if (pages is not null)
+        {
+            pages.Changed += OnTabsChanged;
+        }
+
         _scroll = new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Default };
         Content = _scroll;
         tabs.TabsChanged += OnTabsChanged;
@@ -286,6 +337,10 @@ public sealed class TabStripView : ContentView, IDisposable
         _tabs.TabsChanged -= OnTabsChanged;
         _tabs.ActiveChanged -= OnTabsChanged;
         _tabs.TabChanged -= OnTabChanged;
+        if (_pages is not null)
+        {
+            _pages.Changed -= OnTabsChanged;
+        }
     }
 
     private void OnTabsChanged(object? sender, EventArgs e) => Rebuild();
@@ -307,7 +362,8 @@ public sealed class TabStripView : ContentView, IDisposable
     {
         _strip.Children.Clear();
         _titles.Clear();
-        IsVisible = _tabs.Tabs.Count > 0;
+        var page = _pages?.Active;
+        IsVisible = _tabs.Tabs.Count > 0 || _pages is { Tabs.Count: > 0 };
         if (_palette is not { } palette)
         {
             return;
@@ -319,6 +375,23 @@ public sealed class TabStripView : ContentView, IDisposable
             double size = Math.Max(44, palette.Options.TouchTarget);
             HeightRequest = size;
             var active = _tabs.Active;
+            if (page is not null)
+            {
+                // A page in the editor's place: its title, back to the document, and close.
+                var back = palette.Flat("‹", palette.Text, size, palette.FontSize + 4);
+                back.WidthRequest = size;
+                back.Clicked += (_, _) => _pages!.ShowDocument();
+                var pageTitle = palette.Flat(page.Title, palette.Text, size);
+                pageTitle.BackgroundColor = palette.Surface;
+                var closePage = palette.Flat("×", palette.Text, size, palette.FontSize + 4);
+                closePage.WidthRequest = size;
+                closePage.Clicked += (_, _) => _pages!.Close(page.Id);
+                _strip.Children.Add(back);
+                _strip.Children.Add(pageTitle);
+                _strip.Children.Add(closePage);
+                return;
+            }
+
             var previous = palette.Flat("‹", palette.Text, size, palette.FontSize + 4);
             previous.WidthRequest = size;
             previous.Clicked += (_, _) => _tabs.Previous();
@@ -347,7 +420,7 @@ public sealed class TabStripView : ContentView, IDisposable
         HeightRequest = 36;
         foreach (var tab in _tabs.Tabs)
         {
-            bool isActive = ReferenceEquals(tab, _tabs.Active);
+            bool isActive = page is null && ReferenceEquals(tab, _tabs.Active);
             var title = palette.Label(tab.Title, isActive ? palette.Text : palette.Secondary);
             var dot = new Ellipse { WidthRequest = 8, HeightRequest = 8, Fill = new SolidColorBrush(palette.Text), IsVisible = tab.IsDirty, VerticalOptions = LayoutOptions.Center };
             var close = palette.Flat("×", palette.Secondary, 24, palette.SmallSize);
@@ -356,36 +429,61 @@ public sealed class TabStripView : ContentView, IDisposable
             ToolTipProperties.SetText(close, "Close (Ctrl+W)");
             close.Clicked += (_, _) => CloseRequested?.Invoke(this, tab);
             var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, dot, close } };
-            var cell = new Grid
-            {
-                RowDefinitions = [new RowDefinition(new GridLength(2)), new RowDefinition(GridLength.Star)],
-                ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(new GridLength(1))],
-                BackgroundColor = isActive ? palette.Surface : Colors.Transparent,
-                HeightRequest = 36,
-            };
-            var accentLine = new BoxView { Color = isActive ? palette.Accent : Colors.Transparent };
-            cell.Add(accentLine, 0, 0);
-            Grid.SetColumnSpan(accentLine, 2);
-            cell.Add(row, 0, 1);
-            cell.Add(new BoxView { Color = isActive ? Colors.Transparent : palette.Border }, 1, 1);
-            ToolTipProperties.SetText(cell, tab.FilePath ?? tab.Title);
             var tap = new TapGestureRecognizer();
-            tap.Tapped += (_, _) => _tabs.Activate(tab);
-            cell.GestureRecognizers.Add(tap);
+            tap.Tapped += (_, _) =>
+            {
+                _pages?.ShowDocument();
+                _tabs.Activate(tab);
+            };
             _titles[tab] = (title, dot);
-            _strip.Children.Add(cell);
+            _strip.Children.Add(Cell(palette, row, isActive, tab.FilePath ?? tab.Title, tap));
         }
+
+        foreach (var open in _pages?.Tabs ?? [])
+        {
+            bool isActive = ReferenceEquals(open, page);
+            var title = palette.Label(open.Title, isActive ? palette.Text : palette.Secondary);
+            var close = palette.Flat("×", palette.Secondary, 24, palette.SmallSize);
+            close.WidthRequest = 24;
+            close.Padding = new Thickness(0);
+            ToolTipProperties.SetText(close, "Close (Ctrl+W)");
+            var shown = open;
+            close.Clicked += (_, _) => _pages!.Close(shown.Id);
+            var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, close } };
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += (_, _) => _pages!.Activate(shown);
+            _strip.Children.Add(Cell(palette, row, isActive, open.Title, tap));
+        }
+    }
+
+    // A tab's cell: the accent's line over the active one, on the surface; a border between the others.
+    private static Grid Cell(ShellPalette palette, View row, bool isActive, string tooltip, TapGestureRecognizer tap)
+    {
+        var cell = new Grid
+        {
+            RowDefinitions = [new RowDefinition(new GridLength(2)), new RowDefinition(GridLength.Star)],
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(new GridLength(1))],
+            BackgroundColor = isActive ? palette.Surface : Colors.Transparent,
+            HeightRequest = 36,
+        };
+        var accentLine = new BoxView { Color = isActive ? palette.Accent : Colors.Transparent };
+        cell.Add(accentLine, 0, 0);
+        Grid.SetColumnSpan(accentLine, 2);
+        cell.Add(row, 0, 1);
+        cell.Add(new BoxView { Color = isActive ? Colors.Transparent : palette.Border }, 1, 1);
+        ToolTipProperties.SetText(cell, tooltip);
+        cell.GestureRecognizers.Add(tap);
+        return cell;
     }
 }
 
-/// <summary>The shell's prompts as a page's dialogs (MAUI's, no platform code); the settings page is shown by <paramref name="showSettings"/>.</summary>
-public sealed class MauiShellUi(Page page, Func<Task> showSettings) : IShellUi
+/// <summary>The shell's prompts as a page's dialogs (MAUI's, no platform code); its pages open as tabs (<see cref="PageTabs"/>), not here.</summary>
+public sealed class MauiShellUi(Page page) : IShellUi
 {
     private const string CancelText = "Cancel";
     private const string SaveText = "Save";
     private const string DiscardText = "Don't save";
     private readonly Page _page = page ?? throw new ArgumentNullException(nameof(page));
-    private readonly Func<Task> _showSettings = showSettings ?? throw new ArgumentNullException(nameof(showSettings));
 
     /// <inheritdoc />
     public async Task<UnsavedChoice> AskUnsavedAsync(string title, CancellationToken cancellationToken = default)
@@ -412,9 +510,6 @@ public sealed class MauiShellUi(Page page, Func<Task> showSettings) : IShellUi
         var picked = await _page.DisplayActionSheetAsync(title, CancelText, null, shown);
         return picked is null ? -1 : Array.IndexOf(shown, picked);
     }
-
-    /// <inheritdoc />
-    public Task ShowSettingsAsync(CancellationToken cancellationToken = default) => _showSettings();
 
     /// <inheritdoc />
     public Task ShowMessageAsync(string title, string message) => _page.DisplayAlertAsync(title, message, "OK");

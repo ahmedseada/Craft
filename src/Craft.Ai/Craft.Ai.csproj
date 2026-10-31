@@ -29,6 +29,8 @@
     <ProjectReference Include="..\Craft.Abstractions\Craft.Abstractions.csproj" />
     <PackageReference Include="Idrak.Mcp" Version="$(IdrakVersion)" />
     <PackageReference Include="Idrak.Text" Version="$(IdrakVersion)" />
+    <!-- Idrak.Data adds the Hugging Face model source: a model named by its Hugging Face id resolves and downloads. -->
+    <PackageReference Include="Idrak.Data" Version="$(IdrakVersion)" />
     <!-- The model families the "local" provider can load: Idrak's own plug-in package, registered on the first load
          (the setting idrakPlugins names the packages; empty registers none). No family is written in Craft. -->
     <PackageReference Include="Idrak.Text.Plugins" Version="$(IdrakVersion)" />

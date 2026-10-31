@@ -96,6 +96,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
     private static LocalModel Load(LoadKey key, AiSettings settings)
     {
+        IdrakLibraries.EnsureIncluded();
         RegisterIdrakPlugins(settings);
         ApplyLimits(settings);
         string folder = ModelSource.Resolve(key.Model);

@@ -98,6 +98,7 @@ public sealed class AiPlugin : IEditorPlugin
     public IDisposable Activate(IEditorHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
+        IdrakLibraries.EnsureIncluded();
         var session = new AiSession(host, () => Current = null);
         Current = session;
         return session;

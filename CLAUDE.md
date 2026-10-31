@@ -69,7 +69,7 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   only the projects that changed. 4. Run the targeted filtered tests once with `--no-build`. 5. Merge and push; a merge
   without conflicts gets no build and no tests. 6. Hand the owner one targeted command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it
-  needs with `--no-build`, and no second pull. At most three agents at a time (the owner's limit for Craft), so builds do not compete for the machine.
+  needs with `--no-build`, and no second pull. At most three agents at a time (the owner's limit for Craft and every phase of its plan, including the phases that change Idrak, such as S0 and A0; Idrak's own work outside this plan keeps Idrak's limit of two), so builds do not compete for the machine.
   A slot never idles while work is ready: the moment an agent finishes, the slot takes the next piece of work whose
   inputs are already merged, without waiting for the current wave to end (waves are a dependency order, not a barrier).
 - **No idle background processes.** A session or agent never follows a file (`tail -f`, `less +F`, `watch`) and never

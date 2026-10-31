@@ -281,7 +281,7 @@ the app and registered through `RegisterAll()`, and loading from a folder stays 
 
 ## Phases
 
-Phases are a dependency order, not a barrier. At most three agents work at a time. "Done" is what the owner can check.
+Phases are a dependency order, not a barrier. At most three agents work at a time, in every phase of this plan, including S0 and A0 in Idrak (the owner's exception for Craft's plan; Idrak's own work keeps its limit of two). "Done" is what the owner can check.
 
 | Phase | What | Done when | Needs |
 |---|---|---|---|

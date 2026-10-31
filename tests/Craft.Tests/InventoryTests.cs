@@ -56,14 +56,17 @@ public static class InventoryTests
         {
             ["CRAFT_FONT"] = "Consolas", ["CRAFT_FONT_SIZE"] = "16.5", ["CRAFT_LINE_SPACING"] = "1.5", ["CRAFT_TAB_SIZE"] = "2",
             ["CRAFT_INSERT_SPACES"] = "false", ["CRAFT_THEME"] = "light", ["CRAFT_AUTOSAVE_SECONDS"] = "0", ["CRAFT_UNDO_GROUP_MS"] = "250",
-            ["CRAFT_RECOVERY_FOLDER"] = "rec",
+            ["CRAFT_RECOVERY_FOLDER"] = "rec", ["CRAFT_BUFFER_CHUNK"] = "4096", ["CRAFT_LINE_ENDING"] = "crlf",
+            ["CRAFT_WORKSPACE_IGNORE"] = "bin; out,dist",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
         {
             FontFamily = "Consolas", FontSize = 16.5f, LineSpacing = 1.5f, TabSize = 2, InsertSpaces = false, Theme = "light",
-            AutosaveSeconds = 0, UndoGroupMilliseconds = 250, RecoveryFolder = "rec",
+            AutosaveSeconds = 0, UndoGroupMilliseconds = 250, RecoveryFolder = "rec", BufferChunkCharacters = 4096, NewLine = "\r\n",
+            WorkspaceIgnore = options.WorkspaceIgnore,
         }, options, "options read from every variable");
+        Check.SequenceEqual(["bin", "out", "dist"], options.WorkspaceIgnore, "CRAFT_WORKSPACE_IGNORE split at ';' and ','");
         Check.Equal(values.Count, CraftOptions.Variables.Count, "every variable is listed in CraftOptions.Variables");
         var error = Check.Throws<ArgumentException>(() => CraftOptions.FromVariables(n => n == "CRAFT_TAB_SIZE" ? "wide" : null), "a bad value");
         Check.True(error.Message.Contains("CRAFT_TAB_SIZE", StringComparison.Ordinal), "the error names the variable");

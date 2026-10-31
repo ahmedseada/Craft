@@ -260,6 +260,17 @@ Android out:
   the plug-in folder, the file size above which the semantic layer waits for a click. Each is a Craft option with an
   environment variable (`CRAFT_*`) and a per-workspace `.craft/settings.json`, carried to the settings page.
 
+- **Measured (E1, 2026-10-31, `benches/Craft.Benches -- buffer`, a 4-core x64 Linux container, .NET 10.0.14):** a
+  generated C# file of 100,005 lines (2,676,961 characters) opens in 25.4 ms cold, 10.1 ms warm; the open document holds
+  5.88 MB = 1.10 x the text as UTF-16 (the text, kept once, plus its line index). 10,000 random edits through the
+  document (typing runs, backspaces, newlines, pastes, caret jumps; with undo): first edit 10.0 ms cold (JIT), first 100
+  112 µs mean, warm 2.24 µs mean, 0.70 µs median, 10.7 µs p99, 1,550 B allocated an edit (the path of new tree nodes,
+  the event, the history). `GetLine` warm 0.069 µs on the opened file and 0.265 µs after the edits (many pieces), 0 B a
+  call; 60 visible lines read (`GetLine` + `CopyTo`) 9.4 µs. After the 10,000 edits the document holds 7.03 MB = 1.31 x
+  the text (pieces, the add buffer's chunk, the undo history). Decision taken from the measures: typing that continues
+  the piece before the caret and a deletion at a piece's edge rebuild one path of the tree (no split and join); it took
+  the warm edit from 14.5 µs to 2.24 µs mean and 2,809 to 1,550 B an edit, the random-edit tests unchanged.
+
 ### Tests and benches
 
 - `Craft.Tests` has its own small runner with the same flags as Idrak's (`--progress`, `--failures-only`,

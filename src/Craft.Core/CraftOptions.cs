@@ -45,6 +45,21 @@ public sealed record CraftOptions
     /// <summary>Where recovery copies are kept; null for the user's local application data folder, under "Craft/recovery" (<c>CRAFT_RECOVERY_FOLDER</c>).</summary>
     public string? RecoveryFolder { get; init; }
 
+    /// <summary>The characters of each block a text buffer's add buffer grows by (<c>CRAFT_BUFFER_CHUNK</c>).</summary>
+    public int BufferChunkCharacters { get; init; } = 64 * 1024;
+
+    /// <summary>
+    /// The line break a new document (one with no line break to follow) uses: "\n", "\r\n", or null for the running
+    /// system's (<c>CRAFT_LINE_ENDING</c>: lf, crlf or auto). A file read from disk keeps its own.
+    /// </summary>
+    public string? NewLine { get; init; }
+
+    /// <summary>The folder names a workspace skips when it lists its files, ignoring case (<c>CRAFT_WORKSPACE_IGNORE</c>, separated by ';' or ',').</summary>
+    public IReadOnlyList<string> WorkspaceIgnore { get; init; } = DefaultWorkspaceIgnore;
+
+    /// <summary>The folder names a workspace skips by default.</summary>
+    public static IReadOnlyList<string> DefaultWorkspaceIgnore { get; } = ["bin", "obj", ".git", ".vs", "node_modules", "test-output"];
+
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
     [
@@ -57,6 +72,9 @@ public sealed record CraftOptions
         new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off."),
         new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step."),
         new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept."),
+        new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by."),
+        new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's)."),
+        new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','."),
     ];
 
     /// <summary>
@@ -114,6 +132,27 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_RECOVERY_FOLDER") is { } recovery)
         {
             options = options with { RecoveryFolder = recovery };
+        }
+
+        if (Text(read, "CRAFT_BUFFER_CHUNK") is { } chunk)
+        {
+            options = options with { BufferChunkCharacters = Whole(chunk, "CRAFT_BUFFER_CHUNK", 16, 64 * 1024 * 1024) };
+        }
+
+        if (Text(read, "CRAFT_LINE_ENDING") is { } ending)
+        {
+            options = options with
+            {
+                NewLine = ending.Equals("lf", StringComparison.OrdinalIgnoreCase) ? "\n"
+                    : ending.Equals("crlf", StringComparison.OrdinalIgnoreCase) ? "\r\n"
+                    : ending.Equals("auto", StringComparison.OrdinalIgnoreCase) ? null
+                    : throw new ArgumentException($"CRAFT_LINE_ENDING is '{ending}': it takes lf, crlf or auto.", "CRAFT_LINE_ENDING"),
+            };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_IGNORE") is { } ignore)
+        {
+            options = options with { WorkspaceIgnore = ignore.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
         }
 
         return options;

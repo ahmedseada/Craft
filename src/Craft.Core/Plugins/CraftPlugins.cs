@@ -103,6 +103,44 @@ public static class CraftPlugins
             }
         }
 
+        return Displaced(results);
+    }
+
+    /// <summary>
+    /// The results with each plug-in that loaded but whose own plug-ins a later folder's displaced (Idrak's plug-in
+    /// registry keeps one plug-in per name: registering a second "csharp" unregisters the first) marked not loaded, naming
+    /// the plug-in that took its place, so a lost language is said on the Plug-ins page instead of a silent plain text.
+    /// </summary>
+    [RequiresUnreferencedCode("A plug-in is loaded and its package made by reflection.")]
+    private static List<PluginLoadResult> Displaced(List<PluginLoadResult> results)
+    {
+        for (int i = 0; i < results.Count; i++)
+        {
+            var result = results[i];
+            Assembly? assembly;
+            lock (Gate)
+            {
+                Loaded.TryGetValue(Path.Combine(result.Folder, result.Name + ".dll"), out assembly);
+            }
+
+            if (!result.Loaded || assembly is null || IdrakPlugins.PackageOf(assembly) is not { } package)
+            {
+                continue;
+            }
+
+            var lost = package.All.Where(p => !p.IsRegistered).Select(p =>
+            {
+                var holder = IdrakPlugins.Find(p.Name);
+                return holder is null
+                    ? $"\"{p.Name}\" was unregistered by a plug-in loaded after it"
+                    : $"\"{p.Name}\" was replaced by the plug-in of the same name from {holder.GetType().Assembly.GetName().Name} (registered later; one plug-in per name)";
+            }).ToList();
+            if (lost.Count > 0)
+            {
+                results[i] = Note(result with { Loaded = false, Error = $"loaded, but its plug-in {string.Join("; ", lost)}" });
+            }
+        }
+
         return results;
     }
 

@@ -9,6 +9,12 @@ if (args is ["--probe-plugin", var probed, ..])
     return Craft.Tests.PluginProbe.Run(probed);
 }
 
+// Every pre-installed plug-in, from a plugins root laid out as the app's targets lay it out (the Plugins group's check).
+if (args is ["--probe-installed", var root, ..])
+{
+    return Craft.Tests.PluginProbe.RunInstalled(root);
+}
+
 // Flags (as Idrak's runner): --progress, --failures-only, --failures-file PATH, --filter TEXT (or CRAFT_FILTER), --list.
 var filters = new List<string>(TestRunner.SplitFilter(Environment.GetEnvironmentVariable("CRAFT_FILTER")));
 bool progress = false, failuresOnly = false, list = false;

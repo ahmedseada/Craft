@@ -7,7 +7,6 @@ using Craft.Editor.Abstractions;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
-using Windows.Storage.Pickers;
 using MauiApplication = Microsoft.Maui.Controls.Application;
 using MauiWindow = Microsoft.Maui.Controls.Window;
 using NativeWindow = Microsoft.UI.Xaml.Window;
@@ -21,6 +20,9 @@ namespace Craft.Maui.WinUI;
 /// </summary>
 public sealed class WindowsShellPlatform : IShellPlatform
 {
+    /// <summary>The Windows pieces; the messages' selectable text mapped once (<see cref="SelectableText"/>).</summary>
+    public WindowsShellPlatform() => SelectableText.Configure();
+
     /// <inheritdoc />
     public IFileDialogs FileDialogs { get; } = new WindowsFileDialogs();
 
@@ -170,61 +172,38 @@ public sealed class WindowsShellPlatform : IShellPlatform
 }
 
 /// <summary>
-/// The Windows file dialogs: the Windows App SDK's folder, open and save pickers, owned by the app's window
-/// (<c>InitializeWithWindow</c>, which an unpackaged app needs). The pickers do not run in a process started as
-/// administrator (a Windows limit), and the save picker cannot start in a given folder (it starts where the user last saved).
+/// The Windows file dialogs: the Shell's own folder, open and save dialogs (<see cref="ShellFileDialog"/>), modal to the
+/// app's window, each opening on a real folder (the one asked for, else the user's Documents folder), so "Select folder"
+/// works at once and a new file's save starts in its own folder. Run on the UI thread: the dialog's modal loop keeps the
+/// window painting while it is open.
 /// </summary>
 public sealed class WindowsFileDialogs : IFileDialogs
 {
-    // The save picker needs at least one file type; the suggested name's own comes first.
-    private static readonly string[] SaveTypes = [".cs", ".csx", ".txt", ".md", ".json", ".xml", ".csproj", ".props", ".targets"];
+    /// <inheritdoc />
+    public Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ShellFileDialog.PickFolder(WindowsShellPlatform.MainWindowHandle(), Start(startFolder)));
 
     /// <inheritdoc />
-    public async Task<string?> PickFolderAsync(CancellationToken cancellationToken = default)
-    {
-        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        picker.FileTypeFilter.Add("*");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowsShellPlatform.MainWindowHandle());
-        var folder = await picker.PickSingleFolderAsync();
-        return folder?.Path;
-    }
+    public Task<string?> PickFileAsync(string? startFolder = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ShellFileDialog.PickFile(WindowsShellPlatform.MainWindowHandle(), Start(startFolder)));
 
     /// <inheritdoc />
-    public async Task<string?> PickFileAsync(CancellationToken cancellationToken = default)
-    {
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        picker.FileTypeFilter.Add("*");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowsShellPlatform.MainWindowHandle());
-        var file = await picker.PickSingleFileAsync();
-        return file?.Path;
-    }
-
-    /// <inheritdoc />
-    public async Task<string?> PickSavePathAsync(string suggestedName, string? folder, CancellationToken cancellationToken = default)
+    public Task<string?> PickSavePathAsync(string suggestedName, string? folder, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(suggestedName);
-        var picker = new FileSavePicker
+        return Task.FromResult(ShellFileDialog.PickSave(WindowsShellPlatform.MainWindowHandle(), Start(folder), suggestedName));
+    }
+
+    // The folder asked for when it exists, else the user's Documents folder, else their profile: always a real folder.
+    private static string Start(string? folder)
+    {
+        if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
         {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = Path.GetFileNameWithoutExtension(suggestedName),
-        };
-        var extension = Path.GetExtension(suggestedName);
-        if (extension.Length > 1)
-        {
-            picker.FileTypeChoices.Add(extension.TrimStart('.').ToUpperInvariant() + " file", [extension]);
+            return Path.GetFullPath(folder);
         }
 
-        foreach (var type in SaveTypes)
-        {
-            if (!type.Equals(extension, StringComparison.OrdinalIgnoreCase))
-            {
-                picker.FileTypeChoices.Add(type.TrimStart('.').ToUpperInvariant() + " file", [type]);
-            }
-        }
-
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowsShellPlatform.MainWindowHandle());
-        var file = await picker.PickSaveFileAsync();
-        return file?.Path;
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        return Directory.Exists(documents) ? documents : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     }
 }
 #endif

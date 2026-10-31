@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Runtime.Loader;
 using Craft.Abstractions;
+using Craft.Core;
 using Craft.Core.Plugins;
 using Craft.Editor;
 using Idrak.Abstraction.Devices;
@@ -49,8 +50,40 @@ internal static class PluginProbe
         return 0;
     }
 
+    /// <summary>
+    /// Every plug-in under <paramref name="root"/> (a <c>plugins</c> folder laid out as Craft.App's targets lay it out),
+    /// loaded as the app loads them (<see cref="CraftPlugins.LoadInstalled"/>, in name order, Idrak's libraries shared),
+    /// then activated in a host: one "plugin NAME: LOADED ERROR" line each, then what the registries hold.
+    /// </summary>
+    public static int RunInstalled(string root)
+    {
+        foreach (var result in CraftPlugins.LoadInstalled(new CraftOptions { PluginFolders = [root] }))
+        {
+            Console.WriteLine($"plugin {result.Name}: {result.Loaded} {result.Error}");
+        }
+
+        using var host = new EditorHost(readVariable: _ => null);
+        foreach (var activation in host.RefreshPlugins())
+        {
+            Console.WriteLine($"activation {activation.Name}: {activation.Active} {activation.Error}");
+        }
+
+        Console.WriteLine("language .cs: " + (EditorLanguages.ForFile("a.cs")?.Name ?? "(none)"));
+        Console.WriteLine("language .csx: " + (EditorLanguages.ForFile("a.csx")?.Name ?? "(none)"));
+        Console.WriteLine("editor plugins: " + string.Join(", ", EditorPlugins.Names));
+        Console.WriteLine("tool sets: " + string.Join(", ", EditorToolSets.Names));
+        Console.WriteLine("idrak plugins: " + string.Join(", ", Idrak.Abstraction.Plugins.IdrakPlugins.Names.Order(StringComparer.Ordinal)
+            .Select(n => $"{n}={Idrak.Abstraction.Plugins.IdrakPlugins.Find(n)?.GetType().Assembly.GetName().Name}")));
+        return 0;
+    }
+
     /// <summary>The probe's lines for <paramref name="folder"/>, from a fresh run of this test program.</summary>
-    public static IReadOnlyList<string> RunInFreshProcess(string folder)
+    public static IReadOnlyList<string> RunInFreshProcess(string folder) => RunInFreshProcess("--probe-plugin", folder);
+
+    /// <summary>The probe's lines for the plug-ins under <paramref name="root"/> (<see cref="RunInstalled"/>), from a fresh run of this test program.</summary>
+    public static IReadOnlyList<string> RunInstalledInFreshProcess(string root) => RunInFreshProcess("--probe-installed", root);
+
+    private static List<string> RunInFreshProcess(string mode, string folder)
     {
         var program = Environment.ProcessPath!;
         var start = new ProcessStartInfo(program) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
@@ -59,7 +92,7 @@ internal static class PluginProbe
             start.ArgumentList.Add(typeof(PluginProbe).Assembly.Location);
         }
 
-        start.ArgumentList.Add("--probe-plugin");
+        start.ArgumentList.Add(mode);
         start.ArgumentList.Add(folder);
         using var process = Process.Start(start)!;
         var error = process.StandardError.ReadToEndAsync();

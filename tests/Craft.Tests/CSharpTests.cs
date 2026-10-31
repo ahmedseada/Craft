@@ -633,6 +633,77 @@ public static class PluginTests
         }
     }
 
+    [Test]
+    public static void EveryPreinstalledPluginLoadsFromTheAppsLayout()
+    {
+        // The owner's Windows run: .cs opened as plain text because a later plug-in (the learning plug-in's C# coding
+        // environment, an Idrak plug-in then named "csharp") replaced Craft.CSharp's "csharp" in Idrak's plug-in registry.
+        // Each test of one folder passed; only all of them together, in the app's order, showed it.
+        using var temp = new TempFolder();
+        var root = Path.Combine(temp.Path, "plugins");
+        var names = LayOutPreinstalled(root);
+        var lines = PluginProbe.RunInstalledInFreshProcess(root);
+        string Line(string prefix) => lines.FirstOrDefault(l => l.StartsWith(prefix, StringComparison.Ordinal)) ?? $"(no \"{prefix}\" line in: {string.Join(" | ", lines)})";
+        foreach (var name in names)
+        {
+            Check.Equal($"plugin {name}: True", Line($"plugin {name}:"), $"{name} loads from the app's layout with every other pre-installed plug-in");
+        }
+
+        Check.True(lines.Count(l => l.StartsWith("plugin ", StringComparison.Ordinal)) == names.Count, $"one result per laid-out plug-in ({string.Join(", ", names)})");
+        var failed = lines.Where(l => l.StartsWith("activation ", StringComparison.Ordinal) && !l.Contains(": True", StringComparison.Ordinal)).ToList();
+        Check.True(failed.Count == 0, $"every plug-in starts: {string.Join("; ", failed)}");
+        Check.Equal("language .cs: csharp", Line("language .cs:"), "with every plug-in loaded, .cs still opens as C# (Craft.CSharp's language survives the plug-ins loaded after it)");
+        Check.Equal("language .csx: csharp-script", Line("language .csx:"), "and .csx as a C# script");
+        var idrak = Line("idrak plugins:");
+        Check.True(idrak.Contains("csharp=Craft.CSharp", StringComparison.Ordinal), $"Idrak's plug-in registry holds Craft.CSharp's \"csharp\" ({idrak})");
+        Check.True(idrak.Contains("csharp-coding=Idrak.Reinforcement.Plugins", StringComparison.Ordinal), $"beside the learning plug-in's C# coding environment under its own name ({idrak})");
+        var editor = Line("editor plugins:");
+        foreach (var plugin in (string[])["ai", "tools", "learning", "voice", "placement", "sampler", "sandbox"])
+        {
+            Check.True(editor.Split([':', ','], StringSplitOptions.TrimEntries).Contains(plugin), $"the editor plug-in \"{plugin}\" is registered ({editor})");
+        }
+
+        Check.True(Line("tool sets:").Contains("editor", StringComparison.Ordinal), $"the tools plug-in's set \"editor\" is registered ({Line("tool sets:")})");
+    }
+
+    /// <summary>
+    /// Lays out <paramref name="root"/> as Craft.App's targets lay out <c>plugins\</c> beside the program: Craft.CSharp's
+    /// and Craft.Ai's build output folders, and every <c>plugins/NAME/NAME.csproj</c>'s, each copied whole (its
+    /// subfolders too) to <c>root/NAME/</c>, the host's contracts (Craft.Abstractions, Idrak.Abstraction, Craft.Core) left
+    /// out; the plug-ins' names, in order.
+    /// </summary>
+    internal static IReadOnlyList<string> LayOutPreinstalled(string root)
+    {
+        var testOutput = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var projects = new List<string> { TestRunner.RepositoryPath("src", "Craft.CSharp"), TestRunner.RepositoryPath("src", "Craft.Ai") };
+        projects.AddRange(Directory.GetDirectories(TestRunner.RepositoryPath("plugins")).Where(d => File.Exists(Path.Combine(d, Path.GetFileName(d) + ".csproj"))));
+        var names = new List<string>();
+        foreach (var project in projects)
+        {
+            var name = Path.GetFileName(project);
+            var output = Path.Combine(project, "bin", testOutput.Parent!.Name, testOutput.Name);
+            Check.True(File.Exists(Path.Combine(output, name + ".dll")) && File.Exists(Path.Combine(output, "plugin.json")),
+                $"{name}'s build output, with its plugin.json, is at {output} (the test project builds every pre-installed plug-in first; a new plugins/ project needs its reference there)");
+            foreach (var file in Directory.GetFiles(output, "*", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(output, file);
+                if (relative == Path.GetFileName(relative) && (relative.StartsWith("Craft.Abstractions.", StringComparison.Ordinal)
+                    || relative.StartsWith("Idrak.Abstraction.", StringComparison.Ordinal) || relative.StartsWith("Craft.Core.", StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
+                var target = Path.Combine(root, name, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(file, target);
+            }
+
+            names.Add(name);
+        }
+
+        return names;
+    }
+
     /// <summary>Copies Craft.CSharp's build output (its dll, its deps.json and Roslyn's dlls) into <paramref name="folder"/>.</summary>
     private static void CopyCSharpPlugin(string folder)
     {

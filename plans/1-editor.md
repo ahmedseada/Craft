@@ -1908,6 +1908,43 @@ the owner's machine, not only headless.
 9. **The tree re-renders whole** whenever a file opens: only the rows that changed update, the scroll and the
    expanded folders stay, and navigation is quick (keyboard, type-ahead, reveal the active file).
 
+**Fixed (2026-10-31, the first five)**: items 1, 2, 3, 4 and 8 above, each where it lived, with a headless test.
+- **1, Roslyn: fixed.** Cause: Idrak.Reinforcement.Plugins' C# coding environment (phase R's learning plug-in registers
+  it) was an `IdrakPlugin` named "csharp", Craft.CSharp's name too; Idrak's plug-in registry keeps one plug-in per name
+  and unregisters the earlier, so loading `plugins\Craft.Plugins.Learning\` (after Craft.CSharp, in name order) took C#
+  away. Reproduced here by running Craft.App's own copy targets into a scratch `plugins\` and loading it with
+  `CraftPlugins.LoadInstalled` in a host holding only the app's assemblies: Craft.CSharp loaded, then `.cs` had no
+  language after Learning. Fix in Idrak (`3614c6a`): that plug-in is "csharp-coding" (beside "csharp-language"); in Craft,
+  `LoadInstalled` marks a plug-in whose own plug-ins a later folder displaced as not loaded, naming who took its place (the
+  Plug-ins page and the startup alert say it). Test `Plugins: EveryPreinstalledPluginLoadsFromTheAppsLayout`: every
+  pre-installed plug-in laid out as the app's targets do (its whole output folder, the host's contracts left out), loaded
+  together in a fresh process (`--probe-installed`), each loaded and started, `.cs`/`.csx` C#, the registries present.
+- **2, Save on the agent's new file: fixed.** Causes: a new file the agent proposed opened as a bare untitled tab (the
+  path dropped), so Save went to the save picker; the picker (and any save error outside the caught kinds, such as the
+  encoding one) threw into the command runner, which only logs. Fix: `DocumentTab.SuggestedPath` (`ShellModel.NewFile(path)`,
+  `DocumentTabs.AddFor`/`FindSuggested`): titled by its name, in its language, Save writes it there creating its folders,
+  without asking; a second proposal for it goes to the same tab; Save as starts in its nearest existing folder; a dialog
+  that fails to open, and any failed write, is said in a message. Test `Shell: SaveWritesANewFileWhereItWasMadeFor…`.
+- **3, context and cut replies: fixed.** Causes: the agent panel started a new run, copy and conversation for every
+  message (Idrak's `CodingAgent` could only start one: `CodingAgent.ContinueAsync` added on Idrak `d85b6ab`); the chat
+  kept its history already. The cut text ("you wan", "to h") was mid-word where the model's tokens are whole words: the
+  conversation view made a new label for every streamed piece and swapped it into a stack in a scroll view, which on
+  WinUI kept a view's first size; the generator's own limits (2048/1024 tokens, the model's full context) were not it.
+  Fix: a follow-up continues the run (same copy, its changes and log, the conversation through `ContinueAsync`); Clear,
+  Discard all or another folder start afresh; the view grows the streamed message's text in place; `chatMaxTokens` 2048
+  (was 1024), `chatStops`/`agentStops` new settings (`|` between stops; the template's end of turn always applies); a
+  reply that ends at its limit says so, naming the setting and the context. Tests `AiPlugins: ALongChatReplyArrivesWhole…`
+  (a fake model's 3,001-piece reply arrives whole, the next message carries it) and `AFollowUpContinuesTheAgentsRun…`.
+  To check on the owner's machine with the 7B model: if a reply still stops short, the panel now says whether it was the
+  limit; nothing else ends it but the model's end of turn or Stop.
+- **4, select and copy: fixed.** Every message's text is a `SelectableLabel` (on Windows its TextBlock takes text
+  selection, `Platforms/Windows/SelectableText.cs`), each model message has a Copy button, every code block has Copy.
+- **8, pickers: fixed.** Cause: the Windows App SDK pickers opened on `PickerLocationId.DocumentsLibrary`, a virtual
+  location where "Select folder" stays disabled, and the save picker cannot start in a folder. Fix: the Shell's own
+  `IFileOpenDialog`/`IFileSaveDialog` (`Platforms/Windows/ShellFileDialog.cs`, source-generated COM, trim-safe), opened on
+  a real folder: the workspace (the active file's folder for Open file, the file's own for Save as), else Documents;
+  `IFileDialogs.PickFolderAsync`/`PickFileAsync` take that start folder. They also run in an elevated process.
+
 **Look and feel**
 10. **Custom dialogs**: the platform's message boxes look out of place; one Craft dialog (title, text, actions, the
     design's tokens) for questions, confirmations, consents and the About box.

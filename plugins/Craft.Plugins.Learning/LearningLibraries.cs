@@ -13,7 +13,7 @@ namespace Craft.Plugins.Learning;
 /// <see cref="IdrakPlugins.Load"/>, so their built-ins register (the GPU devices "auto" chooses, the model sources, the
 /// reinforcement trainer's losses and estimators, the preference losses): Idrak finds them by loading its libraries in the
 /// default load context, which cannot see a plug-in's folder (Craft's loader shares one copy of each between the plug-ins).
-/// Then the C# coding environment of Idrak.Reinforcement.Plugins ("csharp", with "coding" and Idrak.Text.Plugins' C#
+/// Then the C# coding environment of Idrak.Reinforcement.Plugins (the plug-in "csharp-coding", its environment "csharp", with "coding" and Idrak.Text.Plugins' C#
 /// language it requires): an Idrak plug-in package, registered by name rather than by loading the whole package. Once per
 /// process; <see cref="Release"/> takes back what this registered (the libraries' built-ins stay, as Craft.Ai's do).
 /// </summary>

@@ -190,7 +190,11 @@ public sealed class ShellModel : IDisposable
         host.PanelShowRequested += OnPanelShowRequested;
         // A plug-in's IEditorHost.OpenDocumentAsync (the agent's changed files): the file's tab, or a new document for a path
         // with no file yet (the user saves it there; the plug-in's proposal fills it).
-        host.OpenFile = async (path, token) => File.Exists(path) ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument : NewFile().HostDocument;
+        // The new document keeps the path, so Save writes it there (the owner's Windows run: Save on the agent's new file
+        // did nothing); a second proposal for the same new file goes to the same tab.
+        host.OpenFile = async (path, token) => File.Exists(path)
+            ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument
+            : (Tabs.FindSuggested(path) ?? NewFile(path)).HostDocument;
         RegisterCommands();
         WatchMemory();
     }
@@ -394,6 +398,16 @@ public sealed class ShellModel : IDisposable
     public DocumentTab NewFile() => Tabs.Add(TextDocument.Create("", Options), null);
 
     /// <summary>
+    /// A new, empty document made for the file <paramref name="path"/>, not written yet (<see cref="DocumentTab.SuggestedPath"/>):
+    /// titled with its name, in its language, and saved there by <see cref="SaveAsync"/> without asking.
+    /// </summary>
+    public DocumentTab NewFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return Tabs.AddFor(TextDocument.Create("", Options), path, EditorLanguages.ForFile(path));
+    }
+
+    /// <summary>
     /// Saves <paramref name="tab"/> (the active one when null): to its file, or, for a new document, where the user picks.
     /// False when it was not saved (no tab, cancelled, or failed, said so).
     /// </summary>
@@ -403,6 +417,11 @@ public sealed class ShellModel : IDisposable
         if (tab is null)
         {
             return false;
+        }
+
+        if (tab.FilePath is null && tab.SuggestedPath is { } suggested)
+        {
+            return await WriteNewAsync(tab, suggested, cancellationToken);
         }
 
         if (tab.FilePath is null)
@@ -422,15 +441,21 @@ public sealed class ShellModel : IDisposable
             return false;
         }
 
-        var suggested = tab.FilePath is { } current ? Path.GetFileName(current) : tab.Title;
-        var folder = tab.FilePath is { } file ? Path.GetDirectoryName(file) : Workspace?.Root;
-        var path = await _dialogs.PickSavePathAsync(suggested, folder, cancellationToken);
-        if (path is null)
+        var target = tab.FilePath ?? tab.SuggestedPath;
+        var suggested = target is not null ? Path.GetFileName(target) : tab.Title;
+        var folder = target is not null ? ExistingFolder(Path.GetDirectoryName(target)) ?? Workspace?.Root : Workspace?.Root;
+        if (await PickAsync("the save dialog", () => _dialogs.PickSavePathAsync(suggested, folder, cancellationToken)) is not { } path)
         {
             return false;
         }
 
-        if (!await WriteAsync(tab, Path.GetFullPath(path), cancellationToken))
+        return await WriteNewAsync(tab, Path.GetFullPath(path), cancellationToken);
+    }
+
+    // Writes a tab to a file it may not have yet (its folders made), then gives it that file's language.
+    private async Task<bool> WriteNewAsync(DocumentTab tab, string path, CancellationToken cancellationToken)
+    {
+        if (!await WriteAsync(tab, path, cancellationToken))
         {
             return false;
         }
@@ -442,6 +467,37 @@ public sealed class ShellModel : IDisposable
         }
 
         return true;
+    }
+
+    // The nearest folder of `folder` that exists (a new file's folders are made when it is saved), or null.
+    private static string? ExistingFolder(string? folder)
+    {
+        while (!string.IsNullOrEmpty(folder) && !Directory.Exists(folder))
+        {
+            folder = Path.GetDirectoryName(folder);
+        }
+
+        return string.IsNullOrEmpty(folder) ? null : folder;
+    }
+
+    // A platform dialog that fails to open is said, never a silent nothing (a command's exception is only logged).
+    private async Task<string?> PickAsync(string what, Func<Task<string?>> pick)
+    {
+        try
+        {
+            return await pick();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // Whatever the platform's dialog threw, the user is told and the editor goes on.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            await _ui.ShowMessageAsync("Craft: " + what + " did not open", $"{e.GetType().Name}: {e.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -767,9 +823,15 @@ public sealed class ShellModel : IDisposable
     {
         try
         {
+            if (path is not null && Path.GetDirectoryName(path) is { Length: > 0 } folder)
+            {
+                Directory.CreateDirectory(folder);              // a new file's folders (the agent's new file in a new folder)
+            }
+
             await Host.SaveAsync(tab.HostDocument, path, cancellationToken);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or EncoderFallbackException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+            or EncoderFallbackException or InvalidOperationException)
         {
             await _ui.ShowMessageAsync("Craft: could not save", $"{path ?? tab.FilePath}: {e.Message}");
             return false;
@@ -796,14 +858,15 @@ public sealed class ShellModel : IDisposable
         Command(ShellCommandIds.NewFile, "File: New file", (_, _) => { NewFile(); return Task.CompletedTask; }, null, "Ctrl+N");
         Command(ShellCommandIds.OpenFile, "File: Open a file", async (_, token) =>
         {
-            if (await _dialogs.PickFileAsync(token) is { } path)
+            var start = Tabs.Active?.FilePath is { } active ? Path.GetDirectoryName(active) : Workspace?.Root;
+            if (await PickAsync("the open dialog", () => _dialogs.PickFileAsync(start, token)) is { } path)
             {
                 await OpenFileAsync(path, cancellationToken: token);
             }
         }, null, "Ctrl+O");
         Command(ShellCommandIds.OpenFolder, "File: Open a folder", async (_, token) =>
         {
-            if (await _dialogs.PickFolderAsync(token) is { } path)
+            if (await PickAsync("the folder dialog", () => _dialogs.PickFolderAsync(Workspace?.Root, token)) is { } path)
             {
                 await OpenFolderAsync(path);
             }

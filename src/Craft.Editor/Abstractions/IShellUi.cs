@@ -10,11 +10,14 @@ namespace Craft.Editor.Abstractions;
 /// </summary>
 public interface IFileDialogs
 {
-    /// <summary>Asks for a folder; its full path, or null.</summary>
-    Task<string?> PickFolderAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Asks for a folder, opening on <paramref name="startFolder"/> (the workspace; null: the user's documents folder), a
+    /// real folder the dialog can select at once; its full path, or null.
+    /// </summary>
+    Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Asks for a file to open; its full path, or null.</summary>
-    Task<string?> PickFileAsync(CancellationToken cancellationToken = default);
+    /// <summary>Asks for a file to open, opening on <paramref name="startFolder"/> (null: the user's documents folder); its full path, or null.</summary>
+    Task<string?> PickFileAsync(string? startFolder = null, CancellationToken cancellationToken = default);
 
     /// <summary>Asks where to save, suggesting <paramref name="suggestedName"/> (in <paramref name="folder"/> when given); the full path, or null.</summary>
     Task<string?> PickSavePathAsync(string suggestedName, string? folder, CancellationToken cancellationToken = default);

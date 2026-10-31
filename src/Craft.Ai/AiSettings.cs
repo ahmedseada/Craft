@@ -90,8 +90,14 @@ public sealed record AiSettings
     /// <summary>The sampling temperature of completion (<c>completionTemperature</c>); 0 takes the likeliest token.</summary>
     public float CompletionTemperature { get; init; }
 
-    /// <summary>The most tokens one chat reply samples (<c>chatMaxTokens</c>).</summary>
-    public int ChatMaxTokens { get; init; } = 1024;
+    /// <summary>
+    /// The most tokens one chat reply samples (<c>chatMaxTokens</c>); the model's context window may leave fewer (a reply
+    /// cut there is said so in the panel). A reply otherwise ends only at the model's end of turn or the user's Stop.
+    /// </summary>
+    public int ChatMaxTokens { get; init; } = 2048;
+
+    /// <summary>Texts that end a chat reply beside the chat template's own end of turn (<c>chatStops</c>); none by default.</summary>
+    public IReadOnlyList<string> ChatStops { get; init; } = [];
 
     /// <summary>How many times a chat reply may call the editor's tools before it must answer (<c>chatToolRounds</c>).</summary>
     public int ChatToolRounds { get; init; } = 6;
@@ -123,8 +129,11 @@ public sealed record AiSettings
     /// <summary>The agent's time limit, minutes (<c>agentMinutes</c>).</summary>
     public int AgentMinutes { get; init; } = 20;
 
-    /// <summary>The most tokens one agent turn samples (<c>agentMaxTokens</c>).</summary>
+    /// <summary>The most tokens one agent turn samples (<c>agentMaxTokens</c>); the model's context window may leave fewer.</summary>
     public int AgentMaxTokens { get; init; } = 2048;
+
+    /// <summary>Texts that end an agent turn beside the chat template's own end of turn (<c>agentStops</c>); none by default.</summary>
+    public IReadOnlyList<string> AgentStops { get; init; } = [];
 
     /// <summary>Where the agent's working copies go (<c>agentFolder</c>); empty: the system's temporary folder, under craft-agent.</summary>
     public string AgentFolder { get; init; } = "";
@@ -157,7 +166,8 @@ public sealed record AiSettings
         new("completionPrefixChars", "0", "Characters before the caret a prompt carries; 0: what the model's context leaves."),
         new("completionChunk", "1", "Tokens sampled between host synchronizations while a completion streams; 1 shows each token."),
         new("completionTemperature", "0", "Completion's sampling temperature; 0 takes the likeliest token."),
-        new("chatMaxTokens", "1024", "The most tokens one chat reply samples."),
+        new("chatMaxTokens", "2048", "The most tokens one chat reply samples (the model's context may leave fewer); a reply otherwise ends at the model's end of turn or Stop."),
+        new("chatStops", "", "Texts that end a chat reply beside the template's own end of turn ('|' between them); empty: none."),
         new("chatToolRounds", "6", "How many times a chat reply may call the editor's tools before it answers."),
         new("chatKeep", "true", "Whether the chat is kept per workspace (in chatFile)."),
         new("chatFile", Path.Combine(".craft", "chat.json"), "Where the chat is kept, relative to the workspace."),
@@ -168,7 +178,8 @@ public sealed record AiSettings
         new("agentSandbox", "approve-each", "The command sandbox the agent's commands run in; none registered under it: the agent runs no command."),
         new("agentMaxTurns", "20", "The agent's most turns."),
         new("agentMinutes", "20", "The agent's time limit in minutes."),
-        new("agentMaxTokens", "2048", "The most tokens one agent turn samples."),
+        new("agentMaxTokens", "2048", "The most tokens one agent turn samples (the model's context may leave fewer)."),
+        new("agentStops", "", "Texts that end an agent turn beside the template's own end of turn ('|' between them); empty: none."),
         new("agentFolder", "", "Where the agent's working copies go; empty: the temporary folder."),
         new("agentCopyIgnore", "bin;.git;.vs;node_modules;test-output", "Folder names the agent's working copy leaves out (';' or ',' between them)."),
     ];
@@ -228,6 +239,9 @@ public sealed record AiSettings
         IReadOnlyList<string> List(string key, IReadOnlyList<string> fallback) =>
             value(key) is { } text ? text.Split([';', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) : fallback;
 
+        // Stop texts are taken as written ('|' between them: a stop may hold ';' or ','), empty ones dropped.
+        IReadOnlyList<string> Stops(string key) => value(key) is { Length: > 0 } text ? text.Split('|', StringSplitOptions.RemoveEmptyEntries) : [];
+
         return new AiSettings
         {
             McpAddress = Text("mcpAddress") ?? defaults.McpAddress,
@@ -253,6 +267,7 @@ public sealed record AiSettings
             CompletionChunk = Whole("completionChunk", defaults.CompletionChunk, 1, 4096),
             CompletionTemperature = (float)Real("completionTemperature", 0, 0, 10),
             ChatMaxTokens = Whole("chatMaxTokens", defaults.ChatMaxTokens, 1, 1_000_000),
+            ChatStops = Stops("chatStops"),
             ChatToolRounds = Whole("chatToolRounds", defaults.ChatToolRounds, 0, 1000),
             ChatKeep = Flag("chatKeep", defaults.ChatKeep),
             ChatFile = Text("chatFile") ?? defaults.ChatFile,
@@ -264,6 +279,7 @@ public sealed record AiSettings
             AgentMaxTurns = Whole("agentMaxTurns", defaults.AgentMaxTurns, 1, 10_000),
             AgentMinutes = Whole("agentMinutes", defaults.AgentMinutes, 1, 100_000),
             AgentMaxTokens = Whole("agentMaxTokens", defaults.AgentMaxTokens, 1, 1_000_000),
+            AgentStops = Stops("agentStops"),
             AgentFolder = Text("agentFolder") ?? "",
             AgentCopyIgnore = List("agentCopyIgnore", defaults.AgentCopyIgnore),
         };

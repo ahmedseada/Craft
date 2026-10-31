@@ -291,14 +291,20 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             });
             var observed = new ObservedTools(_tools, call => Post(() => ToolStarted(generation, call)), result => Post(() => ToolEnded(generation, result)));
             var model = chat.WithTools(observed, settings.ChatToolRounds);
-            var options = new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength };
+            var options = new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength, Stop = settings.ChatStops };
             int lastGenerated = 0;
+            string? reason = null;
             watch.Start();
             await foreach (var chunk in model.StreamAsync(new ChatRequest(messages, Options: options), token).ConfigureAwait(false))
             {
                 int now = chunk.Generated;
                 tokens += now > lastGenerated ? now - lastGenerated : now < lastGenerated ? now : chunk.Delta.Content.Length > 0 ? 1 : 0;
                 lastGenerated = now;
+                if (chunk.Done)
+                {
+                    reason = chunk.DoneReason;
+                }
+
                 string piece = chunk.Delta.Content;
                 if (piece.Length > 0)
                 {
@@ -310,7 +316,11 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             }
 
             double seconds = watch.Elapsed.TotalSeconds;
-            Post(() => Finish(generation, user, Rate(tokens, seconds), null));
+            // A reply cut by its limit is said so (never a silent half sentence): the setting, or the context window's room.
+            string? cut = reason == "length"
+                ? string.Create(CultureInfo.InvariantCulture, $"The reply reached its limit ({tokens} tokens: chatMaxTokens {settings.ChatMaxTokens}, or the room the model's context of {lease.ContextLength} left after the prompt).")
+                : null;
+            Post(() => Finish(generation, user, Rate(tokens, seconds), cut));
             activity.Complete(Rate(tokens, seconds));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -455,7 +465,8 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
         if (problem is not null)
         {
-            rebuilt.Add(new ConversationEntry(problem == "Stopped." ? ConversationRole.Note : ConversationRole.Error, problem));
+            bool note = problem == "Stopped." || problem.StartsWith("The reply reached its limit", StringComparison.Ordinal);
+            rebuilt.Add(new ConversationEntry(note ? ConversationRole.Note : ConversationRole.Error, problem));
         }
 
         if (status is not null)

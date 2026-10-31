@@ -343,6 +343,56 @@ public static class ShellTests
         Check.Equal(bindingsBefore, EditorKeyBindings.Names.Count, "and its bindings");
     }
 
+    [Test]
+    public static async Task SaveWritesANewFileWhereItWasMadeForAsksForAnUntitledOneAndSaysWhenItFails()
+    {
+        // The owner's Windows run: Save did nothing on the agent's new file (a tab with no file, made for a path in a folder
+        // that did not exist yet), and a save dialog that failed said nothing.
+        using var folder = new TempFolder();
+        var settings = new CraftSettings(_ => null, SettingsFile.Load(folder.File("data/settings.json")));
+        var recent = RecentList.Load(folder.File("data/recent.json"), 10);
+        var dialogs = new FakeDialogs { Folder = folder.Path, SavePath = folder.File("picked/Untitled.txt") };
+        var ui = new FakeShellUi();
+        using var host = new EditorHost();
+        using var shell = new ShellModel(host, settings, recent, dialogs, ui);
+        await shell.OpenFolderAsync(folder.Path);
+        string target = folder.File("Generated/Deep/Example.cs");
+        var proposed = await host.OpenDocumentAsync(target);
+        Check.True(proposed is not null && proposed.FilePath is null, "a path with no file yet opens a new document (the agent's new file)");
+        var tab = shell.Tabs.Active!;
+        Check.True(tab.SuggestedPath == Path.GetFullPath(target) && tab.Title == "Example.cs", $"the tab keeps the path it was made for and is titled by it ({tab.Title})");
+        Check.True(ReferenceEquals(await host.OpenDocumentAsync(target), proposed), "the same new file again goes to the same tab");
+        ((TextDocument)tab.Document).Edit([TextEdit.Insert(0, "class Example { }")], EditKind.Paste, SelectionState.At(0), SelectionState.At(17));
+        Check.True(await host.ExecuteCommandAsync(ShellCommandIds.Save), "Ctrl+S ran");
+        Check.Equal("class Example { }", await File.ReadAllTextAsync(target), "Save writes it where it was made for, its folders created");
+        Check.True(dialogs.SaveAsked == 0 && tab.FilePath == Path.GetFullPath(target) && tab.SuggestedPath is null && !tab.IsDirty, "without asking; the tab is that file's now");
+
+        var untitled = shell.NewFile();
+        ((TextDocument)untitled.Document).Edit([TextEdit.Insert(0, "notes")], EditKind.Paste, SelectionState.At(0), SelectionState.At(5));
+        Check.True(await shell.SaveAsync(untitled), "an untitled document is saved");
+        Check.True(dialogs.SaveAsked == 1 && dialogs.SaveFolder == folder.Path, $"after asking where, starting in the workspace ({dialogs.SaveFolder})");
+        Check.Equal("notes", await File.ReadAllTextAsync(dialogs.SavePath), "written where the user picked, its folder created");
+
+        ((TextDocument)untitled.Document).Edit([TextEdit.Insert(5, "!")], EditKind.Paste, SelectionState.At(5), SelectionState.At(6));
+        Check.True(await shell.SaveAsync(untitled) && await File.ReadAllTextAsync(dialogs.SavePath) == "notes!", "a file's own Save writes it again");
+
+        dialogs.Fails = true;
+        var another = shell.NewFile();
+        Check.True(!await shell.SaveAsync(another), "a save dialog that fails saves nothing");
+        Check.True(ui.Messages.Any(m => m.StartsWith("Craft: the save dialog did not open", StringComparison.Ordinal) && m.Contains("no dialog here", StringComparison.Ordinal)),
+            $"and says so, with the reason ({string.Join(" | ", ui.Messages)})");
+        dialogs.Fails = false;
+
+        await File.WriteAllTextAsync(folder.File("Blocker"), "a file where a folder should be");
+        var blocked = shell.NewFile(folder.File("Blocker/Inner.cs"));
+        Check.True(!await shell.SaveAsync(blocked) && ui.Messages.Any(m => m.StartsWith("Craft: could not save", StringComparison.Ordinal)), "a write that fails is said, never silent");
+
+        Check.True(await host.ExecuteCommandAsync(ShellCommandIds.OpenFolder) && dialogs.FolderStart == folder.Path, $"the folder dialog opens on the workspace ({dialogs.FolderStart})");
+        shell.Tabs.Activate(tab);
+        dialogs.File = target;
+        Check.True(await host.ExecuteCommandAsync(ShellCommandIds.OpenFile) && dialogs.FileStart == Path.GetDirectoryName(Path.GetFullPath(target)), $"the file dialog opens on the active file's folder ({dialogs.FileStart})");
+    }
+
     private sealed class FakeDialogs : IFileDialogs
     {
         public string? Folder { get; set; }
@@ -351,11 +401,39 @@ public static class ShellTests
 
         public string SavePath { get; set; } = "";
 
-        public Task<string?> PickFolderAsync(CancellationToken cancellationToken = default) => Task.FromResult(Folder);
+        public bool Fails { get; set; }
 
-        public Task<string?> PickFileAsync(CancellationToken cancellationToken = default) => Task.FromResult(File);
+        public int SaveAsked { get; private set; }
 
-        public Task<string?> PickSavePathAsync(string suggestedName, string? folder, CancellationToken cancellationToken = default) => Task.FromResult<string?>(SavePath);
+        public string? SaveFolder { get; private set; }
+
+        public string? FolderStart { get; private set; }
+
+        public string? FileStart { get; private set; }
+
+        public Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default)
+        {
+            FolderStart = startFolder;
+            return Task.FromResult(Folder);
+        }
+
+        public Task<string?> PickFileAsync(string? startFolder = null, CancellationToken cancellationToken = default)
+        {
+            FileStart = startFolder;
+            return Task.FromResult(File);
+        }
+
+        public Task<string?> PickSavePathAsync(string suggestedName, string? folder, CancellationToken cancellationToken = default)
+        {
+            if (Fails)
+            {
+                throw new System.Runtime.InteropServices.COMException("no dialog here");
+            }
+
+            SaveAsked++;
+            SaveFolder = folder;
+            return Task.FromResult<string?>(SavePath);
+        }
     }
 
     private sealed class FakeShellUi : IShellUi

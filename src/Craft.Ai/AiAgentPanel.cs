@@ -36,6 +36,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private CancellationTokenSource? _running;
     private CodingAgent? _agent;
     private AgentWorkspace? _copy;
+    private CodingAgentRun? _conversation;          // the last finished run: a follow-up continues it (same copy); Clear forgets it
     private ITimer? _ticker;
     private int _assistant = -1;
     private readonly StringBuilder _text = new();
@@ -67,7 +68,14 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     /// <inheritdoc />
     public override string Placeholder => IsBusy
         ? "Add a note for the next turn (it reads it before its next step)"
-        : "Describe a task for the agent (it works on a copy of the folder; you review every change)";
+        : _conversation is not null
+            ? "Follow up: the agent keeps this run's conversation and its copy of the folder (Clear starts afresh)"
+            : "Describe a task for the agent (it works on a copy of the folder; you review every change)";
+
+    /// <summary>Whether the next message continues the last run (its conversation and working copy) rather than starting a new one.</summary>
+    public bool Continues => _conversation is not null && _copy is { } copy && Host.WorkspaceFolder is { } root
+        && string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(copy.Workspace)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), StringComparison.Ordinal)
+        && Directory.Exists(copy.Copy);
 
     /// <inheritdoc />
     public override IReadOnlyList<PanelAction> HeaderActions => IsBusy
@@ -208,6 +216,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         _changes.Clear();
         DiscardLater(_copy);
         _copy = null;
+        _conversation = null;                          // its copy is gone: the next message starts a new run
         Log(new ConversationEntry(ConversationRole.Note, "Discarded every change of the run."));
         ShowChanges();
     }
@@ -273,18 +282,26 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             return;
         }
 
-        DiscardLater(_copy);
-        _copy = null;
-        _changes.Clear();
-        _answer = null;
-        _log.Clear();
+        // A follow-up continues the last run: the same working copy, its changes and log, the conversation so far (the
+        // owner's Windows run: each message started a new run on a new copy, remembering nothing). Clear starts afresh.
+        var earlier = Continues ? _conversation : null;
+        if (earlier is null)
+        {
+            DiscardLater(_copy);
+            _copy = null;
+            _changes.Clear();
+            _answer = null;
+            _log.Clear();
+            _conversation = null;
+            Title = task;
+        }
+
         _assistant = -1;
         _text.Clear();
         _turn = 0;
         _tokens = 0;
         _modelSeconds = 0;
         _waiting = false;
-        Title = task;
         var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _running = source;
         // Phase U: the run shows in the status bar (turn, tokens, tok/s) with Cancel, which stops it as Stop does.
@@ -296,7 +313,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         Log(new ConversationEntry(ConversationRole.User, task));
         // The open documents' text as the user sees it, unsaved changes included (read here, on the UI thread).
         var unsaved = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var document in Host.Documents)
+        foreach (var document in earlier is null ? Host.Documents : Array.Empty<IEditorDocument>())
         {
             if (document.FilePath is { } path && document.Document.IsDirty)
             {
@@ -305,9 +322,11 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         }
 
         string end;
+        var copy = earlier is null ? null : _copy;
         try
         {
-            end = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, activity), CancellationToken.None).ConfigureAwait(true);
+            (end, var run) = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, earlier, copy, activity), CancellationToken.None).ConfigureAwait(true);
+            _conversation = run;
             activity.Complete(end);
         }
         catch (OperationCanceledException)
@@ -338,8 +357,10 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         UpdateStatus();
     }
 
-    // On the thread pool: the model, the working copy, the sandbox, the tools and the agent's loop.
-    private async Task<string> RunAgentAsync(string task, string workspace, Dictionary<string, string> unsaved, AiSettings settings, IActivity activity)
+    // On the thread pool: the model, the working copy (the run's own when it continues), the sandbox, the tools and the
+    // agent's loop (a new conversation, or the earlier run's continued); the end's text and the run.
+    private async Task<(string End, CodingAgentRun Run)> RunAgentAsync(string task, string workspace, Dictionary<string, string> unsaved, AiSettings settings,
+        CodingAgentRun? earlier, AgentWorkspace? existing, IActivity activity)
     {
         var token = activity.CancellationToken;
         activity.Report(null, "waiting for the model (its download and load show on their own)");
@@ -348,15 +369,20 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         // Idrak's built-ins (the "process" sandbox, the coding languages of the families' plug-in) are registered by now:
         // the lease's load registered the plug-in's Idrak libraries and the idrakPlugins packages.
         IdrakLibraries.EnsureIncluded();
-        activity.Report(null, "copying the folder");
-        var copy = AgentWorkspace.Create(workspace, settings.AgentFolder, settings.AgentCopyIgnore, unsaved, token,
+        if (existing is null)
+        {
+            activity.Report(null, "copying the folder");
+        }
+
+        var copy = existing ?? AgentWorkspace.Create(workspace, settings.AgentFolder, settings.AgentCopyIgnore, unsaved, token,
             files => activity.Report(null, string.Create(CultureInfo.InvariantCulture, $"copying the folder: {files:N0} files")));
         Post(() =>
         {
             _copy = copy;
             Subtitle = lease.Model;
-            Log(new ConversationEntry(ConversationRole.Note, string.Create(CultureInfo.InvariantCulture,
-                $"Working on a copy of the folder ({copy.Files:N0} files, {copy.Copy}); your files change only when you accept a diff.")));
+            Log(new ConversationEntry(ConversationRole.Note, existing is null
+                ? string.Create(CultureInfo.InvariantCulture, $"Working on a copy of the folder ({copy.Files:N0} files, {copy.Copy}); your files change only when you accept a diff.")
+                : string.Create(CultureInfo.InvariantCulture, $"Continuing the run: the same copy of the folder and the conversation so far ({earlier!.Messages.Count} messages); Clear starts afresh.")));
         });
 
         _sandboxName = settings.AgentSandbox;
@@ -378,7 +404,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         {
             MaxRounds = settings.AgentMaxTurns,
             TimeLimit = TimeSpan.FromMinutes(settings.AgentMinutes),
-            Sampling = new GenerationOptions { NumPredict = settings.AgentMaxTokens, NumCtx = lease.ContextLength },
+            Sampling = new GenerationOptions { NumPredict = settings.AgentMaxTokens, NumCtx = lease.ContextLength, Stop = settings.AgentStops },
             Tools = new CodingToolOptions { Sandbox = inner.Name },
         };
         var tools = new CodingTools(copy.Copy, options.Tools, sandbox);
@@ -390,13 +416,18 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             OnToolResult = result => { var change = ChangeAfter(copy, result); Post(() => ToolDone(result, change)); },
         };
         Post(() => _agent = agent);
-        var run = await agent.RunAsync(task, tools, token).ConfigureAwait(false);
-        return run.End switch
+        var run = earlier is null
+            ? await agent.RunAsync(task, tools, token).ConfigureAwait(false)
+            : await agent.ContinueAsync(earlier, task, tools, token).ConfigureAwait(false);
+        string end = run.End switch
         {
             CodingAgentEnd.Answered => string.Create(CultureInfo.InvariantCulture, $"Done in {run.Rounds} turns, {run.ToolCalls} tool calls."),
+            CodingAgentEnd.OutOfBudget when run.Note.Length == 0 => string.Create(CultureInfo.InvariantCulture,
+                $"Stopped: the reply reached its limit (agentMaxTokens {settings.AgentMaxTokens}, or the room the model's context of {lease.ContextLength} left)."),
             CodingAgentEnd.OutOfBudget => $"Stopped: {run.Note}.",
             _ => $"Ended: {run.End} {run.Note}".TrimEnd() + ".",
         };
+        return (end, run);
     }
 
     private void TurnStarted()
@@ -579,6 +610,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
 
     private void Clear()
     {
+        _conversation = null;                          // the next message starts a new run and a new conversation
         _log.Clear();
         if (_changes.Count == 0)
         {

@@ -285,6 +285,94 @@ public static class AiPluginTests
     }
 
     [Test]
+    public static async Task ALongChatReplyArrivesWholeAndTheNextMessageCarriesTheConversation()
+    {
+        // The owner's Windows run: replies ended after a few words and the next message seemed to forget them.
+        string root = Folder();
+        try
+        {
+            using var host = new EditorHost(dispatch: Serial(), presenter: new AcceptingPresenter()) { WorkspaceFolder = root };
+            string reply = string.Join(" ", Enumerable.Range(0, 3000).Select(i => "word" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))) + ".";
+            var chat = new ScriptedChatModel(new ChatMessage("assistant", reply), new ChatMessage("assistant", "You asked me to explain."));
+            using var fixture = new ChatFixture(chat);
+            using var panel = new AiChatPanel(host, () => fixture.Settings, fixture.Models);
+            await panel.SubmitAsync("Explain everything");
+            await panel.LastReply.WaitAsync(TimeSpan.FromSeconds(30));
+            var options = chat.Requests[0].Options!;
+            Check.True(options.NumPredict == 2048 && options.Stop.Count == 0 && options.NumCtx == 4096,
+                $"the reply's limit is the chatMaxTokens setting (2048 by default), no extra stops, the model's context ({options.NumPredict}, {options.Stop.Count} stops, {options.NumCtx})");
+            string shown = string.Concat(panel.Entries.Where(e => e.Role == ConversationRole.Assistant).Select(e => e.Text));
+            Check.Equal(reply, shown, "the 3,001-piece reply arrives whole in the panel");
+            Check.True(!panel.Entries.Any(e => e.Role is ConversationRole.Error) && !panel.IsBusy, "it ended at the model's end of turn, nothing said wrong");
+
+            await panel.SubmitAsync("What did I ask?");
+            await panel.LastReply.WaitAsync(TimeSpan.FromSeconds(30));
+            var sent = chat.Requests[1].Messages;
+            Check.True(sent.Any(m => m.Role == "user" && m.Content.EndsWith("Explain everything", StringComparison.Ordinal)) && sent.Any(m => m is { Role: "assistant" } && m.Content == reply)
+                && sent[^1].Content.EndsWith("What did I ask?", StringComparison.Ordinal),
+                $"the next message carries the conversation: the first question and its whole reply ({sent.Count} messages)");
+
+            var limited = fixture.Settings with { ChatMaxTokens = 16, ChatStops = ["END"] };
+            var stopped = AiSettings.Read(k => k switch { "chatMaxTokens" => "16", "chatStops" => "END|<stop;here>", "agentStops" => "", _ => null });
+            Check.True(stopped is { ChatMaxTokens: 16, ChatStops: ["END", "<stop;here>"], AgentStops: [] } && new AiSettings().ChatMaxTokens == 2048 && limited.ChatStops.Count == 1,
+                "chatMaxTokens and chatStops are settings ('|' between stops, a stop may hold ';')");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    public static async Task AFollowUpContinuesTheAgentsRunOnItsCopyAndClearStartsAfresh()
+    {
+        // The owner's Windows run: each message to the agent started a new run on a new copy, with no memory of the last.
+        string root = Folder();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "a.txt"), "alpha\n");
+            using var host = new EditorHost(dispatch: Serial(), presenter: new AcceptingPresenter()) { WorkspaceFolder = root };
+            var chat = new ScriptedChatModel(
+                new ChatMessage("assistant", ToolCalls: [new ToolCall("edit_file", new JsonObject { ["path"] = "a.txt", ["old_text"] = "alpha", ["new_text"] = "beta" })]),
+                new ChatMessage("assistant", "Changed alpha to beta."),
+                new ChatMessage("assistant", "You asked me to change alpha; it is beta now."),
+                new ChatMessage("assistant", "A new task."));
+            using var fixture = new ChatFixture(chat, agentSandbox: "a2-none", agentFolder: root + "-copies");
+            using var panel = new AiAgentPanel(host, () => fixture.Settings, fixture.Models);
+            await panel.SubmitAsync("Change alpha");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(10));
+            var copy = panel.WorkingCopy;
+            Check.True(copy is not null && panel.Continues && panel.Changes.Count == 1, "after the run, its copy and its change stay, and the next message continues it");
+
+            await panel.SubmitAsync("What did I ask?");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(10));
+            var sent = chat.Requests[2].Messages;
+            Check.True(sent.Any(m => m is { Role: "user", Content: "Change alpha" }) && sent.Any(m => m is { Role: "assistant", Content: "Changed alpha to beta." })
+                && sent.Any(m => m.Role == "tool") && sent[^1] is { Role: "user", Content: "What did I ask?" } && sent.Count(m => m.Role == "system") == 1,
+                $"the follow-up carries the run's conversation: the task, the tool result, the answer, then the new message ({sent.Count} messages)");
+            Check.True(ReferenceEquals(panel.WorkingCopy, copy) && panel.Changes.Count == 1 && panel.Entries.Any(e => e is { Role: ConversationRole.User, Text: "Change alpha" }),
+                "on the same copy, its change and its log kept");
+            Check.True(panel.Entries.Any(e => e.Role == ConversationRole.Assistant && e.Text.StartsWith("You asked me", StringComparison.Ordinal)), "the answer arrives");
+
+            await panel.HeaderActions.Single(a => a.Label == "Clear").RunAsync(CancellationToken.None);
+            Check.True(!panel.Continues, "Clear: the next message starts a new run");
+            panel.DiscardAll();
+            await panel.SubmitAsync("Something else");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(10));
+            Check.True(!chat.Requests[3].Messages.Any(m => m.Content == "Change alpha") && !ReferenceEquals(panel.WorkingCopy, copy),
+                "a new conversation on a new copy");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root + "-copies"))
+            {
+                Directory.Delete(root + "-copies", recursive: true);
+            }
+        }
+    }
+
+    [Test]
     public static async Task AnAcceptedNewFileOfTheAgentIsCreatedAndShowsInTheTreeWithinASecond()
     {
         string root = Folder();

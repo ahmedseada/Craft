@@ -14,8 +14,10 @@ namespace Craft.Maui;
 /// <see cref="EditorHost"/> as the approved design's chat column (docs/design/Main.dc.html, Agent.dc.html; the page shows it
 /// as a sheet in the narrow layout, PhoneChat.dc.html): a tab per panel, its title and subtitle and header buttons, its
 /// entries (the user's bubbles, the model's text, tool rows with a check, code blocks with their buttons and Copy, approval
-/// cards, the changed files), its status line, its context chips (a tap removes one) and the input with Send. A streamed
-/// reply replaces one entry's view per piece; anything else rebuilds the panel. Colours only from the theme. Any panel a
+/// cards, the changed files), its status line, its context chips (a tap removes one) and the input with Send. Every
+/// message's text can be selected and copied (<see cref="SelectableLabel"/>), and each model message has a Copy button. A
+/// streamed reply updates its message's text in place, piece by piece (the owner's Windows run: a view made again for every
+/// piece kept its first size and showed a reply cut after a few words); anything else rebuilds the panel. Colours only from the theme. Any panel a
 /// plug-in adds through <see cref="IEditorHost.AddPanel"/> that is an <see cref="IConversationPanel"/> shows here.
 /// </summary>
 public sealed class ConversationsView : ContentView, IDisposable
@@ -198,7 +200,16 @@ public sealed class ConversationsView : ContentView, IDisposable
                 ScrollToEnd();
                 break;
             case ConversationChange.EntryUpdated when e.Index >= 0 && e.Index < _entries.Children.Count && e.Index < panel.Entries.Count:
-                _entries.Children[e.Index] = EntryView(panel.Entries[e.Index]);
+                var updated = panel.Entries[e.Index];
+                if (_entries.Children[e.Index] is MessageView message && message.Role == updated.Role && updated.Actions.Count == 0)
+                {
+                    message.Text = updated.Text;               // the same view, its text grown: laid out again at its new size
+                }
+                else
+                {
+                    _entries.Children[e.Index] = EntryView(updated);
+                }
+
                 ScrollToEnd();
                 break;
             default:
@@ -316,7 +327,7 @@ public sealed class ConversationsView : ContentView, IDisposable
             case ConversationRole.User:
                 return new Border
                 {
-                    Content = new Label { Text = entry.Detail is null ? entry.Text : $"{entry.Text}\n{entry.Detail}", TextColor = text, LineHeight = 1.4 },
+                    Content = new SelectableLabel { Text = entry.Detail is null ? entry.Text : $"{entry.Text}\n{entry.Detail}", TextColor = text, LineHeight = 1.4 },
                     Padding = new Thickness(12, 10),
                     HorizontalOptions = LayoutOptions.End,
                     MaximumWidthRequest = 520,
@@ -325,11 +336,11 @@ public sealed class ConversationsView : ContentView, IDisposable
                     StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10, 10, 10, 2) },
                 };
             case ConversationRole.Assistant:
-                return new Label { Text = entry.Text, TextColor = text, LineHeight = 1.45 };
+                return new MessageView(entry.Role, entry.Text, text, CopyButton(null));
             case ConversationRole.Note:
-                return new Label { Text = entry.Text, TextColor = secondary, FontSize = 12 };
+                return new SelectableLabel { Text = entry.Text, TextColor = secondary, FontSize = 12 };
             case ConversationRole.Error:
-                return new Label { Text = entry.Text, TextColor = C(_colors.Error), FontSize = 12 };
+                return new SelectableLabel { Text = entry.Text, TextColor = C(_colors.Error), FontSize = 12 };
             case ConversationRole.Section:
                 return Stack(new Label { Text = entry.Text, TextColor = secondary, FontSize = 11, FontAttributes = FontAttributes.Bold, CharacterSpacing = 0.6 }, entry);
             case ConversationRole.Tool:
@@ -377,22 +388,7 @@ public sealed class ConversationsView : ContentView, IDisposable
                     buttons.Children.Add(ActionButton(action));
                 }
 
-                if (entry.CopyText is { } copy)
-                {
-                    var button = new Button
-                    {
-                        Text = "Copy",
-                        FontSize = 12,
-                        MinimumHeightRequest = 28,
-                        Padding = new Thickness(12, 0),
-                        BackgroundColor = Colors.Transparent,
-                        TextColor = text,
-                        BorderColor = C(_colors.PopupBorder),
-                        BorderWidth = 1,
-                    };
-                    button.Clicked += async (_, _) => await Clipboard.Default.SetTextAsync(copy);
-                    buttons.Children.Add(button);
-                }
+                buttons.Children.Add(CopyButton(entry.CopyText ?? entry.Text));
 
                 if (buttons.Children.Count > 0)
                 {
@@ -403,7 +399,7 @@ public sealed class ConversationsView : ContentView, IDisposable
         }
     }
 
-    private Label Code(string code) => new()
+    private SelectableLabel Code(string code) => new()
     {
         Text = code.TrimEnd('\n'),
         FontFamily = _codeFont,
@@ -509,5 +505,60 @@ public sealed class ConversationsView : ContentView, IDisposable
         }
     }
 
+    // A Copy button: `text`, or (null) the text of the message it sits in, as it is when clicked.
+    private Button CopyButton(string? text)
+    {
+        var button = new Button
+        {
+            Text = "Copy",
+            FontSize = 12,
+            MinimumHeightRequest = 28,
+            Padding = new Thickness(12, 0),
+            BackgroundColor = Colors.Transparent,
+            TextColor = C(_colors.Foreground),
+            BorderColor = C(_colors.PopupBorder),
+            BorderWidth = 1,
+        };
+        ToolTipProperties.SetText(button, "Copy to the clipboard");
+        button.Clicked += async (_, _) =>
+        {
+            string? copy = text ?? (button.Parent?.Parent as MessageView)?.Text;
+            if (!string.IsNullOrEmpty(copy))
+            {
+                await Clipboard.Default.SetTextAsync(copy);
+            }
+        };
+        return button;
+    }
+
     private static Color C(uint argb) => ThemeColors.Of(argb);
+
+    /// <summary>A message's text (selectable) with its Copy button under it; a streamed reply grows its text in place.</summary>
+    private sealed class MessageView : VerticalStackLayout
+    {
+        private readonly SelectableLabel _text;
+
+        public MessageView(ConversationRole role, string text, Color color, Button copy)
+        {
+            Role = role;
+            Spacing = 4;
+            _text = new SelectableLabel { Text = text, TextColor = color, LineHeight = 1.45, LineBreakMode = LineBreakMode.WordWrap };
+            Children.Add(_text);
+            Children.Add(new HorizontalStackLayout { Children = { copy } });
+        }
+
+        public ConversationRole Role { get; }
+
+        public string Text
+        {
+            get => _text.Text ?? "";
+            set => _text.Text = value;
+        }
+    }
 }
+
+/// <summary>
+/// A label whose text the user can select and copy (Ctrl+C, the context menu): on Windows its TextBlock takes text
+/// selection (the mapping in Platforms/Windows); elsewhere a plain label until that platform maps it.
+/// </summary>
+internal sealed class SelectableLabel : Label;

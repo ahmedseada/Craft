@@ -32,6 +32,12 @@ public sealed class DocumentTab
     /// <summary>Its file, or null for a new document.</summary>
     public string? FilePath => Document.FilePath;
 
+    /// <summary>
+    /// The file a new document is made for and not yet written (a plug-in's new file, such as the agent's): Save writes it
+    /// there, creating its folders, without asking; null once saved, and for every other tab.
+    /// </summary>
+    public string? SuggestedPath { get; internal set; }
+
     /// <summary>Whether it has unsaved changes.</summary>
     public bool IsDirty => Document.IsDirty;
 
@@ -105,11 +111,32 @@ public sealed class DocumentTabs : IDisposable
     /// Opens <paramref name="document"/> (the tabs own it from now on) in a new tab in <paramref name="language"/>, after
     /// the others, and makes it active when <paramref name="activate"/>.
     /// </summary>
-    public DocumentTab Add(ITextDocument document, ILanguage? language, string? languageName = null, bool activate = true)
+    public DocumentTab Add(ITextDocument document, ILanguage? language, string? languageName = null, bool activate = true) =>
+        Add(document, language, languageName, activate, suggestedPath: null);
+
+    /// <summary>
+    /// Opens the new <paramref name="document"/> made for the file <paramref name="suggestedPath"/>, not written yet (its
+    /// <see cref="DocumentTab.SuggestedPath"/>; titled with that file's name), as <see cref="Add(ITextDocument, ILanguage?, string?, bool)"/> does.
+    /// </summary>
+    public DocumentTab AddFor(ITextDocument document, string suggestedPath, ILanguage? language, bool activate = true)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(suggestedPath);
+        return Add(document, language, null, activate, Path.GetFullPath(suggestedPath));
+    }
+
+    /// <summary>The new document's tab made for <paramref name="path"/> (<see cref="DocumentTab.SuggestedPath"/>), or null.</summary>
+    public DocumentTab? FindSuggested(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+        return _tabs.Find(t => t.FilePath is null && t.SuggestedPath is { } suggested && PathKeys.Comparer.Equals(suggested, full));
+    }
+
+    private DocumentTab Add(ITextDocument document, ILanguage? language, string? languageName, bool activate, string? suggestedPath)
     {
         ArgumentNullException.ThrowIfNull(document);
         var hostDocument = _host.Open(document, language, languageName);
-        var tab = new DocumentTab(document, hostDocument, language, document.FilePath is null ? _nextUntitled++ : 0);
+        var tab = new DocumentTab(document, hostDocument, language, document.FilePath is null ? _nextUntitled++ : 0) { SuggestedPath = suggestedPath };
         tab.StateHandler = (_, _) => OnStateChanged(tab);
         document.StateChanged += tab.StateHandler;
         _tabs.Add(tab);
@@ -242,6 +269,11 @@ public sealed class DocumentTabs : IDisposable
         if (!string.Equals(path, tab.LastPath, StringComparison.Ordinal))
         {
             tab.LastPath = path;
+            if (path is not null)
+            {
+                tab.SuggestedPath = null;                    // written: its file is its own now
+            }
+
             Retitle();
         }
 
@@ -254,7 +286,11 @@ public sealed class DocumentTabs : IDisposable
         foreach (var tab in _tabs)
         {
             string title;
-            if (tab.FilePath is not { } path)
+            if (tab.FilePath is null && tab.SuggestedPath is { } suggested)
+            {
+                title = Path.GetFileName(suggested);
+            }
+            else if (tab.FilePath is not { } path)
             {
                 title = "untitled-" + tab.UntitledNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }

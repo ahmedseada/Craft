@@ -48,10 +48,12 @@ public sealed class FolderTree
     public int IndexOf(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
+        // Normalized as Reveal does: on Windows "a/b" and "a\b" are the same file (a caller's path may mix them).
+        var full = path.Length == 0 ? path : Path.GetFullPath(path);
         var comparer = PathKeys.Comparer;
         for (int i = 0; i < _rows.Count; i++)
         {
-            if (comparer.Equals(_rows[i].Entry.FullPath, path))
+            if (comparer.Equals(_rows[i].Entry.FullPath, full))
             {
                 return i;
             }

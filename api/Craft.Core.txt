@@ -93,6 +93,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 ScrollMarginLines { get; init; }
   System.Int32 ScrollMilliseconds { get; init; }
   System.Int32 ScrollWheelLines { get; init; }
+  System.Int32 SearchDelayMilliseconds { get; init; }
   System.Int32 SemanticColorsDelayMilliseconds { get; init; }
   System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 TabSize { get; init; }

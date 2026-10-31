@@ -73,7 +73,7 @@ public static class InventoryTests
             ["CRAFT_DATA_FOLDER"] = "data", ["CRAFT_RECENT_LIMIT"] = "5", ["CRAFT_NARROW_WIDTH"] = "600", ["CRAFT_PANEL_EXPLORER_WIDTH"] = "300",
             ["CRAFT_TREE_INDENT"] = "10",
             ["CRAFT_DIAGNOSTICS_DELAY_MS"] = "250", ["CRAFT_SEMANTIC_MAX_CHARS"] = "1000", ["CRAFT_WORKSPACE_READERS"] = "loose, csproj",
-            ["CRAFT_WORKSPACE_CONFIGURATION"] = "Release", ["CRAFT_COMPLETION_DELAY_MS"] = "0", ["CRAFT_COMPLETION_ROWS"] = "7",
+            ["CRAFT_WORKSPACE_CONFIGURATION"] = "Release", ["CRAFT_SEARCH_DELAY_MS"] = "75", ["CRAFT_COMPLETION_DELAY_MS"] = "0", ["CRAFT_COMPLETION_ROWS"] = "7",
             ["CRAFT_PROBLEMS_LIMIT"] = "20", ["CRAFT_HOVER_DELAY_MS"] = "100",
             ["CRAFT_SOURCE_GENERATORS"] = "false", ["CRAFT_SEMANTIC_COLORS_DELAY_MS"] = "-1", ["CRAFT_MEMORY_MONITOR"] = "none",
             // Phase D: the approved design's shell.
@@ -113,7 +113,7 @@ public static class InventoryTests
             DiffContextLines = 1, DiffLineLimit = 50, DiffCheck = false,
             DataFolder = "data", RecentLimit = 5, NarrowWidth = 600, TreeWidth = 300, TreeIndent = 10,
             DiagnosticsDelayMilliseconds = 250, SemanticMaxCharacters = 1000, WorkspaceReaders = options.WorkspaceReaders, WorkspaceConfiguration = "Release",
-            CompletionDelayMilliseconds = 0, CompletionRows = 7, ProblemsListLimit = 20, HoverDelayMilliseconds = 100,
+            SearchDelayMilliseconds = 75, CompletionDelayMilliseconds = 0, CompletionRows = 7, ProblemsListLimit = 20, HoverDelayMilliseconds = 100,
             SourceGenerators = false, SemanticColorsDelayMilliseconds = -1, MemoryMonitor = "none",
             FontFallback = "Consolas", InterfaceFont = "Segoe UI", InterfaceFontSize = 14, Accent = AccentColors.Blue, BottomPanelHeight = 200,
             QuickOpenFiles = 1000, QuickOpenRows = 8, TouchTarget = 48, TitleBar = "page",

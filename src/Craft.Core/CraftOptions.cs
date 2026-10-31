@@ -160,6 +160,13 @@ public sealed record CraftOptions
     /// </summary>
     public int CompletionDelayMilliseconds { get; init; } = 50;
 
+    /// <summary>
+    /// Milliseconds after the last keystroke in a search or filter box (settings, keyboard shortcuts, plug-ins and models,
+    /// quick open, find) before it searches: a debounce, each keystroke starts the wait again, so typing never waits on
+    /// a search (<c>CRAFT_SEARCH_DELAY_MS</c>; 0 searches at every keystroke).
+    /// </summary>
+    public int SearchDelayMilliseconds { get; init; } = 200;
+
     /// <summary>The rows the completion list shows before it scrolls (<c>CRAFT_COMPLETION_ROWS</c>).</summary>
     public int CompletionRows { get; init; } = 10;
 
@@ -488,6 +495,7 @@ public sealed record CraftOptions
         new("CRAFT_SEMANTIC_MAX_CHARS", "1000000", "Above this many characters the semantic layer (diagnostics, completion while typing) waits for a command; 0 never waits.") { Shape = SettingShape.Whole(SettingSections.CSharp, "Semantic layer waits above", 0, int.MaxValue, "characters", "Diagnostics", step: 100000) },
         new("CRAFT_WORKSPACE_READERS", "csproj,loose", "The workspace readers tried in order to make a folder's projects, separated by ','.") { Shape = SettingShape.ListOf(SettingSections.CSharp, "Workspace readers", "Workspace") },
         new("CRAFT_WORKSPACE_CONFIGURATION", "Debug", "The build configuration a project is read for (Debug defines DEBUG).") { Shape = SettingShape.Choice(SettingSections.CSharp, "Build configuration", ["Debug", "Release"], "Workspace") with { OtherAllowed = true } },
+        new("CRAFT_SEARCH_DELAY_MS", "200", "Milliseconds after the last keystroke in a search or filter box before it searches; each keystroke starts the wait again; 0: at every keystroke.") { Shape = SettingShape.Whole(SettingSections.Editor, "Search after typing", 0, 10_000, "ms", "Search", step: 50) },
         new("CRAFT_COMPLETION_DELAY_MS", "50", "Milliseconds after typing an identifier character or '.' before the completion list is asked for.") { Shape = SettingShape.Whole(SettingSections.Completion, "List after typing", 0, 60_000, "ms", "Completion list", step: 10) },
         new("CRAFT_COMPLETION_ROWS", "10", "The rows the completion list shows before it scrolls.") { Shape = SettingShape.Whole(SettingSections.Completion, "List rows", 1, 100, "rows", "Completion list") },
         new("CRAFT_INLINE_COMPLETION_PROVIDER", "", "The inline completion (ghost text) provider: a registered name; empty: the first that accepts the document; none: off.") { Shape = SettingShape.From(SettingSections.Completion, "Inline completion (ghost text)", SettingChoiceSources.InlineCompletion, ["", "none"], true, "Inline completion") },
@@ -880,6 +888,11 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_WORKSPACE_CONFIGURATION") is { } configuration)
         {
             options = options with { WorkspaceConfiguration = configuration };
+        }
+
+        if (Text(read, "CRAFT_SEARCH_DELAY_MS") is { } searchDelay)
+        {
+            options = options with { SearchDelayMilliseconds = Whole(searchDelay, "CRAFT_SEARCH_DELAY_MS", 0, 10_000) };
         }
 
         if (Text(read, "CRAFT_COMPLETION_DELAY_MS") is { } completionDelay)

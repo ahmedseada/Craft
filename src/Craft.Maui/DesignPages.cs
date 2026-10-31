@@ -93,6 +93,7 @@ public sealed class PluginsPage : ContentView
     private readonly VerticalStackLayout _detail = new() { Spacing = 18, Padding = new Thickness(20) };
     private readonly ContentView _filters = new();
     private readonly Entry _filterText;
+    private readonly TypingDebounce _filterDebounce;
     private readonly Label _notice;
     private IReadOnlyList<PluginRow> _all = [];
     private PluginFilter _filter;
@@ -111,7 +112,9 @@ public sealed class PluginsPage : ContentView
         _filterText = p.Input("Filter by name or registry", 32);
         var filterBox = p.Field(_filterText);
         filterBox.WidthRequest = 320;
-        _filterText.TextChanged += (_, _) => Rebuild();
+        _filterDebounce = new TypingDebounce(this, () => _shell.Options.SearchDelayMilliseconds, Rebuild);
+        _filterText.TextChanged += (_, _) => _filterDebounce.Restart();
+        _filterText.Completed += (_, _) => _filterDebounce.Flush();
         var load = p.SecondaryButton("Load from folder…", 32);
         load.Clicked += async (_, _) => await LoadFolderAsync();
         _notice = p.Label("", p.Secondary, p.SmallSize);

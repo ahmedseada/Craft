@@ -33,6 +33,7 @@ public sealed class SettingsPage : ContentView, IDisposable
     private Grid _body = new();
     private ShellPalette _palette;
     private Entry _search;
+    private TypingDebounce? _searchDebounce;
     private CraftInput _searchField;
     private string _section;
     private KeyboardSection? _keyboardView;
@@ -86,7 +87,9 @@ public sealed class SettingsPage : ContentView, IDisposable
         string text = _search.Text ?? "";
         _search = p.Input("Search every setting", 32);
         _search.Text = text;
-        _search.TextChanged += (_, _) => Rebuild();
+        var debounce = _searchDebounce ??= new TypingDebounce(this, () => _shell.Options.SearchDelayMilliseconds, Rebuild);
+        _search.TextChanged += (_, _) => debounce.Restart();
+        _search.Completed += (_, _) => debounce.Flush();
         BackgroundColor = p.Ground;
         _narrowSections.TextColor = p.Text;
         _narrowSections.BackgroundColor = p.Raised;

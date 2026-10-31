@@ -22,6 +22,7 @@ public sealed class KeyboardSection : ContentView, IDisposable
     private readonly ShellPalette _palette;
     private readonly VerticalStackLayout _rows = new() { Spacing = 0 };
     private readonly Entry _search;
+    private readonly TypingDebounce _searchDebounce;
     private readonly Button _searchKeys;
     private readonly Label _notice;
     private readonly KeyRecorder _searchRecorder = new();
@@ -42,7 +43,9 @@ public sealed class KeyboardSection : ContentView, IDisposable
         var p = palette;
         _search = p.Input("Search commands or keys", 32);
         _search.WidthRequest = 320;
-        _search.TextChanged += (_, _) => FillRows();
+        _searchDebounce = new TypingDebounce(this, () => _shell.Options.SearchDelayMilliseconds, FillRows);
+        _search.TextChanged += (_, _) => _searchDebounce.Restart();
+        _search.Completed += (_, _) => _searchDebounce.Flush();
         _searchKeys = p.SecondaryButton("Search by keys", 32);
         ToolTipProperties.SetText(_searchKeys, "Press a shortcut to see what it runs");
         _searchKeys.Clicked += (_, _) => ToggleSearchByKeys();
@@ -53,7 +56,11 @@ public sealed class KeyboardSection : ContentView, IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => StopCapture();
+    public void Dispose()
+    {
+        StopCapture();
+        _searchDebounce.Dispose();
+    }
 
     /// <summary>Draws the section again from the model (after a change of the settings).</summary>
     public void Refresh()

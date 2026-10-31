@@ -568,6 +568,15 @@ asked: a status bar that shows any operation running, and a UI thread that never
   bytes, speed), agent runs (turn, tokens, tok/s), chat and completion generation, training rounds, code-search
   indexing, Roslyn workspace builds and generator runs, saves of large files, terminal and sandbox commands, plug-in
   loads. Plug-ins report through the same contract (a third party sees and uses the same thing).
+- **Notifications (the owner's request, 2026-10-31, first of U):** a notification centre: a bell in the status bar with a
+  count, and a window (a panel the user opens and closes) listing every operation and event as an entry: the running
+  ones with their live progress and Cancel (the activities above), the finished ones with their outcome and time
+  taken, failures with their reason and a way to retry or open the log, and messages plug-ins post
+  (`IEditorHost.Notify(title, text, severity, actions)`), each dismissable, grouped by source, kept for the session
+  (`CRAFT_NOTIFICATIONS_KEEP`). A short toast shows only what needs the user (a failure, a question); the rest waits in
+  the centre. What the right-hand "Models and devices" and "Terminal (sandbox)" side panel says today (model state,
+  device, sandbox commands) moves into the centre and the Models page; that side panel goes.
+
 - **The UI watchdog**: a background thread posts a tick through the dispatcher every `CRAFT_UI_WATCHDOG_MS` (100) and
   measures how late it runs; a stall over `CRAFT_UI_STALL_MS` (200) is recorded with the label of the UI work that was
   running (every Craft dispatch carries a label; MAUI's own events are labelled by their handler), shown in the status
@@ -589,6 +598,29 @@ Checks: the watchdog reports a deliberate block and stays silent in normal use (
 model load, an agent run, a terminal flood); the status bar lists every activity of a scripted session with its
 progress and cancels each; the owner loads a 7B model and runs the agent on Windows with the window answering
 throughout, and the watchdog's worst stall is written here.
+
+### Panels and layout (phase U2, added 2026-10-31 from the owner's run)
+
+The owner's run of D's shell found five faults, fixed in U2:
+
+1. **Pages cover the menu.** The settings and the Models page open as modal pages over the window, hiding the title
+   bar's menus. They open instead as tabs in the editor area (like a document tab, closable, one each), so the menus,
+   the rail and the status bar stay usable.
+2. **A new file does not show in the tree.** The tree follows the disk: a `FileSystemWatcher` on the open folder (off
+   the UI thread, batched, `CRAFT_WORKSPACE_IGNORE` applied) adds, removes and renames entries; a file the editor
+   saves, creates or renames shows at once; the agent's accepted changes too.
+3. **The right-hand side panel** (A1's "Models and devices", P5's "Terminal (sandbox)") goes: its content moves into the
+   notification centre and the Models page; the sandbox's output shows in the bottom panel's Terminal tab as its own
+   terminal tab ("Agent sandbox"), read-only.
+4. **The bottom panel** collapses (its tab strip's chevron, Ctrl+J, a click on the active tab) and resizes (a splitter
+   drag; the height kept per workspace).
+5. **Every panel collapses and resizes**: the explorer, the chat and agent column (a close button and a splitter), the
+   bottom panel; one `SplitPanel` control for all, sizes in `.craft/settings.json` per workspace and
+   `CRAFT_PANEL_*` defaults, the narrow layout unchanged.
+
+Checks: the menus answer with the settings and the Models page open; a file created by the editor, by the terminal and
+by the agent shows in the tree within a second; every panel collapses, resizes and keeps its size after a restart; the
+owner's eye on Windows.
 
 ## Learning in the editor: reinforcement learning on Idrak (phase R, added 2026-10-31 at the owner's request)
 
@@ -661,7 +693,8 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below), semantic colours and source generators included; Craft's own solution compiles with 0 errors in the reader's model (the bench and the `Semantic` tests). Left: the window on Windows (the owner's run).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | D | **Built (2026-10-31, "D as built" below); left: the window beside the design on Windows (the owner's run).** The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
 | T | **Built (2026-10-31, "T as built" below); left: the owner's run on Windows (ConPTY: `dotnet build` in it, a resize, two terminals, a file-only start in the home folder).** The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
-| U | The UI never freezes; every operation shows ("The UI never freezes" above): `IEditorHost.Activities` and the status bar's activity list with cancel, every long operation reporting, the UI watchdog with stall reports, the audit of every UI-thread path and the build check against synchronous waits. | The watchdog stays silent through typing, a model load, an agent run and a terminal flood, and reports a deliberate block; the owner loads a 7B model and runs the agent with the window answering throughout. | the owner's request (first in the next free slot) |
+| U | The UI never freezes; every operation shows ("The UI never freezes" above): `IEditorHost.Activities`the notification centre (bell, window, toasts for what needs the user),  and the status bar's activity list with cancel, every long operation reporting, the UI watchdog with stall reports, the audit of every UI-thread path and the build check against synchronous waits. | The watchdog stays silent through typing, a model load, an agent run and a terminal flood, and reports a deliberate block; the owner loads a 7B model and runs the agent with the window answering throughout. | the owner's request (first in the next free slot) |
+| U2 | Panels and layout ("Panels and layout" above): settings and the Models page as tabs (the menus never covered), the tree following the disk, the right-hand side panel gone (its content in the notification centre and the Models page), every panel collapsible and resizable with sizes kept. | The owner's five points checked on Windows. | the owner's request (beside U) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | **Built (2026-10-31, "A1 as built" below).** `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |

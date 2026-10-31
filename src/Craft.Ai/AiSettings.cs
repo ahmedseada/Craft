@@ -86,8 +86,11 @@ public sealed record AiSettings
     /// </summary>
     public bool LoadOnStart { get; init; }
 
-    /// <summary>The pause after typing before a completion is asked for, ms (<c>completionDelayMs</c>).</summary>
-    public int CompletionDelayMilliseconds { get; init; } = 300;
+    /// <summary>
+    /// The pause after typing before a completion is asked for, ms (<c>completionDelayMs</c>): a debounce, each keystroke
+    /// starts the wait again, so nothing is asked while typing goes on.
+    /// </summary>
+    public int CompletionDelayMilliseconds { get; init; } = 600;
 
     /// <summary>The most tokens one completion samples (<c>completionMaxTokens</c>).</summary>
     public int CompletionMaxTokens { get; init; } = 64;
@@ -185,7 +188,7 @@ public sealed record AiSettings
         new("completionModel", DefaultCompletionModel, "The model inline completion uses: a small one beside the chat model (model); empty: the chat model, only while it is loaded."),
         new("completionLoad", "true", "Whether inline completion loads its model on its first request; off: it uses a model already loaded, else does nothing."),
         new("loadOnStart", "false", "Whether the chat model loads when the editor starts; off: when you pick it at the composer, send a message or run 'AI: Load the local model'."),
-        new("completionDelayMs", "300", "Milliseconds after typing before a completion is asked for."),
+        new("completionDelayMs", "600", "The pause after the last keystroke before a completion is asked for, ms; each keystroke starts the wait again."),
         new("completionMaxTokens", "64", "The most tokens one completion samples."),
         new("completionMaxLines", "8", "The most lines one completion shows."),
         new("completionSuffixChars", "512", "Characters after the caret a fill-in-the-middle prompt carries (a prefix-first model processes them again each request); 0: none."),

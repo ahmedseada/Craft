@@ -29,6 +29,7 @@ public static class AiSettingShapes
         "device" => SettingShape.From(SettingSections.Models, "Device", "devices", ["auto", "cpu", "cuda:0", "vulkan:0"], other: true, group: "Local model"),
         "weights" => SettingShape.Choice(SettingSections.Models, "Weights once loaded", ["", "int8", "int4", "bfloat16"], "Local model"),
         "model" => SettingShape.Text(SettingSections.Models, "Model", "Local model"),
+        "completionDelayMs" => SettingShape.Number(SettingSections.Completion, "Delay after typing", 0, 5000, 50, "ms"),
         "completionTemperature" => SettingShape.Number(SettingSections.Completion, "Temperature", 0, 2, 0.05),
         "placementMaxError" => SettingShape.Number(SettingSections.Models, "Placement's largest difference", 0, 1, 0.05),
         _ => null,

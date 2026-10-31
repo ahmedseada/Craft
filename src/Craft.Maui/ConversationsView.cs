@@ -57,7 +57,8 @@ public sealed class ConversationsView : ContentView, IDisposable
         _inputBox = new CraftInput(palette, _input, radius: 8, multiline: true);
         ModelChip = new ModelChip(palette);
         _send.Clicked += (_, _) => Send();
-        _input.Completed += (_, _) => Send();
+        // Not Editor.Completed: on Windows a multi-line Editor raises it when it loses focus, which sent half-written
+        // messages (the owner's run, 2026-10-31). Send is the button, and Enter through the composer's key binding.
         SemanticProperties.SetDescription(_send, "Send");
         var header = new Grid
         {

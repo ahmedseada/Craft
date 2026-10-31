@@ -61,6 +61,9 @@ public static class ShellCommandIds
     /// <summary>Quick open, the title bar's search box: files by name, '&gt;' commands (Ctrl+P).</summary>
     public const string QuickOpen = "craft.quickOpen";
 
+    /// <summary>The rail's Search: the first registered search side view (EditorSideViews: the code search), else quick open.</summary>
+    public const string Search = "craft.search";
+
     /// <summary>Shows or hides the bottom panel (Ctrl+J).</summary>
     public const string TogglePanel = "craft.togglePanel";
 
@@ -180,6 +183,7 @@ public sealed class ShellModel : IDisposable
         // A plug-in's IEditorHost.OpenDocumentAsync (the agent's changed files): the file's tab, or a new document for a path
         // with no file yet (the user saves it there; the plug-in's proposal fills it).
         host.OpenFile = async (path, token) => File.Exists(path) ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument : NewFile().HostDocument;
+        host.DataFolder = Options.ResolveDataFolder();   // a plug-in's caches (the code search's index) go under it
         RegisterCommands();
         WatchMemory();
     }
@@ -674,6 +678,16 @@ public sealed class ShellModel : IDisposable
         Command(ShellCommandIds.RefreshTree, "View: Refresh the folder tree", (_, _) => { Tree?.Refresh(); return Task.CompletedTask; }, _ => Tree is not null, null);
         Command(ShellCommandIds.ToggleTheme, "View: Switch light and dark", (_, _) => { ToggleTheme(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.QuickOpen, "Go: Open a file by name ('>' for a command)", (_, _) => View(ShellViewNames.QuickOpen), null, "Ctrl+P");
+        Command(ShellCommandIds.Search, "View: Search", (host, _) =>
+        {
+            if (EditorSideViews.Names.Count > 0)
+            {
+                host.ShowPanel(EditorSideViews.Names[0]);
+                return Task.CompletedTask;
+            }
+
+            return View(ShellViewNames.QuickOpen);
+        }, null, null);
         Command(ShellCommandIds.TogglePanel, "View: Show or hide the bottom panel", (_, _) => View(ShellViewNames.TogglePanel), null, "Ctrl+J");
         Command(ShellCommandIds.ShowProblems, "View: Problems", (_, _) => View(ShellViewNames.Problems), null, null);
         Command(ShellCommandIds.ShowTerminal, "View: Terminal", (_, _) => View(ShellViewNames.Terminal), null, null);
@@ -716,7 +730,7 @@ public sealed class ShellModel : IDisposable
 
         // The activity rail: each item a command; one whose command is not registered (the agent before A2) does not show.
         Rail(new RailItem("craft.explorer", "Explorer", ShellCommandIds.ToggleTree, RailIcons.Explorer, 0));
-        Rail(new RailItem("craft.search", "Search", ShellCommandIds.QuickOpen, RailIcons.Search, 10));
+        Rail(new RailItem("craft.search", "Search", ShellCommandIds.Search, RailIcons.Search, 10));
         Rail(new RailItem("craft.agent", "Agent", ShellCommandIds.Agent, RailIcons.Agent, 30));
         Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));

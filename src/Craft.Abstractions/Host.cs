@@ -160,6 +160,30 @@ public interface IEditorHost
     {
     }
 
+    /// <summary>
+    /// The panel <paramref name="panelId"/> any plug-in added (the AI plug-in's chat, "ai.chat"), or null when none is shown:
+    /// a plug-in hands another's panel what that panel's contract takes (a picture to a conversation panel).
+    /// </summary>
+    IEditorPanel? FindPanel(string panelId) => null;
+
+    /// <summary>
+    /// Opens <paramref name="path"/> in the editor and puts the caret at <paramref name="line"/> and <paramref name="column"/>
+    /// (both 1-based, clamped to the text), showing it; true when it did. False when the host cannot open documents (the default).
+    /// </summary>
+    Task<bool> GoToAsync(string path, int line, int column = 1, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <summary>
+    /// A picture from <paramref name="source"/> (the clipboard's, or a file the user picks), read off the UI thread; null when
+    /// there is none, the user cancelled, or the host cannot read pictures (the default).
+    /// </summary>
+    Task<EditorImage?> ReadImageAsync(EditorImageSource source, CancellationToken cancellationToken = default) => Task.FromResult<EditorImage?>(null);
+
+    /// <summary>
+    /// The app's own data folder (where its settings and recent list live: <c>CRAFT_DATA_FOLDER</c>), for a plug-in's caches
+    /// (the code search's index); null when the host has none.
+    /// </summary>
+    string? DataFolder => null;
+
     /// <summary>The registered commands (<see cref="EditorCommands"/>), in order.</summary>
     IReadOnlyList<IEditorCommand> Commands { get; }
 

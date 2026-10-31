@@ -84,6 +84,47 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// </summary>
     public Func<string, CancellationToken, Task<IEditorDocument?>>? OpenFile { get; set; }
 
+    /// <summary>
+    /// How <see cref="GoToAsync"/> opens a file at a line and column (the shell sets it); null: the call gives false.
+    /// </summary>
+    public Func<string, int, int, CancellationToken, Task<bool>>? GoTo { get; set; }
+
+    /// <summary>
+    /// How <see cref="ReadImageAsync"/> reads a picture (the shell sets it: the platform's clipboard, the file picker); null:
+    /// the call gives null.
+    /// </summary>
+    public Func<EditorImageSource, CancellationToken, Task<EditorImage?>>? ReadImage { get; set; }
+
+    /// <inheritdoc />
+    /// <remarks>Set by the shell to the app's data folder (<c>CRAFT_DATA_FOLDER</c>); null in a host without one.</remarks>
+    public string? DataFolder { get; set; }
+
+    /// <inheritdoc />
+    public IEditorPanel? FindPanel(string panelId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(panelId);
+        foreach (var panel in _panels)
+        {
+            if (string.Equals(panel.Id, panelId, StringComparison.Ordinal))
+            {
+                return panel;
+            }
+        }
+
+        return null;
+    }
+
+    /// <inheritdoc />
+    public Task<bool> GoToAsync(string path, int line, int column = 1, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return GoTo is { } go ? go(Path.GetFullPath(path), Math.Max(1, line), Math.Max(1, column), cancellationToken) : Task.FromResult(false);
+    }
+
+    /// <inheritdoc />
+    public Task<EditorImage?> ReadImageAsync(EditorImageSource source, CancellationToken cancellationToken = default) =>
+        ReadImage is { } read ? read(source, cancellationToken) : Task.FromResult<EditorImage?>(null);
+
     /// <inheritdoc />
     public void ShowPanel(string panelId)
     {

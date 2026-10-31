@@ -29,6 +29,10 @@ public static class ApiGuardTests
         Assembly.Load(new AssemblyName("Craft.Plugins.Sampler")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Sandbox")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Placement")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Search")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Telemetry")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.WorkspaceModels")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Vision")),
     ];
 
     [Test]

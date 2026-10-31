@@ -229,10 +229,13 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             }
         }
 
+        // The editor's tools of the setting agentTools (the code search's search_code), made here on the UI thread.
+        var extra = ExtraTools(settings);
+
         string end;
         try
         {
-            end = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, source.Token), CancellationToken.None).ConfigureAwait(true);
+            end = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, extra, source.Token), CancellationToken.None).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -259,9 +262,34 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     }
 
     // On the thread pool: the model, the working copy, the sandbox, the tools and the agent's loop.
-    private async Task<string> RunAgentAsync(string task, string workspace, Dictionary<string, string> unsaved, AiSettings settings, CancellationToken token)
+    // The tools of every registered editor tool set whose names agentTools lists; a name none has is said in the run.
+    private List<ITool> ExtraTools(AiSettings settings)
     {
-        var lease = await _models.ChatAsync(token).ConfigureAwait(false);
+        var picked = new List<ITool>(settings.AgentTools.Count);
+        if (settings.AgentTools.Count == 0)
+        {
+            return picked;
+        }
+
+        var live = EditorToolSets.Live(Host);
+        foreach (var name in settings.AgentTools)
+        {
+            if (live.FirstOrDefault(t => string.Equals(t.Definition.Name, name, StringComparison.Ordinal)) is { } tool)
+            {
+                picked.Add(tool);
+            }
+            else
+            {
+                Log(new ConversationEntry(ConversationRole.Note, $"The tool '{name}' (CRAFT_PLUGIN_AI_AGENTTOOLS) is in no registered tool set; the agent runs without it."));
+            }
+        }
+
+        return picked;
+    }
+
+    private async Task<string> RunAgentAsync(string task, string workspace, Dictionary<string, string> unsaved, AiSettings settings, IReadOnlyList<ITool> extra, CancellationToken token)
+    {
+        var lease = await _models.AgentAsync(token).ConfigureAwait(false);
         var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot run as an agent.");
         // Idrak's built-ins (the "process" sandbox, the coding languages of the families' plug-in) are registered by now:
         // the lease's load registered the plug-in's Idrak libraries and the idrakPlugins packages.
@@ -296,6 +324,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             TimeLimit = TimeSpan.FromMinutes(settings.AgentMinutes),
             Sampling = new GenerationOptions { NumPredict = settings.AgentMaxTokens, NumCtx = lease.ContextLength },
             Tools = new CodingToolOptions { Sandbox = inner.Name },
+            ExtraTools = extra,
         };
         var tools = new CodingTools(copy.Copy, options.Tools, sandbox);
         var observed = new CountingChatModel(chat, () => Post(TurnStarted), (tokens, seconds) => Post(() => Counted(tokens, seconds)));

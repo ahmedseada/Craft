@@ -26,7 +26,7 @@ public sealed record AiSettings
     /// <summary>Whether the MCP server starts with the editor (<c>mcpOnStart</c>); off: the command "ai.mcpStart" starts it.</summary>
     public bool McpOnStart { get; init; }
 
-    /// <summary>The local model's name, resolved by Idrak's model sources (<c>model</c>); empty for none.</summary>
+    /// <summary>The local model's name, resolved by Idrak's model sources (<c>model</c>); empty for the workspace's chat model (<see cref="WithWorkspaceModels"/>), else none.</summary>
     public string Model { get; init; } = "";
 
     /// <summary>The device the local model loads on (<c>device</c>): "auto" (the best found), "cpu", "vulkan:0" and the like.</summary>
@@ -59,7 +59,7 @@ public sealed record AiSettings
     /// <summary>Whether inline completion shows ghost text (<c>completion</c>).</summary>
     public bool Completion { get; init; } = true;
 
-    /// <summary>The model inline completion uses (<c>completionModel</c>); empty for <see cref="Model"/>.</summary>
+    /// <summary>The model inline completion uses (<c>completionModel</c>); empty for the workspace's completion model, else <see cref="Model"/>.</summary>
     public string CompletionModel { get; init; } = "";
 
     /// <summary>The pause after typing before a completion is asked for, ms (<c>completionDelayMs</c>).</summary>
@@ -132,6 +132,75 @@ public sealed record AiSettings
     /// <summary>The folder names the agent's working copy leaves out (<c>agentCopyIgnore</c>; obj stays, so a restore is not needed).</summary>
     public IReadOnlyList<string> AgentCopyIgnore { get; init; } = ["bin", ".git", ".vs", "node_modules", "test-output"];
 
+    /// <summary>The largest picture the chat sends, MiB (<c>chatImageMaxMb</c>).</summary>
+    public int ChatImageMaxMegabytes { get; init; } = 20;
+
+    /// <summary>The model the agent uses (<c>agentModel</c>); empty for the workspace's agent model, else <see cref="Model"/>.</summary>
+    public string AgentModel { get; init; } = "";
+
+    /// <summary>
+    /// The editor's tools (by name, from every registered <c>EditorToolSets</c> set) the agent is offered beside its coding
+    /// tools (<c>agentTools</c>): the code search's <c>search_code</c> by default; a name no set has is left out, said in the run.
+    /// </summary>
+    public IReadOnlyList<string> AgentTools { get; init; } = ["search_code"];
+
+    /// <summary>
+    /// The Idrak progress reporter a model's download and load report through (<c>progress</c>, a name in Idrak's
+    /// <c>ProgressReporters</c>): "editor", the status bar's, which the telemetry plug-in registers; not registered, the load
+    /// reports its stages only and says so.
+    /// </summary>
+    public string Progress { get; init; } = "editor";
+
+    /// <summary>The roles whose model came from the workspace (<c>.craft/model.json</c>, <see cref="ModelRoleSources"/>), not from a setting.</summary>
+    public IReadOnlyList<string> WorkspaceRoles { get; init; } = [];
+
+    /// <summary>
+    /// These settings with the workspace's model for each role the user left empty (<see cref="ModelRoleSources.ModelFor"/>:
+    /// the chat model, completion's, the agent's), and <see cref="WorkspaceRoles"/> naming them. A workspace file that does
+    /// not read leaves the settings as they are and gives the reason in <paramref name="problem"/>.
+    /// </summary>
+    public AiSettings WithWorkspaceModels(string? workspaceFolder, out string? problem)
+    {
+        problem = null;
+        if (ModelRoleSources.All.Count == 0 || Model.Length > 0 && CompletionModel.Length > 0 && AgentModel.Length > 0)
+        {
+            return this;
+        }
+
+        try
+        {
+            var roles = new List<string>(3);
+            string Pick(string own, string role)
+            {
+                if (own.Length > 0)
+                {
+                    return own;
+                }
+
+                if (ModelRoleSources.ModelFor(role, workspaceFolder) is { } model)
+                {
+                    roles.Add(role);
+                    return model;
+                }
+
+                return "";
+            }
+
+            var resolved = this with
+            {
+                Model = Pick(Model, ModelRoles.Chat),
+                CompletionModel = Pick(CompletionModel, ModelRoles.Completion),
+                AgentModel = Pick(AgentModel, ModelRoles.Agent),
+            };
+            return roles.Count == 0 ? this : resolved with { WorkspaceRoles = roles };
+        }
+        catch (InvalidDataException error)
+        {
+            problem = error.Message;
+            return this;
+        }
+    }
+
     /// <summary>The settings the plug-in declares, with their defaults and meanings (the settings page lists them).</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
@@ -171,6 +240,10 @@ public sealed record AiSettings
         new("agentMaxTokens", "2048", "The most tokens one agent turn samples."),
         new("agentFolder", "", "Where the agent's working copies go; empty: the temporary folder."),
         new("agentCopyIgnore", "bin;.git;.vs;node_modules;test-output", "Folder names the agent's working copy leaves out (';' or ',' between them)."),
+        new("chatImageMaxMb", "20", "The largest picture (pasted, dropped, a screenshot) the chat sends with a message, MiB."),
+        new("agentModel", "", "The model the agent uses; empty: the workspace's agent model (.craft/model.json), else the model."),
+        new("agentTools", "search_code", "The editor's tools (from every registered tool set) offered to the agent beside its coding tools (';' or ',' between them); empty: none."),
+        new("progress", "editor", "The Idrak progress reporter a model's download and load report through (the status bar's 'editor', from the telemetry plug-in)."),
     ];
 
     /// <summary>The settings from the environment (a process outside the app).</summary>
@@ -266,6 +339,10 @@ public sealed record AiSettings
             AgentMaxTokens = Whole("agentMaxTokens", defaults.AgentMaxTokens, 1, 1_000_000),
             AgentFolder = Text("agentFolder") ?? "",
             AgentCopyIgnore = List("agentCopyIgnore", defaults.AgentCopyIgnore),
+            AgentModel = Text("agentModel") ?? "",
+            ChatImageMaxMegabytes = Whole("chatImageMaxMb", defaults.ChatImageMaxMegabytes, 1, 1024),
+            AgentTools = List("agentTools", defaults.AgentTools),
+            Progress = Text("progress") ?? defaults.Progress,
         };
     }
 }

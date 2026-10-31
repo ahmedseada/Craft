@@ -126,6 +126,14 @@ public interface IConversationPanel : IEditorPanel
     /// <summary>Sends what the user typed (a message, a steering note while busy); completes when it was taken, not when the reply ends.</summary>
     Task SubmitAsync(string text, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Attaches <paramref name="image"/> to the next message (a pasted or dropped picture, a screenshot): null when it was
+    /// attached (a chip shows it), else why the panel refuses it. A panel that sends pictures to a model sends them as
+    /// "image" message parts and, when its model takes text only, refuses to send rather than drop the picture. The default
+    /// refuses: the panel takes text only.
+    /// </summary>
+    string? AttachImage(EditorImage image) => $"The panel '{Title}' takes text only; the picture was not attached.";
+
     /// <summary>Raised on the UI thread when an entry, the chips, the status, the header or the busy state changed.</summary>
     event EventHandler<ConversationChangedEventArgs>? ConversationChanged;
 }

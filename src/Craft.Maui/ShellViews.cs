@@ -446,4 +446,16 @@ public interface IShellPlatform
 
     /// <summary>The platform's terminal host (phase T: ConPTY on Windows), registered while the shell runs; null when it has none (the library's "pipe" serves).</summary>
     ITerminalHost? TerminalHost => null;
+
+    /// <summary>
+    /// The picture on the clipboard (a screenshot just taken, an image copied, an image file copied), its encoded bytes read
+    /// off the UI thread; null when the clipboard holds none or the platform cannot read it (the default).
+    /// </summary>
+    Task<EditorImage?> ReadClipboardImageAsync(CancellationToken cancellationToken = default) => Task.FromResult<EditorImage?>(null);
+
+    /// <summary>
+    /// The picture dropped on a view (<paramref name="drop"/>: the drop's arguments, whose platform data holds the files or
+    /// the bitmap), read off the UI thread; null when the drop holds none or the platform cannot read it (the default).
+    /// </summary>
+    Task<EditorImage?> ReadDroppedImageAsync(DropEventArgs drop, CancellationToken cancellationToken = default) => Task.FromResult<EditorImage?>(null);
 }

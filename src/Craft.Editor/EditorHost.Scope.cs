@@ -84,6 +84,16 @@ public sealed partial class EditorHost
             }
         }
 
+        public string? DataFolder => host.DataFolder;
+
+        public IEditorPanel? FindPanel(string panelId) => _closed ? null : host.FindPanel(panelId);
+
+        public Task<bool> GoToAsync(string path, int line, int column = 1, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult(false) : host.GoToAsync(path, line, column, cancellationToken);
+
+        public Task<EditorImage?> ReadImageAsync(EditorImageSource source, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult<EditorImage?>(null) : host.ReadImageAsync(source, cancellationToken);
+
         public Task<IEditorDocument?> OpenDocumentAsync(string path, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult<IEditorDocument?>(null) : host.OpenDocumentAsync(path, cancellationToken);
 

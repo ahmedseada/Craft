@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.WorkspaceModels",
+  "version": "0.1.0",
+  "summary": "P10 · Workspace model names: craft:NAME from the project's .craft/model.json, and its default model per role (chat, completion, agent) [ModelSources \"craft\", a new kind; ModelRoleSources \"workspace\"]",
+  "contractVersion": "1.0",
+  "capabilities": ["files"]
+}

@@ -74,6 +74,9 @@ public sealed class ConversationsView : ContentView, IDisposable
         layout.Add(_status, 0, 3);
         layout.Add(footer, 0, 4);
         Content = layout;
+        var drop = new DropGestureRecognizer { AllowDrop = true };
+        drop.Drop += OnDrop;
+        layout.GestureRecognizers.Add(drop);
         host.PanelsChanged += OnPanelsChanged;
         OnPanelsChanged(this, EventArgs.Empty);
     }
@@ -101,6 +104,55 @@ public sealed class ConversationsView : ContentView, IDisposable
 
     /// <summary>Puts the keyboard's focus in the input.</summary>
     public void FocusInput() => _input.Focus();
+
+    /// <summary>
+    /// How a drop's picture is read (the shell sets it to the platform's <see cref="IShellPlatform.ReadDroppedImageAsync"/>);
+    /// null: a drop attaches nothing.
+    /// </summary>
+    public Func<DropEventArgs, Task<EditorImage?>>? ReadDrop { get; set; }
+
+    /// <summary>
+    /// Attaches <paramref name="image"/> to the panel shown (<see cref="IConversationPanel.AttachImage"/>); null when it was
+    /// attached, else why not (no panel shown, or the panel's refusal).
+    /// </summary>
+    public string? Attach(EditorImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return _shown is { } panel ? panel.AttachImage(image) : "No chat is shown to attach the picture to.";
+    }
+
+    // A picture dropped on the chat column goes to the panel shown; a drop with none, or a refusal, is said.
+    private async void OnDrop(object? sender, DropEventArgs e)
+    {
+        if (ReadDrop is not { } read)
+        {
+            return;
+        }
+
+        EditorImage? image;
+        try
+        {
+            image = await read(e);
+        }
+#pragma warning disable CA1031 // A drop that cannot be read is said; the editor goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(EditorLogLevel.Warning, "The dropped item could not be read as a picture.", error);
+            return;
+        }
+
+        if (image is null)
+        {
+            await _host.ShowMessageAsync("Not a picture", $"Drop a picture ({string.Join(", ", EditorImage.Extensions)}) on the chat to send it with your next message.");
+            return;
+        }
+
+        if (Attach(image) is { } refusal)
+        {
+            await _host.ShowMessageAsync("Picture not attached", refusal);
+        }
+    }
 
     /// <summary>Takes the theme's colours.</summary>
     public void ApplyTheme(ITheme theme)

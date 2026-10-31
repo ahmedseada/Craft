@@ -36,6 +36,14 @@ public sealed class AiModels : IDisposable
         return LeaseAsync(settings.CompletionModel.Length > 0 ? settings.CompletionModel : settings.Model, cancellationToken);
     }
 
+    /// <summary>The agent's lease (<c>agentModel</c>, else <c>model</c>).</summary>
+    /// <exception cref="InvalidOperationException">No model is set.</exception>
+    public Task<ModelLease> AgentAsync(CancellationToken cancellationToken)
+    {
+        var settings = _settings();
+        return LeaseAsync(settings.AgentModel.Length > 0 ? settings.AgentModel : settings.Model, cancellationToken);
+    }
+
     /// <summary>Whether a model for completion is named.</summary>
     public bool HasCompletionModel
     {
@@ -80,7 +88,8 @@ public sealed class AiModels : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (model.Length == 0)
         {
-            throw new InvalidOperationException("No model is set: set the model (CRAFT_PLUGIN_AI_MODEL) on the settings page: a folder, a .gguf file, store:NAME or a Hugging Face id.");
+            throw new InvalidOperationException("No model is set: set the model (CRAFT_PLUGIN_AI_MODEL) on the settings page (a folder, a .gguf file, store:NAME or a Hugging Face id), "
+                + "or name the workspace's models in .craft/model.json (the workspace models plug-in).");
         }
 
         var settings = _settings();

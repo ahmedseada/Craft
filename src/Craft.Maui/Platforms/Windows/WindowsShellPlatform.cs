@@ -28,6 +28,13 @@ public sealed class WindowsShellPlatform : IShellPlatform
     public ITerminalHost? TerminalHost { get; } = new ConPtyTerminalHost();
 
     /// <inheritdoc />
+    public Task<EditorImage?> ReadClipboardImageAsync(CancellationToken cancellationToken = default) => WindowsImages.FromClipboardAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public Task<EditorImage?> ReadDroppedImageAsync(Microsoft.Maui.Controls.DropEventArgs drop, CancellationToken cancellationToken = default) =>
+        WindowsImages.FromDropAsync(drop, cancellationToken);
+
+    /// <inheritdoc />
     public IDisposable RouteKeys(MauiWindow window, IEditorKeyHandler handler)
     {
         ArgumentNullException.ThrowIfNull(window);

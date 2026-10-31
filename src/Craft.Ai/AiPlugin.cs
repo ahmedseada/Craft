@@ -255,8 +255,26 @@ public sealed class AiSession : IDisposable
         return false;
     }
 
-    /// <summary>The settings as the host reads them now.</summary>
-    public AiSettings Settings => AiSettings.From(_host.Settings);
+    /// <summary>
+    /// The settings as the host reads them now, each role the user left without a model given the workspace's
+    /// (<see cref="AiSettings.WithWorkspaceModels"/>); a workspace file that does not read is logged once and left out.
+    /// </summary>
+    public AiSettings Settings
+    {
+        get
+        {
+            var settings = AiSettings.From(_host.Settings).WithWorkspaceModels(_host.WorkspaceFolder, out var problem);
+            if (problem is not null && !string.Equals(problem, _workspaceProblem, StringComparison.Ordinal))
+            {
+                _workspaceProblem = problem;
+                _host.Log(EditorLogLevel.Warning, "The workspace's models were not read: " + problem);
+            }
+
+            return settings;
+        }
+    }
+
+    private string? _workspaceProblem;
 
     /// <summary>Starts the MCP server of the live tools (once); its address goes to the status bar.</summary>
     public async Task StartMcpAsync(CancellationToken cancellationToken)

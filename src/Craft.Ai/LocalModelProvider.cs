@@ -6,11 +6,15 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.Loader;
 using Craft.Abstractions;
+using System.Collections.Concurrent;
+using Idrak.Abstraction.Diagnostics;
 using Idrak.Abstraction.Generation;
 using Idrak.Abstraction.Plugins;
 using Idrak.Abstraction.Serving;
+using Idrak.Data;
 using Idrak.Models;
 using Idrak.Text;
+using Idrak.Text.Generation;
 
 namespace Craft.Ai;
 
@@ -29,6 +33,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     private static readonly Lock PluginsGate = new();
     private static bool s_pluginsRegistered;
     private readonly Lock _gate = new();
+    private readonly ConcurrentDictionary<string, IProgress<ModelLoadStatus>> _loadProgress = new(StringComparer.Ordinal);
     private ModelHost<LocalModel>? _models;
     private TimeSpan? _keepAlive;
 
@@ -63,8 +68,9 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 Where = "local",
                 Roles =
                 [
-                    new ModelRole("Chat and agent", model, model is null ? "none set" : _state, model is not null && _stateIsProblem),
-                    new ModelRole("Inline completion", model, model is null ? "none set" : "the chat model (fill-in-the-middle when its family registers a format)"),
+                    new ModelRole("Chat", model, model is null ? "none set" : From(ModelRoles.Chat) + _state, model is not null && _stateIsProblem),
+                    Role("Inline completion", settings.CompletionModel, ModelRoles.Completion, model, "fill-in-the-middle when its family registers a format"),
+                    Role("Agent", settings.AgentModel, ModelRoles.Agent, model, "its commands through the agent's sandbox"),
                 ],
                 Device = _device,
                 LoadCommand = AiPlugin.LoadModelCommand,
@@ -79,6 +85,14 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             };
         }
     }
+
+    // A role with its own model (from a setting or the workspace), else the chat model's.
+    private ModelRole Role(string title, string own, string role, string? chat, string what) =>
+        own.Length > 0 ? new ModelRole(title, own, From(role) + what)
+            : new ModelRole(title, chat, chat is null ? "none set" : "the chat model; " + what);
+
+    // "from .craft/model.json · " when the workspace gave the role its model.
+    private string From(string role) => Settings.WorkspaceRoles.Contains(role, StringComparer.Ordinal) ? "from .craft/model.json · " : "";
 
     /// <summary>Raised when <see cref="Status"/> changed (a load's stage, its end), on the reporting thread.</summary>
     public event EventHandler? StatusChanged;
@@ -121,7 +135,24 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         using var ticker = new Timer(_ => progress?.Report(new ModelLoadStatus("loading", null,
             string.Create(CultureInfo.InvariantCulture, $"loading {key.Model} on {key.Device}, {watch.Elapsed.TotalSeconds:F1} s"))), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
         progress?.Report(new ModelLoadStatus("resolving", null, $"resolving {key.Model} (Idrak's model sources)"));
-        var lease = host.Acquire(key.Text, _keepAlive);
+        if (progress is not null)
+        {
+            _loadProgress[key.Text] = progress;   // the load (made once per key by the host) reports its pull to it
+        }
+
+        ModelHost<LocalModel>.Lease lease;
+        try
+        {
+            lease = host.Acquire(key.Text, _keepAlive);
+        }
+        finally
+        {
+            if (progress is not null)
+            {
+                _loadProgress.TryRemove(new KeyValuePair<string, IProgress<ModelLoadStatus>>(key.Text, progress));
+            }
+        }
+
         var model = lease.Model;
         _device = model.Device;
         progress?.Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
@@ -137,20 +168,34 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             if (_models is null)
             {
                 _keepAlive = TimeSpan.FromMinutes(settings.KeepAliveMinutes);
-                _models = new ModelHost<LocalModel>(text => Load(LoadKey.Parse(text), Settings), _keepAlive);
+                _models = new ModelHost<LocalModel>(text => Load(LoadKey.Parse(text), Settings, _loadProgress.GetValueOrDefault(text)), _keepAlive);
             }
 
             return _models;
         }
     }
 
-    private static LocalModel Load(LoadKey key, AiSettings settings)
+    private static LocalModel Load(LoadKey key, AiSettings settings, IProgress<ModelLoadStatus>? status)
     {
         IdrakLibraries.EnsureIncluded();
         RegisterIdrakPlugins(settings);
         ApplyLimits(settings);
-        string folder = ModelSource.Resolve(key.Model);
+        // The pull and the load report through Idrak's progress reporter of the setting (the status bar's "editor", from the
+        // telemetry plug-in): a download's bytes, speed and time left, then the load's time so far.
+        using var reporter = StartReporter(settings, $"pull {key.Model}", status);
+        string folder;
+        try
+        {
+            folder = ModelSource.Resolve(key.Model, downloader: new Downloader { Progress = new PullProgress(reporter, status, key.Model) });
+        }
+        catch (Exception error)
+        {
+            reporter.Finish($"pull {key.Model}: failed ({error.Message})");
+            throw;
+        }
+
         var device = key.Device.Equals("auto", StringComparison.OrdinalIgnoreCase) ? Device.Default : Device.Parse(key.Device);
+        reporter.NextStage($"load {key.Model} on {device}", null, ProgressUnit.Elapsed, keepLine: false);
         string weights = key.Weights.ToLowerInvariant();
         var model = PretrainedModel.Load(folder, new PretrainedOptions
         {
@@ -161,18 +206,76 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             PackedFormatName = weights is "" or "int8" or "int4" or "bf16" or "bfloat16" or "float32" or "f32" ? null : key.Weights,
             MaxPositions = key.Context > 0 ? key.Context : null,
         });
+        ModelImages? images = null;
         try
         {
             int context = key.Context > 0 ? Math.Min(key.Context, model.MaxPositions) : model.MaxPositions;
             var layout = KeyValueLayouts.Get("float32");
-            IChatModel? chat = model.ChatTemplate is null ? null : model.CreateChat(layout, context);
+            // A vision-language model (its family registered in Idrak's VisionFamilies, by the vision plug-in) reads the
+            // chat's pictures: its chat takes "image" parts (PartKinds); a text model's takes text only.
+            images = ModelImages.For(model);
+            IChatModel? chat = model.ChatTemplate is null ? null
+                : new ChatGenerator(model.CreateGenerator(layout, context), model.ChatTemplate) { Images = images?.Images };
             ITextModel text = model.CreateGenerator(layout, context);
-            return new LocalModel(model, chat, text, context, device.ToString()) { Tokenizer = model.Tokenizer as IPretrainedTokenizer };
+            reporter.Finish($"{key.Model} loaded on {device}{(images is null ? "" : ", reads pictures")}");
+            return new LocalModel(model, chat, text, context, device.ToString(), images) { Tokenizer = model.Tokenizer as IPretrainedTokenizer };
         }
         catch
         {
+            images?.Dispose();
             model.Dispose();
             throw;
+        }
+    }
+
+    // The reporter the setting names; not registered (the telemetry plug-in removed), the quiet one, and the reason said.
+    private static IProgressReporter StartReporter(AiSettings settings, string label, IProgress<ModelLoadStatus>? status)
+    {
+        if (ProgressReporters.Find(settings.Progress) is null)
+        {
+            status?.Report(new ModelLoadStatus("progress", null,
+                $"The progress reporter '{settings.Progress}' is not registered (registered: {string.Join(", ", ProgressReporters.Names)}): the telemetry plug-in "
+                + "(Craft.Plugins.Telemetry) is removed or disabled, or set CRAFT_PLUGIN_AI_PROGRESS; the load shows its stages only."));
+            return ProgressReporters.Start(label, null, ProgressUnit.Bytes, new ProgressOptions { Reporter = ProgressReporters.QuietReporter });
+        }
+
+        return ProgressReporters.Start(label, null, ProgressUnit.Bytes, new ProgressOptions { Reporter = settings.Progress });
+    }
+
+    /// <summary>
+    /// A download's progress (Idrak.Data's <see cref="Downloader.Progress"/>, on the download's thread) into the reporter (a
+    /// stage per file: its bytes, speed and time left) and, at most four times a second, into the load's status (the model
+    /// chip's state line, with the share done).
+    /// </summary>
+    private sealed class PullProgress(IProgressReporter reporter, IProgress<ModelLoadStatus>? status, string model) : IProgress<DownloadProgress>
+    {
+        private readonly Lock _gate = new();
+        private string _file = "";
+        private long _shown;
+
+        public void Report(DownloadProgress value)
+        {
+            lock (_gate)
+            {
+                string file = value.File.Length > 0 ? value.File : value.Url;
+                if (!string.Equals(file, _file, StringComparison.Ordinal))
+                {
+                    _file = file;
+                    reporter.NextStage($"pull {model}: {Path.GetFileName(file)}", value.Total, ProgressUnit.Bytes, keepLine: false);
+                }
+
+                reporter.Report(value.Received);
+                long now = Environment.TickCount64;
+                if (status is null || !value.Completed && now - _shown < 250)
+                {
+                    return;
+                }
+
+                _shown = now;
+                double? fraction = value.Total is > 0 ? Math.Min(1, value.Received / (double)value.Total.Value) : null;
+                status.Report(new ModelLoadStatus("pull", fraction,
+                    ProgressText.Format($"pull {model}: {Path.GetFileName(file)}", value.Received, value.Total, value.Elapsed, ProgressUnit.Bytes)));
+            }
         }
     }
 
@@ -229,7 +332,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     }
 
     /// <summary>A loaded model: the weights and its chat and text generators.</summary>
-    private sealed class LocalModel(PretrainedModel model, IChatModel? chat, ITextModel text, int contextLength, string device) : IDisposable
+    private sealed class LocalModel(PretrainedModel model, IChatModel? chat, ITextModel text, int contextLength, string device, ModelImages? images) : IDisposable
     {
         public IChatModel? Chat { get; } = chat;
 
@@ -241,6 +344,10 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
         public IPretrainedTokenizer? Tokenizer { get; init; }
 
-        public void Dispose() => model.Dispose();
+        public void Dispose()
+        {
+            images?.Dispose();
+            model.Dispose();
+        }
     }
 }

@@ -53,6 +53,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly QuickOpen _quickOpen;
     private readonly FolderTreeView _tree = new();
     private readonly ExplorerView _explorer;
+    private SideQueryView? _side;
     private readonly TabStripView _tabStrip;
     private readonly BreadcrumbView _breadcrumb;
     private readonly ContentView _editorArea = new();
@@ -125,9 +126,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         // sheet over the editor when narrow (PhoneChat.dc.html); craft.chat (Ctrl+Alt+I) shows or hides it, a plug-in's
         // IEditorHost.ShowPanel brings one forward.
         _conversations = new ConversationsView(_host, _shell.Options.FontFamily);
+        _conversations.ReadDrop = drop => _startup.Platform.ReadDroppedImageAsync(drop);
         _chatBox = new ContentView { Content = _conversations, WidthRequest = _shell.Options.ChatWidth };
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
         _host.PanelShowRequested += OnPanelShowRequested;
+        _host.GoTo = GoToAsync;
+        _host.ReadImage = ReadImageAsync;
         RegisterAppCommands();
 
         _titleWide = new TitleBarView(_palette);
@@ -254,6 +258,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _body.Add(_rail, 0, 0);
         _body.Add(_railLine, 1, 0);
         _body.Add(_explorer, 2, 0);
+        EditorSideViews.Changed += OnSideViewsChanged;
+        ModelTelemetry.Changed += OnModelMeasured;
         _body.Add(_explorerLine, 3, 0);
         _body.Add(_center, 4, 0);
         _body.Add(_panelsLine, 5, 0);
@@ -318,6 +324,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         _disposed = true;
         EditorMenus.Changed -= OnMenusChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
+        EditorSideViews.Changed -= OnSideViewsChanged;
+        ModelTelemetry.Changed -= OnModelMeasured;
+        _side?.Dispose();
+        _host.GoTo = null;
+        _host.ReadImage = null;
         _conversations.Dispose();
         foreach (var provider in _watchedProviders)
         {
@@ -518,8 +529,63 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
+    // A rail side view (EditorSideViews: the code search) in the explorer's column, in the tree's place; named again, the
+    // tree comes back. The column shows (a folder is open) whichever is chosen.
+    private bool ShowSideView(string id)
+    {
+        if (EditorSideViews.Find(id) is not { } view)
+        {
+            return false;
+        }
+
+        if (_side is { } shown && ReferenceEquals(shown.View, view))
+        {
+            CloseSideView();
+            return true;
+        }
+
+        CloseSideView();
+        _side = new SideQueryView(view, _palette) { WidthRequest = _shell.Options.TreeWidth };
+        _body.Add(_side, 2, 0);
+        if (!_shell.Layout.TreeVisible)
+        {
+            _shell.Layout.ToggleTree();
+        }
+
+        ApplyLayout();
+        _side.FocusInput();
+        return true;
+    }
+
+    private void CloseSideView()
+    {
+        if (_side is not { } side)
+        {
+            return;
+        }
+
+        _side = null;
+        _body.Remove(side);
+        side.Dispose();
+        ApplyLayout();
+    }
+
+    // The view shown was unregistered (its plug-in went): the tree is back.
+    private void OnSideViewsChanged(object? sender, EventArgs e)
+    {
+        if (_side is { } side && EditorSideViews.Find(side.View.Id) is null)
+        {
+            CloseSideView();
+        }
+    }
+
     private void OnPanelShowRequested(object? sender, string panelId)
     {
+        if (ShowSideView(panelId))
+        {
+            return;
+        }
+
         if (!_conversations.Show(panelId))
         {
             return;
@@ -843,6 +909,8 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private void OnModelStatusChanged(object? sender, EventArgs e) => Dispatcher.Dispatch(UpdateModel);
 
+    private void OnModelMeasured(object? sender, EventArgs e) => Dispatcher.Dispatch(UpdateModel);
+
     private void UpdateModel()
     {
         var status = ShellText.ModelStatus()?.Status;
@@ -1009,6 +1077,74 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
+    // A plug-in's IEditorHost.GoToAsync (the code search's results): the file's tab, the caret at the line and column.
+    private async Task<bool> GoToAsync(string path, int line, int column, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await _shell.OpenFileAsync(path, cancellationToken: cancellationToken) is null)
+            {
+                return false;
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _status.Notice.Text = $"Could not open {path}: {error.Message}";
+            return false;
+        }
+
+        ShowActive();
+        if (_shown is not { Model: { } model } view)
+        {
+            return false;
+        }
+
+        var snapshot = model.Snapshot;
+        var at = snapshot.GetLine(Math.Clamp(line - 1, 0, Math.Max(0, snapshot.LineCount - 1)));
+        int position = at.Start + Math.Clamp(column - 1, 0, at.Length);
+        model.Select(position, position);
+        model.EnsureCaretVisible();
+        view.Focus();
+        return true;
+    }
+
+    // A plug-in's IEditorHost.ReadImageAsync (a picture for the chat): the platform's clipboard, or a picked file read off
+    // the UI thread; null when there is none, the user cancelled, or the file is not a picture (said in the status bar).
+    private async Task<EditorImage?> ReadImageAsync(EditorImageSource source, CancellationToken cancellationToken)
+    {
+        if (source == EditorImageSource.Clipboard)
+        {
+            var image = await _startup.Platform.ReadClipboardImageAsync(cancellationToken);
+            if (image is null)
+            {
+                _status.Notice.Text = "The clipboard holds no picture (take a screenshot with Win+Shift+S, or copy an image).";
+            }
+
+            return image;
+        }
+
+        if (await _startup.Platform.FileDialogs.PickFileAsync(cancellationToken) is not { } path)
+        {
+            return null;
+        }
+
+        if (!EditorImage.IsImagePath(path))
+        {
+            _status.Notice.Text = $"{Path.GetFileName(path)} is not a picture ({string.Join(", ", EditorImage.Extensions)}).";
+            return null;
+        }
+
+        try
+        {
+            return await Task.Run(() => EditorImage.FromFileAsync(path, cancellationToken), cancellationToken);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _status.Notice.Text = $"Could not read {path}: {error.Message}";
+            return null;
+        }
+    }
+
     private void OnWorkspaceChanged()
     {
         _tree.Tree = _shell.Tree;
@@ -1060,8 +1196,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         _titleRow.IsVisible = _titleRow.Content is not null;
         _titleLine.IsVisible = _titleRow.IsVisible;
         _rail.IsVisible = _railLine.IsVisible = !narrow;
-        _rail.Active = layout.TreeVisible ? "craft.explorer" : null;
-        _explorer.IsVisible = layout.TreeVisible;
+        _rail.Active = !layout.TreeVisible ? null : _side is null ? "craft.explorer" : "craft.search";
+        _explorer.IsVisible = layout.TreeVisible && _side is null;
+        if (_side is { } side)
+        {
+            side.IsVisible = layout.TreeVisible;
+            side.WidthRequest = narrow ? -1 : _shell.Options.TreeWidth;
+        }
         _explorerLine.IsVisible = layout.TreeVisible && !narrow;
         _center.IsVisible = layout.EditorVisible;
         _panelsBox.IsVisible = layout.PanelsVisible && _panels.IsVisible;
@@ -1125,6 +1266,7 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _rail.Apply(p);
         _explorer.Apply(p);
+        _side?.Apply(p);
         _tabStrip.Apply(p);
         _breadcrumb.Apply(p);
         _bottom.Apply(p);

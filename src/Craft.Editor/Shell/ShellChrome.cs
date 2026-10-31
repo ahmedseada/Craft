@@ -237,12 +237,33 @@ public static class ShellText
         return string.Join(" · ", parts);
     }
 
+    /// <summary>
+    /// <paramref name="status"/> with what Idrak's telemetry measured (<see cref="ModelTelemetry"/>: the telemetry plug-in's)
+    /// where the provider measured nothing itself: the speed, the first token, the device memory.
+    /// </summary>
+    public static ModelProviderStatus WithMeasures(ModelProviderStatus status, ModelMeasures measures)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(measures);
+        if (ReferenceEquals(measures, ModelMeasures.None) || status.TokensPerSecond is not null && status.FirstToken is not null && status.DeviceMemoryBytes is not null)
+        {
+            return status;
+        }
+
+        return status with
+        {
+            TokensPerSecond = status.TokensPerSecond ?? measures.TokensPerSecond,
+            FirstToken = status.FirstToken ?? measures.FirstToken,
+            DeviceMemoryBytes = status.DeviceMemoryBytes ?? measures.DeviceMemoryBytes,
+        };
+    }
+
     /// <summary>The first registered model provider's status (the one the shell shows), or null when none is registered.</summary>
     public static (IModelProvider Provider, ModelProviderStatus Status)? ModelStatus()
     {
         foreach (var provider in ModelProviders.All)
         {
-            return (provider, provider.Status);
+            return (provider, WithMeasures(provider.Status, ModelTelemetry.Current));
         }
 
         return null;

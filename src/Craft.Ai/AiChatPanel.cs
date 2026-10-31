@@ -37,6 +37,9 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     private readonly List<ChatMessage> _history = [];
     private readonly HashSet<string> _removed = new(StringComparer.Ordinal);
     private readonly List<ContextChip> _extra = [];
+    private readonly List<(string Id, EditorImage Image)> _images = [];
+    private int _imageNumber;
+    private List<(string Id, EditorImage Image)>? _pending;
     private readonly Dictionary<ToolCall, int> _toolRows = new(ReferenceEqualityComparer.Instance);
     private readonly StringBuilder _segment = new();
     private readonly StringBuilder _reply = new();
@@ -78,11 +81,41 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         ? [new PanelAction("Stop", _ => { Stop(); return Task.CompletedTask; })]
         : [new PanelAction("New chat", _ => { NewChat(); return Task.CompletedTask; })];
 
+    /// <summary>The pictures the next message carries (pasted, dropped, a screenshot), in order.</summary>
+    public IReadOnlyList<EditorImage> Pictures => [.. _images.Select(i => i.Image)];
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The picture goes with the next message as an "image" part (Idrak's <c>ChatImage</c>), a chip showing it. When the
+    /// chat model takes text only (its <c>PartKinds</c> lack "image"), that message is not sent: the panel says so and keeps
+    /// the picture, never sending the words without it. A picture over <c>chatImageMaxMb</c> is refused.
+    /// </remarks>
+    public override string? AttachImage(EditorImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        if (image.Data.IsEmpty)
+        {
+            return "The picture is empty.";
+        }
+
+        long limit = _settings().ChatImageMaxMegabytes * 1024L * 1024L;
+        if (image.Data.Length > limit)
+        {
+            return string.Create(CultureInfo.InvariantCulture,
+                $"The picture is {image.Data.Length / 1048576.0:F1} MiB, over the chat's limit of {_settings().ChatImageMaxMegabytes} MiB (CRAFT_PLUGIN_AI_CHATIMAGEMAXMB).");
+        }
+
+        _images.Add(("image:" + (++_imageNumber).ToString(CultureInfo.InvariantCulture), image));
+        RefreshChips();
+        return null;
+    }
+
     /// <inheritdoc />
     public override void RemoveChip(string id)
     {
         _removed.Add(id);
         _extra.RemoveAll(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+        _images.RemoveAll(i => string.Equals(i.Id, id, StringComparison.Ordinal));
         RefreshChips();
     }
 
@@ -132,13 +165,19 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
         var settings = _settings();
         string withContext = BuildContext(settings) + (context is null ? "" : context + "\n\n") + message;
-        Add(new ConversationEntry(ConversationRole.User, message));
+        var pictures = _images.ToList();
+        Add(new ConversationEntry(ConversationRole.User, pictures.Count == 0 ? message
+            : message + "\n" + string.Join("\n", pictures.Select(p => "Picture: " + p.Image.Name))));
         var messages = new List<ChatMessage>(_history.Count + 2) { new("system", SystemPrompt) };
         messages.AddRange(_history);
-        var user = new ChatMessage("user", withContext);
+        // The pictures go as "image" parts after the text (Idrak's ChatImage, its bytes as they came).
+        var user = pictures.Count == 0 ? new ChatMessage("user", withContext)
+            : new ChatMessage("user", [new ChatText(withContext), .. pictures.Select(p => (ChatPart)ChatImage.FromBytes(p.Image.Data.Span, p.Image.MediaType))]);
         messages.Add(user);
         _removed.Clear();
         _extra.Clear();
+        _images.Clear();
+        _pending = pictures;
         RefreshChips();
         var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _running = source;
@@ -163,6 +202,9 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     {
         Stop();
         _history.Clear();
+        _images.Clear();
+        _pending = null;
+        RefreshChips();
         ClearEntries();
         Status = null;
         Save();
@@ -243,6 +285,18 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         {
             var lease = await _models.ChatAsync(token).ConfigureAwait(false);
             var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot chat.");
+            if (!chat.PartKinds.Contains(ChatParts.Image) && messages.Any(m => m.Parts.Any(p => p is ChatImage)))
+            {
+                // A text-only model is never sent the words without the picture: nothing is sent, the picture stays attached.
+                string refusal = $"The chat model {lease.Model} takes text only (its message parts: {string.Join(", ", chat.PartKinds)}), so the message with its "
+                                 + "picture was not sent. Choose a model that reads pictures (a vision-language family: the vision plug-in, Craft.Plugins.Vision, "
+                                 + "registers them in Idrak's VisionFamilies), or remove the picture's chip"
+                                 + (user.Parts.Any(p => p is ChatImage) ? "." : "; the conversation already holds a picture, so start a New chat.");
+                Post(() => RestorePictures(generation));
+                Post(() => Finish(generation, user, null, refusal));
+                return;
+            }
+
             Post(() =>
             {
                 _modelName = lease.Model;
@@ -282,6 +336,17 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         finally
         {
             Post(() => done.TrySetResult());
+        }
+    }
+
+    // The pictures of a message that was not sent go back on the next one.
+    private void RestorePictures(int generation)
+    {
+        if (generation == _generation && _pending is { Count: > 0 } pending)
+        {
+            _images.InsertRange(0, pending);
+            _pending = null;
+            RefreshChips();
         }
     }
 
@@ -519,6 +584,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         }
 
         chips.AddRange(_extra);
+        chips.AddRange(_images.Select(i => new ContextChip(i.Id, "Picture: " + i.Image.Name)));
         if (!chips.SequenceEqual(Chips))
         {
             SetChips(chips);

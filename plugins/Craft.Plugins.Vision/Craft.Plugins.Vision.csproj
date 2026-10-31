@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plug-in P8 of plan phase P, photo or screenshot to code: it registers Idrak's vision-language families (the package
+    Idrak.Vision.Plugins, by the setting idrakPlugins: Qwen-VL, LLaVA, Gemma 3, IdrakVision; nothing is named in Craft) in
+    VisionFamilies when it activates, so the AI plug-in's "local" provider loads a vision-language model whose chat takes
+    "image" parts (IChatModel.PartKinds); and it brings the commands that put a picture in the chat: the clipboard's (a
+    screenshot taken with Win+Shift+S), a picked file, and "screenshot to code", which sends the picture with a prompt. A
+    picture dropped on the chat column goes the same way (the shell's). A text-only chat model refuses the message clearly
+    (the chat panel's check), never sending the words without the picture.
+
+    It carries Idrak.Vision.Plugins and the Idrak libraries it needs (Craft's loader shares one copy of each Idrak library
+    between the plug-ins; each goes through IdrakPlugins.Load at activation, as the idrak tool's -P does). It runs no model
+    itself: the AI plug-in, which references Idrak.Gpu, runs the model and its vision encoder on the device found.
+    Android (phase M): the families' assembly is loaded by name, to root for the trimmer.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Vision</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Idrak.Vision.Plugins" Version="$(IdrakVersion)" />
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

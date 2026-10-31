@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Vision",
+  "version": "0.1.0",
+  "summary": "P8 · Photo or screenshot to code: a pasted, dropped or picked picture goes to the chat as an \"image\" part; vision-language families for the local models [VisionFamilies from Idrak.Vision.Plugins; IChatModel.PartKinds \"image\"]",
+  "contractVersion": "1.0",
+  "capabilities": ["files", "model"]
+}

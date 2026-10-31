@@ -104,6 +104,9 @@ public abstract class ConversationPanel : IConversationPanel
     /// <inheritdoc />
     public abstract Task SubmitAsync(string text, CancellationToken cancellationToken = default);
 
+    /// <inheritdoc />
+    public virtual string? AttachImage(EditorImage image) => $"The panel '{Title}' takes text only; the picture was not attached.";
+
     /// <summary>Adds <paramref name="entry"/> at the end; its index.</summary>
     protected int Add(ConversationEntry entry)
     {

@@ -25,6 +25,10 @@
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Sampler\Craft.Plugins.Sampler.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Sandbox\Craft.Plugins.Sandbox.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Placement\Craft.Plugins.Placement.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Search\Craft.Plugins.Search.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Telemetry\Craft.Plugins.Telemetry.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.WorkspaceModels\Craft.Plugins.WorkspaceModels.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Vision\Craft.Plugins.Vision.csproj" />
     <!-- Idrak's conformance suites (FillInMiddleFormatSuite, TokenSamplerSuite, TextMatcherSuite) for the plug-ins of phase P. -->
     <PackageReference Include="Idrak.Abstraction.Testing" Version="$(IdrakVersion)" />
     <!-- The sample plug-in (PluginKit group): built first, never referenced; the tests copy its output folder into a

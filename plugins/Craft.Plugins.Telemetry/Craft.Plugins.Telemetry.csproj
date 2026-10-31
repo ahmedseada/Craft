@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plug-in P9 of plan phase P, status-bar progress and telemetry: Idrak's ProgressReporters gains "editor" (a new kind on a
+    registry without a guard), whose reporters show a model's pull and load (the stage, the share done when known, the speed,
+    the time left) in the status bar through the host's progress (IEditorHost.StartProgress, which phase U folds into its
+    activities); and an Idrak telemetry hook (the inference stages) gives the tokens per second, the time to the first token
+    and the device memory in use to the model chip, the status bar and the "Idrak telemetry" tab (Craft's ModelTelemetry and
+    IEditorHost.Record). The AI plug-in's local provider names the reporter by its setting "progress".
+
+    Built only on Craft.Abstractions and Idrak.Abstraction (ProgressReporters and Telemetry live there, shared with the host
+    and every Idrak library), so it carries no Idrak library of its own. Android (phase M): no reflection.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Telemetry</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- Idrak.Abstraction comes through Craft.Abstractions; as a contract shared with the host it is not copied either. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

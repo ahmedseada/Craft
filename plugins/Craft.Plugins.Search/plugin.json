@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Search",
+  "version": "0.1.0",
+  "summary": "P6 · Code search: Roslyn-shaped chunks, camelCase-split identifiers, BM25 and (with an embedding model) vectors, kept on disk and updated as files change; search_code for the chat and the agent, and the Code search view [KeywordIndexes \"code-bm25\", a new kind; PretrainedEncoders, SequencePoolers, VectorIndex]",
+  "contractVersion": "1.0",
+  "capabilities": ["files", "model"]
+}

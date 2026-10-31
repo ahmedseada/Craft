@@ -13,6 +13,7 @@
     <!-- P3's bench: the sampler and the StarCoder2 FIM layout it watches (Idrak comes with the family). -->
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Sampler\Craft.Plugins.Sampler.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.StarCoder2\Craft.Plugins.StarCoder2.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Search\Craft.Plugins.Search.csproj" />
   </ItemGroup>
 
 </Project>

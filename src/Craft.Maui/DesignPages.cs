@@ -517,6 +517,14 @@ public sealed class ModelsPage : ContentPage
         };
         _main.Children.Add(Section("How a name is resolved", resolved));
 
+        // The workspace's own names (.craft/model.json, the workspace models plug-in): read off the UI thread, then shown.
+        if (ModelRoleSources.All.Count > 0)
+        {
+            var named = new VerticalStackLayout { Spacing = 10, Children = { Wrapped("Reading the workspace's names…", p.Secondary, p.FontSize) } };
+            _main.Children.Add(Section("Workspace names", named));
+            _ = ShowWorkspaceNamesAsync(named, _shell.Workspace?.Root);
+        }
+
         // The side: the device and what it measured, then the limits.
         _side.Children.Add(Heading("Device"));
         if (status?.DeviceSetting is { } deviceSetting)
@@ -537,6 +545,43 @@ public sealed class ModelsPage : ContentPage
         foreach (var limit in status?.Limits ?? [])
         {
             _side.Children.Add(SettingField(limit));
+        }
+    }
+
+    // Each source's names for the folder (craft:NAME, what it stands for, the roles it is the default of), or why there are none.
+    private async Task ShowWorkspaceNamesAsync(VerticalStackLayout into, string? folder)
+    {
+        var p = _palette;
+        var read = await Task.Run(() => ModelRoleSources.All.Select(source =>
+        {
+            try
+            {
+                return (source.FileFor(folder), source.Names(folder), (string?)null);
+            }
+            catch (Exception error) when (error is InvalidDataException or IOException or UnauthorizedAccessException)
+            {
+                return (source.FileFor(folder), (IReadOnlyList<NamedModel>)[], error.Message);
+            }
+        }).ToList());
+        into.Children.Clear();
+        foreach (var (file, names, problem) in read)
+        {
+            into.Children.Add(Wrapped(problem ?? (names.Count == 0
+                ? $"No names: {(folder is null ? "no folder is open" : $"{file} names none (Models: Edit the workspace's models)")}."
+                : $"From {file}; a model setting takes them as they are written here, and a role left empty takes the workspace's."), problem is null ? p.Secondary : p.Error, p.FontSize));
+            var list = new VerticalStackLayout { Spacing = 0 };
+            foreach (var named in names)
+            {
+                var item = new Grid { ColumnDefinitions = [new ColumnDefinition(new GridLength(180)), new ColumnDefinition(GridLength.Star)], Padding = new Thickness(14, 10), ColumnSpacing = 12 };
+                item.Add(Mono(named.Name, p.Text), 0, 0);
+                item.Add(Wrapped(named.Target + (named.Roles.Count > 0 ? "  ·  default for " + string.Join(", ", named.Roles) : ""), p.Secondary, p.FontSize), 1, 0);
+                list.Children.Add(item);
+            }
+
+            if (names.Count > 0)
+            {
+                into.Children.Add(p.Box(list, 10, new Thickness(0)));
+            }
         }
     }
 

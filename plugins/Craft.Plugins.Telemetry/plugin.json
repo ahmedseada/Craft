@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Telemetry",
+  "version": "0.1.0",
+  "summary": "P9 · Status-bar progress and telemetry: a model's pull and load in the status bar; tokens per second and device memory from Idrak's telemetry [ProgressReporters \"editor\", a new kind; Telemetry]",
+  "contractVersion": "1.0",
+  "capabilities": []
+}

@@ -14,6 +14,10 @@
     <Project Path="plugins/Craft.Plugins.Sampler/Craft.Plugins.Sampler.csproj" />
     <Project Path="plugins/Craft.Plugins.Sandbox/Craft.Plugins.Sandbox.csproj" />
     <Project Path="plugins/Craft.Plugins.Placement/Craft.Plugins.Placement.csproj" />
+    <Project Path="plugins/Craft.Plugins.Search/Craft.Plugins.Search.csproj" />
+    <Project Path="plugins/Craft.Plugins.Telemetry/Craft.Plugins.Telemetry.csproj" />
+    <Project Path="plugins/Craft.Plugins.WorkspaceModels/Craft.Plugins.WorkspaceModels.csproj" />
+    <Project Path="plugins/Craft.Plugins.Vision/Craft.Plugins.Vision.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plug-in P6 of plan phase P, code search: the workspace cut into Roslyn-shaped chunks (each type, each member; other text
+    files in windows of lines), their words camelCase-split, searched with Idrak.Text's KeywordIndexes (a new kind,
+    "code-bm25": BM25 over the split identifiers) and, when an embedding model is set, with its vectors (Idrak's encoder
+    families in PretrainedEncoders, pooled by SequencePoolers, in Idrak's VectorIndex), fused by reciprocal rank. The index
+    is kept on disk under the app's data folder and brought up to date when a file changes (only the changed files are
+    parsed and embedded again). It is the editor tool search_code (EditorToolSets "search": the chat and the agent) and the
+    "Code search" rail view.
+
+    It references Idrak.Text (KeywordIndexes, TextEncoder, VectorIndex through Idrak.Abstraction), Idrak.Text.Plugins (the
+    encoder families, registered by the setting idrakPlugins only when an embedding model is set), Idrak.Gpu (the encoder
+    runs on the device found: without it the GPU is never found) and Roslyn's C# parser (its own copy, as P4's). Android
+    (phase M): Roslyn is the known exception, rooted for the trimmer.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Search</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+    <InternalsVisibleTo Include="Craft.Benches" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Idrak.Text" Version="$(IdrakVersion)" />
+    <PackageReference Include="Idrak.Text.Plugins" Version="$(IdrakVersion)" />
+    <PackageReference Include="Idrak.Gpu" Version="$(IdrakVersion)" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(RoslynVersion)" />
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

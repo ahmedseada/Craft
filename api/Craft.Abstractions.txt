@@ -1,0 +1,246 @@
+struct Craft.Abstractions.BracketPair : System.IEquatable<Craft.Abstractions.BracketPair>
+  System.Boolean Equals(Craft.Abstractions.BracketPair other)
+  System.Boolean Equals(System.Object obj)
+  System.Char Close { get; init; }
+  System.Char Open { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out System.Char Open, out System.Char Close)
+  ctor(System.Char Open, System.Char Close)
+sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstractions.EditorColors>
+  Craft.Abstractions.EditorColors <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.EditorColors other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.UInt32 Background { get; init; }
+  System.UInt32 BracketMatch { get; init; }
+  System.UInt32 Caret { get; init; }
+  System.UInt32 CurrentLine { get; init; }
+  System.UInt32 FindMatch { get; init; }
+  System.UInt32 Foreground { get; init; }
+  System.UInt32 Gutter { get; init; }
+  System.UInt32 GutterCurrentText { get; init; }
+  System.UInt32 GutterText { get; init; }
+  System.UInt32 Selection { get; init; }
+  System.Void Deconstruct(out System.UInt32 Background, out System.UInt32 Foreground, out System.UInt32 Selection, out System.UInt32 CurrentLine, out System.UInt32 Caret, out System.UInt32 Gutter, out System.UInt32 GutterText, out System.UInt32 GutterCurrentText, out System.UInt32 BracketMatch, out System.UInt32 FindMatch)
+  ctor(System.UInt32 Background, System.UInt32 Foreground, System.UInt32 Selection, System.UInt32 CurrentLine, System.UInt32 Caret, System.UInt32 Gutter, System.UInt32 GutterText, System.UInt32 GutterCurrentText, System.UInt32 BracketMatch, System.UInt32 FindMatch)
+sealed class Craft.Abstractions.EditorFont : System.IEquatable<Craft.Abstractions.EditorFont>
+  Craft.Abstractions.EditorFont <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.EditorFont other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Single Size { get; init; }
+  System.String Family { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Family, out System.Single Size)
+  ctor(System.String Family, System.Single Size)
+enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  A = 16
+  Backspace = 9
+  C = 17
+  Delete = 10
+  Down = 4
+  End = 6
+  Enter = 11
+  Escape = 13
+  F = 18
+  F3 = 15
+  H = 19
+  Home = 5
+  Insert = 14
+  Left = 1
+  None = 0
+  PageDown = 8
+  PageUp = 7
+  Right = 2
+  S = 20
+  Tab = 12
+  Up = 3
+  V = 21
+  X = 22
+  Y = 23
+  Z = 24
+static class Craft.Abstractions.EditorLanguages
+  static Craft.Abstractions.ILanguage Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.ILanguage ForFile(System.String path)
+  static Craft.Abstractions.ILanguage Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ILanguage> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.ILanguage language)
+static class Craft.Abstractions.EditorThemes
+  const System.String Dark = dark
+  const System.String Light = light
+  static Craft.Abstractions.ITheme Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.ITheme Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.ITheme theme)
+struct Craft.Abstractions.FontMetrics : System.IEquatable<Craft.Abstractions.FontMetrics>
+  System.Boolean Equals(Craft.Abstractions.FontMetrics other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Single Baseline { get; init; }
+  System.Single CellWidth { get; init; }
+  System.Single LineHeight { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Single CellWidth, out System.Single LineHeight, out System.Single Baseline)
+  ctor(System.Single CellWidth, System.Single LineHeight, System.Single Baseline)
+interface Craft.Abstractions.IEditorCanvas
+  System.Void DrawLine(System.Single x1, System.Single y1, System.Single x2, System.Single y2, System.UInt32 argb, System.Single thickness)
+  System.Void DrawText(System.String text, System.Single x, System.Single top, in Craft.Abstractions.TextStyle style)
+  System.Void FillRect(System.Single x, System.Single y, System.Single width, System.Single height, System.UInt32 argb)
+interface Craft.Abstractions.IEditorInputSink
+  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Void OnText(System.String text)
+interface Craft.Abstractions.ILanguage : Idrak.Abstraction.IKind
+  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
+  Craft.Abstractions.LanguageRules Rules { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+interface Craft.Abstractions.ILanguageSession : System.IDisposable
+  System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+interface Craft.Abstractions.ITextBuffer
+  Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
+  Craft.Abstractions.ITextSnapshot Current { get; }
+  event System.EventHandler<Craft.Abstractions.TextChangedEventArgs> Changed
+interface Craft.Abstractions.ITextInputAdapter
+  System.IDisposable Attach(System.Object platformView, Craft.Abstractions.IEditorInputSink sink)
+interface Craft.Abstractions.ITextMeasurer
+  Craft.Abstractions.FontMetrics Measure(Craft.Abstractions.EditorFont font, System.Single lineSpacing)
+interface Craft.Abstractions.ITextSnapshot
+  Craft.Abstractions.ITextBuffer Buffer { get; }
+  Craft.Abstractions.TextLine GetLine(System.Int32 index)
+  System.Char Item[System.Int32] { get; }
+  System.Int32 GetLineIndex(System.Int32 position)
+  System.Int32 Length { get; }
+  System.Int32 LineCount { get; }
+  System.Int32 Version { get; }
+  System.String GetText(System.Int32 start, System.Int32 length)
+  System.Void CopyTo(System.Int32 start, System.Span<System.Char> destination)
+interface Craft.Abstractions.ITheme : Idrak.Abstraction.IKind
+  Craft.Abstractions.EditorColors Colors { get; }
+  Craft.Abstractions.TextStyle StyleOf(System.String tokenClass)
+  System.Boolean IsDark { get; }
+enum Craft.Abstractions.KeyModifiers : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Alt = 4
+  Control = 2
+  None = 0
+  Shift = 1
+sealed class Craft.Abstractions.LanguageRules : System.IEquatable<Craft.Abstractions.LanguageRules>
+  Craft.Abstractions.LanguageRules <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.LanguageRules other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets { get; init; }
+  System.Int32 GetHashCode()
+  System.String BlockCommentClose { get; init; }
+  System.String BlockCommentOpen { get; init; }
+  System.String LineComment { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String LineComment, out System.String BlockCommentOpen, out System.String BlockCommentClose, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
+  ctor(System.String LineComment, System.String BlockCommentOpen, System.String BlockCommentClose, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
+  static Craft.Abstractions.LanguageRules Plain { get; }
+sealed class Craft.Abstractions.TableTheme : Craft.Abstractions.ITheme, Idrak.Abstraction.IKind
+  Craft.Abstractions.EditorColors Colors { get; }
+  Craft.Abstractions.TextStyle StyleOf(System.String tokenClass)
+  System.Boolean IsDark { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor(System.String name, System.String summary, System.Boolean isDark, Craft.Abstractions.EditorColors colors, System.Collections.Generic.IReadOnlyDictionary<System.String, Craft.Abstractions.TextStyle> styles)
+enum Craft.Abstractions.TextChangeReason : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Edit = 0
+  Redo = 2
+  Reload = 3
+  Undo = 1
+sealed class Craft.Abstractions.TextChangedEventArgs : System.EventArgs
+  Craft.Abstractions.ITextSnapshot After { get; }
+  Craft.Abstractions.ITextSnapshot Before { get; }
+  Craft.Abstractions.TextChangeReason Reason { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits { get; }
+  ctor(Craft.Abstractions.ITextSnapshot before, Craft.Abstractions.ITextSnapshot after, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason)
+struct Craft.Abstractions.TextEdit : System.IEquatable<Craft.Abstractions.TextEdit>
+  System.Boolean Equals(Craft.Abstractions.TextEdit other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Delta { get; }
+  System.Int32 End { get; }
+  System.Int32 GetHashCode()
+  System.Int32 Length { get; init; }
+  System.Int32 Start { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out System.String Text)
+  ctor(System.Int32 Start, System.Int32 Length, System.String Text)
+  static Craft.Abstractions.TextEdit Delete(System.Int32 start, System.Int32 length)
+  static Craft.Abstractions.TextEdit Insert(System.Int32 position, System.String text)
+struct Craft.Abstractions.TextLine : System.IEquatable<Craft.Abstractions.TextLine>
+  System.Boolean Equals(Craft.Abstractions.TextLine other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 BreakLength { get; init; }
+  System.Int32 End { get; }
+  System.Int32 EndIncludingBreak { get; }
+  System.Int32 GetHashCode()
+  System.Int32 Index { get; init; }
+  System.Int32 Length { get; init; }
+  System.Int32 Start { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Index, out System.Int32 Start, out System.Int32 Length, out System.Int32 BreakLength)
+  ctor(System.Int32 Index, System.Int32 Start, System.Int32 Length, System.Int32 BreakLength)
+struct Craft.Abstractions.TextStyle : System.IEquatable<Craft.Abstractions.TextStyle>
+  System.Boolean Bold { get; init; }
+  System.Boolean Equals(Craft.Abstractions.TextStyle other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Italic { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.UInt32 Argb { get; init; }
+  System.Void Deconstruct(out System.UInt32 Argb, out System.Boolean Bold, out System.Boolean Italic)
+  ctor(System.UInt32 Argb, System.Boolean Bold = false, System.Boolean Italic = false)
+static class Craft.Abstractions.TokenClasses
+  const System.String ClassName = class name
+  const System.String Comment = comment
+  const System.String ControlKeyword = keyword - control
+  const System.String DelegateName = delegate name
+  const System.String DocComment = xml doc comment - text
+  const System.String DocCommentTag = xml doc comment - delimiter
+  const System.String EnumName = enum name
+  const System.String ExcludedCode = excluded code
+  const System.String FieldName = field name
+  const System.String Identifier = identifier
+  const System.String InterfaceName = interface name
+  const System.String Keyword = keyword
+  const System.String LocalName = local name
+  const System.String MethodName = method name
+  const System.String NamespaceName = namespace name
+  const System.String Number = number
+  const System.String Operator = operator
+  const System.String ParameterName = parameter name
+  const System.String PreprocessorKeyword = preprocessor keyword
+  const System.String PreprocessorText = preprocessor text
+  const System.String PropertyName = property name
+  const System.String Punctuation = punctuation
+  const System.String RecordClassName = record class name
+  const System.String RecordStructName = record struct name
+  const System.String String = string
+  const System.String StringEscape = string - escape character
+  const System.String StructName = struct name
+  const System.String Text = text
+  const System.String TypeParameterName = type parameter name
+  const System.String VerbatimString = string - verbatim
+struct Craft.Abstractions.TokenSpan : System.IEquatable<Craft.Abstractions.TokenSpan>
+  System.Boolean Equals(Craft.Abstractions.TokenSpan other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 End { get; }
+  System.Int32 GetHashCode()
+  System.Int32 Length { get; init; }
+  System.Int32 Start { get; init; }
+  System.String Class { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out System.String Class)
+  ctor(System.Int32 Start, System.Int32 Length, System.String Class)
+sealed class Craft.Abstractions.TokenSpanBuffer : System.IDisposable
+  System.Int32 Count { get; }
+  System.ReadOnlySpan<Craft.Abstractions.TokenSpan> Spans { get; }
+  System.Void Add(System.Int32 start, System.Int32 length, System.String tokenClass)
+  System.Void Clear()
+  System.Void Dispose()
+  ctor(System.Int32 capacity = 256)

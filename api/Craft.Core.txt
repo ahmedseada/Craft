@@ -1,0 +1,30 @@
+sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions>
+  Craft.Core.CraftOptions <Clone>$()
+  System.Boolean Equals(Craft.Core.CraftOptions other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean InsertSpaces { get; init; }
+  System.Int32 AutosaveSeconds { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 TabSize { get; init; }
+  System.Int32 UndoGroupMilliseconds { get; init; }
+  System.Single FontSize { get; init; }
+  System.Single LineSpacing { get; init; }
+  System.String FontFamily { get; init; }
+  System.String RecoveryFolder { get; init; }
+  System.String Theme { get; init; }
+  System.String ToString()
+  ctor()
+  static Craft.Core.CraftOptions FromEnvironment(Craft.Core.CraftOptions baseline = null)
+  static Craft.Core.CraftOptions FromVariables(System.Func<System.String, System.String> read, Craft.Core.CraftOptions baseline = null)
+  static System.Collections.Generic.IReadOnlyList<Craft.Core.CraftVariable> Variables { get; }
+sealed class Craft.Core.CraftVariable : System.IEquatable<Craft.Core.CraftVariable>
+  Craft.Core.CraftVariable <Clone>$()
+  System.Boolean Equals(Craft.Core.CraftVariable other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Default { get; init; }
+  System.String Meaning { get; init; }
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Default, out System.String Meaning)
+  ctor(System.String Name, System.String Default, System.String Meaning)

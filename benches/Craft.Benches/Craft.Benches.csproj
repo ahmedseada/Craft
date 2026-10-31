@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The measurements of plan 1's "Speed and memory", cold and warm apart, results under test-output\. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Craft.Benches</RootNamespace>
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Editor\Craft.Editor.csproj" />
+    <ProjectReference Include="..\..\src\Craft.CSharp\Craft.CSharp.csproj" />
+  </ItemGroup>
+
+</Project>

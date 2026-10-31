@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Craft's contracts and their registries (Idrak's SlotTable and KindTable). Reference it alone to write a plug-in. -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Abstractions</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Idrak.Abstraction" Version="$(IdrakVersion)" />
+  </ItemGroup>
+
+</Project>

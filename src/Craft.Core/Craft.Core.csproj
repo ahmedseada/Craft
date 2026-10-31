@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Craft's core, no UI: the text buffer, documents, undo, autosave and recovery, the workspace, the options. -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Core</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Craft.Abstractions\Craft.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

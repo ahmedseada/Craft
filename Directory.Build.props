@@ -1,0 +1,40 @@
+<Project>
+  <!-- Craft's settings, the same as Idrak's (net10.0, nullable, implicit usings, warnings as errors). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisModePerformance>All</AnalysisModePerformance>
+    <Deterministic>true</Deterministic>
+    <IsPackable>false</IsPackable>
+    <Authors>Ahmed Seada</Authors>
+    <Copyright>Copyright (c) 2026 Ahmed Seada</Copyright>
+  </PropertyGroup>
+
+  <!-- The global usings the Idrak.Abstraction package gives a project; a project reference (IdrakFromSource) does not
+       bring its buildTransitive props, so they are stated here, as Idrak's own Directory.Build.props does. -->
+  <ItemGroup>
+    <Using Include="Idrak.Abstraction" />
+  </ItemGroup>
+
+  <!--
+    Idrak: built from the clone beside this repository (../Idrak, on the owner's machine D:\Projects\Idrak), because the
+    contracts Craft uses (IKind, KindTable, and later the MCP host of plan phase S0) are on Idrak's main and not in a
+    published package. Directory.Build.targets imports the clone's build/IdrakFromSource.targets, which turns each Idrak
+    PackageReference into the clone's project, so a library fix is tested in Craft on its next build.
+      another clone:        dotnet build ... -p:IdrakFromSource=D:\path\to\Idrak
+      published packages:   dotnet build ... -p:IdrakFromPackages=true -p:IdrakVersion=VERSION
+  -->
+  <PropertyGroup>
+    <IdrakFromSource Condition="'$(IdrakFromSource)' == '' and '$(IdrakFromPackages)' != 'true'">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../Idrak'))</IdrakFromSource>
+    <IdrakVersion Condition="'$(IdrakVersion)' == ''">0.4.1</IdrakVersion>
+    <RoslynVersion Condition="'$(RoslynVersion)' == ''">5.9.0</RoslynVersion>
+  </PropertyGroup>
+
+  <Target Name="CraftIdrakCheck" BeforeTargets="CollectPackageReferences;PrepareForBuild" Condition="'$(IdrakFromSource)' != ''">
+    <Error Condition="!Exists('$(IdrakFromSource)/build/IdrakFromSource.targets')"
+           Text="Craft builds against an Idrak clone at '$(IdrakFromSource)' and there is none: clone Idrak beside Craft, or pass -p:IdrakFromSource=FOLDER, or -p:IdrakFromPackages=true." />
+  </Target>
+</Project>

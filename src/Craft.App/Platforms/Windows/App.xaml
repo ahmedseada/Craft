@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- The WinUI application (Windows only): MAUI's MauiWinUIApplication, which builds the MAUI app (MauiProgram). -->
+<maui:MauiWinUIApplication
+    x:Class="Craft.App.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:maui="using:Microsoft.Maui"
+    xmlns:local="using:Craft.App.WinUI">
+</maui:MauiWinUIApplication>

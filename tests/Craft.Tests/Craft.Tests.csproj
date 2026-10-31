@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Craft's tests: one program with its own small runner and the flags of Idrak's (plan 1, "Tests and benches"): progress,
+    failures-only and failures-file (the owner's command list in CLAUDE.md shows them). CRAFT_FILTER (or the filter flag)
+    picks tests whose name contains any of its "|"-separated texts, ignoring case. CRAFT_UPDATE=1 rewrites the public API
+    dumps (api/*.txt) and the registry inventory (plans/inventory.md).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Craft.Tests</RootNamespace>
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Craft.Core\Craft.Core.csproj" />
+    <ProjectReference Include="..\..\src\Craft.Editor\Craft.Editor.csproj" />
+    <ProjectReference Include="..\..\src\Craft.CSharp\Craft.CSharp.csproj" />
+  </ItemGroup>
+
+</Project>

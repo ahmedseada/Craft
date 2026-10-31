@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Craft.Abstractions/Craft.Abstractions.csproj" />
+    <Project Path="src/Craft.Core/Craft.Core.csproj" />
+    <Project Path="src/Craft.CSharp/Craft.CSharp.csproj" />
+    <Project Path="src/Craft.Editor/Craft.Editor.csproj" />
+    <Project Path="src/Craft.Maui/Craft.Maui.csproj" />
+    <Project Path="src/Craft.App/Craft.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />
+  </Folder>
+  <Folder Name="/benches/">
+    <Project Path="benches/Craft.Benches/Craft.Benches.csproj" />
+  </Folder>
+</Solution>

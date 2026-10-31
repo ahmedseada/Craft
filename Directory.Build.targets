@@ -1,0 +1,4 @@
+<Project>
+  <!-- An Idrak clone instead of the packages (see Directory.Build.props). -->
+  <Import Project="$(IdrakFromSource)/build/IdrakFromSource.targets" Condition="'$(IdrakFromSource)' != ''" />
+</Project>

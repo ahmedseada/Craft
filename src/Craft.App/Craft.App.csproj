@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Craft, the app. Windows only until the owner says "compile Android" (plan 1, phase M). It builds and runs on Windows
+    (Visual Studio's .NET MAUI workload, or `dotnet workload install maui-windows` once for the command line):
+      dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+      src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe [FILE]
+    Unpackaged (WindowsPackageType None): a plain .exe, no certificate, the Windows App SDK's runtime beside it
+    (WindowsAppSDKSelfContained), so the folder runs on a machine without that runtime installed.
+
+    On another system the project stops at once, saying so: the WinUI tools run only on Windows.
+  -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(WindowsAppSDKSelfContained)' == ''">true</WindowsAppSDKSelfContained>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RootNamespace>Craft.App</RootNamespace>
+    <ApplicationTitle>Craft</ApplicationTitle>
+    <ApplicationId>io.github.ahmedseada.craft</ApplicationId>
+    <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+  </PropertyGroup>
+
+  <Target Name="CraftAppWindowsOnly" BeforeTargets="CollectPackageReferences;PrepareForBuild" Condition="!$([MSBuild]::IsOSPlatform('windows'))">
+    <Error Text="Craft.App builds on Windows only until the owner says &quot;compile Android&quot; (plan 1, phase M). Build Craft.Maui, Craft.Editor or tests\Craft.Tests here." />
+  </Target>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <ProjectReference Include="..\Craft.Maui\Craft.Maui.csproj" />
+    <ProjectReference Include="..\Craft.CSharp\Craft.CSharp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('windows'))">
+    <Compile Remove="**/*.cs" />
+  </ItemGroup>
+
+</Project>

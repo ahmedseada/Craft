@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The editor without a UI: caret, selection, commands, layout, hit-testing, find and replace, bracket matching, and the
+    drawing of the visible lines through IEditorCanvas. Every UI (Craft.Maui) hosts it; the tests drive it headless.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Editor</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Craft.Core\Craft.Core.csproj" />
+  </ItemGroup>
+
+</Project>

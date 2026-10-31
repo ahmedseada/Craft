@@ -67,6 +67,7 @@ Every Idrak capability this plan leans on, checked in the source. A claim that d
 | `Craft.Abstractions` | The editor's contracts and their registries (`SlotTable` / `KindTable`). Reference it alone to write a plug-in. |
 | `Craft.Core` | Text buffer, documents, undo, autosave and recovery, workspace, the classification layers, themes, the plug-in host. No UI, `net10.0`, AOT-compatible, tested on any machine. |
 | `Craft.CSharp` | C# on Roslyn (`Microsoft.CodeAnalysis.CSharp.Workspaces` and `.Features`): syntactic and semantic classification, diagnostics, completion, signature help, hover, go to definition, formatting. Registered as the "csharp" language on both platforms. Not AOT-compatible (Roslyn's MEF uses reflection): `IsAotCompatible` false, its assemblies rooted for the trimmer; Craft never uses NativeAOT. |
+| `Craft.Editor` | The editor without a UI: caret, selection, commands, layout, hit-testing, find and replace, bracket matching, and the drawing of the visible lines through `IEditorCanvas`. The UI hosts it; the tests drive it headless. (Split from `Craft.Maui` in E0 so the control's logic is tested without MAUI.) |
 | `Craft.Ai` | The AI plug-ins on Idrak's contracts: inline completion, chat panel, code actions, agent, and the editor's tools. |
 | `Craft.Maui` | The editor control and the pages: the drawn surface behind `IEditorCanvas`, the input adapters per platform, features registered into Idrak.Maui. Targets `net10.0` (headless, for tests) and the Windows target; `net10.0-android` is added in M. |
 | `Craft.App` | The app: Windows only until the owner says "compile Android" (M). It makes the registrations (Idrak's plug-in packages, Craft's plug-ins) and hosts the models. |
@@ -74,10 +75,13 @@ Every Idrak capability this plan leans on, checked in the source. A claim that d
 | `Craft.Tests` | Targeted groups (`CRAFT_FILTER`), with the same runner flags as Idrak's tests (see "Tests and benches"). |
 | `Craft.Benches` | The measurements of "Speed and memory", results under `test-output\`. |
 
-Idrak comes in as packages. `Directory.Build.props` takes `IdrakFromSource=<clone>` and `Directory.Build.targets`
-imports the clone's `build/IdrakFromSource.targets`, as `apps/` in Idrak does, so a library fix is tested in the editor
-before a release. Craft's `Directory.Build.props` carries Idrak's settings (net10.0, nullable, implicit usings, warnings
-as errors, the global usings of `Idrak.Abstraction`) and its own `MauiVersion`.
+Idrak is built from the clone beside this repository (`../Idrak`, on the owner's machine `D:\Projects\Idrak`), through
+the clone's `build/IdrakFromSource.targets`: the contracts Craft uses (`IKind`, `KindTable`, and S0's MCP host) are on
+Idrak's `main` and not in the published 0.4.1 package, and publishing is not Craft's to do. `-p:IdrakFromSource=FOLDER`
+names another clone; `-p:IdrakFromPackages=true -p:IdrakVersion=VERSION` takes published packages once they carry what
+Craft needs. Craft's `Directory.Build.props` carries Idrak's settings (net10.0, nullable, implicit usings, warnings as
+errors, the performance analyzers, `using Idrak.Abstraction`); MAUI's version is the installed workload's
+(`$(MauiVersion)`), as in Idrak.
 
 ### Editor contracts (`Craft.Abstractions`)
 

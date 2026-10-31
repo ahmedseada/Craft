@@ -1684,3 +1684,79 @@ with `--no-build`, outputs under `test-output\`.
    remote.
 7. **MCP first:** the Idrak.Mcp gap (serving from a running app) is fixed before the editor starts (S0).
 8. **Rules:** Idrak's working rules apply to Craft, written into this repository's `CLAUDE.md` for every later session.
+
+## Where the work stopped (2026-10-31, evening)
+
+The three agents running (U, U2, P batch 2) were stopped when the account's usage limit was reached; the owner then
+asked to stop and wrap up. Their unfinished, untested work is saved, not merged, as patches in `plans/wip/` (each
+applies with `git apply --index` on a checkout of its base commit, then rebases onto `main`):
+
+| Work | Patch | Base | Size | Where it stopped | What is left |
+|---|---|---|---|---|---|
+| U: notification centre, activities, UI watchdog, freeze audit | `plans/wip/u.patch` | `14b5ef5` | 40 files, +3,201 −131 | the contracts (`IEditorHost.Activities`, `Notify`), the centre's model and the watchdog written; it was writing the MAUI views (status-bar activity, bell, centre, toast) | the views, wiring every long operation, the audit fixes and the scan test, one build and the targeted run, "U as built" |
+| U2: panels and layout (the owner's five points) | `plans/wip/u2.patch` | `385758f` | 32 files, +1,731 −142 | the tree's disk watcher, settings and Models as tabs, the side panel's removal written; it was starting the `SplitPanel` control | `SplitPanel` (collapse, resize, sizes kept), the bottom panel and chat column on it, one build and the targeted run, "U2 as built" |
+| P batch 2: P6 code search, P9 progress, P10 project model names, P8 screenshot to code | `plans/wip/p2.patch` | `e04652c` | 51 files, +4,791 −25 | the four plug-ins written, Idrak's `AgentOptions.ExtraTools` pushed (`d449824`, on Idrak `main`); it was writing the tests' checks of progress items and messages | the tests, P6 in the rail's Search view (not the side panel U2 removes), one build and the targeted run, "P as built (second batch)" |
+
+Idrak `main` holds every Idrak change of the day (S0 gaps, A0, R0, A2's `CodingAgent.Steer`, P's sampler and sandbox
+output, the `idrak chat --mcp` URL check, `ModelHost` loading outside its lock, `AgentOptions.ExtraTools`); nothing of
+Idrak is left unmerged.
+
+## The owner's notes from the Windows run (2026-10-31): first, before every phase left
+
+The owner ran the whole app on Windows (the test project, the 7B model) and wrote these down. They come before U, U2,
+P batch 2 and every held phase: the next session starts here, one agent per group, at most three. Each is checked on
+the owner's machine, not only headless.
+
+**Broken**
+1. **Roslyn stopped working.** The status bar says "Plain text — no language for .cs (the C# plug-in is not installed or
+   is disabled)": the C# plug-in no longer loads in the app (likely since P's shared loading of Idrak libraries across
+   plug-in folders, or the plug-in copy target); the Plug-ins page and `CRAFT_CRASH_FOLDER` show why. A test loads
+   every pre-installed plug-in from the app's real output folder layout.
+2. **Ctrl+S and File › Save do nothing** on a document the agent proposed for a new file (an untitled tab whose
+   breadcrumb shows a path outside the workspace, `C:\Users\…\Example.cs`): save must write it, or ask where with the
+   picker, and say so if it fails.
+3. **The agent and the chat lose context, trim their answers and stop mid-sentence** ("I understand that you wan",
+   "I'm here to h"): each agent message starts a new run on a new folder copy with no memory of the run before, and the
+   replies end after a few tokens; the conversation carries over, the token limit and the stop are settings with sane
+   defaults, and a reply ends only at the model's end or the user's Stop.
+4. **Text in the chat and the agent cannot be selected or copied.**
+5. **The chat and the agent never scroll** while an answer streams: they follow the newest text unless the user
+   scrolled up.
+6. **CUDA never shows in the status bar** (`local` only): the device in use is shown in the status bar and the model
+   chip, and the GPU is used (`Idrak.Gpu` in every plug-in that loads a model).
+7. **The explorer button on the rail does nothing** when clicked: it toggles the explorer.
+8. **The folder and file pickers start with "Select folder" disabled**: the picker opens on a folder it can select
+   (the workspace, else the user's), with the button enabled.
+9. **The tree re-renders whole** whenever a file opens: only the rows that changed update, the scroll and the
+   expanded folders stay, and navigation is quick (keyboard, type-ahead, reveal the active file).
+
+**Look and feel**
+10. **Custom dialogs**: the platform's message boxes look out of place; one Craft dialog (title, text, actions, the
+    design's tokens) for questions, confirmations, consents and the About box.
+11. **The model chip belongs with the composer**: the model choice sits at the chat and agent input (pick a model there),
+    not alone in the title bar.
+12. **The inputs look doubled** (a box inside a box: the search, the composer, the settings fields): one border, the
+    design's input style.
+13. **The settings page looks bad**: sections (Editor, C# and Roslyn, Models, Completion, Agent and sandbox, Plug-ins,
+    Appearance, Keyboard), proper controls (switches, numbers, drop-downs, a font picker) instead of a text box and Set
+    for each, search, and the variable shown small; the composer of the chat and the agent made as good as the design.
+14. **The editor's font**: the default code font looks wrong; JetBrains Mono must actually draw (the bundled font
+    reaching the drawn surface), else a well-chosen monospaced fallback, with the line height and weight tuned.
+15. **More interactive and friendly** overall: hover states, focus rings, tooltips, empty states that say what to do,
+    smooth scrolling, context menus in the editor and the tree.
+
+**Missing**
+16. **Keyboard shortcuts**: every shortcut a C# developer expects (Visual Studio's and VS Code's common ones: go to
+    line, go to file, comment, duplicate line, move line, multi-caret, rename, find in files, quick fix, and so on),
+    and a page to see and remap them (searchable, conflicts shown, reset), saved in the settings.
+17. **Languages of a C# project in the C# plug-in**: syntax colours (and bracket matching, folding later) for `.csproj`,
+    `.props`, `.targets`, `.sln`/`.slnx`, `.xml`, `.xaml`, `.config`, `.resx`, `.razor`/`.cshtml` (markup and C#),
+    `.editorconfig`, `.json` (`appsettings.json`, `launchSettings.json`, `global.json`); each removable with the plug-in.
+18. **Format document for those files** (XML and JSON formatting beside C#'s), on Shift+Alt+F and on save as a setting.
+
+**Already planned and still owed** (from the earlier notes, in U and U2 above): the notification centre, every
+operation in the status bar, the window never freezing, the settings and Models pages not covering the menus, new
+files showing in the tree, the side panel gone, every panel collapsible and resizable, and the open question of
+whether voice dictation goes through the diff view (not answered yet).
+
+The held phases (M Android, L more languages, A3 remote models) stay held for the owner's word.

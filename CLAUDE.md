@@ -36,6 +36,10 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   `CommandSandboxes`, and so on. A contract only one Craft package can use lives in that package's
   `{package}.Abstractions` namespace; one any package can use lives in `Craft.Abstractions`. Keep the inventory test and
   the public API guard (`api/<package>.txt`) passing; regenerate a dump when a public API changes.
+- **Plug-ins first.** The editor is a host for plug-ins: every feature beyond the core editing surface (languages,
+  themes, commands, panels, status items, AI, more languages) is reachable through public contracts in
+  `Craft.Abstractions`, and Craft's own plug-ins (C# first, pre-installed and removable) use nothing a third party
+  cannot. A new feature that could be a plug-in is built as one.
 - **Idrak gaps are fixed in Idrak.** Something Craft needs that the library lacks (a contract, a transport, a format) is
   added to Idrak on Idrak's `main` by Idrak's rules, then used from Craft; never reimplemented in Craft.
 - **Windows first; Android only when the owner says.** Until the owner has a good Windows version and says "compile

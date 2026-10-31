@@ -107,6 +107,30 @@ the CLI works in the editor. A new kind of name (such as `craft:`, plug-in P10) 
 Each registry is a `SlotTable` with library defaults and app overrides. Craft gets its own inventory test
 (`plans/inventory.md`, generated) and an API guard per package (`api/<package>.txt`), as Idrak has.
 
+### Plug-ins first (the owner's priority)
+
+The editor is a host for plug-ins, and its own features prove it. Everything after the core editing surface (languages,
+themes, commands, panels, status bar items, the AI features, the phase P plug-ins, phase L's languages) reaches the editor
+through public contracts in `Craft.Abstractions`, so a plug-in author needs only `Craft.Abstractions` (and
+`Idrak.Abstraction`), never Craft's internals:
+
+- **The contracts (phase K):** `IEditorPlugin : IKind` with `Activate(IEditorHost)` and its contributions; `IEditorHost`
+  with the documents and their lifecycle events (opened, changed, saved, closed), the active editor's selection,
+  `ProposeEdits` (a diff the user accepts), commands with key bindings (`EditorCommands`), status bar items, panels,
+  settings a plug-in declares (shown on the settings page, each with a `CRAFT_*`-style variable named after the plug-in),
+  progress and telemetry; languages (`EditorLanguages`) and themes (`EditorThemes`) as today.
+- **Packaging:** a plug-in is a folder `plugins/<Name>/` with `<Name>.dll`, its dependencies and a `plugin.json` (name,
+  version, summary, the Craft contract version it was built against, the capabilities it asks for: files, network,
+  a sandbox, a model). One loader (`CraftPlugins`, through `IdrakPlugins.Load`) for Craft's and Idrak's registries alike;
+  each plug-in in its own load context, sharing the contracts. Pre-installed plug-ins (C# first) ship in the app's
+  `plugins/`, are removable and can be disabled; user folders are off until the user names one.
+- **For authors:** a sample plug-in (`Craft.Plugins.Sample`: a word-count status item and a command), a `dotnet new`
+  template, and a guide (`docs/plugins.md`): the contracts, the folder layout, how to debug one against the app.
+- **Versioning:** the plug-in contracts carry a version; a plug-in built against an older one is marked, one against a
+  newer one is refused with the reason, never loaded half-way.
+- **Proof:** C# is the first plug-in (E2, pre-installed); the AI features (A2), phase P and phase L are all plug-ins on
+  the same contracts; nothing Craft ships as a plug-in uses a contract a third party cannot.
+
 ### Threading and safety
 
 - The UI thread owns the buffer. Snapshots are immutable, so Roslyn, the plug-ins and the benches read them on any
@@ -297,7 +321,8 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E4 | `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
-| A1 | `Craft.Ai` host: `IEditorPlugin`, `IEditorHost`, the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, A0, S0 |
+| K | The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3 (with E4) |
+| A1 | `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
 | A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P7 and P8; P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
 | M | Android, when the owner says "compile Android": the `net10.0-android` target added to every project in one step; `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | Every project builds for Android; the owner edits a file on a phone; the numbers are written here. | the owner's word, after a good Windows version |

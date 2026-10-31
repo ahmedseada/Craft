@@ -29,6 +29,9 @@
     <PackageReference Include="Idrak.Text" Version="$(IdrakVersion)" />
     <!-- Idrak.Data adds the Hugging Face model source: a model named by its Hugging Face id resolves and downloads. -->
     <PackageReference Include="Idrak.Data" Version="$(IdrakVersion)" />
+    <!-- Idrak.Gpu adds the GPU devices (CUDA, Vulkan, HIP; the system's own drivers, loaded at run time): without it the
+         "auto" device finds only the CPU. Its devices register through IdrakLibraries at activation. -->
+    <PackageReference Include="Idrak.Gpu" Version="$(IdrakVersion)" />
     <!-- The model families the "local" provider can load: Idrak's own plug-in package, registered on the first load
          (the setting idrakPlugins names the packages; empty registers none). No family is written in Craft. -->
     <PackageReference Include="Idrak.Text.Plugins" Version="$(IdrakVersion)" />

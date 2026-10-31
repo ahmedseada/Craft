@@ -3,7 +3,7 @@
 These are the owner's standing rules, the same as Idrak's (`Idrak/CLAUDE.md`), applied to this repository. They hold in
 every session, after every compaction, and for every agent. Where this file and Idrak's differ only in names (paths,
 variables, project names), the Craft name is used here; where they would differ in substance, Idrak's rule wins and this
-file is corrected.
+file is corrected, except where the owner set a rule for Craft itself (such as the number of agents), which is kept.
 
 - **The task is the plan.** `plans/1-editor.md` is the current task: its phases in their order, each started only when
   the owner says. A session reads it first, and writes its measured numbers and decisions back into it.
@@ -69,7 +69,7 @@ file is corrected.
   only the projects that changed. 4. Run the targeted filtered tests once with `--no-build`. 5. Merge and push; a merge
   without conflicts gets no build and no tests. 6. Hand the owner one targeted command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it
-  needs with `--no-build`, and no second pull. At most two agents at a time, so builds do not compete for the machine.
+  needs with `--no-build`, and no second pull. At most three agents at a time (the owner's limit for Craft), so builds do not compete for the machine.
   A slot never idles while work is ready: the moment an agent finishes, the slot takes the next piece of work whose
   inputs are already merged, without waiting for the current wave to end (waves are a dependency order, not a barrier).
 - **No idle background processes.** A session or agent never follows a file (`tail -f`, `less +F`, `watch`) and never

@@ -281,7 +281,7 @@ the app and registered through `RegisterAll()`, and loading from a folder stays 
 
 ## Phases
 
-Phases are a dependency order, not a barrier. At most two agents work at a time. "Done" is what the owner can check.
+Phases are a dependency order, not a barrier. At most three agents work at a time. "Done" is what the owner can check.
 
 | Phase | What | Done when | Needs |
 |---|---|---|---|

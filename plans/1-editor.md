@@ -2163,8 +2163,15 @@ the owner's machine, not only headless.
       laid out and drawn, new lines appended at the end and followed unless the user scrolled up, the code font and the
       theme, error and warning lines coloured (a small log language), bounded by `CRAFT_HOST_LOG_LINES` (oldest lines
       trimmed in one step).
-    - Problems stays a list (a row jumps to its place) with no checkboxes: plain rows, Ctrl+click and Shift+click to
-      pick several, Ctrl+C copies the picked rows, Copy all stays.
+    - The owner, on the same panels: "this isn't modern design, this is an ancient design". So each panel follows what
+      current editors do, from the design's tokens (hover states, no box inside a box, no row chrome):
+    - Idrak telemetry is not a log but measurements: a live metrics table (source, measure, last, mean, p95, count,
+      unit), sortable by a header click, a filter box, a sparkline of each measure's recent values, stalls and slow
+      values marked; plain rows with no checkboxes, a range selected by drag or Shift+click, Ctrl+C copying it as a
+      table (tab-separated, pastes into a sheet).
+    - Output also gets a filter box and a "follow the end" toggle in its header.
+    - Problems is plain rows grouped by file (a collapsible file header with its count), a severity icon per row, a
+      click jumps to its place, Ctrl+click and Shift+click pick several, Ctrl+C copies the picked rows, Copy all stays.
     - Tests headless: read-only refuses every edit path, append keeps the selection and the follow rule, the trim keeps
       the view's place; and a scan that no `SelectionMode.Multiple` list is left in the shell.
 

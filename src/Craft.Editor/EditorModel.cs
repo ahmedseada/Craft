@@ -65,6 +65,11 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         LanguageName = language?.Name ?? PlainTextName(document.FilePath);
         Find = new EditorFind(this);
         _session = language?.Open(document.Buffer);
+        if (_session is not null)
+        {
+            _session.Reclassified += OnSessionReclassified;
+        }
+
         _lastLineCount = Snapshot.LineCount;
         _lastDigits = TextReading.Digits(_lastLineCount);
         document.Buffer.Changed += OnBufferChanged;
@@ -135,6 +140,12 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
     /// <summary>Raised when what is drawn changed (the host redraws).</summary>
     public event EventHandler? Invalidated;
+
+    /// <summary>
+    /// Raised when the language's spans changed without an edit (its parse off the UI thread landed), on the language's
+    /// thread, not the UI thread: the host dispatches to its UI thread and calls <see cref="ApplyReclassification"/>.
+    /// </summary>
+    public event EventHandler? Reclassified;
 
     /// <summary>Raised when the caret or the selection moved.</summary>
     public event EventHandler? CaretMoved;
@@ -284,6 +295,32 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         }
     }
 
+    /// <summary>
+    /// On the UI thread, after <see cref="Reclassified"/>: forgets the bracket match (its strings and comments may have
+    /// moved) and raises <see cref="Invalidated"/>. The renderer's line cache keys on each line's spans, so it rebuilds
+    /// the lines whose spans changed, and only those.
+    /// </summary>
+    public void ApplyReclassification()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _bracketVersion = -1;
+        Invalidate();
+    }
+
+    /// <summary>
+    /// Waits up to <see cref="CraftOptions.ParseWaitMilliseconds"/> for the language's parse of <paramref name="snapshot"/>
+    /// (the renderer calls it before it classifies a frame); true when its spans are final, or there is no language.
+    /// </summary>
+    public bool WaitForClassification(ITextSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return _session is null || _session.WaitUntilClassified(snapshot, TimeSpan.FromMilliseconds(Options.ParseWaitMilliseconds));
+    }
+
     /// <summary>Clears the input-to-paint maximum.</summary>
     public void ResetTelemetry() => MaxInputToPaintMilliseconds = 0;
 
@@ -347,7 +384,12 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         _disposed = true;
         _document.Buffer.Changed -= OnBufferChanged;
-        _session?.Dispose();
+        if (_session is not null)
+        {
+            _session.Reclassified -= OnSessionReclassified;
+            _session.Dispose();
+        }
+
         _bracketSpans.Dispose();
     }
 
@@ -376,6 +418,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         Invalidate();
     }
+
+    private void OnSessionReclassified(object? sender, EventArgs e) => Reclassified?.Invoke(this, EventArgs.Empty);
 
     private void ScrollTo(float x, float y)
     {

@@ -2,17 +2,19 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Craft.Abstractions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Craft.CSharp;
 
 /// <summary>
 /// C# on Roslyn's parser: "csharp" opens ".cs" files as regular code, "csharp-script" opens ".csx" files as scripts
 /// (<see cref="Script"/>; <see cref="ILanguage.Open"/> is not told the file, so the script kind is a language of its
-/// own). A session keeps the buffer's latest syntax tree, re-parsed incrementally on each change, and classifies the
-/// lines asked for with <see cref="CSharpClassifier"/>.
+/// own). A session parses the buffer off the UI thread (incrementally, from its last tree) and classifies the lines asked
+/// for with <see cref="CSharpClassifier"/> from the last tree that landed.
 /// </summary>
 public sealed class CSharpLanguage : ILanguage
 {
@@ -76,92 +78,461 @@ public sealed class CSharpLanguage : ILanguage
     /// <inheritdoc />
     ILanguageSession ILanguage.Open(ITextBuffer buffer) => Open(buffer);
 
-    /// <summary>A session over <paramref name="buffer"/>, its text parsed now.</summary>
+    /// <summary>A session over <paramref name="buffer"/>; its first full parse starts at once, off the calling thread.</summary>
     public CSharpLanguageSession Open(ITextBuffer buffer) => new(buffer, ParseOptions);
 }
 
 /// <summary>
-/// C# on one buffer: the latest <see cref="SyntaxTree"/>, re-parsed incrementally on each <see cref="ITextBuffer.Changed"/>
-/// (on the thread that changed the buffer, the UI thread; <see cref="LastUpdate"/> says what it cost), and the syntactic
-/// classification of a range.
+/// C# on one buffer, parsed off the UI thread. The session keeps the last parse that landed (its tree and the snapshot
+/// it is the text of, swapped as one immutable value) and one worker on the thread pool: <see cref="ITextBuffer.Changed"/>
+/// (on the UI thread) records the change, composed with the others not parsed yet into one covering range, and wakes the
+/// worker, which parses the newest snapshot from its last tree in one incremental step however many versions arrived
+/// meanwhile, again while newer changes are pending, then sleeps (no thread is held while idle). Each landed parse raises
+/// <see cref="Reclassified"/> on the worker's thread. <see cref="Classify"/> never waits: for a snapshot newer than the
+/// last parse it classifies the parse's tree through the pending change (spans before and after it kept, shifted; the
+/// changed text left plain). The editor waits up to its budget with <see cref="WaitUntilClassified"/>. A parse that
+/// throws is kept in <see cref="ParseError"/> (the last tree stays in use); the next change parses the file afresh.
 /// </summary>
 public sealed class CSharpLanguageSession : ILanguageSession
 {
     private readonly ITextBuffer _buffer;
     private readonly CSharpParseOptions _options;
-    private SnapshotSourceText _text;
-    private SyntaxTree _tree;
-    private SyntaxNode _root;
+    private readonly object _gate = new();
+    private readonly ManualResetEventSlim _resume = new(true);
+    private readonly CancellationTokenSource _stop = new();
+    private Parsed? _parsed;
+    private ITextSnapshot _latest;
+    private TextChangeRange? _inflight;
+    private bool _inflightUnknown;
+    private TextChangeRange? _pending;
+    private bool _pendingUnknown;
+    private bool _full = true;
+    private bool _working;
     private bool _disposed;
+    private bool _released;
+    private TaskCompletionSource _idle = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private Exception? _error;
+    private TokenSpanBuffer? _scratch;
 
     internal CSharpLanguageSession(ITextBuffer buffer, CSharpParseOptions options)
     {
         ArgumentNullException.ThrowIfNull(buffer);
         _buffer = buffer;
         _options = options;
-        long start = Stopwatch.GetTimestamp();
-        _text = new SnapshotSourceText(buffer.Current);
-        _tree = CSharpSyntaxTree.ParseText(_text, options);
-        _root = _tree.GetRoot();
-        LastUpdate = Stopwatch.GetElapsedTime(start);
+        _latest = buffer.Current;
         buffer.Changed += OnChanged;
+        lock (_gate)
+        {
+            Kick();
+        }
     }
 
-    /// <summary>The latest tree, of <see cref="Snapshot"/>.</summary>
-    public SyntaxTree Tree => _tree;
+    /// <inheritdoc />
+    public event EventHandler? Reclassified;
 
-    /// <summary>The snapshot <see cref="Tree"/> is the text of.</summary>
-    public ITextSnapshot Snapshot => _text.Snapshot;
+    /// <summary>The last tree that landed (of <see cref="Snapshot"/>), or null before the first parse lands.</summary>
+    public SyntaxTree? Tree => Volatile.Read(ref _parsed)?.Tree;
 
-    /// <summary>What the last parse cost (the first full parse, then each incremental one).</summary>
-    public TimeSpan LastUpdate { get; private set; }
+    /// <summary>The snapshot <see cref="Tree"/> is the text of, or null before the first parse lands.</summary>
+    public ITextSnapshot? Snapshot => Volatile.Read(ref _parsed)?.Text.Snapshot;
 
-    /// <summary>The parses since the session opened, the first included.</summary>
-    public int Updates { get; private set; } = 1;
+    /// <summary>What the last landed parse cost on the worker (the first full parse, then each incremental one).</summary>
+    public TimeSpan LastUpdate => Volatile.Read(ref _parsed)?.Elapsed ?? TimeSpan.Zero;
+
+    /// <summary>The parses landed since the session opened, the first included.</summary>
+    public int Updates => Volatile.Read(ref _parsed)?.Number ?? 0;
+
+    /// <summary>The error the last parse threw (or a <see cref="Reclassified"/> handler), or null when it succeeded.</summary>
+    public Exception? ParseError => Volatile.Read(ref _error);
+
+    /// <summary>Whether the worker is parsing (or about to).</summary>
+    public bool IsParsing
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _working;
+            }
+        }
+    }
+
+    /// <summary>Completes when the worker has nothing left to parse (or the session is disposed and the worker stopped).</summary>
+    public Task WhenIdle()
+    {
+        lock (_gate)
+        {
+            return _idle.Task;
+        }
+    }
+
+    /// <summary>Test hook: holds the worker before its next parse until <see cref="ResumeParsing"/>.</summary>
+    internal void PauseParsing() => _resume.Reset();
+
+    /// <summary>Test hook: lets a held worker go on.</summary>
+    internal void ResumeParsing() => _resume.Set();
+
+    /// <summary>Test hook: called on the worker before each parse (a test throws from it).</summary>
+    internal Action? BeforeParse { get; set; }
 
     /// <inheritdoc />
     public void Classify(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(into);
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (start < 0 || length < 0 || start > snapshot.Length - length)
         {
             throw new ArgumentOutOfRangeException(nameof(start), start, $"The range of {length} characters at {start} runs outside the text of {snapshot.Length}.");
         }
 
-        var root = ReferenceEquals(snapshot, _text.Snapshot) || (ReferenceEquals(snapshot.Buffer, _buffer) && snapshot.Version == _text.Snapshot.Version)
-            ? _root
-            : CSharpSyntaxTree.ParseText(new SnapshotSourceText(snapshot), _options).GetRoot();
-        CSharpClassifier.Classify(root, start, length, into);
+        var parsed = Volatile.Read(ref _parsed);
+        if (parsed is not null && IsOf(snapshot, parsed))
+        {
+            CSharpClassifier.Classify(parsed.Root, start, length, into);
+            return;
+        }
+
+        if (ReferenceEquals(snapshot.Buffer, _buffer))
+        {
+            TextChangeRange? change = null;
+            bool newest;
+            bool unknown = false;
+            lock (_gate)
+            {
+                parsed = _parsed;
+                newest = snapshot.Version == _latest.Version;
+                if (newest)
+                {
+                    change = SnapshotSourceText.Compose(_inflight, _pending);
+                    unknown = _inflightUnknown || _pendingUnknown;
+                }
+            }
+
+            if (newest)
+            {
+                // Newer than the last parse: its tree, through the change still being parsed (nothing yet before the first).
+                if (parsed is not null && !unknown)
+                {
+                    if (change is { } through)
+                    {
+                        ClassifyThrough(parsed.Root, through, start, length, into);
+                    }
+                    else
+                    {
+                        CSharpClassifier.Classify(parsed.Root, start, length, into);
+                    }
+                }
+
+                return;
+            }
+
+            if (parsed is null || snapshot.Version > parsed.Text.Snapshot.Version)
+            {
+                // A version between the last parse and the newest: no change is kept for it; drawn plain.
+                return;
+            }
+        }
+
+        CSharpClassifier.Classify(CSharpSyntaxTree.ParseText(new SnapshotSourceText(snapshot), _options).GetRoot(), start, length, into);
+    }
+
+    /// <inheritdoc />
+    public bool WaitUntilClassified(ITextSnapshot snapshot, TimeSpan timeout)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (Volatile.Read(ref _parsed) is { } parsed && IsOf(snapshot, parsed))
+        {
+            return true;
+        }
+
+        if (!ReferenceEquals(snapshot.Buffer, _buffer))
+        {
+            return true;
+        }
+
+        bool forever = timeout == Timeout.InfiniteTimeSpan;
+        if (!forever && timeout <= TimeSpan.Zero)
+        {
+            return false;
+        }
+
+        long deadline = forever ? long.MaxValue : Stopwatch.GetTimestamp() + (long)(timeout.TotalSeconds * Stopwatch.Frequency);
+        lock (_gate)
+        {
+            while (!_disposed && _working && (_parsed is null || _parsed.Text.Snapshot.Version < snapshot.Version))
+            {
+                if (forever)
+                {
+                    Monitor.Wait(_gate);
+                    continue;
+                }
+
+                long left = deadline - Stopwatch.GetTimestamp();
+                if (left <= 0)
+                {
+                    break;
+                }
+
+                Monitor.Wait(_gate, TimeSpan.FromSeconds((double)left / Stopwatch.Frequency));
+            }
+
+            return _parsed is { } landed && landed.Text.Snapshot.Version >= snapshot.Version;
+        }
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        if (!_disposed)
+        lock (_gate)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             _disposed = true;
-            _buffer.Changed -= OnChanged;
+            _stop.Cancel();
+            _resume.Set();
+            Monitor.PulseAll(_gate);
+            if (!_working)
+            {
+                Release();
+            }
         }
+
+        _buffer.Changed -= OnChanged;
+    }
+
+    private static bool IsOf(ITextSnapshot snapshot, Parsed parsed)
+    {
+        var of = parsed.Text.Snapshot;
+        return ReferenceEquals(snapshot, of) || (ReferenceEquals(snapshot.Buffer, of.Buffer) && snapshot.Version == of.Version);
     }
 
     private void OnChanged(object? sender, TextChangedEventArgs change)
     {
-        long start = Stopwatch.GetTimestamp();
-        if (ReferenceEquals(change.Before, _text.Snapshot))
+        lock (_gate)
         {
-            _text = SnapshotSourceText.FromChange(change);
-            _tree = _tree.WithChangedText(_text);
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (change.Before.Version == _latest.Version && ReferenceEquals(change.Before.Buffer, _buffer))
+            {
+                _pending = SnapshotSourceText.Compose(_pending, SnapshotSourceText.Collapse(change.Edits));
+            }
+            else
+            {
+                // A change this session did not see the start of: what changed is unknown, so the file is parsed afresh.
+                _pendingUnknown = true;
+                _full = true;
+            }
+
+            _latest = change.After;
+            Kick();
+        }
+    }
+
+    /// <summary>Starts the worker when it is not running (called holding the gate).</summary>
+    private void Kick()
+    {
+        if (_working || _disposed)
+        {
+            return;
+        }
+
+        _working = true;
+        if (_idle.Task.IsCompleted)
+        {
+            _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        _ = Task.Run(Work);
+    }
+
+    private void Work()
+    {
+        while (true)
+        {
+            _resume.Wait();
+            ITextSnapshot target;
+            Parsed? from;
+            TextChangeRange? range;
+            bool full;
+            lock (_gate)
+            {
+                if (_disposed || (!_full && _parsed is not null && _parsed.Text.Snapshot.Version == _latest.Version))
+                {
+                    Stop();
+                    return;
+                }
+
+                target = _latest;
+                from = _parsed;
+                full = _full || from is null;
+                range = _pending;
+                _inflight = _pending;
+                _inflightUnknown = _pendingUnknown;
+                _pending = null;
+                _pendingUnknown = false;
+                _full = false;
+            }
+
+            Parsed? landed = null;
+            Exception? error = null;
+            long start = Stopwatch.GetTimestamp();
+            try
+            {
+                BeforeParse?.Invoke();
+                landed = Parse(target, full ? null : from, range, start);
+            }
+            catch (Exception e)
+            {
+                error = e;
+            }
+
+            lock (_gate)
+            {
+                _inflight = null;
+                if (landed is not null)
+                {
+                    _inflightUnknown = false;
+                    Volatile.Write(ref _parsed, landed);
+                    Volatile.Write(ref _error, null);
+                    Monitor.PulseAll(_gate);
+                }
+                else
+                {
+                    // The last tree stays; the change it missed goes back in front of the pending one, and the next change
+                    // parses the file afresh (no retry loop on a parse that keeps throwing).
+                    _pending = SnapshotSourceText.Compose(range, _pending);
+                    _pendingUnknown |= _inflightUnknown;
+                    _inflightUnknown = false;
+                    _full = true;
+                    if (!_disposed)
+                    {
+                        Volatile.Write(ref _error, error);
+                    }
+
+                    Stop();
+                    return;
+                }
+            }
+
+            try
+            {
+                if (!_disposed)
+                {
+                    Reclassified?.Invoke(this, EventArgs.Empty);
+                }
+            }
+            catch (Exception e)
+            {
+                Volatile.Write(ref _error, e);
+            }
+        }
+    }
+
+    private Parsed Parse(ITextSnapshot target, Parsed? from, TextChangeRange? range, long start)
+    {
+        SnapshotSourceText text;
+        SyntaxTree tree;
+        if (from is not null && range is { } change)
+        {
+            text = SnapshotSourceText.Since(target, from.Text.Snapshot.Version, change);
+            tree = from.Tree.WithChangedText(text);
         }
         else
         {
-            // A change this session did not see the start of: parse the text afresh.
-            _text = new SnapshotSourceText(change.After);
-            _tree = CSharpSyntaxTree.ParseText(_text, _options);
+            text = new SnapshotSourceText(target);
+            tree = CSharpSyntaxTree.ParseText(text, _options, cancellationToken: _stop.Token);
         }
 
-        _root = _tree.GetRoot();
-        LastUpdate = Stopwatch.GetElapsedTime(start);
-        Updates++;
+        var root = tree.GetRoot(_stop.Token);
+        return new Parsed(text, tree, root, Stopwatch.GetElapsedTime(start), (from?.Number ?? Volatile.Read(ref _parsed)?.Number ?? 0) + 1);
     }
+
+    /// <summary>The worker ends (called holding the gate): idle, waiters woken, and the handles released once disposed.</summary>
+    private void Stop()
+    {
+        _working = false;
+        _idle.TrySetResult();
+        Monitor.PulseAll(_gate);
+        if (_disposed)
+        {
+            Release();
+        }
+    }
+
+    private void Release()
+    {
+        if (_released)
+        {
+            return;
+        }
+
+        _released = true;
+        _stop.Dispose();
+        _resume.Dispose();
+        Interlocked.Exchange(ref _scratch, null)?.Dispose();
+        _idle.TrySetResult();
+    }
+
+    /// <summary>
+    /// Classifies <paramref name="root"/> (an older version's tree) for a range of the newest snapshot, through
+    /// <paramref name="change"/> (older to newest, in the older positions): the part before the change as it is, the part
+    /// after it shifted by the change's delta, and no span that overlaps or touches the changed text.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ClassifyThrough(SyntaxNode root, TextChangeRange change, int start, int length, TokenSpanBuffer into)
+    {
+        int at = change.Span.Start;
+        int oldEnd = change.Span.End;
+        int newEnd = at + change.NewLength;
+        int delta = change.NewLength - change.Span.Length;
+        int end = start + length;
+        var scratch = Interlocked.Exchange(ref _scratch, null) ?? new TokenSpanBuffer(256);
+        try
+        {
+            if (start < at)
+            {
+                scratch.Clear();
+                CSharpClassifier.Classify(root, start, Math.Min(end, at) - start, scratch);
+                foreach (var span in scratch.Spans)
+                {
+                    if (span.End < at)
+                    {
+                        into.Add(span.Start, span.Length, span.Class);
+                    }
+                }
+            }
+
+            if (end > newEnd || (start > newEnd && length == 0))
+            {
+                int from = Math.Max(start, newEnd);
+                scratch.Clear();
+                CSharpClassifier.Classify(root, from - delta, end - from, scratch);
+                foreach (var span in scratch.Spans)
+                {
+                    if (span.Start > oldEnd)
+                    {
+                        into.Add(span.Start + delta, span.Length, span.Class);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            scratch.Clear();
+            if (Interlocked.CompareExchange(ref _scratch, scratch, null) is not null)
+            {
+                scratch.Dispose();
+            }
+        }
+    }
+
+    /// <summary>A landed parse: the text it is of, its tree and root, what it cost and its number since the session opened.</summary>
+    private sealed record Parsed(SnapshotSourceText Text, SyntaxTree Tree, SyntaxNode Root, TimeSpan Elapsed, int Number);
 }

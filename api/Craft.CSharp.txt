@@ -18,10 +18,15 @@ sealed class Craft.CSharp.CSharpLanguage : Craft.Abstractions.ILanguage, Idrak.A
 sealed class Craft.CSharp.CSharpLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
   Craft.Abstractions.ITextSnapshot Snapshot { get; }
   Microsoft.CodeAnalysis.SyntaxTree Tree { get; }
+  System.Boolean IsParsing { get; }
+  System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
+  System.Exception ParseError { get; }
   System.Int32 Updates { get; }
+  System.Threading.Tasks.Task WhenIdle()
   System.TimeSpan LastUpdate { get; }
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   System.Void Dispose()
+  event System.EventHandler Reclassified
 sealed class Craft.CSharp.CSharpPlugin : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
   ctor()
   protected System.Void RegisterParts()
@@ -46,3 +51,6 @@ sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.Sourc
   System.Void CopyTo(System.Int32 sourceIndex, System.Char[] destination, System.Int32 destinationIndex, System.Int32 count)
   ctor(Craft.Abstractions.ITextSnapshot snapshot)
   static Craft.CSharp.SnapshotSourceText FromChange(Craft.Abstractions.TextChangedEventArgs change)
+  static Craft.CSharp.SnapshotSourceText Since(Craft.Abstractions.ITextSnapshot after, System.Int32 previousVersion, Microsoft.CodeAnalysis.Text.TextChangeRange change)
+  static Microsoft.CodeAnalysis.Text.TextChangeRange? Collapse(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits)
+  static Microsoft.CodeAnalysis.Text.TextChangeRange? Compose(Microsoft.CodeAnalysis.Text.TextChangeRange? first, Microsoft.CodeAnalysis.Text.TextChangeRange? second)

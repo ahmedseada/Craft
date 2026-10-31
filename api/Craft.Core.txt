@@ -16,6 +16,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 FindCountLimit { get; init; }
   System.Int32 GetHashCode()
   System.Int32 GutterPaddingCells { get; init; }
+  System.Int32 ParseWaitMilliseconds { get; init; }
   System.Int32 ScrollMarginColumns { get; init; }
   System.Int32 ScrollMarginLines { get; init; }
   System.Int32 TabSize { get; init; }

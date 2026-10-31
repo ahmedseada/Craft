@@ -11,7 +11,10 @@ namespace Craft.Editor;
 /// order background, current line, find matches, selection, bracket match, text, gutter, caret. The visible range is
 /// classified in one call per frame into a reused buffer; each line's runs (its text cut where its style changes, tabs
 /// expanded) are kept while the line's characters and spans stay the same (compared as spans, whatever the snapshot's
-/// version), so scrolling in place and the caret's blink make no strings and a keystroke rebuilds only its own line. One renderer per drawn surface; dispose it to return its buffers.
+/// version), so scrolling in place and the caret's blink make no strings and a keystroke rebuilds only its own line, and a
+/// landed background parse (<see cref="EditorModel.Reclassified"/>) rebuilds only the lines whose spans it changed. Before
+/// classifying, a frame waits for the language's parse up to the options' budget, never longer. One renderer per drawn
+/// surface; dispose it to return its buffers.
 /// </summary>
 public sealed class EditorRenderer : IDisposable
 {
@@ -25,6 +28,12 @@ public sealed class EditorRenderer : IDisposable
 
     /// <summary>How many run strings it has made since it was created (the run cache's misses).</summary>
     public long RunStringsBuilt { get; private set; }
+
+    /// <summary>The frames whose language parse did not land within the wait budget (drawn with the changed text plain).</summary>
+    public long ParseWaitsExceeded { get; private set; }
+
+    /// <summary>Whether the last frame's spans were final (its parse had landed, or it has no language).</summary>
+    public bool LastFrameClassified { get; private set; } = true;
 
     /// <summary>The lines the last frame drew.</summary>
     public int LinesDrawn { get; private set; }
@@ -81,6 +90,12 @@ public sealed class EditorRenderer : IDisposable
         var firstLine = snapshot.GetLine(visible.First);
         var lastLine = snapshot.GetLine(visible.Last);
         _spans.Clear();
+        LastFrameClassified = model.WaitForClassification(snapshot);
+        if (!LastFrameClassified)
+        {
+            ParseWaitsExceeded++;
+        }
+
         model.LanguageSession?.Classify(snapshot, firstLine.Start, lastLine.EndIncludingBreak - firstLine.Start, _spans);
         var spans = _spans.Spans;
         var find = model.Find;

@@ -104,7 +104,9 @@ interface Craft.Abstractions.ILanguage : Idrak.Abstraction.IKind
   Craft.Abstractions.LanguageRules Rules { get; }
   System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
 interface Craft.Abstractions.ILanguageSession : System.IDisposable
+  System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+  event System.EventHandler Reclassified
 interface Craft.Abstractions.ITextBuffer
   Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
   Craft.Abstractions.ITextSnapshot Current { get; }

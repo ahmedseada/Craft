@@ -93,6 +93,12 @@ public sealed record CraftOptions
     public int FindCountLimit { get; init; } = 100_000;
 
     /// <summary>
+    /// The milliseconds a frame waits on the UI thread for the language's parse of the text it draws (a parse off the UI
+    /// thread); a longer parse draws the changed text plain and repaints when it lands. 0 never waits (<c>CRAFT_PARSE_WAIT_MS</c>).
+    /// </summary>
+    public int ParseWaitMilliseconds { get; init; } = 8;
+
+    /// <summary>
     /// Folders of user plug-ins (each holding a <c>Name/Name.dll</c> folder per plug-in), loaded after the app's own
     /// <c>plugins</c> folder; none by default, since a plug-in is code (<c>CRAFT_PLUGIN_FOLDERS</c>, separated by ';').
     /// </summary>
@@ -129,6 +135,7 @@ public sealed record CraftOptions
         new("CRAFT_GUTTER_PADDING", "2", "Empty cells of the line-number gutter beside the widest number."),
         new("CRAFT_AUTO_CLOSE_BRACKETS", "false", "Whether typing an opening bracket inserts its closing one too."),
         new("CRAFT_FIND_COUNT_LIMIT", "100000", "Find stops counting matches at this many."),
+        new("CRAFT_PARSE_WAIT_MS", "8", "Milliseconds a frame waits for the language's parse of its text; longer parses paint the changed text plain, then repaint. 0 never waits."),
     ];
 
     /// <summary>
@@ -262,6 +269,11 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_FIND_COUNT_LIMIT") is { } findLimit)
         {
             options = options with { FindCountLimit = Whole(findLimit, "CRAFT_FIND_COUNT_LIMIT", 1, int.MaxValue) };
+        }
+
+        if (Text(read, "CRAFT_PARSE_WAIT_MS") is { } parseWait)
+        {
+            options = options with { ParseWaitMilliseconds = Whole(parseWait, "CRAFT_PARSE_WAIT_MS", 0, 10_000) };
         }
 
 

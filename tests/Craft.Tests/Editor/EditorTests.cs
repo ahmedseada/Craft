@@ -592,6 +592,45 @@ public static class EditorTests
         Check.Equal("quotes", named.LanguageName, "a language's name");
     }
 
+    [Test]
+    public static async Task ALandedParseRebuildsTheLinesWhoseSpansChanged()
+    {
+        var language = new DeferredLanguage();
+        var (model, _, _) = Editors.Make("int a = 1;\nplain words\nb = 22;", language: language);
+        using var renderer = new EditorRenderer();
+        var canvas = new RecordingCanvas();
+        renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: false);
+        Check.True(!renderer.LastFrameClassified && renderer.ParseWaitsExceeded == 1, "before the parse lands, the frame's wait runs out and says so");
+        uint number = model.Theme.StyleOf(TokenClasses.Number).Argb;
+        Check.True(!canvas.Texts.Any(t => t.Argb == number), "and nothing is drawn as a number");
+        long built = renderer.RunStringsBuilt;
+
+        int raised = 0;
+        int raisedOn = -1;
+        model.Reclassified += (_, _) =>
+        {
+            raised++;
+            raisedOn = Environment.CurrentManagedThreadId;
+        };
+        int ui = Environment.CurrentManagedThreadId;
+        await Task.Factory.StartNew(() => language.Last!.Land(), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Check.Equal(1, raised, "the session's Reclassified reaches the model's");
+        Check.True(raisedOn != ui, "it is raised on the parse's thread (the host marshals it)");
+
+        int invalidated = 0;
+        model.Invalidated += (_, _) => invalidated++;
+        model.ApplyReclassification();
+        Check.Equal(1, invalidated, "applied on the UI thread, it invalidates the view");
+        canvas.Clear();
+        renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: false);
+        Check.True(renderer.LastFrameClassified && renderer.ParseWaitsExceeded == 1, "after the landing the frame's spans are final");
+        Check.SequenceEqual(["1", "22"], canvas.Texts.Where(t => t.Argb == number).Select(t => t.Text).ToList(), "the numbers are drawn in their colour now");
+        // Line 0 "int a = " "1" ";" and line 2 "b = " "22" ";" are rebuilt (three runs each); "plain words" is not.
+        Check.Equal(built + 6, renderer.RunStringsBuilt, "only the two lines whose spans changed are rebuilt");
+        renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: false);
+        Check.Equal(built + 6, renderer.RunStringsBuilt, "the next frame rebuilds nothing");
+    }
+
     /// <summary>A language that classifies the whole text as one comment, whatever range it is asked for.</summary>
     private sealed class WholeTextLanguage : ILanguage
     {

@@ -15,6 +15,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The session's test hooks (holding the parse worker, failing a parse) are internal. -->
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(RoslynVersion)" />
     <ProjectReference Include="..\Craft.Abstractions\Craft.Abstractions.csproj">
       <Private>false</Private>

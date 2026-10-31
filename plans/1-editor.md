@@ -280,9 +280,44 @@ Android out:
   visible lines (414 spans) classify in 47 ms cold, 344 µs warm, 1.5 KB a call (Roslyn's red nodes). Typing `/*` at line
   10 re-parses in 9.5 ms and then the top 60 lines classify in 28 µs, the commented-out middle in 0.7 µs (one span);
   deleting that `/*` again re-lexes everything after it: **305-561 ms on the UI thread**. A keystroke inside a raw
-  string: 0.8 ms median; a raw string opened at line 10: 25 ms. Candidate, measured here and not yet taken: parse off the
-  UI thread on a snapshot and classify from the last finished tree (the plan's "nothing waits on the UI thread"),
-  because an edit that changes the meaning of the rest of a large file costs a full parse.
+  string: 0.8 ms median; a raw string opened at line 10: 25 ms. Candidate, measured here: parse off the UI thread on a
+  snapshot and classify from the last finished tree (the plan's "nothing waits on the UI thread"), because an edit that
+  changes the meaning of the rest of a large file costs a full parse. **Taken (below).**
+
+- **Parse off the UI thread (E2 fix, 2026-10-31, the same bench and file, a 4-core x64 Linux container, .NET 10.0.14).**
+  `CSharpLanguageSession` keeps the last landed parse (tree + the snapshot it is of, one immutable value swapped
+  atomically) and one worker on the thread pool that runs only while there is work. `Changed` (UI thread) composes the
+  change into one covering `TextChangeRange` against the last parsed version (`SnapshotSourceText.Collapse`, `Compose`,
+  `Since`: several versions become one incremental parse, no text chained) and wakes the worker; it parses the newest
+  snapshot, again while newer changes are pending, and raises `ILanguageSession.Reclassified` (new in the contract, on
+  the worker's thread; `EditorModel.Reclassified` forwards it, `EditorView` dispatches to the UI thread and calls
+  `ApplyReclassification`, which drops the bracket match and invalidates; the run cache keys on spans, so only the lines
+  whose spans changed are rebuilt). A frame waits for the parse up to `CraftOptions.ParseWaitMilliseconds`
+  (`CRAFT_PARSE_WAIT_MS`, default 8: the typing parse's p99 is 2.2-2.3 ms, so typing paints classified in the same frame
+  with 3.5 x room, and 8 ms is half a 60 Hz frame; 0 never waits) through `ILanguageSession.WaitUntilClassified` (new,
+  with a default that returns true). Past the budget, `Classify` maps the range through the pending change into the old
+  tree: spans before and after it kept (shifted), those touching it dropped (drawn plain until `Reclassified`). A parse
+  that throws is kept in `ParseError`, the last tree stays in use and the next change parses afresh; `Dispose` stops the
+  worker. The classifier now walks from the range's first token (`FindToken`, `GetNextToken`) instead of
+  `DescendantTokens(range)`, which made a red node for every type above the visible lines on each fresh tree: the same
+  tokens (proven against `DescendantTokens` on 12,000 random ranges), 107 KB to 32 KB allocated on the UI thread a
+  keystroke. Before (the old code, measured again on this container) and after, UI thread = the edit and its `Changed`,
+  the wait, and the classification of the 60 visible lines:
+
+  | What | Before, on the UI thread | After, UI thread | After, the parse in the background |
+  |---|---|---|---|
+  | Open the 100,005-line file (cold) | 711 ms (the full parse) | 8.3 ms `Open` + 14.5 ms first frame (budget spent, drawn plain) | 866 ms, then repainted by `Reclassified` |
+  | Keystroke in a method body, cold | 41.9 ms | 18.2 ms (over the budget, drawn plain once) | 21.4 ms |
+  | Keystroke, warm | 1.11 ms median, 2.1 ms p99 (parse only; + classify 0.2-0.6 ms) | 2.1 ms median, 3.6 ms p99, 6.1 ms max; 0 of 350 over the budget | 1.29 ms median, 2.2 ms p99 |
+  | Keystroke, warm, `CRAFT_PARSE_WAIT_MS=0` | | 0.52 ms median, 1.7 ms p99 (classified through the pending change) | the same |
+  | `/*` typed at line 10 | 9.7 ms | 8.7 ms cold, 7.3 ms warm median (classified within the budget) | 14.4 ms cold, 7.0 ms warm |
+  | `/*` deleted again (the freeze) | **258 ms** (305-561 ms in the first E2 run) | **8.7 ms cold, 8.1 ms warm median, 8.7 ms max** (lines above the change classified, the rest plain) | 349 ms cold, 321 ms warm median, then repainted |
+  | Raw string opened at line 10 | 25.7 ms | 8.3 ms (over the budget) | 29.6 ms |
+  | Keystroke inside a raw string | 1.8 ms median | 1.4 ms median | 0.73 ms median |
+
+  The warm keystroke's UI cost is now the wait for the background parse plus the hand-off (the parse itself is the
+  same Roslyn incremental parse); with a budget of 0 the UI thread never waits and draws the typed token plain for one
+  frame. The worst case on the UI thread is the budget plus one classification, whatever the edit.
 
 ### Tests and benches
 

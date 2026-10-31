@@ -60,7 +60,7 @@ public static class InventoryTests
             ["CRAFT_WORKSPACE_IGNORE"] = "bin; out,dist", ["CRAFT_CARET_BLINK_MS"] = "0", ["CRAFT_CARET_WIDTH"] = "1.5",
             ["CRAFT_DOUBLE_CLICK_MS"] = "300", ["CRAFT_DOUBLE_CLICK_DISTANCE"] = "6", ["CRAFT_BRACKET_SCAN_LINES"] = "100",
             ["CRAFT_SCROLL_MARGIN_LINES"] = "1", ["CRAFT_SCROLL_MARGIN_COLUMNS"] = "3", ["CRAFT_BOTTOM_MARGIN_LINES"] = "0",
-            ["CRAFT_GUTTER_PADDING"] = "1", ["CRAFT_AUTO_CLOSE_BRACKETS"] = "true", ["CRAFT_FIND_COUNT_LIMIT"] = "50",
+            ["CRAFT_GUTTER_PADDING"] = "1", ["CRAFT_AUTO_CLOSE_BRACKETS"] = "true", ["CRAFT_FIND_COUNT_LIMIT"] = "50", ["CRAFT_PARSE_WAIT_MS"] = "0",
             ["CRAFT_PLUGIN_FOLDERS"] = "p1; p2", ["CRAFT_PLUGINS_DISABLED"] = "Craft.CSharp, Other",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
@@ -70,7 +70,7 @@ public static class InventoryTests
             AutosaveSeconds = 0, UndoGroupMilliseconds = 250, RecoveryFolder = "rec", BufferChunkCharacters = 4096, NewLine = "\r\n",
             WorkspaceIgnore = options.WorkspaceIgnore, CaretBlinkMilliseconds = 0, CaretWidth = 1.5f, DoubleClickMilliseconds = 300,
             DoubleClickDistance = 6, BracketScanLines = 100, ScrollMarginLines = 1, ScrollMarginColumns = 3, BottomMarginLines = 0,
-            GutterPaddingCells = 1, AutoCloseBrackets = true, FindCountLimit = 50,
+            GutterPaddingCells = 1, AutoCloseBrackets = true, FindCountLimit = 50, ParseWaitMilliseconds = 0,
             PluginFolders = options.PluginFolders, DisabledPlugins = options.DisabledPlugins,
         }, options, "options read from every variable");
         Check.SequenceEqual(["p1", "p2"], options.PluginFolders, "CRAFT_PLUGIN_FOLDERS split at ';'");

@@ -41,11 +41,36 @@ public static class CSharpTokenClasses
 /// </summary>
 public static class CSharpClassifier
 {
-    /// <summary>Adds the spans of <paramref name="root"/>'s tokens and trivia overlapping <paramref name="start"/> to <paramref name="start"/> + <paramref name="length"/>, in order.</summary>
+    /// <summary>
+    /// Adds the spans of <paramref name="root"/>'s tokens and trivia overlapping <paramref name="start"/> to
+    /// <paramref name="start"/> + <paramref name="length"/>, in order. It finds the range's first token by position
+    /// (descending by the green tree's widths) and walks to the next token from there, so only the nodes on the way are
+    /// made, not every sibling before the range (as <c>DescendantTokens</c> does: on a fresh tree of a large file, a red node
+    /// per type above the visible lines). The tokens are the same as <c>DescendantTokens(range)</c>'s (proven in the tests).
+    /// </summary>
     public static void Classify(SyntaxNode root, int start, int length, TokenSpanBuffer into)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(into);
+        var range = new TextSpan(start, length);
+        var full = root.FullSpan;
+        if (length == 0 || start < full.Start || start >= full.End)
+        {
+            // The edges (an empty range, a range outside the root) as Roslyn's own walk answers them.
+            ClassifyByDescendants(root, start, length, into);
+            return;
+        }
+
+        int end = range.End;
+        for (var token = root.FindToken(start); token.RawKind != 0 && token.FullSpan.Start < end; token = token.GetNextToken(includeZeroWidth: true))
+        {
+            TokenWithTrivia(token, range, into);
+        }
+    }
+
+    /// <summary>As <see cref="Classify"/>, through Roslyn's <c>DescendantTokens(range)</c>: the reference the tests compare it with.</summary>
+    internal static void ClassifyByDescendants(SyntaxNode root, int start, int length, TokenSpanBuffer into)
+    {
         var range = new TextSpan(start, length);
         foreach (var token in root.DescendantTokens(range))
         {

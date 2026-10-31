@@ -35,6 +35,7 @@ public sealed class EditorView : ContentView, IDisposable
     private ITheme? _theme;
     private CraftOptions _options = new();
     private bool _caretOn = true;
+    private bool _reclassifying;
     private bool _disposed;
 
     /// <summary>An empty editor (set <see cref="Document"/> to show one).</summary>
@@ -184,6 +185,7 @@ public sealed class EditorView : ContentView, IDisposable
         model.ContentSizeChanged += OnModelContentSizeChanged;
         model.SaveRequested += OnModelSaveRequested;
         model.FindRequested += OnModelFindRequested;
+        model.Reclassified += OnModelReclassified;
         _model = model;
         _drawable.Model = model;
         model.UpdateViewport((float)_scroll.ScrollX, (float)_scroll.ScrollY, (float)_scroll.Width, (float)_scroll.Height);
@@ -204,6 +206,7 @@ public sealed class EditorView : ContentView, IDisposable
         model.ContentSizeChanged -= OnModelContentSizeChanged;
         model.SaveRequested -= OnModelSaveRequested;
         model.FindRequested -= OnModelFindRequested;
+        model.Reclassified -= OnModelReclassified;
         _drawable.Model = null;
         _model = null;
         model.Dispose();
@@ -246,8 +249,36 @@ public sealed class EditorView : ContentView, IDisposable
         Invalidate();
     }
 
+    private void OnModelReclassified(object? sender, EventArgs e)
+    {
+        // Raised on the language's parse thread: the repaint happens on the UI thread, for the model still shown.
+        var model = sender as EditorModel;
+        Dispatcher.Dispatch(() =>
+        {
+            if (model is not null && ReferenceEquals(model, _model))
+            {
+                _reclassifying = true;
+                try
+                {
+                    model.ApplyReclassification();
+                }
+                finally
+                {
+                    _reclassifying = false;
+                }
+            }
+        });
+    }
+
     private void OnModelInvalidated(object? sender, EventArgs e)
     {
+        if (_reclassifying)
+        {
+            // New colours only: the caret keeps its blink.
+            Invalidate();
+            return;
+        }
+
         _caretOn = true;
         _drawable.CaretVisible = true;
         RestartBlink();

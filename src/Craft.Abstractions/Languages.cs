@@ -40,17 +40,41 @@ public interface ILanguage : IKind
 
 /// <summary>
 /// A language's work on one open buffer. <see cref="Classify"/> is the syntactic layer: fast enough for the keystroke,
-/// called on the UI thread for the lines about to be drawn. The semantic layer (diagnostics, completion) comes later
-/// and runs off the UI thread.
+/// called on the UI thread for the lines about to be drawn, and it never waits. A session may parse off the UI thread:
+/// it then classifies a snapshot newer than its last parse from that parse (the text the change touched left plain),
+/// raises <see cref="Reclassified"/> when a newer parse lands, and lets the editor wait a bounded time for it
+/// (<see cref="WaitUntilClassified"/>). The semantic layer (diagnostics, completion) comes later and runs off the UI thread.
 /// </summary>
 public interface ILanguageSession : IDisposable
 {
     /// <summary>
+    /// Raised when the spans <see cref="Classify"/> gives may have changed without the buffer changing: a parse made off
+    /// the UI thread landed (the first one after the session opened included). It is raised on the session's own thread,
+    /// never the UI thread's: the subscriber marshals to its UI thread before it redraws. A session that classifies each
+    /// snapshot completely when asked never raises it (the default).
+    /// </summary>
+    event EventHandler? Reclassified
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
     /// Adds the classified spans of <paramref name="start"/> to <paramref name="start"/> + <paramref name="length"/> of
     /// <paramref name="snapshot"/> to <paramref name="into"/>, in order of position. A character no span covers is plain
     /// text. A span may start before the range or end after it (a block comment that began above); the caller clips.
+    /// It never waits for a parse: before the parse of <paramref name="snapshot"/> lands, the text its changes touched
+    /// gets no span (and <see cref="Reclassified"/> follows).
     /// </summary>
     void Classify(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into);
+
+    /// <summary>
+    /// Waits up to <paramref name="timeout"/> (none when zero, without end when <see cref="Timeout.InfiniteTimeSpan"/>) until <see cref="Classify"/> of <paramref name="snapshot"/>
+    /// gives its final spans (its parse landed); true when it does. The editor calls it before a frame with its budget, so
+    /// ordinary typing paints classified in the same frame and a long parse never holds the UI thread longer. A session
+    /// that classifies each snapshot completely when asked returns true at once (the default).
+    /// </summary>
+    bool WaitUntilClassified(ITextSnapshot snapshot, TimeSpan timeout) => true;
 }
 
 /// <summary>

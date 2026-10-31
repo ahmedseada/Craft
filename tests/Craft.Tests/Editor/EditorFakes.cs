@@ -314,6 +314,73 @@ internal sealed class QuoteLanguage : ILanguage
     }
 }
 
+/// <summary>
+/// A test language whose "parse" lands when the test says (<see cref="Land"/>, from another thread): until then it gives
+/// no spans and its wait fails; after it, digits are numbers. It raises Reclassified on the landing thread.
+/// </summary>
+internal sealed class DeferredLanguage : ILanguage
+{
+    public Session? Last { get; private set; }
+
+    public string Name => "deferred";
+
+    public string Summary => "Test: spans that arrive after a background parse";
+
+    public IReadOnlyList<string> Extensions { get; } = [".deferred"];
+
+    public LanguageRules Rules => LanguageRules.Plain;
+
+    public ILanguageSession Open(ITextBuffer buffer) => Last = new Session();
+
+    internal sealed class Session : ILanguageSession
+    {
+        private volatile bool _landed;
+
+        public event EventHandler? Reclassified;
+
+        public int Waits { get; private set; }
+
+        public void Land()
+        {
+            _landed = true;
+            Reclassified?.Invoke(this, EventArgs.Empty);
+        }
+
+        public bool WaitUntilClassified(ITextSnapshot snapshot, TimeSpan timeout)
+        {
+            Waits++;
+            return _landed;
+        }
+
+        public void Classify(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into)
+        {
+            if (!_landed)
+            {
+                return;
+            }
+
+            for (int i = start; i < start + length; i++)
+            {
+                if (char.IsAsciiDigit(snapshot[i]))
+                {
+                    int j = i;
+                    while (j < start + length && char.IsAsciiDigit(snapshot[j]))
+                    {
+                        j++;
+                    }
+
+                    into.Add(i, j - i, TokenClasses.Number);
+                    i = j;
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+}
+
 /// <summary>Builds an editor over a fake document.</summary>
 internal static class Editors
 {

@@ -5,6 +5,9 @@ every session, after every compaction, and for every agent. Where this file and 
 variables, project names), the Craft name is used here; where they would differ in substance, Idrak's rule wins and this
 file is corrected, except where the owner set a rule for Craft itself (such as the number of agents), which is kept.
 
+- **Usability before features.** Until the owner says the editor is dynamic, friendly, usable and interactive (the
+  plan's "Usability before features" and phase X), no agent starts a new feature: the slots take the owner's notes,
+  U, U2 and X first.
 - **The task is the plan.** `plans/1-editor.md` is the current task: its phases in their order, each started only when
   the owner says. A session reads it first, and writes its measured numbers and decisions back into it.
 - **Ambiguous instructions are asked, not guessed.** When the owner's wording could mean start or stop, now or later,

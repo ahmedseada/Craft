@@ -1754,3 +1754,49 @@ files showing in the tree, the side panel gone, every panel collapsible and resi
 whether voice dictation goes through the diff view (not answered yet).
 
 The held phases (M Android, L more languages, A3 remote models) stay held for the owner's word.
+
+## Usability before features (the owner's order, 2026-10-31)
+
+The owner: the editor must be dynamic, friendly, usable and interactive before any more features. So the order from
+here is: U and U2 (running), the owner's notes above (broken first, then look and feel, then shortcuts and the C#
+project's languages), then phase X below; only then features again (P batch 2 on `wip/p-batch-2`, more plug-ins, M, L,
+A3). No agent starts a feature while an item here is open.
+
+### Phase X: the experience pass
+
+Each item is checked by the owner on Windows, against the design (`docs/design/`), and measured where it can be:
+
+- **Every action answers at once.** A click, a key or a drag shows its effect within one frame (or a pressed state
+  and a spinner when the work takes longer, through the activities); nothing looks dead. Hover, pressed, focus and
+  disabled states on every control, from the design's tokens; a visible focus ring for the keyboard.
+- **Motion that explains.** Short transitions (panels opening and closing, tabs moving, the notification centre, the
+  completion list, toasts), 120-200 ms, off when the system asks for reduced motion (`CRAFT_REDUCED_MOTION`).
+- **Direct manipulation.** Drag tabs to reorder and to split the editor; drag files in the tree to move them and onto
+  the editor to open; drag the panels' splitters; drop a file or an image onto the chat; double-click a tab strip's empty
+  space for a new file.
+- **Context menus everywhere**: the editor (cut, copy, paste, go to definition, find references, rename, format, AI
+  actions on the selection, run selection in terminal), the tree (new file, new folder, rename inline, delete with undo,
+  reveal in Explorer, open in terminal, copy path), the tabs (close, close others, close to the right, pin, reveal),
+  the problems, the chat and agent messages (copy, apply, retry).
+- **Inline, not modal.** Rename in place (tree and symbols), find and replace as an overlay in the editor, the command
+  palette and quick-open as one overlay with fuzzy highlights, recent items and keyboard navigation (arrows, Enter,
+  Escape), confirmations as an inline bar with Undo rather than a dialog where possible.
+- **The editor itself feels alive**: smooth scrolling, a minimap or an overview ruler with errors and search hits,
+  sticky scroll of the current type and member, code folding, indentation guides, matching-bracket and current-word
+  highlights, multi-caret (Alt+click, Ctrl+D), column selection, line and selection moves (Alt+Up/Down), auto-indent
+  and auto-close that never fight the user, hover cards that stay while the pointer moves into them.
+- **Friendly when empty or wrong**: a welcome page (open a folder, recent folders, start from a template, the shortcuts
+  that matter, the model state), empty states that say what to do (no folder, no problems, no model, no terminal),
+  errors in plain words with the action that fixes them (a model that fails to load, a plug-in that failed, a save
+  refused), never a raw exception in front of the user.
+- **The chat and the agent feel like a conversation**: streaming that scrolls, markdown rendered (code blocks with
+  colours, copy and apply), the model and its device chosen at the composer, a stop button while it writes, retry and
+  edit-and-resend, the agent's steps as a live list (thinking, a tool call, a command waiting for approval) that the user
+  can open, the context shown as removable chips.
+- **Settings that read like an app's**, not a list of variables: sections, real controls, search, the effect shown
+  live, the variable name small for those who want it, and a shortcuts page with remapping (the owner's note 16).
+- **Measured**: the time from input to visible response for each interaction above (the UI watchdog's numbers and a
+  bench of the shell's interactions), written here; no interaction over one frame without a pressed state and a spinner.
+
+Checks: the owner uses Craft on the test project for a session (open, edit, search, refactor, chat, run the agent, the
+terminal) and every item above holds; the measured numbers are written here.

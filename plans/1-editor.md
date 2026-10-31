@@ -453,6 +453,9 @@ string `#E3B27A`, comment `#8790A0` italic, method `#E8D58A`, variable `#B8C7DC`
 Mono for code (both SIL Open Font License, bundled as MAUI fonts; `CRAFT_FONT` still overrides the code font); 13 px
 interface text, 22 px code lines; 44 px touch targets in the narrow layout.
 
+The logo and app icon (the owner's choice, 2026-10-31): `docs/design/logo.svg`, the rounder dark square with the thick
+amber C, a white caret and a white spark; it is `src/Craft.App/Resources/AppIcon/appicon.svg` and the title bar's mark.
+
 Phase D builds the shell's look and layout from `Main.dc.html` on E4's shell and K's contracts (the menus and the rail
 are commands, so plug-ins add to them), the Plug-ins and Models pages, and the theme tokens; each later screen follows
 its design file. Checks: the Windows window beside the design at 1440x900 and at the narrow width, the owner the judge;

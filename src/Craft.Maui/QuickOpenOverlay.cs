@@ -45,6 +45,7 @@ public sealed class QuickOpenOverlay : ContentView
     private CancellationTokenSource? _query;
     private ShellPalette _palette;
     private bool _settingText;
+    private readonly TypingDebounce _typing;
 
     /// <summary>The overlay over <paramref name="model"/>, in <paramref name="palette"/>'s colours.</summary>
     public QuickOpenOverlay(QuickOpen model, ShellPalette palette)
@@ -55,11 +56,13 @@ public sealed class QuickOpenOverlay : ContentView
         _palette = palette;
         _input = new RoutedEntry { Placeholder = "Search files by name   ·   > commands   ·   : go to a line", HeightRequest = 32, FontSize = palette.FontSize, FontFamily = palette.Font() };
         _input.RouteKey = OnKey;
-        _input.TextChanged += (_, e) =>
+        // Debounced (CRAFT_SEARCH_DELAY_MS): typing never waits on a match; a key the overlay takes runs a waiting one first.
+        _typing = new TypingDebounce(this, () => _palette.Options.SearchDelayMilliseconds, () => _ = RefreshAsync(_input.Text ?? ""));
+        _input.TextChanged += (_, _) =>
         {
             if (!_settingText)
             {
-                _ = RefreshAsync(e.NewTextValue ?? "");
+                _typing.Restart();
             }
         };
         _inputBox = palette.Field(_input);
@@ -147,6 +150,7 @@ public sealed class QuickOpenOverlay : ContentView
     // The keys of the open overlay (the input hands them over before its box).
     private bool OnKey(EditorKey key, KeyModifiers modifiers)
     {
+        _typing.Flush();
         switch (key)
         {
             case EditorKey.Escape:

@@ -39,6 +39,7 @@ public sealed class FindOverlay : ContentView
     private EditorModel? _model;
     private CancellationTokenSource? _counting;
     private bool _replaceShown;
+    private readonly TypingDebounce _typing;
 
     /// <summary>The overlay in <paramref name="palette"/>'s colours, hidden.</summary>
     public FindOverlay(ShellPalette palette)
@@ -47,7 +48,9 @@ public sealed class FindOverlay : ContentView
         _palette = palette;
         _query = new RoutedEntry { Placeholder = "Find", HeightRequest = 28, FontSize = palette.FontSize, FontFamily = palette.Font() };
         _query.RouteKey = OnQueryKey;
-        _query.TextChanged += (_, _) => OnQueryChanged();
+        // Debounced (CRAFT_SEARCH_DELAY_MS): a key the overlay takes (Enter, F3, Escape) runs a waiting search first.
+        _typing = new TypingDebounce(this, () => _palette.Options.SearchDelayMilliseconds, OnQueryChanged);
+        _query.TextChanged += (_, _) => _typing.Restart();
         _queryBox = palette.Field(_query);
         _replacement = new RoutedEntry { Placeholder = "Replace", HeightRequest = 28, FontSize = palette.FontSize, FontFamily = palette.Font() };
         _replacement.RouteKey = OnReplacementKey;
@@ -371,6 +374,7 @@ public sealed class FindOverlay : ContentView
 
     private bool OnQueryKey(EditorKey key, KeyModifiers modifiers)
     {
+        _typing.Flush();
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
         bool alt = (modifiers & KeyModifiers.Alt) != 0;
         bool control = (modifiers & KeyModifiers.Control) != 0;

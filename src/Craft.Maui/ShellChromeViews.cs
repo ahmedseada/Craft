@@ -158,6 +158,7 @@ public sealed class TitleBarView : ContentView
     private readonly List<Button> _narrowButtons = [];
     private readonly List<(Button Button, string Name, string Command)> _narrowTips = [];
     private ShellPalette _palette;
+    private readonly TypingDebounce _typing;
 
     /// <summary>The bar in <paramref name="palette"/>'s colours.</summary>
     public TitleBarView(ShellPalette palette)
@@ -167,8 +168,14 @@ public sealed class TitleBarView : ContentView
         _logo = new GraphicsView { Drawable = _logoDrawable, WidthRequest = 20, HeightRequest = 20, InputTransparent = true };
         _name = palette.Label("Craft", weight: FontWeight.SemiBold);
         Search = palette.Input("Search files, symbols and commands  (Ctrl+P)", 26);
-        Search.TextChanged += (_, e) => SearchChanged?.Invoke(this, e.NewTextValue ?? "");
-        Search.Completed += (_, _) => SearchSubmitted?.Invoke(this, EventArgs.Empty);
+        // Debounced (CRAFT_SEARCH_DELAY_MS); Enter runs a waiting search before it picks.
+        _typing = new TypingDebounce(this, () => _palette.Options.SearchDelayMilliseconds, () => SearchChanged?.Invoke(this, Search.Text ?? ""));
+        Search.TextChanged += (_, _) => _typing.Restart();
+        Search.Completed += (_, _) =>
+        {
+            _typing.Flush();
+            SearchSubmitted?.Invoke(this, EventArgs.Empty);
+        };
         Search.Focused += (_, _) => SearchFocused?.Invoke(this, EventArgs.Empty);
         _searchBox = palette.Field(Search);
         _searchBox.MaximumWidthRequest = 460;

@@ -306,7 +306,7 @@ public static class AiTests
             ["completionMaxLines"] = "3", ["completionSuffixChars"] = "128", ["completionPrefixChars"] = "4000", ["completionChunk"] = "2", ["completionTemperature"] = "0.2",
             ["chatMaxTokens"] = "300", ["chatToolRounds"] = "2", ["chatKeep"] = "false", ["chatFile"] = "c.json", ["chatHistory"] = "10", ["chatFileLines"] = "50", ["placement"] = "csharp-tokens",
             ["placementMaxError"] = "0.1", ["agentSandbox"] = "container", ["agentMaxTurns"] = "5", ["agentMinutes"] = "3", ["agentMaxTokens"] = "500",
-            ["agentFolder"] = "/copies", ["agentCopyIgnore"] = "bin",
+            ["agentFolder"] = "/copies", ["agentCopyIgnore"] = "bin", ["chatStops"] = "END|<x;y>", ["agentStops"] = "DONE",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -319,7 +319,7 @@ public static class AiTests
             CompletionSuffixCharacters: 128, CompletionPrefixCharacters: 4000, CompletionChunk: 2, ChatMaxTokens: 300, ChatToolRounds: 2, ChatKeep: false,
             ChatFile: "c.json", ChatHistory: 10, ChatFileLines: 50, Placement: "csharp-tokens", PlacementMaxError: 0.1, AgentSandbox: "container", AgentMaxTurns: 5, AgentMinutes: 3,
             AgentMaxTokens: 500, AgentFolder: "/copies",
-        } && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
+        } && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && settings.ChatStops.SequenceEqual(["END", "<x;y>"]) && settings.AgentStops.SequenceEqual(["DONE"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
             "each value is read");
         var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "threads" ? "many" : null), "a bad value");
         Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_THREADS", StringComparison.Ordinal), "the error names the variable");

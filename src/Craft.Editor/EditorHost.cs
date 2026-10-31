@@ -301,7 +301,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         }
     }
 
-    /// <summary>Saves <paramref name="document"/> (to <paramref name="path"/> when given), then raises <see cref="DocumentSaved"/>.</summary>
+    /// <summary>Saves <paramref name="document"/> (to <paramref name="path"/> when given, its folders made), then raises <see cref="DocumentSaved"/>.</summary>
     public async Task SaveAsync(IEditorDocument document, string? path = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -309,6 +309,11 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         using var activity = ActivityCenter.Start($"Saving {name}", ActivityKinds.Save, false, cancellationToken, true, HostSource);
         try
         {
+            if (path is not null && Path.GetDirectoryName(Path.GetFullPath(path)) is { Length: > 0 } folder)
+            {
+                Directory.CreateDirectory(folder);              // a new file's folders (the agent's new file in a new folder)
+            }
+
             await document.Document.SaveAsync(path, cancellationToken);
             activity.Complete(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{document.Document.Buffer.Current.Length:N0} characters"));
         }

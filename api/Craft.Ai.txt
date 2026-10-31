@@ -28,6 +28,7 @@ sealed class Craft.Ai.AgentWorkspace : System.IDisposable
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits(System.String current, System.String target)
 sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, System.IDisposable
   Craft.Ai.AgentWorkspace WorkingCopy { get; }
+  System.Boolean Continues { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Ai.AgentChange> Changes { get; }
   System.String Placeholder { get; }
@@ -147,6 +148,8 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Boolean Equals(System.Object obj)
   System.Boolean McpOnStart { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentCopyIgnore { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> AgentStops { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> ChatStops { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> IdrakPlugins { get; init; }
   System.Double PlacementMaxError { get; init; }
   System.Int32 AgentMaxTokens { get; init; }

@@ -1924,7 +1924,8 @@ the owner's machine, not only headless.
   encoding one) threw into the command runner, which only logs. Fix: `DocumentTab.SuggestedPath` (`ShellModel.NewFile(path)`,
   `DocumentTabs.AddFor`/`FindSuggested`): titled by its name, in its language, Save writes it there creating its folders,
   without asking; a second proposal for it goes to the same tab; Save as starts in its nearest existing folder; a dialog
-  that fails to open, and any failed write, is said in a message. Test `Shell: SaveWritesANewFileWhereItWasMadeFor…`.
+  that fails to open, and any failed write, is said in a message; `EditorHost.SaveAsync` makes a given path's folders, so U2's
+  "accepted whole, the file is created" works for a new file in a new folder too. Test `Shell: SaveWritesANewFileWhereItWasMadeFor…`.
 - **3, context and cut replies: fixed.** Causes: the agent panel started a new run, copy and conversation for every
   message (Idrak's `CodingAgent` could only start one: `CodingAgent.ContinueAsync` added on Idrak `d85b6ab`); the chat
   kept its history already. The cut text ("you wan", "to h") was mid-word where the model's tokens are whole words: the

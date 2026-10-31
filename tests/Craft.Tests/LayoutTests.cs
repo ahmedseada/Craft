@@ -298,9 +298,9 @@ public static class LayoutTests
     {
         public string SavePath { get; set; } = "";
 
-        public Task<string?> PickFolderAsync(CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
 
-        public Task<string?> PickFileAsync(CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task<string?> PickFileAsync(string? startFolder = null, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
 
         public Task<string?> PickSavePathAsync(string suggestedName, string? folder, CancellationToken cancellationToken = default) => Task.FromResult<string?>(SavePath);
     }

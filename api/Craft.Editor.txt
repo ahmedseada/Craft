@@ -9,8 +9,8 @@ interface Craft.Editor.Abstractions.IEditorPresenter
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.Boolean>> ChooseHunksAsync(Craft.Editor.EditProposal proposal, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken)
 interface Craft.Editor.Abstractions.IFileDialogs
-  System.Threading.Tasks.Task<System.String> PickFileAsync(System.Threading.CancellationToken cancellationToken = null)
-  System.Threading.Tasks.Task<System.String> PickFolderAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PickFileAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PickSavePathAsync(System.String suggestedName, System.String folder, System.Threading.CancellationToken cancellationToken = null)
 interface Craft.Editor.Abstractions.IShellUi
   System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
@@ -512,11 +512,14 @@ sealed class Craft.Editor.Shell.DocumentTab
   System.Int32 UntitledNumber { get; }
   System.Object View { get; set; }
   System.String FilePath { get; }
+  System.String SuggestedPath { get; }
   System.String Title { get; }
 sealed class Craft.Editor.Shell.DocumentTabs : System.IDisposable
   Craft.Editor.Shell.DocumentTab Active { get; }
   Craft.Editor.Shell.DocumentTab Add(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, System.String languageName = null, System.Boolean activate = true)
+  Craft.Editor.Shell.DocumentTab AddFor(Craft.Abstractions.ITextDocument document, System.String suggestedPath, Craft.Abstractions.ILanguage language, System.Boolean activate = true)
   Craft.Editor.Shell.DocumentTab Find(System.String path)
+  Craft.Editor.Shell.DocumentTab FindSuggested(System.String path)
   System.Boolean HasUnsaved { get; }
   System.Boolean Next()
   System.Boolean Previous()
@@ -766,6 +769,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Editor.Abstractions.IFileDialogs FileDialogs { get; }
   Craft.Editor.EditorHost Host { get; }
   Craft.Editor.Shell.DocumentTab NewFile()
+  Craft.Editor.Shell.DocumentTab NewFile(System.String path)
   Craft.Editor.Shell.DocumentTabs Tabs { get; }
   Craft.Editor.Shell.FolderTree Tree { get; }
   Craft.Editor.Shell.FolderTreeWatch TreeWatch { get; }

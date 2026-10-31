@@ -392,6 +392,40 @@ phrase; a spoken command runs the matching command; a spoken-code phrase arrives
 back stops on a key; the owner speaks into the microphone on Windows. Idrak gaps met on the way (a phrase-grammar or
 keyword biasing contract for the recognizer, if the measured accuracy on code words needs one) are fixed in Idrak first.
 
+## Learning in the editor: reinforcement learning on Idrak (phase R, added 2026-10-31 at the owner's request)
+
+The owner asked that the editor learn, through Idrak's reinforcement learning, and that it test that library through
+the C# plug-in Idrak already has. Everything it needs is in Idrak today: the contracts (`EnvironmentKinds`,
+`RewardFunctions`, `AdvantageEstimators`, `PolicyLosses`, `IPolicy`, `Trajectory`, `RolloutBatch`), the trainer
+(`Idrak.Reinforcement`: `ReinforcementTrainer`, `RolloutCollector`, `OffPolicyTrainer`), the text side
+(`Idrak.Text.Reinforcement`: `LanguageModelPolicy`, `PromptsEnvironmentKind`, `TextRewards`, `JudgeReward`,
+`OnPolicyDistiller`; `FineTuning` for the adapters), and the environments (`Idrak.Reinforcement.Plugins`: "coding" with
+`CodingTask`, `CodingSuite`, `CodingVerifier`, the `container` sandbox; "csharp" from `CSharpCodingPlugin`, with the
+`csharp-tests` and `csharp-build` rewards, over Idrak.Text.Plugins' "csharp-language", whose checks are `dotnet build`
+and `dotnet test`). Craft builds only plug-ins on K and A1; nothing of it is in Craft's libraries, and Craft never
+reimplements a trainer, a reward or an environment (a gap is fixed in Idrak first).
+
+| Piece | What it does | Idrak contract |
+|---|---|---|
+| Episodes from the editor | Opt-in, off by default, local only: each inline completion, chat diff, code action and agent task becomes an episode (the context, the model's answer, what the user did: accepted, edited after accepting and how far, rejected, undone). Stored under the app's data folder per workspace, with a size cap; the user sees, exports and deletes them on the Learning panel. | `Trajectory`, `EpisodeInfo` keys, `PromptsEnvironmentKind`'s prompt data |
+| Rewards | The user's verdict (accepted and kept, edited, rejected, undone) as an editor reward registered by the plug-in; for code, whether it builds and its tests pass, through `csharp-build` and `csharp-tests` run in a registered sandbox (approved, or `container`); a judge model optional. Weights are settings. | `RewardFunctions` (Craft's "editor-verdict" registered by the plug-in; Idrak's `csharp-*`, `tests-passed`, `JudgeReward`) |
+| Tasks from the workspace | The workspace's own tests make tasks: a test that fails (or one the user marks) becomes a `CodingTask` whose hidden check is `dotnet test`; the suite is written in `task.json` form so `idrak reinforce` reads it too. | `CodingTask`, `CodingSuite`, `CodingWorkspace`, the "csharp" environment |
+| Training | In the background when the machine is idle (or on demand), bounded by `ComputeResources` and the settings: the policy is the user's local model, trained as an adapter (never the base weights), with the loss and the advantage estimator chosen by name; live progress (episodes, reward, loss, time left) in the status bar and the panel; stoppable at any step. | `ReinforcementTrainer`, `LanguageModelPolicy`, `PolicyLosses`, `AdvantageEstimators`, `FineTuning`, `OnPolicyDistiller` |
+| Promotion | A trained adapter replaces the current one only if it scores better on a held-out set of the workspace's tasks and episodes, measured and shown; one click rolls back; every version kept until deleted. | `CodingVerifier`, the coding suite's evaluation |
+| Testing the library | The same plug-in is Idrak's reinforcement stack's test from a real host: the "csharp" environment on a small suite built from Craft's own repository and from fixtures, run headless; the five checks of phase P hold (registered by name, overridden, "not registered" for a missing one, loaded from the plug-in folder, the same assembly under `idrak reinforce`). | `EnvironmentKinds`, `RewardFunctions`, `IdrakPlugins` |
+
+Settings (each `CRAFT_LEARN_*` and in Settings): on or off (off by default), what is recorded (completions, chat,
+agent), the episode store's folder and cap, the reward weights, the sandbox, idle-only or on demand, the compute limits,
+the loss and estimator names, the held-out share and the promotion margin. Privacy: episodes and adapters never leave
+the machine; the status bar shows when a run is training. No silent edit still holds: a learned model proposes, the
+user accepts.
+
+Checks: a fake policy over a fixture C# workspace with a failing test runs episodes through the "csharp" environment
+and gets `csharp-tests` rewards; recorded editor episodes replay into a `RolloutBatch`; a tiny random-weight model's
+adapter trains a few steps with the loss falling and memory flat; promotion refuses a worse adapter and rolls back; the
+same plug-in assembly runs under `idrak reinforce`; the owner trains on a real model on Windows and the numbers
+(episodes per minute, reward before and after, the held-out score) are written here.
+
 ## Phases
 
 Phases are a dependency order, not a barrier. At most three agents work at a time, in every phase of this plan, including S0 and A0 in Idrak (the owner's exception for Craft's plan; Idrak's own work keeps its limit of two). "Done" is what the owner can check.
@@ -411,6 +445,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
 | V | Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
+| R | Learning in the editor on Idrak's reinforcement learning ("Learning in the editor" above): episodes from the editor, the editor-verdict reward with `csharp-build`/`csharp-tests`, tasks from the workspace's tests, background adapter training, promotion and rollback, the Learning panel; and the plug-in as the test of Idrak's reinforcement stack through its C# environment. | A fixture workspace's failing test becomes a task the "csharp" environment rewards; recorded episodes replay; an adapter trains with flat memory and is promoted only when better; the same assembly runs under `idrak reinforce`; the owner trains on a real model on Windows. | A2 (the episodes come from its plug-ins), P5 (the sandbox) |
 | M | Android, when the owner says "compile Android": the `net10.0-android` target added to every project in one step; `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | Every project builds for Android; the owner edits a file on a phone; the numbers are written here. | the owner's word, after a good Windows version |
 | L | Held, far later: more languages, each its own pre-installed, removable plug-in like C# (an `ILanguage` in `EditorLanguages`, loaded from `plugins/`): TypeScript, JavaScript, HTML, CSS. The parser for each is chosen when the phase starts, measured against the keystroke budget; nothing native (no tree-sitter binaries), so a C# incremental parser or lexer per language. | Each opens, colours and matches brackets like C#; removing its folder turns its files to plain text. | the owner's word, after a good Windows version |
 | A3 | Held: the "remote" model provider, the `kestrel` MCP transport in Idrak.AspNetCore, screen-reader access to the drawn editor, iOS and macOS. | the owner's call | the owner |

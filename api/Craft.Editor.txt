@@ -1,6 +1,11 @@
 interface Craft.Editor.Abstractions.IEditorClipboard
   System.Threading.Tasks.Task SetTextAsync(System.String text)
   System.Threading.Tasks.Task<System.String> GetTextAsync()
+interface Craft.Editor.Abstractions.IEditorKeyHandler
+  System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
+interface Craft.Editor.Abstractions.IEditorPresenter
+  System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
+  System.Threading.Tasks.Task<System.Boolean> ConfirmEditsAsync(Craft.Editor.EditProposal proposal, System.Threading.CancellationToken cancellationToken)
 struct Craft.Editor.BracketMatch : System.IEquatable<Craft.Editor.BracketMatch>
   System.Boolean Equals(Craft.Editor.BracketMatch other)
   System.Boolean Equals(System.Object obj)
@@ -13,6 +18,21 @@ struct Craft.Editor.BracketMatch : System.IEquatable<Craft.Editor.BracketMatch>
 sealed class Craft.Editor.ClipboardFailedEventArgs : System.EventArgs
   System.Exception Error { get; }
   ctor(System.Exception error)
+sealed class Craft.Editor.EditProposal : System.IEquatable<Craft.Editor.EditProposal>
+  Craft.Abstractions.IEditorDocument Document { get; init; }
+  Craft.Editor.EditProposal <Clone>$()
+  System.Boolean Equals(Craft.Editor.EditProposal other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Version { get; init; }
+  System.String Source { get; init; }
+  System.String Summary { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Abstractions.IEditorDocument Document, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits, out System.String Title, out System.String Source, out System.Int32 Version, out System.String Summary)
+  ctor(Craft.Abstractions.IEditorDocument Document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits, System.String Title, System.String Source, System.Int32 Version, System.String Summary)
+  static System.String Summarize(Craft.Abstractions.ITextSnapshot snapshot, System.String filePath, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Int32 previewCharacters)
 sealed class Craft.Editor.EditorFind
   Craft.Editor.FindCount CountMatches()
   System.Boolean FindNext()
@@ -24,6 +44,69 @@ sealed class Craft.Editor.EditorFind
   System.Boolean WholeWord { get; set; }
   System.Int32 ReplaceAll(System.String replacement)
   System.String Query { get; set; }
+sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Editor.Abstractions.IEditorKeyHandler, System.IDisposable
+  Craft.Abstractions.IEditorDocument ActiveDocument { get; }
+  Craft.Abstractions.IEditorDocument Open(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, System.String languageName = null)
+  Craft.Abstractions.IEditorProgress StartProgress(System.String title)
+  Craft.Abstractions.IPluginSettings Settings { get; }
+  Craft.Abstractions.SelectionState Selection { get; }
+  Craft.Core.CraftOptions Options { get; }
+  Craft.Editor.Abstractions.IEditorPresenter Presenter { get; set; }
+  System.Boolean Deactivate(System.String name)
+  System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Documents { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPanel> Panels { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IStatusItem> StatusItems { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.EditorLogEntry> RecentLog { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.EditorProgressItem> Progress { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.PluginActivation> Plugins { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.PluginActivation> RefreshPlugins()
+  System.IDisposable AddPanel(Craft.Abstractions.IEditorPanel panel)
+  System.IDisposable AddStatusItem(Craft.Abstractions.IStatusItem item)
+  System.Threading.Tasks.Task SaveAsync(Craft.Abstractions.IEditorDocument document, System.String path = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
+  System.Threading.Tasks.Task<System.Boolean> ExecuteCommandAsync(System.String commandId, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Close(Craft.Abstractions.IEditorDocument document)
+  System.Void Dispatch(System.Action action)
+  System.Void Dispose()
+  System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
+  System.Void Record(System.String metric, System.Double value, System.String unit)
+  System.Void SetActive(Craft.Abstractions.IEditorDocument document)
+  System.Void UpdateSelection(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
+  const System.String HostSource = host
+  ctor(Craft.Core.CraftOptions options = null, System.Action<System.Action> dispatch = null, Craft.Editor.Abstractions.IEditorPresenter presenter = null, System.Func<System.String, System.String> readVariable = null)
+  event System.EventHandler ActiveDocumentChanged
+  event System.EventHandler PanelsChanged
+  event System.EventHandler StatusItemsChanged
+  event System.EventHandler<Craft.Abstractions.EditorDocumentChangedEventArgs> DocumentChanged
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentClosed
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentOpened
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentSaved
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> SelectionChanged
+  event System.EventHandler<Craft.Editor.EditorLogEntry> Logged
+  event System.EventHandler<Craft.Editor.EditorMeasureEventArgs> Recorded
+  event System.EventHandler<Craft.Editor.EditorProgressItem> ProgressChanged
+sealed class Craft.Editor.EditorLogEntry : System.IEquatable<Craft.Editor.EditorLogEntry>
+  Craft.Abstractions.EditorLogLevel Level { get; init; }
+  Craft.Editor.EditorLogEntry <Clone>$()
+  System.Boolean Equals(Craft.Editor.EditorLogEntry other)
+  System.Boolean Equals(System.Object obj)
+  System.DateTimeOffset Time { get; init; }
+  System.Exception Error { get; init; }
+  System.Int32 GetHashCode()
+  System.String Message { get; init; }
+  System.String Source { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.DateTimeOffset Time, out Craft.Abstractions.EditorLogLevel Level, out System.String Source, out System.String Message, out System.Exception Error)
+  ctor(System.DateTimeOffset Time, Craft.Abstractions.EditorLogLevel Level, System.String Source, System.String Message, System.Exception Error)
+sealed class Craft.Editor.EditorMeasureEventArgs : System.EventArgs
+  System.Double Value { get; }
+  System.String Metric { get; }
+  System.String Source { get; }
+  System.String Unit { get; }
+  ctor(System.String source, System.String metric, System.Double value, System.String unit)
 sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, System.IDisposable
   Craft.Abstractions.FontMetrics Metrics { get; }
   Craft.Abstractions.ILanguage Language { get; }
@@ -88,6 +171,14 @@ struct Craft.Editor.EditorPoint : System.IEquatable<Craft.Editor.EditorPoint>
   System.String ToString()
   System.Void Deconstruct(out System.Single X, out System.Single Y)
   ctor(System.Single X, System.Single Y)
+sealed class Craft.Editor.EditorProgressItem : Craft.Abstractions.IEditorProgress, System.IDisposable
+  System.Boolean IsDone { get; }
+  System.Double? Fraction { get; }
+  System.String Message { get; }
+  System.String Source { get; }
+  System.String Title { get; }
+  System.Void Dispose()
+  System.Void Report(System.Double? fraction, System.String message = null)
 sealed class Craft.Editor.EditorRenderer : System.IDisposable
   Craft.Editor.LineRange LastVisible { get; }
   System.Boolean LastFrameClassified { get; }
@@ -124,3 +215,15 @@ struct Craft.Editor.LineRange : System.IEquatable<Craft.Editor.LineRange>
   System.String ToString()
   System.Void Deconstruct(out System.Int32 First, out System.Int32 Last)
   ctor(System.Int32 First, System.Int32 Last)
+sealed class Craft.Editor.PluginActivation : System.IEquatable<Craft.Editor.PluginActivation>
+  Craft.Editor.PluginActivation <Clone>$()
+  System.Boolean Active { get; init; }
+  System.Boolean Equals(Craft.Editor.PluginActivation other)
+  System.Boolean Equals(System.Object obj)
+  System.Double Milliseconds { get; init; }
+  System.Int32 GetHashCode()
+  System.String Error { get; init; }
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.Boolean Active, out System.String Error, out System.Double Milliseconds)
+  ctor(System.String Name, System.Boolean Active, System.String Error, System.Double Milliseconds)

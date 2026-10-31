@@ -34,4 +34,11 @@
     </ItemGroup>
   </Target>
 
+  <!-- Its plugin.json (name, version, summary, the contract version it was built against) goes beside its dll in its own
+       output folder, which Craft.App copies to plugins\Craft.CSharp\. Copied by a target, not as content, so it never
+       flows into the output of a project that references this one (the tests). -->
+  <Target Name="CraftCopyPluginManifest" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)plugin.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

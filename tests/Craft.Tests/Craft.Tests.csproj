@@ -17,6 +17,9 @@
     <ProjectReference Include="..\..\src\Craft.Core\Craft.Core.csproj" />
     <ProjectReference Include="..\..\src\Craft.Editor\Craft.Editor.csproj" />
     <ProjectReference Include="..\..\src\Craft.CSharp\Craft.CSharp.csproj" />
+    <!-- The sample plug-in (PluginKit group): built first, never referenced; the tests copy its output folder into a
+         temporary plugins/ folder and load it from there, as the app would. -->
+    <ProjectReference Include="..\..\samples\Craft.Plugins.Sample\Craft.Plugins.Sample.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
 </Project>

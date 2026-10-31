@@ -37,6 +37,9 @@ public static class InventoryTests
     {
         Check.Throws<NotRegisteredException>(() => EditorLanguages.Get("no-such-language"), "EditorLanguages.Get of an unknown name");
         Check.Throws<NotRegisteredException>(() => EditorThemes.Get("no-such-theme"), "EditorThemes.Get of an unknown name");
+        Check.Throws<NotRegisteredException>(() => EditorPlugins.Get("no-such-plugin"), "EditorPlugins.Get of an unknown name");
+        Check.Throws<NotRegisteredException>(() => EditorCommands.Get("no.such.command"), "EditorCommands.Get of an unknown id");
+        Check.True(EditorKeyBindings.Find(new KeyChord(EditorKey.F12, KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Alt)) is null, "an unbound chord finds no binding");
         Check.True(EditorLanguages.ForFile("readme.no-such-extension") is null, "a file of no registered language opens as plain text");
     }
 
@@ -62,6 +65,7 @@ public static class InventoryTests
             ["CRAFT_SCROLL_MARGIN_LINES"] = "1", ["CRAFT_SCROLL_MARGIN_COLUMNS"] = "3", ["CRAFT_BOTTOM_MARGIN_LINES"] = "0",
             ["CRAFT_GUTTER_PADDING"] = "1", ["CRAFT_AUTO_CLOSE_BRACKETS"] = "true", ["CRAFT_FIND_COUNT_LIMIT"] = "50", ["CRAFT_PARSE_WAIT_MS"] = "0",
             ["CRAFT_PLUGIN_FOLDERS"] = "p1; p2", ["CRAFT_PLUGINS_DISABLED"] = "Craft.CSharp, Other",
+            ["CRAFT_KEY_BINDINGS"] = "Ctrl+Shift+W=sample.wordCount;Ctrl+K=", ["CRAFT_HOST_LOG_LINES"] = "20", ["CRAFT_PROPOSAL_PREVIEW_CHARS"] = "40",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -72,7 +76,9 @@ public static class InventoryTests
             DoubleClickDistance = 6, BracketScanLines = 100, ScrollMarginLines = 1, ScrollMarginColumns = 3, BottomMarginLines = 0,
             GutterPaddingCells = 1, AutoCloseBrackets = true, FindCountLimit = 50, ParseWaitMilliseconds = 0,
             PluginFolders = options.PluginFolders, DisabledPlugins = options.DisabledPlugins,
+            KeyBindings = options.KeyBindings, HostLogLines = 20, ProposalPreviewCharacters = 40,
         }, options, "options read from every variable");
+        Check.True(options.KeyBindings is [{ Name: "Ctrl+Shift+W", CommandId: "sample.wordCount" }, { Name: "Ctrl+K", CommandId: "" }], "CRAFT_KEY_BINDINGS parsed, an empty command kept as an unbinding");
         Check.SequenceEqual(["p1", "p2"], options.PluginFolders, "CRAFT_PLUGIN_FOLDERS split at ';'");
         Check.SequenceEqual(["Craft.CSharp", "Other"], options.DisabledPlugins, "CRAFT_PLUGINS_DISABLED split at ','");
         Check.SequenceEqual(["bin", "out", "dist"], options.WorkspaceIgnore, "CRAFT_WORKSPACE_IGNORE split at ';' and ','");

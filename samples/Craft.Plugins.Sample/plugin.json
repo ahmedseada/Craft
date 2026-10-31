@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Sample",
+  "version": "1.0.0",
+  "summary": "Sample: a word-count status item and the command sample.wordCount (Ctrl+Shift+W)",
+  "contractVersion": "1.0",
+  "capabilities": []
+}

@@ -5,6 +5,7 @@ using System.Globalization;
 using Craft.Abstractions;
 using Craft.Core;
 using Craft.Core.Documents;
+using Craft.Core.Plugins;
 using Craft.Editor;
 using Craft.Maui;
 
@@ -13,7 +14,9 @@ namespace Craft.App;
 /// <summary>
 /// The minimal window of phase E3: Open, Save and the theme on top, the find and replace bar (Ctrl+F, Ctrl+H), the editor,
 /// and a status bar (language, line and column, encoding, line ending, dirty marker, input-to-paint time). The bars wrap
-/// when the window is narrow (their layout follows the width). Code only, no XAML.
+/// when the window is narrow (their layout follows the width). Code only, no XAML. Phase K: an <see cref="EditorHost"/>
+/// activates the plug-ins; their status items join the status bar, their panels the side area, their key bindings reach
+/// the editor's keys through the host; "Commands" (Ctrl+Shift+P) lists the commands and "Plug-ins" the installed ones.
 /// </summary>
 public sealed class EditorPage : ContentPage
 {
@@ -37,7 +40,11 @@ public sealed class EditorPage : ContentPage
     private readonly Label _paint = StatusLabel();
     private readonly Label _notice = StatusLabel();
     private readonly View _topBar;
-    private readonly View _statusBar;
+    private readonly FlexLayout _statusBar;
+    private readonly EditorHost _host;
+    private readonly StatusItemsView _pluginStatus;
+    private readonly PanelsView _panels;
+    private IEditorDocument? _hostDocument;
     private Window? _window;
     private TextDocument? _document;
     private ITheme _theme;
@@ -50,6 +57,10 @@ public sealed class EditorPage : ContentPage
         _startup = startup;
         _initialPath = path;
         _theme = EditorThemes.Find(startup.Options.Theme) ?? EditorThemes.Get(EditorThemes.Dark);
+        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this));
+        _pluginStatus = new StatusItemsView(_host);
+        _panels = new PanelsView(_host) { WidthRequest = 280 };
+        RegisterAppCommands();
 
         var open = new Button { Text = "Open" };
         open.Clicked += OnOpenClicked;
@@ -59,11 +70,15 @@ public sealed class EditorPage : ContentPage
         _themeButton.Clicked += OnThemeClicked;
         var find = new Button { Text = "Find" };
         find.Clicked += (_, _) => ShowFind(replace: false, null);
+        var commands = new Button { Text = "Commands" };
+        commands.Clicked += (_, _) => _ = CommandPalette.ShowAsync(this, _host);
+        var plugins = new Button { Text = "Plug-ins" };
+        plugins.Clicked += (_, _) => _ = ShowPluginsAsync();
         _topBar = new FlexLayout
         {
             Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
             Padding = new Thickness(6, 4),
-            Children = { open, _save, _themeButton, find },
+            Children = { open, _save, _themeButton, find, commands, plugins },
         };
 
         _query = new Entry { Placeholder = "Find", WidthRequest = 220 };
@@ -108,8 +123,15 @@ public sealed class EditorPage : ContentPage
         {
             Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
             Padding = new Thickness(8, 2),
-            Children = { _language, _position, _encoding, _lineEnding, _dirty, _paint, _notice },
+            Children = { _language, _position, _encoding, _lineEnding, _dirty, _paint, _notice, _pluginStatus },
         };
+        FlexLayout.SetGrow((IView)_pluginStatus, 1);
+        var body = new Grid
+        {
+            ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+        };
+        body.Add(_editor, 0, 0);
+        body.Add(_panels, 1, 0);
 
         var grid = new Grid
         {
@@ -123,7 +145,7 @@ public sealed class EditorPage : ContentPage
         };
         grid.Add(_topBar, 0, 0);
         grid.Add(_findBar, 0, 1);
-        grid.Add(_editor, 0, 2);
+        grid.Add(body, 0, 2);
         grid.Add(_statusBar, 0, 3);
         Content = grid;
 
@@ -131,7 +153,8 @@ public sealed class EditorPage : ContentPage
         _editor.Theme = _theme;
         _editor.SaveRequested += OnSaveRequested;
         _editor.FindRequested += OnFindRequested;
-        _editor.CaretMoved += (_, _) => UpdateStatus();
+        _editor.KeyHandler = _host;
+        _editor.CaretMoved += (_, _) => OnCaretMoved();
         _editor.Painted += (_, _) => UpdatePaintTime();
         ApplyTheme();
     }
@@ -163,6 +186,15 @@ public sealed class EditorPage : ContentPage
             Show(TextDocument.Create("", _startup.Options), EditorLanguages.Find("csharp"));
         }
 
+        foreach (var activation in _host.RefreshPlugins())
+        {
+            if (activation.Error is not null)
+            {
+                _notice.Text = $"Plug-in {activation.Name} did not start";
+                await DisplayAlertAsync("Craft: a plug-in did not start", $"{activation.Name}: {activation.Error}", "OK");
+            }
+        }
+
         if (_startup.OptionsError is { } error)
         {
             await DisplayAlertAsync("Craft: a setting did not parse", error + " The defaults are used.", "OK");
@@ -176,6 +208,47 @@ public sealed class EditorPage : ContentPage
                 await DisplayAlertAsync("Craft: a plug-in did not load", $"{plugin.Name} ({plugin.Folder}): {plugin.Error}", "OK");
             }
         }
+    }
+
+    /// <summary>The app's own commands, on the same contracts as the plug-ins': the palette (Ctrl+Shift+P) and the Plug-ins list.</summary>
+    private void RegisterAppCommands()
+    {
+        EditorCommands.Register(new EditorCommand("craft.commandPalette", "Show all commands", (_, _) => CommandPalette.ShowAsync(this, _host)));
+        EditorCommands.Register(new EditorCommand("craft.plugins", "Show the installed plug-ins", (_, _) => ShowPluginsAsync()));
+        EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.P, KeyModifiers.Control | KeyModifiers.Shift), "craft.commandPalette"));
+    }
+
+    private Task ShowPluginsAsync()
+    {
+        var lines = new List<string>();
+        foreach (var plugin in CraftPlugins.Installed)
+        {
+            string state = plugin.Disabled ? "disabled" : plugin.Loaded ? plugin.Outdated ? "loaded, outdated" : "loaded" : "not loaded";
+            string version = plugin.Version is { } v ? " " + v : "";
+            string summary = plugin.Summary is { Length: > 0 } text ? " — " + text : "";
+            string? detail = plugin.Error ?? plugin.Note;
+            lines.Add($"{plugin.Name}{version} ({state}){summary}{(detail is null ? "" : "\n    " + detail)}");
+        }
+
+        foreach (var activation in _host.Plugins)
+        {
+            if (activation.Error is not null)
+            {
+                lines.Add($"{activation.Name}: did not start: {activation.Error}");
+            }
+        }
+
+        return DisplayAlertAsync("Plug-ins", lines.Count == 0 ? "No plug-in is installed." : string.Join("\n", lines), "OK");
+    }
+
+    private void OnCaretMoved()
+    {
+        if (_hostDocument is { } document && _editor.Model is { } model)
+        {
+            _host.UpdateSelection(document, model.Selection);
+        }
+
+        UpdateStatus();
     }
 
     private static Label StatusLabel() => new() { Margin = new Thickness(0, 0, 16, 0), FontSize = 12, VerticalTextAlignment = TextAlignment.Center };
@@ -235,6 +308,12 @@ public sealed class EditorPage : ContentPage
         _document = document;
         document.StateChanged += OnDocumentStateChanged;
         _editor.Open(document, language);
+        if (_hostDocument is { } closing)
+        {
+            _host.Close(closing);
+        }
+
+        _hostDocument = _host.Open(document, language, _editor.Model?.LanguageName);
         old?.Dispose();
         if (_findBar.IsVisible && _editor.Model is { } model)
         {
@@ -264,7 +343,14 @@ public sealed class EditorPage : ContentPage
 
         try
         {
-            await document.SaveAsync();
+            if (_hostDocument is { } open)
+            {
+                await _host.SaveAsync(open);
+            }
+            else
+            {
+                await document.SaveAsync();
+            }
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -299,6 +385,9 @@ public sealed class EditorPage : ContentPage
         _topBar.BackgroundColor = ColorOf(colors.Gutter);
         _findBar.BackgroundColor = ColorOf(colors.CurrentLine);
         _statusBar.BackgroundColor = ColorOf(colors.Gutter);
+        _pluginStatus.TextColor = foreground;
+        _panels.TextColor = foreground;
+        _panels.BackgroundColor = ColorOf(colors.Gutter);
         foreach (var label in (ReadOnlySpan<Label>)[_language, _position, _encoding, _lineEnding, _dirty, _paint, _notice, _matchCount])
         {
             label.TextColor = foreground;

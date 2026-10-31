@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Craft's sample plug-in (docs/plugins.md): a word-count status item and a command, sample.wordCount (Ctrl+Shift+W).
+    Built outside Craft's solution against Craft.Abstractions alone (and Idrak.Abstraction through it), as a third party
+    builds one. Its output folder (bin/<Configuration>/net10.0/: Craft.Plugins.Sample.dll, its .deps.json, plugin.json)
+    is the plug-in: copy it to a plugins/Craft.Plugins.Sample/ folder Craft loads (the app's own, or one named in
+    CRAFT_PLUGIN_FOLDERS).
+      dotnet build -c Release samples/Craft.Plugins.Sample
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Sample</RootNamespace>
+    <!-- Loaded at run time into its own load context: a .deps.json, and its dependencies beside it. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The contracts come from the host: compiled against, never copied. -->
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- Idrak.Abstraction comes through Craft.Abstractions; as a contract shared with the host it is not copied either. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- plugin.json beside the dll (copied by a target, so it never flows into a referencing project's output). -->
+  <Target Name="CraftCopyPluginManifest" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)plugin.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

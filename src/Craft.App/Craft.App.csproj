@@ -45,7 +45,8 @@
 
   <!--
     The pre-installed C# plug-in: Craft.CSharp is built as a plain library (no runtime identifier, so its own output folder
-    bin\<Configuration>\net10.0\), and that folder (Craft.CSharp.dll, Roslyn's assemblies, Craft.CSharp.deps.json; never the host's Craft.Abstractions, Craft.Core or
+    bin\<Configuration>\net10.0\), and that folder (Craft.CSharp.dll, Roslyn's assemblies, Craft.CSharp.deps.json, and the
+    plugin.json that Craft.CSharp's own build copies there from src\Craft.CSharp\plugin.json; never the host's Craft.Abstractions, Craft.Core or
     Idrak.Abstraction) is copied to
     plugins\Craft.CSharp\ beside the program after Build, and beside the published program after Publish. Deleting that
     folder (or CRAFT_PLUGINS_DISABLED=csharp) removes C#; the app still starts, opening .cs files as plain text.
@@ -60,6 +61,7 @@
       <_CraftCSharpPluginFolder>@(_CraftCSharpPluginAssembly->'%(RootDir)%(Directory)')</_CraftCSharpPluginFolder>
     </PropertyGroup>
     <Error Condition="'$(_CraftCSharpPluginFolder)' == '' or !Exists('$(_CraftCSharpPluginFolder)')" Text="The C# plug-in's build output was not found (Craft.CSharp built to '$(_CraftCSharpPluginFolder)')." />
+    <Error Condition="!Exists('$(_CraftCSharpPluginFolder)plugin.json')" Text="The C# plug-in's plugin.json was not found in its build output ('$(_CraftCSharpPluginFolder)'): Craft.CSharp's CraftCopyPluginManifest target puts it there." />
     <ItemGroup>
       <!-- The host's own contracts are never copied: the app provides them, so the plug-in shares the same types. -->
       <_CraftCSharpPluginFile Include="$(_CraftCSharpPluginFolder)**\*"

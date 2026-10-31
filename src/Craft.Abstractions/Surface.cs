@@ -132,6 +132,123 @@ public enum EditorKey
 
     /// <summary>Z (undo with Control, redo with Control+Shift).</summary>
     Z,
+
+    // Phase K: the other letters, the digits and the function keys, for key bindings (EditorKeyBindings). Added at the end
+    // so the values above keep theirs.
+
+    /// <summary>B (free for key bindings).</summary>
+    B,
+
+    /// <summary>D (free for key bindings).</summary>
+    D,
+
+    /// <summary>E (free for key bindings).</summary>
+    E,
+
+    /// <summary>G (free for key bindings).</summary>
+    G,
+
+    /// <summary>I (free for key bindings).</summary>
+    I,
+
+    /// <summary>J (free for key bindings).</summary>
+    J,
+
+    /// <summary>K (free for key bindings).</summary>
+    K,
+
+    /// <summary>L (free for key bindings).</summary>
+    L,
+
+    /// <summary>M (free for key bindings).</summary>
+    M,
+
+    /// <summary>N (free for key bindings).</summary>
+    N,
+
+    /// <summary>O (free for key bindings).</summary>
+    O,
+
+    /// <summary>P (free for key bindings).</summary>
+    P,
+
+    /// <summary>Q (free for key bindings).</summary>
+    Q,
+
+    /// <summary>R (free for key bindings).</summary>
+    R,
+
+    /// <summary>T (free for key bindings).</summary>
+    T,
+
+    /// <summary>U (free for key bindings).</summary>
+    U,
+
+    /// <summary>W (free for key bindings).</summary>
+    W,
+
+    /// <summary>The digit 0 of the main keyboard.</summary>
+    D0,
+
+    /// <summary>The digit 1 of the main keyboard.</summary>
+    D1,
+
+    /// <summary>The digit 2 of the main keyboard.</summary>
+    D2,
+
+    /// <summary>The digit 3 of the main keyboard.</summary>
+    D3,
+
+    /// <summary>The digit 4 of the main keyboard.</summary>
+    D4,
+
+    /// <summary>The digit 5 of the main keyboard.</summary>
+    D5,
+
+    /// <summary>The digit 6 of the main keyboard.</summary>
+    D6,
+
+    /// <summary>The digit 7 of the main keyboard.</summary>
+    D7,
+
+    /// <summary>The digit 8 of the main keyboard.</summary>
+    D8,
+
+    /// <summary>The digit 9 of the main keyboard.</summary>
+    D9,
+
+    /// <summary>F1.</summary>
+    F1,
+
+    /// <summary>F2.</summary>
+    F2,
+
+    /// <summary>F4.</summary>
+    F4,
+
+    /// <summary>F5.</summary>
+    F5,
+
+    /// <summary>F6.</summary>
+    F6,
+
+    /// <summary>F7.</summary>
+    F7,
+
+    /// <summary>F8.</summary>
+    F8,
+
+    /// <summary>F9.</summary>
+    F9,
+
+    /// <summary>F10.</summary>
+    F10,
+
+    /// <summary>F11.</summary>
+    F11,
+
+    /// <summary>F12.</summary>
+    F12,
 }
 
 /// <summary>Where the platform's input goes: the editor implements it, a <see cref="ITextInputAdapter"/> calls it.</summary>

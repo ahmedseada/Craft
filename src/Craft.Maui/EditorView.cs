@@ -130,6 +130,12 @@ public sealed class EditorView : ContentView, IDisposable
         }
     }
 
+    /// <summary>
+    /// Where a key goes first (an <see cref="EditorHost"/>: the user's and the plug-ins' key bindings around the editor's
+    /// own keys); null sends keys to the editor alone.
+    /// </summary>
+    public Craft.Editor.Abstractions.IEditorKeyHandler? KeyHandler { get; set; }
+
     /// <summary>Raised on Ctrl+S.</summary>
     public event EventHandler? SaveRequested;
 
@@ -387,7 +393,8 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>The keyboard's sink: the current model, whichever it is when the key arrives.</summary>
     private sealed class InputForwarder(EditorView view) : IEditorInputSink
     {
-        public bool OnKey(EditorKey key, KeyModifiers modifiers) => view._model?.OnKey(key, modifiers) ?? false;
+        public bool OnKey(EditorKey key, KeyModifiers modifiers) =>
+            view.KeyHandler is { } handler ? handler.HandleKey(key, modifiers, view._model) : view._model?.OnKey(key, modifiers) ?? false;
 
         public void OnText(string text) => view._model?.OnText(text);
     }

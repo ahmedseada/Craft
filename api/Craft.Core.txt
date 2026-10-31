@@ -4,6 +4,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
   System.Boolean InsertSpaces { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> PluginFolders { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
@@ -16,7 +17,9 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 FindCountLimit { get; init; }
   System.Int32 GetHashCode()
   System.Int32 GutterPaddingCells { get; init; }
+  System.Int32 HostLogLines { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
+  System.Int32 ProposalPreviewCharacters { get; init; }
   System.Int32 ScrollMarginColumns { get; init; }
   System.Int32 ScrollMarginLines { get; init; }
   System.Int32 TabSize { get; init; }
@@ -91,20 +94,41 @@ sealed class Craft.Core.Documents.TextDocument : Craft.Abstractions.ITextDocumen
   static System.Threading.Tasks.Task<Craft.Core.Documents.TextDocument> OpenAsync(System.String path, Craft.Core.CraftOptions options = null, System.Threading.CancellationToken cancellationToken = null)
 static class Craft.Core.Plugins.CraftPlugins
   static Craft.Core.Plugins.PluginLoadResult LoadFolder(System.String pluginFolder)
+  static System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> Installed { get; }
   static System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> LoadInstalled(Craft.Core.CraftOptions options)
   static System.String InstalledFolder { get; }
 sealed class Craft.Core.Plugins.PluginLoadResult : System.IEquatable<Craft.Core.Plugins.PluginLoadResult>
   Craft.Core.Plugins.PluginLoadResult <Clone>$()
+  Craft.Core.Plugins.PluginManifest Manifest { get; init; }
+  System.Boolean Disabled { get; init; }
   System.Boolean Equals(Craft.Core.Plugins.PluginLoadResult other)
   System.Boolean Equals(System.Object obj)
   System.Boolean Loaded { get; init; }
+  System.Boolean Outdated { get; init; }
   System.Int32 GetHashCode()
   System.String Error { get; init; }
   System.String Folder { get; init; }
   System.String Name { get; init; }
+  System.String Note { get; init; }
+  System.String Summary { get; }
   System.String ToString()
+  System.String Version { get; }
   System.Void Deconstruct(out System.String Name, out System.String Folder, out System.Boolean Loaded, out System.String Error)
   ctor(System.String Name, System.String Folder, System.Boolean Loaded, System.String Error)
+sealed class Craft.Core.Plugins.PluginManifest : System.IEquatable<Craft.Core.Plugins.PluginManifest>
+  Craft.Core.Plugins.PluginManifest <Clone>$()
+  System.Boolean Equals(Craft.Core.Plugins.PluginManifest other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Capabilities { get; init; }
+  System.Int32 GetHashCode()
+  System.String ContractVersion { get; init; }
+  System.String Name { get; init; }
+  System.String Summary { get; init; }
+  System.String ToString()
+  System.String Version { get; init; }
+  const System.String FileName = plugin.json
+  ctor()
+  static Craft.Core.Plugins.PluginManifest Read(System.ReadOnlySpan<System.Byte> utf8, System.String folderName, out System.Collections.Generic.IReadOnlyList<System.String> problems)
 sealed class Craft.Core.Text.PieceTableBuffer : Craft.Abstractions.ITextBuffer
   Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
   Craft.Abstractions.ITextSnapshot Current { get; }

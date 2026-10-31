@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
 using System.Globalization;
+using Craft.Abstractions;
 
 namespace Craft.Core;
 
@@ -107,6 +108,19 @@ public sealed record CraftOptions
     /// <summary>The plug-ins (by folder name, ignoring case) not loaded, the pre-installed ones included (<c>CRAFT_PLUGINS_DISABLED</c>, separated by ',').</summary>
     public IReadOnlyList<string> DisabledPlugins { get; init; } = [];
 
+    /// <summary>
+    /// The user's key bindings, over the plug-ins' and the app's (<c>CRAFT_KEY_BINDINGS</c>: "Chord=command" separated by
+    /// ';', "Ctrl+Shift+W=sample.wordCount;Ctrl+K="): a user's binding runs before the editor's own keys; an empty command
+    /// unbinds the chord from its plug-in (the editor's own key, if any, stays).
+    /// </summary>
+    public IReadOnlyList<KeyBinding> KeyBindings { get; init; } = [];
+
+    /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
+    public int HostLogLines { get; init; } = 500;
+
+    /// <summary>The characters of an edit's new text a proposal's confirmation shows before it cuts (<c>CRAFT_PROPOSAL_PREVIEW_CHARS</c>).</summary>
+    public int ProposalPreviewCharacters { get; init; } = 200;
+
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
     [
@@ -136,6 +150,9 @@ public sealed record CraftOptions
         new("CRAFT_AUTO_CLOSE_BRACKETS", "false", "Whether typing an opening bracket inserts its closing one too."),
         new("CRAFT_FIND_COUNT_LIMIT", "100000", "Find stops counting matches at this many."),
         new("CRAFT_PARSE_WAIT_MS", "8", "Milliseconds a frame waits for the language's parse of its text; longer parses paint the changed text plain, then repaint. 0 never waits."),
+        new("CRAFT_KEY_BINDINGS", "(none)", "The user's key bindings, 'Chord=command' separated by ';' (Ctrl+Shift+W=sample.wordCount); they run before the editor's keys; an empty command unbinds a plug-in's chord."),
+        new("CRAFT_HOST_LOG_LINES", "500", "Lines of the editor host's log (plug-ins' lines included) kept for the log view; 0 keeps none."),
+        new("CRAFT_PROPOSAL_PREVIEW_CHARS", "200", "Characters of a proposed edit's new text its confirmation shows before it cuts."),
     ];
 
     /// <summary>
@@ -276,6 +293,28 @@ public sealed record CraftOptions
             options = options with { ParseWaitMilliseconds = Whole(parseWait, "CRAFT_PARSE_WAIT_MS", 0, 10_000) };
         }
 
+
+        if (Text(read, "CRAFT_KEY_BINDINGS") is { } bindings)
+        {
+            try
+            {
+                options = options with { KeyBindings = KeyBinding.ParseList(bindings) };
+            }
+            catch (FormatException e)
+            {
+                throw new ArgumentException($"CRAFT_KEY_BINDINGS is '{bindings}': {e.Message}. It takes 'Chord=command' entries separated by ';'.", "CRAFT_KEY_BINDINGS", e);
+            }
+        }
+
+        if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)
+        {
+            options = options with { HostLogLines = Whole(logLines, "CRAFT_HOST_LOG_LINES", 0, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_PROPOSAL_PREVIEW_CHARS") is { } preview)
+        {
+            options = options with { ProposalPreviewCharacters = Whole(preview, "CRAFT_PROPOSAL_PREVIEW_CHARS", 0, 1_000_000) };
+        }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)
         {

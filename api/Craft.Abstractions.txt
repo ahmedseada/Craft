@@ -7,6 +7,14 @@ struct Craft.Abstractions.BracketPair : System.IEquatable<Craft.Abstractions.Bra
   System.String ToString()
   System.Void Deconstruct(out System.Char Open, out System.Char Close)
   ctor(System.Char Open, System.Char Close)
+enum Craft.Abstractions.ContractFit : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Current = 0
+  Newer = 2
+  Outdated = 1
+static class Craft.Abstractions.CraftContracts
+  static Craft.Abstractions.ContractFit Fit(System.Version builtAgainst)
+  static System.Version Parse(System.ReadOnlySpan<System.Char> text)
+  static System.Version Version { get; }
 enum Craft.Abstractions.EditKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Command = 3
   Deleting = 1
@@ -30,6 +38,26 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 Selection { get; init; }
   System.Void Deconstruct(out System.UInt32 Background, out System.UInt32 Foreground, out System.UInt32 Selection, out System.UInt32 CurrentLine, out System.UInt32 Caret, out System.UInt32 Gutter, out System.UInt32 GutterText, out System.UInt32 GutterCurrentText, out System.UInt32 BracketMatch, out System.UInt32 FindMatch)
   ctor(System.UInt32 Background, System.UInt32 Foreground, System.UInt32 Selection, System.UInt32 CurrentLine, System.UInt32 Caret, System.UInt32 Gutter, System.UInt32 GutterText, System.UInt32 GutterCurrentText, System.UInt32 BracketMatch, System.UInt32 FindMatch)
+sealed class Craft.Abstractions.EditorCommand : Craft.Abstractions.IEditorCommand, Idrak.Abstraction.IKind
+  System.Boolean CanExecute(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String Title { get; }
+  System.Threading.Tasks.Task ExecuteAsync(Craft.Abstractions.IEditorHost host, System.Threading.CancellationToken cancellationToken)
+  ctor(System.String id, System.String title, System.Func<Craft.Abstractions.IEditorHost, System.Threading.CancellationToken, System.Threading.Tasks.Task> execute, System.Func<Craft.Abstractions.IEditorHost, System.Boolean> canExecute = null, System.String summary = null)
+static class Craft.Abstractions.EditorCommands
+  static Craft.Abstractions.IEditorCommand Find(System.ReadOnlySpan<System.Char> id)
+  static Craft.Abstractions.IEditorCommand Get(System.ReadOnlySpan<System.Char> id)
+  static System.Boolean Unregister(System.String id)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.IEditorCommand command)
+sealed class Craft.Abstractions.EditorDocumentChangedEventArgs : Craft.Abstractions.EditorDocumentEventArgs
+  Craft.Abstractions.TextChangedEventArgs Change { get; }
+  ctor(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.TextChangedEventArgs change)
+class Craft.Abstractions.EditorDocumentEventArgs : System.EventArgs
+  Craft.Abstractions.IEditorDocument Document { get; }
+  ctor(Craft.Abstractions.IEditorDocument document)
 sealed class Craft.Abstractions.EditorFont : System.IEquatable<Craft.Abstractions.EditorFont>
   Craft.Abstractions.EditorFont <Clone>$()
   System.Boolean Equals(Craft.Abstractions.EditorFont other)
@@ -42,30 +70,74 @@ sealed class Craft.Abstractions.EditorFont : System.IEquatable<Craft.Abstraction
   ctor(System.String Family, System.Single Size)
 enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   A = 16
+  B = 25
   Backspace = 9
   C = 17
+  D = 26
+  D0 = 42
+  D1 = 43
+  D2 = 44
+  D3 = 45
+  D4 = 46
+  D5 = 47
+  D6 = 48
+  D7 = 49
+  D8 = 50
+  D9 = 51
   Delete = 10
   Down = 4
+  E = 27
   End = 6
   Enter = 11
   Escape = 13
   F = 18
+  F1 = 52
+  F10 = 60
+  F11 = 61
+  F12 = 62
+  F2 = 53
   F3 = 15
+  F4 = 54
+  F5 = 55
+  F6 = 56
+  F7 = 57
+  F8 = 58
+  F9 = 59
+  G = 28
   H = 19
   Home = 5
+  I = 29
   Insert = 14
+  J = 30
+  K = 31
+  L = 32
   Left = 1
+  M = 33
+  N = 34
   None = 0
+  O = 35
+  P = 36
   PageDown = 8
   PageUp = 7
+  Q = 37
+  R = 38
   Right = 2
   S = 20
+  T = 39
   Tab = 12
+  U = 40
   Up = 3
   V = 21
+  W = 41
   X = 22
   Y = 23
   Z = 24
+static class Craft.Abstractions.EditorKeyBindings
+  static Craft.Abstractions.KeyBinding Find(Craft.Abstractions.KeyChord chord)
+  static System.Boolean Unregister(Craft.Abstractions.KeyChord chord)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.KeyBinding binding)
 static class Craft.Abstractions.EditorLanguages
   static Craft.Abstractions.ILanguage Find(System.ReadOnlySpan<System.Char> name)
   static Craft.Abstractions.ILanguage ForFile(System.String path)
@@ -74,6 +146,18 @@ static class Craft.Abstractions.EditorLanguages
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ILanguage> All { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.ILanguage language)
+enum Craft.Abstractions.EditorLogLevel : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Debug = 0
+  Error = 3
+  Information = 1
+  Warning = 2
+static class Craft.Abstractions.EditorPlugins
+  static Craft.Abstractions.IEditorPlugin Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IEditorPlugin Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPlugin> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.IEditorPlugin plugin)
 static class Craft.Abstractions.EditorThemes
   const System.String Dark = dark
   const System.String Light = light
@@ -96,9 +180,51 @@ interface Craft.Abstractions.IEditorCanvas
   System.Void DrawLine(System.Single x1, System.Single y1, System.Single x2, System.Single y2, System.UInt32 argb, System.Single thickness)
   System.Void DrawText(System.String text, System.Single x, System.Single top, in Craft.Abstractions.TextStyle style)
   System.Void FillRect(System.Single x, System.Single y, System.Single width, System.Single height, System.UInt32 argb)
+interface Craft.Abstractions.IEditorCommand : Idrak.Abstraction.IKind
+  System.Boolean CanExecute(Craft.Abstractions.IEditorHost host)
+  System.String Title { get; }
+  System.Threading.Tasks.Task ExecuteAsync(Craft.Abstractions.IEditorHost host, System.Threading.CancellationToken cancellationToken)
+interface Craft.Abstractions.IEditorDocument
+  Craft.Abstractions.ILanguage Language { get; }
+  Craft.Abstractions.ITextDocument Document { get; }
+  Craft.Abstractions.SelectionState Selection { get; }
+  System.String FilePath { get; }
+  System.String LanguageName { get; }
+interface Craft.Abstractions.IEditorHost
+  Craft.Abstractions.IEditorDocument ActiveDocument { get; }
+  Craft.Abstractions.IEditorProgress StartProgress(System.String title)
+  Craft.Abstractions.IPluginSettings Settings { get; }
+  Craft.Abstractions.SelectionState Selection { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Documents { get; }
+  System.IDisposable AddPanel(Craft.Abstractions.IEditorPanel panel)
+  System.IDisposable AddStatusItem(Craft.Abstractions.IStatusItem item)
+  System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
+  System.Threading.Tasks.Task<System.Boolean> ExecuteCommandAsync(System.String commandId, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Dispatch(System.Action action)
+  System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
+  System.Void Record(System.String metric, System.Double value, System.String unit)
+  event System.EventHandler ActiveDocumentChanged
+  event System.EventHandler<Craft.Abstractions.EditorDocumentChangedEventArgs> DocumentChanged
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentClosed
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentOpened
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentSaved
+  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> SelectionChanged
 interface Craft.Abstractions.IEditorInputSink
   System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Void OnText(System.String text)
+interface Craft.Abstractions.IEditorPanel
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+  System.String Id { get; }
+  System.String Title { get; }
+  event System.EventHandler Changed
+interface Craft.Abstractions.IEditorPlugin : Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+interface Craft.Abstractions.IEditorProgress : System.IDisposable
+  System.String Title { get; }
+  System.Void Report(System.Double? fraction, System.String message = null)
 interface Craft.Abstractions.ILanguage : Idrak.Abstraction.IKind
   Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
   Craft.Abstractions.LanguageRules Rules { get; }
@@ -107,6 +233,17 @@ interface Craft.Abstractions.ILanguageSession : System.IDisposable
   System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   event System.EventHandler Reclassified
+interface Craft.Abstractions.IPluginSettings
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
+  System.String Get(System.String plugin, System.String key)
+interface Craft.Abstractions.IStatusItem
+  Craft.Abstractions.StatusAlignment Alignment { get; }
+  System.Int32 Priority { get; }
+  System.String CommandId { get; }
+  System.String Id { get; }
+  System.String Text { get; }
+  System.String Tooltip { get; }
+  event System.EventHandler Changed
 interface Craft.Abstractions.ITextBuffer
   Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
   Craft.Abstractions.ITextSnapshot Current { get; }
@@ -140,6 +277,33 @@ interface Craft.Abstractions.ITheme : Idrak.Abstraction.IKind
   Craft.Abstractions.EditorColors Colors { get; }
   Craft.Abstractions.TextStyle StyleOf(System.String tokenClass)
   System.Boolean IsDark { get; }
+sealed class Craft.Abstractions.KeyBinding : Idrak.Abstraction.IKind, System.IEquatable<Craft.Abstractions.KeyBinding>
+  Craft.Abstractions.KeyBinding <Clone>$()
+  Craft.Abstractions.KeyChord Chord { get; init; }
+  System.Boolean Equals(Craft.Abstractions.KeyBinding other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean OverridesEditor { get; init; }
+  System.Int32 GetHashCode()
+  System.String CommandId { get; init; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Abstractions.KeyChord Chord, out System.String CommandId, out System.Boolean OverridesEditor)
+  ctor(Craft.Abstractions.KeyChord Chord, System.String CommandId, System.Boolean OverridesEditor = false)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> ParseList(System.ReadOnlySpan<System.Char> text)
+struct Craft.Abstractions.KeyChord : System.IEquatable<Craft.Abstractions.KeyChord>
+  Craft.Abstractions.EditorKey Key { get; init; }
+  Craft.Abstractions.KeyModifiers Modifiers { get; init; }
+  System.Boolean Equals(Craft.Abstractions.KeyChord other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Format(System.Span<System.Char> destination)
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Abstractions.EditorKey Key, out Craft.Abstractions.KeyModifiers Modifiers)
+  const System.Int32 MaxLength = 32
+  ctor(Craft.Abstractions.EditorKey Key, Craft.Abstractions.KeyModifiers Modifiers)
+  static Craft.Abstractions.KeyChord Parse(System.ReadOnlySpan<System.Char> text)
+  static System.Boolean TryParse(System.ReadOnlySpan<System.Char> text, out Craft.Abstractions.KeyChord chord, out System.String error)
 enum Craft.Abstractions.KeyModifiers : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Alt = 4
   Control = 2
@@ -158,6 +322,55 @@ sealed class Craft.Abstractions.LanguageRules : System.IEquatable<Craft.Abstract
   System.Void Deconstruct(out System.String LineComment, out System.String BlockCommentOpen, out System.String BlockCommentClose, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
   ctor(System.String LineComment, System.String BlockCommentOpen, System.String BlockCommentClose, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
   static Craft.Abstractions.LanguageRules Plain { get; }
+sealed class Craft.Abstractions.ListPanel : Craft.Abstractions.IEditorPanel
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+  System.String Id { get; }
+  System.String Title { get; set; }
+  System.Void SetItems(System.Collections.Generic.IEnumerable<Craft.Abstractions.PanelItem> items)
+  ctor(System.String id, System.String title)
+  event System.EventHandler Changed
+sealed class Craft.Abstractions.PanelItem : System.IEquatable<Craft.Abstractions.PanelItem>
+  Craft.Abstractions.PanelItem <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelItem other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String CommandId { get; init; }
+  System.String Detail { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Text, out System.String Detail, out System.String CommandId)
+  ctor(System.String Text, System.String Detail = null, System.String CommandId = null)
+static class Craft.Abstractions.PluginCapabilities
+  const System.String Files = files
+  const System.String Model = model
+  const System.String Network = network
+  const System.String Sandbox = sandbox
+  static System.Boolean IsKnown(System.ReadOnlySpan<System.Char> name)
+  static System.Collections.Generic.IReadOnlyList<System.String> All { get; }
+sealed class Craft.Abstractions.PluginSetting : System.IEquatable<Craft.Abstractions.PluginSetting>
+  Craft.Abstractions.PluginSetting <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PluginSetting other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Default { get; init; }
+  System.String Description { get; init; }
+  System.String Key { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Key, out System.String Default, out System.String Description)
+  ctor(System.String Key, System.String Default, System.String Description)
+  static System.String VariableName(System.String plugin, System.String key)
+sealed class Craft.Abstractions.PluginSettingValue : System.IEquatable<Craft.Abstractions.PluginSettingValue>
+  Craft.Abstractions.PluginSetting Setting { get; init; }
+  Craft.Abstractions.PluginSettingValue <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PluginSettingValue other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Plugin { get; init; }
+  System.String ToString()
+  System.String Value { get; init; }
+  System.String Variable { get; init; }
+  System.Void Deconstruct(out System.String Plugin, out Craft.Abstractions.PluginSetting Setting, out System.String Variable, out System.String Value)
+  ctor(System.String Plugin, Craft.Abstractions.PluginSetting Setting, System.String Variable, System.String Value)
 struct Craft.Abstractions.SelectionState : System.IEquatable<Craft.Abstractions.SelectionState>
   System.Boolean Equals(Craft.Abstractions.SelectionState other)
   System.Boolean Equals(System.Object obj)
@@ -172,6 +385,18 @@ struct Craft.Abstractions.SelectionState : System.IEquatable<Craft.Abstractions.
   System.Void Deconstruct(out System.Int32 Anchor, out System.Int32 Caret)
   ctor(System.Int32 Anchor, System.Int32 Caret)
   static Craft.Abstractions.SelectionState At(System.Int32 position)
+enum Craft.Abstractions.StatusAlignment : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Left = 0
+  Right = 1
+sealed class Craft.Abstractions.StatusItem : Craft.Abstractions.IStatusItem
+  Craft.Abstractions.StatusAlignment Alignment { get; }
+  System.Int32 Priority { get; }
+  System.String CommandId { get; }
+  System.String Id { get; }
+  System.String Text { get; set; }
+  System.String Tooltip { get; set; }
+  ctor(System.String id, System.String text, Craft.Abstractions.StatusAlignment alignment = Right, System.Int32 priority = 0, System.String commandId = null)
+  event System.EventHandler Changed
 sealed class Craft.Abstractions.TableTheme : Craft.Abstractions.ITheme, Idrak.Abstraction.IKind
   Craft.Abstractions.EditorColors Colors { get; }
   Craft.Abstractions.TextStyle StyleOf(System.String tokenClass)

@@ -577,6 +577,7 @@ public static class PluginTests
             var result = CraftPlugins.LoadFolder(folder);
             Check.True(result.Loaded, $"the C# plug-in loads from its folder ({result.Error})");
             Check.Equal("Craft.CSharp", result.Name, "the result names the plug-in");
+            Check.True(result is { Outdated: false, Manifest.ContractVersion: "1.0" }, "its plugin.json is read: built against this contract version");
             var language = EditorLanguages.ForFile("a.cs");
             Check.Equal("csharp", language?.Name, "with it, .cs opens as C#");
             Check.True(AssemblyLoadContext.GetLoadContext(language!.GetType().Assembly) != AssemblyLoadContext.Default, "the language comes from the plug-in's own load context");
@@ -634,7 +635,7 @@ public static class PluginTests
         foreach (var file in Directory.GetFiles(output))
         {
             var name = Path.GetFileName(file);
-            if (name.StartsWith("Craft.CSharp.", StringComparison.Ordinal) || name.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal))
+            if (name.StartsWith("Craft.CSharp.", StringComparison.Ordinal) || name.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal) || name == PluginManifest.FileName)
             {
                 File.Copy(file, Path.Combine(folder, name));
             }

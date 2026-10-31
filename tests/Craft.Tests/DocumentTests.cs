@@ -47,9 +47,15 @@ internal sealed class TempFolder : IDisposable
         var root = TestRunner.RepositoryPath("test-output", "tmp");
         if (Directory.Exists(root))
         {
+            // Only earlier runs' folders: one this run already made (a test may make its own under tmp before the first
+            // TempFolder) is newer than the process, and deleting it broke that test in parallel runs.
+            var started = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime();
             foreach (var folder in Directory.GetDirectories(root))
             {
-                TryDelete(folder);
+                if (Directory.GetCreationTimeUtc(folder) < started)
+                {
+                    TryDelete(folder);
+                }
             }
         }
 

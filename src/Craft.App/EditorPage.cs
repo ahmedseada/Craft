@@ -71,7 +71,7 @@ public sealed class EditorPage : ContentPage
         ArgumentNullException.ThrowIfNull(startup);
         _startup = startup;
         _initialPath = path;
-        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, () => _shell.Theme), startup.Settings.Read);
+        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, () => _shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
         _shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(this, ShowSettingsAsync));
         _pluginStatus = new StatusItemsView(_host);
         _panels = new PanelsView(_host);

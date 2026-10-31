@@ -1687,19 +1687,13 @@ with `--no-build`, outputs under `test-output\`.
 
 ## Where the work stopped (2026-10-31, evening)
 
-The three agents running (U, U2, P batch 2) were stopped when the account's usage limit was reached; the owner then
-asked to stop and wrap up. Their unfinished, untested work is saved, not merged, as patches in `plans/wip/` (each
-applies with `git apply --index` on a checkout of its base commit, then rebases onto `main`):
-
-| Work | Patch | Base | Size | Where it stopped | What is left |
-|---|---|---|---|---|---|
-| U: notification centre, activities, UI watchdog, freeze audit | `plans/wip/u.patch` | `14b5ef5` | 40 files, +3,201 −131 | the contracts (`IEditorHost.Activities`, `Notify`), the centre's model and the watchdog written; it was writing the MAUI views (status-bar activity, bell, centre, toast) | the views, wiring every long operation, the audit fixes and the scan test, one build and the targeted run, "U as built" |
-| U2: panels and layout (the owner's five points) | `plans/wip/u2.patch` | `385758f` | 32 files, +1,731 −142 | the tree's disk watcher, settings and Models as tabs, the side panel's removal written; it was starting the `SplitPanel` control | `SplitPanel` (collapse, resize, sizes kept), the bottom panel and chat column on it, one build and the targeted run, "U2 as built" |
-| P batch 2: P6 code search, P9 progress, P10 project model names, P8 screenshot to code | `plans/wip/p2.patch` | `e04652c` | 51 files, +4,791 −25 | the four plug-ins written, Idrak's `AgentOptions.ExtraTools` pushed (`d449824`, on Idrak `main`); it was writing the tests' checks of progress items and messages | the tests, P6 in the rail's Search view (not the side panel U2 removes), one build and the targeted run, "P as built (second batch)" |
-
-Idrak `main` holds every Idrak change of the day (S0 gaps, A0, R0, A2's `CodingAgent.Steer`, P's sampler and sandbox
-output, the `idrak chat --mcp` URL check, `ModelHost` loading outside its lock, `AgentOptions.ExtraTools`); nothing of
-Idrak is left unmerged.
+The three agents running (U, U2, P batch 2) stopped when the account's usage limit was reached. The owner then said:
+continue the UI ones (U and U2, resumed from their own worktrees), and keep only the plug-ins' unfinished work, off
+`main`. So P batch 2 (P6 code search, P9 progress and telemetry, P10 project model names, P8 screenshot to code;
+not built, not tested; base `e04652c`; 51 files, +4,791 −25) is saved on the branch `wip/p-batch-2`, the one branch the
+owner allowed for it. Left there: the tests' checks of progress items and messages, P6 in the rail's Search view (not
+the side panel U2 removes), one build and the targeted run, rebased onto `main`, "P as built (second batch)". Its Idrak
+part (`AgentOptions.ExtraTools`, `d449824`) is on Idrak `main`; nothing of Idrak is left unmerged.
 
 ## The owner's notes from the Windows run (2026-10-31): first, before every phase left
 

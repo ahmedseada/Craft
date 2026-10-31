@@ -8,7 +8,8 @@ namespace Craft.Editor;
 
 /// <summary>
 /// Draws an <see cref="EditorModel"/> through an <see cref="IEditorCanvas"/>: only the visible lines (plus one), in the
-/// order background, current line, find matches, selection, bracket match, text, gutter, caret. The visible range is
+/// order background, current line, find matches, selection, bracket match, text, the diagnostics' squiggles, gutter,
+/// caret, then the popups (completion list, tooltip). The visible range is
 /// classified in one call per frame into a reused buffer; each line's runs (its text cut where its style changes, tabs
 /// expanded) are kept while the line's characters and spans stay the same (compared as spans, whatever the snapshot's
 /// version), so scrolling in place and the caret's blink make no strings and a keystroke rebuilds only its own line, and a
@@ -21,6 +22,7 @@ public sealed class EditorRenderer : IDisposable
     private readonly TokenSpanBuffer _spans = new();
     private readonly Dictionary<int, LineRuns> _lines = [];
     private readonly Dictionary<int, string> _numbers = [];
+    private readonly EditorPopupRenderer _popups = new();
     private TokenSpan[] _clipped = ArrayPool<TokenSpan>.Shared.Rent(64);
     private EditorModel? _model;
     private ITheme? _theme;
@@ -40,6 +42,9 @@ public sealed class EditorRenderer : IDisposable
 
     /// <summary>The visible line range of the last frame.</summary>
     public LineRange LastVisible { get; private set; }
+
+    /// <summary>The squiggle segments the last frame drew (only for diagnostics on its visible lines).</summary>
+    public int SquiggleSegmentsDrawn { get; private set; }
 
     /// <summary>
     /// Draws <paramref name="model"/> scrolled to (<paramref name="scrollX"/>, <paramref name="scrollY"/>) in a viewport of
@@ -103,6 +108,9 @@ public sealed class EditorRenderer : IDisposable
         int queryLength = find.Query.Length;
         var bracket = model.MatchingBrackets;
         int caretColumn = 0;
+        var diagnostics = model.Diagnostics;
+        int firstDiagnostic = diagnostics.IsEmpty ? 0 : model.FirstDiagnosticReaching(firstLine.Start);
+        SquiggleSegmentsDrawn = 0;
 
         char[]? buffer = null;
         char[]? expanded = null;
@@ -173,6 +181,11 @@ public sealed class EditorRenderer : IDisposable
                     canvas.DrawText(run.Text, x, top, run.Style);
                 }
 
+                for (int d = firstDiagnostic; d < diagnostics.Length && diagnostics[d].Start <= line.End; d++)
+                {
+                    DrawSquiggle(canvas, diagnostics[d], line, text, left, top, metrics, tabSize, textLeft, viewportWidth, colors);
+                }
+
                 if (index == caretLine)
                 {
                     caretColumn = TextReading.ColumnOf(text, selection.Caret - line.Start, tabSize);
@@ -214,7 +227,76 @@ public sealed class EditorRenderer : IDisposable
             }
         }
 
+        _popups.Draw(canvas, model);
         model.NotePainted();
+    }
+
+    /// <summary>A diagnostic's part on one line: a wave (errors, warnings) or dots (information) under its columns; hidden ones are not drawn.</summary>
+    private void DrawSquiggle(IEditorCanvas canvas, in EditorDiagnostic diagnostic, in TextLine line, ReadOnlySpan<char> text, float left, float top,
+        FontMetrics metrics, int tabSize, float textLeft, float viewportWidth, EditorColors colors)
+    {
+        if (diagnostic.Severity == DiagnosticSeverity.Hidden || diagnostic.End < line.Start)
+        {
+            return;
+        }
+
+        int start = Math.Max(diagnostic.Start, line.Start);
+        int end = Math.Min(diagnostic.End, line.End);
+        int startColumn;
+        int endColumn;
+        if (end > start)
+        {
+            startColumn = TextReading.ColumnOf(text, start - line.Start, tabSize);
+            endColumn = TextReading.ColumnOf(text, end - line.Start, tabSize);
+        }
+        else if (diagnostic.Length == 0 || diagnostic.Start >= line.Start)
+        {
+            // A point (a missing semicolon), or a span that starts at the line's end: one cell wide.
+            startColumn = TextReading.ColumnOf(text, Math.Min(start, line.End) - line.Start, tabSize);
+            endColumn = startColumn + 1;
+        }
+        else
+        {
+            return;
+        }
+
+        float cell = metrics.CellWidth;
+        float x0 = Math.Max(textLeft, left + (startColumn * cell));
+        float x1 = Math.Min(viewportWidth, left + (endColumn * cell));
+        if (x1 <= x0)
+        {
+            return;
+        }
+
+        uint color = diagnostic.Severity switch
+        {
+            DiagnosticSeverity.Error => colors.Error,
+            DiagnosticSeverity.Warning => colors.Warning,
+            _ => colors.Info,
+        };
+        float baseY = top + metrics.LineHeight - 1.5f;
+        float step = Math.Max(2f, cell / 3f);
+        bool dotted = diagnostic.Severity == DiagnosticSeverity.Info;
+        bool up = false;
+        for (float x = x0; x < x1; x += step)
+        {
+            float next = Math.Min(x1, x + step);
+            if (dotted)
+            {
+                if (!up)
+                {
+                    canvas.DrawLine(x, baseY, next, baseY, color, 1);
+                    SquiggleSegmentsDrawn++;
+                }
+            }
+            else
+            {
+                canvas.DrawLine(x, up ? baseY - 2 : baseY, next, up ? baseY : baseY - 2, color, 1);
+                SquiggleSegmentsDrawn++;
+            }
+
+            up = !up;
+        }
     }
 
     /// <inheritdoc />

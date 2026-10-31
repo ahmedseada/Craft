@@ -12,7 +12,8 @@ using Craft.Maui;
 namespace Craft.App;
 
 /// <summary>
-/// The app's shell (phase E4) over <see cref="ShellModel"/>: the folder tree, the tabs (one <see cref="EditorView"/> per
+/// The app's shell (phase E4; E5 adds the problems list under the editor, the error and warning counts in the status
+/// bar, and F12 into another file) over <see cref="ShellModel"/>: the folder tree, the tabs (one <see cref="EditorView"/> per
 /// tab, only the active one in the page, so a tab keeps its parse, caret and find state), the find and replace bar, the
 /// plug-ins' panels and status items, and the status bar; the settings page and the recent list from the shell's
 /// commands. Every button runs a command of <see cref="EditorCommands"/> (the palette lists them with their chords), so
@@ -46,6 +47,8 @@ public sealed class EditorPage : ContentPage
     private readonly Label _dirty = StatusLabel();
     private readonly Label _paint = StatusLabel();
     private readonly Label _notice = StatusLabel();
+    private readonly Label _problemCounts = StatusLabel();
+    private readonly ProblemsPanel _problems;
     private readonly FlexLayout _topBar;
     private readonly View[] _wideOnly;
     private readonly FlexLayout _statusBar;
@@ -149,9 +152,13 @@ public sealed class EditorPage : ContentPage
         {
             Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
             Padding = new Thickness(8, 2),
-            Children = { _language, _position, _encoding, _lineEnding, _dirty, _paint, _notice, _pluginStatus },
+            Children = { _language, _position, _problemCounts, _encoding, _lineEnding, _dirty, _paint, _notice, _pluginStatus },
         };
         _statusBar.SetGrow(_pluginStatus, 1);
+        _problems = new ProblemsPanel(startup.Options.ProblemsListLimit, OnProblemChosen);
+        var countsTap = new TapGestureRecognizer();
+        countsTap.Tapped += (_, _) => _problems.Toggle();
+        _problemCounts.GestureRecognizers.Add(countsTap);
 
         _body = new Grid
         {
@@ -170,13 +177,15 @@ public sealed class EditorPage : ContentPage
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Star),
                 new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
             },
         };
         grid.Add(_topBar, 0, 0);
         grid.Add(_tabStrip, 0, 1);
         grid.Add(_findBar, 0, 2);
         grid.Add(_body, 0, 3);
-        grid.Add(_statusBar, 0, 4);
+        grid.Add(_problems.View, 0, 4);
+        grid.Add(_statusBar, 0, 5);
         Content = grid;
 
         _shell.Tabs.TabsChanged += OnTabsChanged;
@@ -379,8 +388,17 @@ public sealed class EditorPage : ContentPage
             Options = _shell.Options,
             Theme = _shell.Theme,
             KeyHandler = _host,
+            WorkspaceRoot = _shell.Workspace?.Root,
         };
         view.Open(tab.Document, tab.Language);
+        view.DiagnosticsChanged += (_, _) =>
+        {
+            if (ReferenceEquals(view, _shown))
+            {
+                UpdateProblems();
+            }
+        };
+        view.DefinitionRequested += OnDefinitionRequested;
         view.SaveRequested += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.Save);
         view.FindRequested += (_, e) => ShowFind(e.Replace, e.InitialQuery);
         view.CaretMoved += (_, _) =>
@@ -433,6 +451,60 @@ public sealed class EditorPage : ContentPage
 
         UpdateStatus();
         UpdateTitle();
+        UpdateProblems();
+    }
+
+    private void UpdateProblems()
+    {
+        if (_shown?.Model is not { } model)
+        {
+            _problemCounts.Text = "";
+            _problems.Clear();
+            return;
+        }
+
+        _problemCounts.Text = model.SemanticSession is null ? "" : string.Create(CultureInfo.InvariantCulture,
+            $"{model.ErrorCount} {(model.ErrorCount == 1 ? "error" : "errors")}, {model.WarningCount} {(model.WarningCount == 1 ? "warning" : "warnings")}");
+        _problems.Show(model);
+    }
+
+    private void OnProblemChosen(int position)
+    {
+        if (_shown is { Model: { } model } view)
+        {
+            model.Select(position, position);
+            model.EnsureCaretVisible();
+            view.Focus();
+        }
+    }
+
+    private async void OnDefinitionRequested(object? sender, DefinitionRequestedEventArgs e)
+    {
+        var location = e.Location;
+        if (location.FilePath is not { } path)
+        {
+            _notice.Text = location.Description;
+            return;
+        }
+
+        try
+        {
+            await _shell.OpenFileAsync(path);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _notice.Text = $"Could not open {path}: {error.Message}";
+            return;
+        }
+
+        ShowActive();
+        if (_shown?.Model is { } model && model.Document.FilePath is { } opened
+            && string.Equals(Path.GetFullPath(opened), Path.GetFullPath(path), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            int start = Math.Clamp(location.Start, 0, model.Snapshot.Length);
+            model.Select(Math.Min(model.Snapshot.Length, start + location.Length), start);
+            model.EnsureCaretVisible();
+        }
     }
 
     private void OnWorkspaceChanged()
@@ -515,10 +587,12 @@ public sealed class EditorPage : ContentPage
         _pluginStatus.TextColor = foreground;
         _panels.TextColor = foreground;
         _panelsBox.BackgroundColor = bar;
-        foreach (var label in (ReadOnlySpan<Label>)[_language, _position, _encoding, _lineEnding, _dirty, _paint, _notice, _matchCount])
+        foreach (var label in (ReadOnlySpan<Label>)[_language, _position, _problemCounts, _encoding, _lineEnding, _dirty, _paint, _notice, _matchCount])
         {
             label.TextColor = foreground;
         }
+
+        _problems.ApplyTheme(theme);
     }
 
     private void ShowFind(bool replace, string? query)

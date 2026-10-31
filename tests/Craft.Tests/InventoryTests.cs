@@ -69,6 +69,9 @@ public static class InventoryTests
             // Phase E4: the shell.
             ["CRAFT_DATA_FOLDER"] = "data", ["CRAFT_RECENT_LIMIT"] = "5", ["CRAFT_NARROW_WIDTH"] = "600", ["CRAFT_TREE_WIDTH"] = "300",
             ["CRAFT_TREE_INDENT"] = "10", ["CRAFT_PANEL_WIDTH"] = "320",
+            ["CRAFT_DIAGNOSTICS_DELAY_MS"] = "250", ["CRAFT_SEMANTIC_MAX_CHARS"] = "1000", ["CRAFT_WORKSPACE_READERS"] = "loose, csproj",
+            ["CRAFT_WORKSPACE_CONFIGURATION"] = "Release", ["CRAFT_COMPLETION_DELAY_MS"] = "0", ["CRAFT_COMPLETION_ROWS"] = "7",
+            ["CRAFT_PROBLEMS_LIMIT"] = "20", ["CRAFT_HOVER_DELAY_MS"] = "100",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -81,7 +84,13 @@ public static class InventoryTests
             PluginFolders = options.PluginFolders, DisabledPlugins = options.DisabledPlugins,
             KeyBindings = options.KeyBindings, HostLogLines = 20, ProposalPreviewCharacters = 40,
             DataFolder = "data", RecentLimit = 5, NarrowWidth = 600, TreeWidth = 300, TreeIndent = 10, PanelWidth = 320,
+            DiagnosticsDelayMilliseconds = 250, SemanticMaxCharacters = 1000, WorkspaceReaders = options.WorkspaceReaders, WorkspaceConfiguration = "Release",
+            CompletionDelayMilliseconds = 0, CompletionRows = 7, ProblemsListLimit = 20, HoverDelayMilliseconds = 100,
         }, options, "options read from every variable");
+        Check.SequenceEqual(["loose", "csproj"], options.WorkspaceReaders, "CRAFT_WORKSPACE_READERS split at ','");
+        var settings = options.ToLanguageSettings();
+        Check.True(settings is { DiagnosticsDelayMilliseconds: 250, SemanticMaxCharacters: 1000, Configuration: "Release", TabSize: 2, InsertSpaces: false }
+            && ReferenceEquals(settings.WorkspaceReaders, options.WorkspaceReaders), "the language settings carry the options");
         Check.True(options.KeyBindings is [{ Name: "Ctrl+Shift+W", CommandId: "sample.wordCount" }, { Name: "Ctrl+K", CommandId: "" }], "CRAFT_KEY_BINDINGS parsed, an empty command kept as an unbinding");
         Check.SequenceEqual(["p1", "p2"], options.PluginFolders, "CRAFT_PLUGIN_FOLDERS split at ';'");
         Check.SequenceEqual(["Craft.CSharp", "Other"], options.DisabledPlugins, "CRAFT_PLUGINS_DISABLED split at ','");

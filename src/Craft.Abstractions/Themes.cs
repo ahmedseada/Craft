@@ -23,7 +23,29 @@ public readonly record struct TextStyle(uint Argb, bool Bold = false, bool Itali
 /// <param name="BracketMatch">The fill behind a matched bracket pair.</param>
 /// <param name="FindMatch">The fill behind a find match.</param>
 public sealed record EditorColors(uint Background, uint Foreground, uint Selection, uint CurrentLine, uint Caret, uint Gutter,
-    uint GutterText, uint GutterCurrentText, uint BracketMatch, uint FindMatch);
+    uint GutterText, uint GutterCurrentText, uint BracketMatch, uint FindMatch)
+{
+    /// <summary>An error's squiggle (and its mark in the problems list).</summary>
+    public uint Error { get; init; } = 0xFFE5534B;
+
+    /// <summary>A warning's squiggle.</summary>
+    public uint Warning { get; init; } = 0xFFC69026;
+
+    /// <summary>An informational diagnostic's dotted underline.</summary>
+    public uint Info { get; init; } = 0xFF4A90D9;
+
+    /// <summary>The fill of the editor's popups (the completion list, signature help, hover).</summary>
+    public uint PopupBackground { get; init; } = 0xFF2A2E36;
+
+    /// <summary>The popups' border.</summary>
+    public uint PopupBorder { get; init; } = 0xFF5A6270;
+
+    /// <summary>The selected row of the completion list.</summary>
+    public uint PopupSelection { get; init; } = 0xFF2C3A55;
+
+    /// <summary>The popups' text.</summary>
+    public uint PopupText { get; init; } = 0xFFD5D9E0;
+}
 
 /// <summary>A theme, registered in <see cref="EditorThemes"/>: the surface's colours and a style per token class.</summary>
 public interface ITheme : IKind
@@ -119,13 +141,21 @@ public static class EditorThemes
 
     private static TableTheme MakeDark() => new TableTheme(Dark, "Dark: a deep ground, amber accent", isDark: true,
         new EditorColors(Background: 0xFF16181D, Foreground: 0xFFD5D9E0, Selection: 0xFF2C3A55, CurrentLine: 0xFF1E222B, Caret: 0xFFE5A54B,
-            Gutter: 0xFF16181D, GutterText: 0xFF7D8696, GutterCurrentText: 0xFFD5D9E0, BracketMatch: 0xFF34404F, FindMatch: 0xFF5A4520),
+            Gutter: 0xFF16181D, GutterText: 0xFF7D8696, GutterCurrentText: 0xFFD5D9E0, BracketMatch: 0xFF34404F, FindMatch: 0xFF5A4520)
+        {
+            Error = 0xFFF47067, Warning = 0xFFD9A93A, Info = 0xFF6CB6FF,
+            PopupBackground = 0xFF22262E, PopupBorder = 0xFF4A5260, PopupSelection = 0xFF2C3A55, PopupText = 0xFFD5D9E0,
+        },
         Styles(keyword: 0xFF82AAFF, type: 0xFF5FC9B4, @string: 0xFFE3B27A, comment: 0xFF8790A0, number: 0xFFD9A0E8, method: 0xFFE8D58A,
             local: 0xFFB8C7DC, preprocessor: 0xFFB09EE0, excluded: 0xFF6B7382, punctuation: 0xFFAEB6C2));
 
     private static TableTheme MakeLight() => new TableTheme(Light, "Light: a paper ground, deep inks", isDark: false,
         new EditorColors(Background: 0xFFFFFFFF, Foreground: 0xFF1F2328, Selection: 0xFFC8DAF8, CurrentLine: 0xFFF3F5F8, Caret: 0xFFB2650F,
-            Gutter: 0xFFFFFFFF, GutterText: 0xFF6E7781, GutterCurrentText: 0xFF1F2328, BracketMatch: 0xFFDDE6F0, FindMatch: 0xFFFFE3A3),
+            Gutter: 0xFFFFFFFF, GutterText: 0xFF6E7781, GutterCurrentText: 0xFF1F2328, BracketMatch: 0xFFDDE6F0, FindMatch: 0xFFFFE3A3)
+        {
+            Error = 0xFFCF222E, Warning = 0xFF9A6700, Info = 0xFF0969DA,
+            PopupBackground = 0xFFF6F8FA, PopupBorder = 0xFF8C959F, PopupSelection = 0xFFC8DAF8, PopupText = 0xFF1F2328,
+        },
         Styles(keyword: 0xFF0B4FC6, type: 0xFF0E7A6B, @string: 0xFF9A4A06, comment: 0xFF5F6B78, number: 0xFF8A2BB8, method: 0xFF795E00,
             local: 0xFF2A4A75, preprocessor: 0xFF6F42C1, excluded: 0xFF8C959F, punctuation: 0xFF404852));
 

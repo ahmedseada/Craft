@@ -335,6 +335,28 @@ Android out:
   same Roslyn incremental parse); with a budget of 0 the UI thread never waits and draws the typed token plain for one
   frame. The worst case on the UI thread is the budget plus one classification, whatever the edit.
 
+- **Measured (E5, 2026-10-31, `benches/Craft.Benches -- semantic`, a 4-core x64 Linux container, .NET 10.0.14; results in
+  `test-output/benches/semantic.txt`).** The workspace of Craft's own `src/Craft.Editor` (the "csproj" reader: 4 projects,
+  Idrak.Abstraction, Craft.Abstractions, Craft.Core and Craft.Editor, through `obj/project.assets.json`; 245 documents, 167
+  references, 5.8 MB of reference files): built in 1,247 ms cold (the projects and references read, Roslyn's MEF host
+  composed once per process), 21.6 ms warm after a release (references read again), 7.7 ms for a second workspace sharing
+  the references. Craft.Editor's compilation: 2,577 ms cold, 622 ms warm. Every project's diagnostics: 7 errors, 0
+  warnings, all CS8795 in Idrak.Abstraction (partial methods that `LibraryImport` and `GeneratedRegex` source generators
+  implement; generators and analyzers are not run yet), so the reader's model of Craft's projects compiles clean. With the
+  compilations the workspace holds 102.8 MB of managed heap (the references' metadata included); released, 56 MB stays over
+  the start (the MEF host composed once per process and Roslyn's own static caches, not measured apart). A loose
+  generated file: 1,000 lines, first diagnostics 308 ms, warm after a keystroke 68.5 ms median (138 ms max), 4.8 MB; 10,000
+  lines (267 K chars), first 1,499 ms, warm 542 ms median (1,277 ms max), 4.4 MB over the shared references. Completion after
+  '.' (126 items): first 1,156 ms (JIT and the completion providers), warm 15-44 ms median with nothing else running, 27-62 ms
+  with each keystroke's diagnostics pass beside it. **Decision taken from the measures:** the first version called Roslyn's
+  `GetChangeAsync` for each "complex" item when the list was made (12 of the 126): 98-328 ms a list; now an item says
+  `NeedsResolve` and only the committed one is resolved (`ISemanticLanguageSession.ResolveCompletionAsync`): 15-44 ms, the
+  same items (the `Semantic` and `Editor` tests). `CRAFT_SEMANTIC_MAX_CHARS` defaults to 1,000,000 characters (some
+  37,000 lines; the warm pass scales with the file: about 2 s a pass there on this container). Candidates, measured here,
+  not taken yet: the warm pass re-binds the whole tree after each change (542 ms at 10,000 lines), so the diagnostics of the
+  changed member first (`SemanticModel.GetDiagnostics(span)`), then the rest; and one parse for both layers (the workspace
+  parses the open document again beside the syntactic worker: a second tree of the same text).
+
 ### Tests and benches
 
 - `Craft.Tests` has its own small runner with the same flags as Idrak's (`--progress`, `--failures-only`,
@@ -476,7 +498,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E2 | `Craft.CSharp`, syntactic layer: the snapshot as `SourceText`, the incremental parse, classified spans for a line range, Roslyn's classification names mapped to theme classes, light and dark themes; C# shipped as a pre-installed, removable plug-in loaded from `plugins/` (`Craft.Core.Plugins.CraftPlugins`, `CRAFT_PLUGIN_FOLDERS`, `CRAFT_PLUGINS_DISABLED`). | Spans of fixed C# 14 files (every string kind, comments, preprocessor lines, contextual keywords) match; spans after random edits equal a fresh parse; the snapshot-`SourceText` equals `SourceText.From` on random edits. | E1 |
 | E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows. | E2 |
 | E4 | **Built (2026-10-31, "E4 as built" below).** `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
-| E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
+| E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below; semantic colours not yet).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
@@ -624,6 +646,85 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
 - **Minimal now**: capabilities are recorded and shown, not enforced; a panel is text lines; the confirmation is a
   dialog with a summary (the diff is A1); plug-in settings come from the environment (the settings page and
   `.craft/settings.json` are E4); one document at a time in the window (tabs are E4); a plug-in loads once per process.
+
+## E5 as built (2026-10-31)
+
+- **Contracts (`Craft.Abstractions`, `Semantics.cs`, `WorkspaceReaders.cs`):** `ISemanticLanguageSession : ILanguageSession`,
+  optional (a language that only classifies implements nothing more): `Diagnostics` (a `DiagnosticSet`: the snapshot they
+  are of, `EditorDiagnostic` items with span, severity Hidden/Info/Warning/Error, id, message, and the counts) and
+  `DiagnosticsChanged` (raised on the session's worker; the subscriber marshals), `GetCompletionsAsync` (a `CompletionList`:
+  its snapshot, position and span start, `CompletionItem`s with label, kind, detail, edit, filter and sort text, caret, and
+  `NeedsResolve`), `ResolveCompletionAsync`, `GetSignatureHelpAsync`, `GetHoverAsync`, `GetDefinitionAsync` (a path and span,
+  the same document, or a metadata symbol's description), `FormatAsync` (edits in the snapshot's positions), `EnableSemantics`
+  (the command for a large file), `IsSemanticDeferred`, `Telemetry` (`SemanticTelemetry`: the workspace's projects, documents,
+  references and their bytes, the heap its build added, build and last diagnostics time, generation) and `Release`. Every
+  request is a task, cancellable, run off the calling thread. `ILanguage.Open(ITextBuffer, LanguageOpenContext)` is a
+  default-interface overload (the old `Open(buffer)` stays): the file, the workspace root and the `LanguageSettings` (the
+  diagnostics pause, the size limit, the readers in order, the configuration, tab size, spaces, line break), made from
+  `CraftOptions.ToLanguageSettings()`, since a plug-in reads no `CraftOptions`. `IWorkspaceReader : IKind` in
+  `WorkspaceReaders` (a `KindTable`, no library default: the C# plug-in registers "csproj" and "loose"; an unknown name
+  fails with "not registered") turns a folder into `WorkspaceProject`s, plain data any language can build its model from.
+  `EditorColors` gained `Error`, `Warning`, `Info` and the popups' colours (init properties, so the record's constructor is
+  unchanged), contrast-checked: squiggles 6.2-8.3:1 on the dark ground, 4.9-5.4:1 on the light one, popup text 10.7 and 14.8.
+  `EditorKey` gained `F12`, `Space` (a key only with a modifier; typed, it stays text), `D`, `K`.
+- **Craft.CSharp** (now also on `Microsoft.CodeAnalysis.CSharp.Workspaces` and `.Features` at `$(RoslynVersion)`; with them come
+  System.Composition, Humanizer, Elfie, DiaSymReader and System.Configuration.ConfigurationManager, all in the plug-in's
+  folder; none is AOT-compatible, MEF composes by reflection: rooted for the trimmer in M). The "csproj" reader evaluates
+  the project file itself (`ProjectEvaluator`: Directory.Build.props, the project, Directory.Build.targets and their plain
+  imports; `$(Name)`; conditions of the common shapes and the property functions `IsOSPlatform`, `GetTargetPlatformIdentifier`,
+  `GetTargetFrameworkIdentifier`, `Path.GetFullPath` and `Combine`; another condition counts as false and is noted): target
+  framework (the first of several), language version, nullable, unsafe, warnings as errors, documentation diagnostics,
+  warning level, NoWarn, defines (the SDK's for the configuration and framework), implicit usings (Microsoft.NET.Sdk's set,
+  the Web SDK's, `Using` items), `InternalsVisibleTo`, `Compile` (the default glob without bin, obj and hidden folders, then
+  Include and Remove), `ProjectReference`, and references from `obj/project.assets.json` (packages' compile assets for the
+  framework, its projects, its framework references) plus the framework's targeting pack beside the running runtime
+  (`dotnet/packs/*.Ref`, with XML documentation), else the running runtime's trusted platform assemblies of its folder. The
+  "loose" reader makes one "Loose files" project on the running framework. `CSharpWorkspace`: one `AdhocWorkspace` per
+  workspace root (and configuration and readers), counted by its sessions; MEF host services composed once from the
+  plug-in's own assemblies, loaded through the plug-in's load context; projects added as files need them; the open
+  document's text is its session's `SnapshotSourceText`, brought to the requested snapshot in one incremental step from the
+  version the solution holds (the changes composed into one range, as the parse worker does); other files load from disk
+  when Roslyn needs them (`FileTextLoader`), and a closed document goes back to its file; metadata references are read once
+  per process and shared; the SDK's generated global usings and `InternalsVisibleTo` become one generated document.
+  Diagnostics run on the thread pool after `CRAFT_DIAGNOSTICS_DELAY_MS` without a change (one timer reset per change, the
+  running pass cancelled), syntax and semantic diagnostics of the open document's tree (analyzers and source generators
+  later); above `CRAFT_SEMANTIC_MAX_CHARS` nothing runs on its own (nor completion while typing) until `EnableSemantics`.
+  Completion: `CompletionService` and, on commit only, `GetChangeAsync`; signature help built from the semantic model
+  (invocations, object creations, indexers; the overloads from the member group, the active one from the binding, the
+  argument from the commas); hover: the symbol's display and its documentation's summary; definition:
+  `SymbolFinder.FindSymbolAtPositionAsync` and `FindSourceDefinitionAsync`; format: `Formatter.FormatAsync` with the
+  editor's indentation, its text changes as edits. `Release` drops the workspace (a request made after it never sees the
+  old one) and the shared references; `CSharpLanguage.ReleaseWorkspaces()` releases all. Scripts (.csx) stay syntactic only.
+- **Craft.Editor:** `EditorModel` opens the language with the context (a new optional `workspaceRoot`), takes the session's
+  diagnostics on the UI thread (`Dispatch`, set by the host; else the synchronization context; else at once) and maps a set
+  computed for an older snapshot through the edits since (kept per version; one an edit touches is dropped, as the
+  syntactic layer does); every edit moves the current ones. `CompletionController` (open after an identifier character or
+  '.' and `CRAFT_COMPLETION_DELAY_MS`, or Ctrl+Space; filter by prefix, case first, then camel humps; Up, Down, Page Up and
+  Page Down; Enter and Tab commit one `EditKind.Command` step, mapped onto what was typed since; Escape; a click selects a
+  row, a second commits; an answer for an older request or a word the caret left is dropped and counted). Signature help on
+  '(' and ',' (Ctrl+Shift+Space), hover after `CRAFT_HOVER_DELAY_MS` (the problems there first), F12 (the same document
+  selects the name, another file raises `DefinitionRequested`, metadata shows its description), Shift+Alt+F and Ctrl+K
+  Ctrl+D format (applied as one step if the text is still the one formatted). The renderer draws squiggles (a wave for
+  errors and warnings, dots for information, hidden ones not at all) only for the visible lines (a binary search from the
+  first line, bounded by the longest diagnostic), then the popups through `IEditorCanvas` (the completion list under or
+  over the word, the tooltip with the active parameter bold; the tooltip's wrapped lines kept while its text and width are).
+- **Craft.Maui / Craft.App:** `EditorView` sets `Dispatch`, forwards `DiagnosticsChanged` and `DefinitionRequested`, takes the
+  pointer's hover (`MoveHoverInteraction`, `EndHoverInteraction`), has `WorkspaceRoot` and `ReleaseSemanticMemory()`; the
+  Windows adapter maps F12, Space (with Ctrl or Alt only), D and K. The app's page has a collapsible problems list under the
+  editor (`ProblemsPanel`: plain labels, errors first, `CRAFT_PROBLEMS_LIMIT` rows, a tap moves the caret), the error and
+  warning counts in the status bar (a tap opens the list), and F12 into another file opens it with the name selected. Not
+  yet: wiring the platform's memory-pressure signal to `ReleaseSemanticMemory` (Windows' `MemoryManager` lives under
+  `Platforms/`), semantic colours, the analyzers and source generators.
+- **Settings added** (each a `CRAFT_*` variable): `CRAFT_DIAGNOSTICS_DELAY_MS` (400), `CRAFT_SEMANTIC_MAX_CHARS` (1,000,000),
+  `CRAFT_WORKSPACE_READERS` (csproj,loose), `CRAFT_WORKSPACE_CONFIGURATION` (Debug), `CRAFT_COMPLETION_DELAY_MS` (50),
+  `CRAFT_COMPLETION_ROWS` (10), `CRAFT_HOVER_DELAY_MS` (500), `CRAFT_PROBLEMS_LIMIT` (500).
+- **Tests:** group `Semantic` (a temporary project of a .csproj and two files: the reader's model, diagnostics that appear and
+  clear, waited on with `WhenDiagnosticsIdle`; completion after `Console.` and on a local of the other file's type, applied;
+  signature help, hover with the summary, definition into the other file, in the same document and in metadata; format;
+  release and rebuild; a large file waiting for the command), `Editor` additions (completion filtering, selection, commit as
+  one step, resolve on commit, late answers dropped, camel humps, popup clicks, diagnostics of an older snapshot mapped,
+  squiggles only on visible lines, popups drawn, definition and format through the model), and the `Plugins` test copies the
+  whole plug-in output and asks the plug-in's own semantic layer for `Console.` completion.
 
 ## Commands for the owner (once a phase is built)
 

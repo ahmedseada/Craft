@@ -47,8 +47,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <param name="measurer">Measures the options' font on the platform.</param>
     /// <param name="clipboard">The clipboard for copy, cut and paste.</param>
     /// <param name="time">The clock for click counting and the input-to-paint telemetry (the system's when null).</param>
+    /// <param name="workspaceRoot">The open folder the document belongs to (its language's workspace), or null.</param>
     public EditorModel(ITextDocument document, ILanguage? language, CraftOptions? options, ITheme? theme, ITextMeasurer measurer,
-        IEditorClipboard clipboard, TimeProvider? time = null)
+        IEditorClipboard clipboard, TimeProvider? time = null, string? workspaceRoot = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(measurer);
@@ -64,10 +65,15 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         Metrics = Measure();
         LanguageName = language?.Name ?? PlainTextName(document.FilePath);
         Find = new EditorFind(this);
-        _session = language?.Open(document.Buffer);
+        _session = language?.Open(document.Buffer, new LanguageOpenContext(document.FilePath, workspaceRoot, Options.ToLanguageSettings()));
         if (_session is not null)
         {
             _session.Reclassified += OnSessionReclassified;
+        }
+
+        if (_session is ISemanticLanguageSession semantic)
+        {
+            semantic.DiagnosticsChanged += OnSessionDiagnosticsChanged;
         }
 
         _lastLineCount = Snapshot.LineCount;
@@ -384,6 +390,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         _disposed = true;
         _document.Buffer.Changed -= OnBufferChanged;
+        DisposeSemantic();
         if (_session is not null)
         {
             _session.Reclassified -= OnSessionReclassified;
@@ -492,6 +499,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
             ContentSizeChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        OnSemanticBufferChanged(e);
         Invalidate();
     }
 

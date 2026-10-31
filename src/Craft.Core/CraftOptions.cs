@@ -103,6 +103,53 @@ public sealed record CraftOptions
     public int ParseWaitMilliseconds { get; init; } = 8;
 
     /// <summary>
+    /// Milliseconds after the last change before the language computes the document's diagnostics again, off the UI
+    /// thread (<c>CRAFT_DIAGNOSTICS_DELAY_MS</c>).
+    /// </summary>
+    public int DiagnosticsDelayMilliseconds { get; init; } = 400;
+
+    /// <summary>
+    /// Above this many characters a document's semantic layer (diagnostics, completion while typing) waits for a command
+    /// instead of running on its own; 0 never waits (<c>CRAFT_SEMANTIC_MAX_CHARS</c>).
+    /// </summary>
+    public int SemanticMaxCharacters { get; init; } = 1_000_000;
+
+    /// <summary>The workspace readers tried in order to make a folder's projects (<c>CRAFT_WORKSPACE_READERS</c>, separated by ',').</summary>
+    public IReadOnlyList<string> WorkspaceReaders { get; init; } = DefaultWorkspaceReaders;
+
+    /// <summary>The workspace readers tried by default: project files, then loose files.</summary>
+    public static IReadOnlyList<string> DefaultWorkspaceReaders { get; } = ["csproj", "loose"];
+
+    /// <summary>The build configuration a project is read for (<c>CRAFT_WORKSPACE_CONFIGURATION</c>).</summary>
+    public string WorkspaceConfiguration { get; init; } = "Debug";
+
+    /// <summary>
+    /// Milliseconds after typing an identifier character or '.' before the completion list is asked for; Ctrl+Space asks
+    /// at once (<c>CRAFT_COMPLETION_DELAY_MS</c>).
+    /// </summary>
+    public int CompletionDelayMilliseconds { get; init; } = 50;
+
+    /// <summary>The rows the completion list shows before it scrolls (<c>CRAFT_COMPLETION_ROWS</c>).</summary>
+    public int CompletionRows { get; init; } = 10;
+
+    /// <summary>Milliseconds the pointer rests on a symbol before its description shows (<c>CRAFT_HOVER_DELAY_MS</c>).</summary>
+    public int HoverDelayMilliseconds { get; init; } = 500;
+
+    /// <summary>The most rows the problems list shows (the counts stay exact) (<c>CRAFT_PROBLEMS_LIMIT</c>).</summary>
+    public int ProblemsListLimit { get; init; } = 500;
+
+    /// <summary>The settings a language's semantic layer is opened with (these options, carried to the language).</summary>
+    public LanguageSettings ToLanguageSettings() => new()
+    {
+        DiagnosticsDelayMilliseconds = DiagnosticsDelayMilliseconds,
+        SemanticMaxCharacters = SemanticMaxCharacters,
+        WorkspaceReaders = WorkspaceReaders,
+        Configuration = WorkspaceConfiguration,
+        TabSize = TabSize,
+        InsertSpaces = InsertSpaces,
+    };
+
+    /// <summary>
     /// Folders of user plug-ins (each holding a <c>Name/Name.dll</c> folder per plug-in), loaded after the app's own
     /// <c>plugins</c> folder; none by default, since a plug-in is code (<c>CRAFT_PLUGIN_FOLDERS</c>, separated by ';').
     /// </summary>
@@ -193,6 +240,14 @@ public sealed record CraftOptions
         new("CRAFT_TREE_WIDTH", "260", "The folder tree's width in the wide layout (device-independent units)."),
         new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units)."),
         new("CRAFT_PANEL_WIDTH", "280", "The plug-ins' side panels' width in the wide layout (device-independent units)."),
+        new("CRAFT_DIAGNOSTICS_DELAY_MS", "400", "Milliseconds after the last change before the document's diagnostics are computed again (off the UI thread)."),
+        new("CRAFT_SEMANTIC_MAX_CHARS", "1000000", "Above this many characters the semantic layer (diagnostics, completion while typing) waits for a command; 0 never waits."),
+        new("CRAFT_WORKSPACE_READERS", "csproj,loose", "The workspace readers tried in order to make a folder's projects, separated by ','."),
+        new("CRAFT_WORKSPACE_CONFIGURATION", "Debug", "The build configuration a project is read for (Debug defines DEBUG)."),
+        new("CRAFT_COMPLETION_DELAY_MS", "50", "Milliseconds after typing an identifier character or '.' before the completion list is asked for."),
+        new("CRAFT_COMPLETION_ROWS", "10", "The rows the completion list shows before it scrolls."),
+        new("CRAFT_PROBLEMS_LIMIT", "500", "The most rows the problems list shows (the counts stay exact)."),
+        new("CRAFT_HOVER_DELAY_MS", "500", "Milliseconds the pointer rests on a symbol before its description shows."),
     ];
 
     /// <summary>
@@ -390,6 +445,46 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_PANEL_WIDTH") is { } panelWidth)
         {
             options = options with { PanelWidth = Positive(panelWidth, "CRAFT_PANEL_WIDTH", 40, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_DIAGNOSTICS_DELAY_MS") is { } diagnosticsDelay)
+        {
+            options = options with { DiagnosticsDelayMilliseconds = Whole(diagnosticsDelay, "CRAFT_DIAGNOSTICS_DELAY_MS", 0, 600_000) };
+        }
+
+        if (Text(read, "CRAFT_SEMANTIC_MAX_CHARS") is { } semanticMax)
+        {
+            options = options with { SemanticMaxCharacters = Whole(semanticMax, "CRAFT_SEMANTIC_MAX_CHARS", 0, int.MaxValue) };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_READERS") is { } readers)
+        {
+            options = options with { WorkspaceReaders = readers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_CONFIGURATION") is { } configuration)
+        {
+            options = options with { WorkspaceConfiguration = configuration };
+        }
+
+        if (Text(read, "CRAFT_COMPLETION_DELAY_MS") is { } completionDelay)
+        {
+            options = options with { CompletionDelayMilliseconds = Whole(completionDelay, "CRAFT_COMPLETION_DELAY_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_COMPLETION_ROWS") is { } rows)
+        {
+            options = options with { CompletionRows = Whole(rows, "CRAFT_COMPLETION_ROWS", 1, 100) };
+        }
+
+        if (Text(read, "CRAFT_PROBLEMS_LIMIT") is { } problems)
+        {
+            options = options with { ProblemsListLimit = Whole(problems, "CRAFT_PROBLEMS_LIMIT", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_HOVER_DELAY_MS") is { } hoverDelay)
+        {
+            options = options with { HoverDelayMilliseconds = Whole(hoverDelay, "CRAFT_HOVER_DELAY_MS", 0, 60_000) };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

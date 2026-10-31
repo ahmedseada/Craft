@@ -34,6 +34,7 @@ public sealed class EditorView : ContentView, IDisposable
     private ILanguage? _language;
     private ITheme? _theme;
     private CraftOptions _options = new();
+    private string? _workspaceRoot;
     private bool _caretOn = true;
     private bool _reclassifying;
     private bool _disposed;
@@ -70,6 +71,8 @@ public sealed class EditorView : ContentView, IDisposable
         _graphics.StartInteraction += OnStartInteraction;
         _graphics.DragInteraction += OnDragInteraction;
         _graphics.EndInteraction += OnEndInteraction;
+        _graphics.MoveHoverInteraction += OnMoveHoverInteraction;
+        _graphics.EndHoverInteraction += OnEndHoverInteraction;
         _graphics.HandlerChanged += OnGraphicsHandlerChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -117,6 +120,17 @@ public sealed class EditorView : ContentView, IDisposable
         }
     }
 
+    /// <summary>The open folder the document belongs to (its language's workspace), or null; a change makes a new model.</summary>
+    public string? WorkspaceRoot
+    {
+        get => _workspaceRoot;
+        set
+        {
+            _workspaceRoot = value;
+            Rebuild();
+        }
+    }
+
     /// <summary>The settings.</summary>
     public CraftOptions Options
     {
@@ -147,6 +161,15 @@ public sealed class EditorView : ContentView, IDisposable
 
     /// <summary>Raised after each frame, outside it (the status bar reads the model's telemetry then).</summary>
     public event EventHandler? Painted;
+
+    /// <summary>Raised on the UI thread when the model's diagnostics changed (the problems list and the counts follow).</summary>
+    public event EventHandler? DiagnosticsChanged;
+
+    /// <summary>Raised on F12 when the definition is in another file (the app opens it) or only in metadata.</summary>
+    public event EventHandler<DefinitionRequestedEventArgs>? DefinitionRequested;
+
+    /// <summary>Releases the language's semantic memory (its workspace), as on the platform's memory-pressure signal; it is rebuilt on the next request.</summary>
+    public void ReleaseSemanticMemory() => _model?.SemanticSession?.Release();
 
     /// <summary>Shows <paramref name="document"/> in <paramref name="language"/> (null for plain text), making one new model.</summary>
     public void Open(ITextDocument? document, ILanguage? language)
@@ -184,7 +207,10 @@ public sealed class EditorView : ContentView, IDisposable
             return;
         }
 
-        var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard);
+        var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot);
+        model.Dispatch = action => Dispatcher.Dispatch(action);
+        model.DiagnosticsChanged += OnModelDiagnosticsChanged;
+        model.DefinitionRequested += OnModelDefinitionRequested;
         model.Invalidated += OnModelInvalidated;
         model.CaretMoved += OnModelCaretMoved;
         model.ScrollRequested += OnModelScrollRequested;
@@ -213,6 +239,9 @@ public sealed class EditorView : ContentView, IDisposable
         model.SaveRequested -= OnModelSaveRequested;
         model.FindRequested -= OnModelFindRequested;
         model.Reclassified -= OnModelReclassified;
+        model.DiagnosticsChanged -= OnModelDiagnosticsChanged;
+        model.DefinitionRequested -= OnModelDefinitionRequested;
+        model.Dispatch = null;
         _drawable.Model = null;
         _model = null;
         model.Dispose();
@@ -346,6 +375,23 @@ public sealed class EditorView : ContentView, IDisposable
     }
 
     private void OnEndInteraction(object? sender, TouchEventArgs e) => _model?.PointerReleased();
+
+    private void OnMoveHoverInteraction(object? sender, TouchEventArgs e)
+    {
+        if (_model is null || e.Touches.Length == 0)
+        {
+            return;
+        }
+
+        var point = e.Touches[0];
+        _model.PointerHovered(point.X, point.Y);
+    }
+
+    private void OnEndHoverInteraction(object? sender, EventArgs e) => _model?.PointerExited();
+
+    private void OnModelDiagnosticsChanged(object? sender, EventArgs e) => DiagnosticsChanged?.Invoke(this, EventArgs.Empty);
+
+    private void OnModelDefinitionRequested(object? sender, DefinitionRequestedEventArgs e) => DefinitionRequested?.Invoke(this, e);
 
     private void OnGraphicsHandlerChanged(object? sender, EventArgs e)
     {

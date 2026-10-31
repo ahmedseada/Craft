@@ -589,6 +589,16 @@ public static class PluginTests
             using var spans = new TokenSpanBuffer();
             session.Classify(buffer.Current, 0, buffer.Current.Length, spans);
             Check.Equal(TokenClasses.ClassName, spans.Spans[1].Class, "the plug-in's session classifies");
+            Check.True(File.Exists(Path.Combine(folder, "Microsoft.CodeAnalysis.CSharp.Features.dll")) && File.Exists(Path.Combine(folder, "System.Composition.Hosting.dll")),
+                "the plug-in's folder carries Roslyn's Features and MEF");
+
+            // The semantic layer in the plug-in's context: MEF composes from the plug-in's assemblies and completion answers.
+            var stray = Path.Combine(temp.Path, "Stray.cs");
+            var code = new PieceTableBuffer("class A { void M() { System.Console. } }");
+            using var semantic = (ISemanticLanguageSession)language.Open(code, new LanguageOpenContext(stray, temp.Path, LanguageSettings.Default));
+            int dot = code.Current.GetText(0, code.Current.Length).IndexOf("Console.", StringComparison.Ordinal) + "Console.".Length;
+            var list = semantic.GetCompletionsAsync(code.Current, dot, CompletionTrigger.Typed('.'), CancellationToken.None).GetAwaiter().GetResult();
+            Check.True(list is not null && list.Items.Any(i => i.Label == "WriteLine"), "the plug-in's completion offers Console.WriteLine");
 
             Check.True(IdrakPlugins.Unregister("csharp"), "the plug-in unregisters");
             Check.True(EditorLanguages.ForFile("a.cs") is null, "removed, a .cs file is plain text again");
@@ -635,7 +645,10 @@ public static class PluginTests
         foreach (var file in Directory.GetFiles(output))
         {
             var name = Path.GetFileName(file);
-            if (name.StartsWith("Craft.CSharp.", StringComparison.Ordinal) || name.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal) || name == PluginManifest.FileName)
+            // Everything the plug-in's build put there (Roslyn's Workspaces and Features, MEF's System.Composition, their
+            // dependencies, its plugin.json), except the contracts the host shares, as the app's copy does.
+            if (!name.StartsWith("Craft.Abstractions.", StringComparison.Ordinal) && !name.StartsWith("Idrak.Abstraction.", StringComparison.Ordinal)
+                && !name.StartsWith("Craft.Core.", StringComparison.Ordinal))
             {
                 File.Copy(file, Path.Combine(folder, name));
             }

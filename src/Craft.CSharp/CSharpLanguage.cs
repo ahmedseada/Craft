@@ -11,10 +11,12 @@ using Microsoft.CodeAnalysis.Text;
 namespace Craft.CSharp;
 
 /// <summary>
-/// C# on Roslyn's parser: "csharp" opens ".cs" files as regular code, "csharp-script" opens ".csx" files as scripts
-/// (<see cref="Script"/>; <see cref="ILanguage.Open"/> is not told the file, so the script kind is a language of its
-/// own). A session parses the buffer off the UI thread (incrementally, from its last tree) and classifies the lines asked
-/// for with <see cref="CSharpClassifier"/> from the last tree that landed.
+/// C# on Roslyn: "csharp" opens ".cs" files as regular code, "csharp-script" opens ".csx" files as scripts
+/// (<see cref="Script"/>; a language of its own, since <see cref="ILanguage.Open(ITextBuffer)"/> is not told the file).
+/// A session parses the buffer off the UI thread (incrementally, from its last tree) and classifies the lines asked for
+/// with <see cref="CSharpClassifier"/> from the last tree that landed; opened with a <see cref="LanguageOpenContext"/>, it
+/// is also the document of its workspace's Roslyn solution: diagnostics, completion, signature help, hover, go to
+/// definition and formatting (<see cref="ISemanticLanguageSession"/>).
 /// </summary>
 public sealed class CSharpLanguage : ILanguage
 {
@@ -61,25 +63,49 @@ public sealed class CSharpLanguage : ILanguage
     /// <inheritdoc />
     public LanguageRules Rules => CSharpRules;
 
-    /// <summary>Registers regular C# and C# script in <see cref="EditorLanguages"/>.</summary>
+    /// <summary>Registers regular C# and C# script in <see cref="EditorLanguages"/>, and the "csproj" and "loose" workspace readers.</summary>
     public static void Register()
     {
         EditorLanguages.Register(new CSharpLanguage());
         EditorLanguages.Register(Script);
+        WorkspaceReaders.Register(new Workspaces.CsprojWorkspaceReader());
+        WorkspaceReaders.Register(new Workspaces.LooseWorkspaceReader());
     }
 
-    /// <summary>Removes both from <see cref="EditorLanguages"/>.</summary>
+    /// <summary>Removes both languages and both readers.</summary>
     public static void Unregister()
     {
         EditorLanguages.Unregister(RegularName);
         EditorLanguages.Unregister(ScriptName);
+        WorkspaceReaders.Unregister(Workspaces.CsprojWorkspaceReader.ReaderName);
+        WorkspaceReaders.Unregister(Workspaces.LooseWorkspaceReader.ReaderName);
     }
+
+    /// <summary>Releases every C# workspace and the shared references (the host's memory-pressure call); each is built again on its next request.</summary>
+    public static void ReleaseWorkspaces() => CSharpWorkspace.ReleaseAll();
 
     /// <inheritdoc />
     ILanguageSession ILanguage.Open(ITextBuffer buffer) => Open(buffer);
 
-    /// <summary>A session over <paramref name="buffer"/>; its first full parse starts at once, off the calling thread.</summary>
-    public CSharpLanguageSession Open(ITextBuffer buffer) => new(buffer, ParseOptions);
+    /// <inheritdoc />
+    ILanguageSession ILanguage.Open(ITextBuffer buffer, LanguageOpenContext context) => Open(buffer, context);
+
+    /// <summary>
+    /// A session over <paramref name="buffer"/>; its first full parse starts at once, off the calling thread. It knows no
+    /// file or workspace: its semantic layer answers requests (a loose document on the running framework) and computes
+    /// diagnostics only when asked (<see cref="CSharpLanguageSession.EnableSemantics"/>).
+    /// </summary>
+    public CSharpLanguageSession Open(ITextBuffer buffer) => new(buffer, ParseOptions, null);
+
+    /// <summary>
+    /// A session over <paramref name="buffer"/>, the document of <paramref name="context"/>'s file in its workspace: its
+    /// first full parse starts at once, and its diagnostics follow the changes (off the calling thread).
+    /// </summary>
+    public CSharpLanguageSession Open(ITextBuffer buffer, LanguageOpenContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new(buffer, ParseOptions, context);
+    }
 }
 
 /// <summary>
@@ -93,7 +119,7 @@ public sealed class CSharpLanguage : ILanguage
 /// changed text left plain). The editor waits up to its budget with <see cref="WaitUntilClassified"/>. A parse that
 /// throws is kept in <see cref="ParseError"/> (the last tree stays in use); the next change parses the file afresh.
 /// </summary>
-public sealed class CSharpLanguageSession : ILanguageSession
+public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
 {
     private readonly ITextBuffer _buffer;
     private readonly CSharpParseOptions _options;
@@ -114,16 +140,22 @@ public sealed class CSharpLanguageSession : ILanguageSession
     private Exception? _error;
     private TokenSpanBuffer? _scratch;
 
-    internal CSharpLanguageSession(ITextBuffer buffer, CSharpParseOptions options)
+    internal CSharpLanguageSession(ITextBuffer buffer, CSharpParseOptions options, LanguageOpenContext? context)
     {
         ArgumentNullException.ThrowIfNull(buffer);
         _buffer = buffer;
         _options = options;
         _latest = buffer.Current;
+        _context = context ?? LanguageOpenContext.None;
+        _automatic = context is not null && options.Kind == SourceCodeKind.Regular;
         buffer.Changed += OnChanged;
         lock (_gate)
         {
             Kick();
+            if (_automatic && !IsSemanticDeferred)
+            {
+                ScheduleDiagnostics(immediately: true);
+            }
         }
     }
 
@@ -292,12 +324,13 @@ public sealed class CSharpLanguageSession : ILanguageSession
             }
 
             _disposed = true;
+            StopSemantics();
             _stop.Cancel();
             _resume.Set();
             Monitor.PulseAll(_gate);
             if (!_working)
             {
-                Release();
+                ReleaseHandles();
             }
         }
 
@@ -319,7 +352,8 @@ public sealed class CSharpLanguageSession : ILanguageSession
                 return;
             }
 
-            if (change.Before.Version == _latest.Version && ReferenceEquals(change.Before.Buffer, _buffer))
+            bool continuous = change.Before.Version == _latest.Version && ReferenceEquals(change.Before.Buffer, _buffer);
+            if (continuous)
             {
                 _pending = SnapshotSourceText.Compose(_pending, SnapshotSourceText.Collapse(change.Edits));
             }
@@ -332,6 +366,7 @@ public sealed class CSharpLanguageSession : ILanguageSession
 
             _latest = change.After;
             Kick();
+            NoteSemanticChange(change, continuous);
         }
     }
 
@@ -462,11 +497,11 @@ public sealed class CSharpLanguageSession : ILanguageSession
         Monitor.PulseAll(_gate);
         if (_disposed)
         {
-            Release();
+            ReleaseHandles();
         }
     }
 
-    private void Release()
+    private void ReleaseHandles()
     {
         if (_released)
         {

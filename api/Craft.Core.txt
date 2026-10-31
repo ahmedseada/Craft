@@ -1,4 +1,5 @@
 sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions>
+  Craft.Abstractions.LanguageSettings ToLanguageSettings()
   Craft.Core.CraftOptions <Clone>$()
   System.Boolean AutoCloseBrackets { get; init; }
   System.Boolean Equals(Craft.Core.CraftOptions other)
@@ -8,21 +9,28 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> PluginFolders { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> WorkspaceReaders { get; init; }
   System.Int32 AutosaveSeconds { get; init; }
   System.Int32 BottomMarginLines { get; init; }
   System.Int32 BracketScanLines { get; init; }
   System.Int32 BufferChunkCharacters { get; init; }
   System.Int32 CaretBlinkMilliseconds { get; init; }
+  System.Int32 CompletionDelayMilliseconds { get; init; }
+  System.Int32 CompletionRows { get; init; }
+  System.Int32 DiagnosticsDelayMilliseconds { get; init; }
   System.Int32 DoubleClickMilliseconds { get; init; }
   System.Int32 FindCountLimit { get; init; }
   System.Int32 GetHashCode()
   System.Int32 GutterPaddingCells { get; init; }
   System.Int32 HostLogLines { get; init; }
+  System.Int32 HoverDelayMilliseconds { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
+  System.Int32 ProblemsListLimit { get; init; }
   System.Int32 ProposalPreviewCharacters { get; init; }
   System.Int32 RecentLimit { get; init; }
   System.Int32 ScrollMarginColumns { get; init; }
   System.Int32 ScrollMarginLines { get; init; }
+  System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 UndoGroupMilliseconds { get; init; }
   System.Single CaretWidth { get; init; }
@@ -41,11 +49,13 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String ResolveDataFolder()
   System.String Theme { get; init; }
   System.String ToString()
+  System.String WorkspaceConfiguration { get; init; }
   ctor()
   static Craft.Core.CraftOptions FromEnvironment(Craft.Core.CraftOptions baseline = null)
   static Craft.Core.CraftOptions FromVariables(System.Func<System.String, System.String> read, Craft.Core.CraftOptions baseline = null)
   static System.Collections.Generic.IReadOnlyList<Craft.Core.CraftVariable> Variables { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceIgnore { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceReaders { get; }
 sealed class Craft.Core.CraftVariable : System.IEquatable<Craft.Core.CraftVariable>
   Craft.Core.CraftVariable <Clone>$()
   System.Boolean Equals(Craft.Core.CraftVariable other)

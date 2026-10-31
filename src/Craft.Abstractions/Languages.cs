@@ -36,6 +36,13 @@ public interface ILanguage : IKind
     /// and classifies its snapshots. Dispose it when the document closes.
     /// </summary>
     ILanguageSession Open(ITextBuffer buffer);
+
+    /// <summary>
+    /// A session over <paramref name="buffer"/> that knows its file and workspace (<paramref name="context"/>), which a
+    /// semantic layer (<see cref="ISemanticLanguageSession"/>) needs; a language with none ignores the context (the default
+    /// calls <see cref="Open(ITextBuffer)"/>).
+    /// </summary>
+    ILanguageSession Open(ITextBuffer buffer, LanguageOpenContext context) => Open(buffer);
 }
 
 /// <summary>
@@ -43,7 +50,8 @@ public interface ILanguage : IKind
 /// called on the UI thread for the lines about to be drawn, and it never waits. A session may parse off the UI thread:
 /// it then classifies a snapshot newer than its last parse from that parse (the text the change touched left plain),
 /// raises <see cref="Reclassified"/> when a newer parse lands, and lets the editor wait a bounded time for it
-/// (<see cref="WaitUntilClassified"/>). The semantic layer (diagnostics, completion) comes later and runs off the UI thread.
+/// (<see cref="WaitUntilClassified"/>). The semantic layer (diagnostics, completion, signature help, hover, definition, formatting), for a language that has
+/// one, is <see cref="ISemanticLanguageSession"/>: it runs off the UI thread.
 /// </summary>
 public interface ILanguageSession : IDisposable
 {

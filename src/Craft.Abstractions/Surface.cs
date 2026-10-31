@@ -106,6 +106,9 @@ public enum EditorKey
     /// <summary>F3 (find next).</summary>
     F3,
 
+    /// <summary>Space, as a key only with a modifier (Ctrl+Space asks for completion); typed, it arrives as text.</summary>
+    Space,
+
     /// <summary>A (select all with Control).</summary>
     A,
 

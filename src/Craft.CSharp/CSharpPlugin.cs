@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.CSharp;
+using Craft.CSharp.Workspaces;
 using Idrak.Abstraction.Plugins;
 using Microsoft.CodeAnalysis;
 
@@ -18,13 +19,15 @@ namespace Craft.CSharp;
 public sealed class CSharpPlugin() : IdrakPlugin("csharp")
 {
     /// <summary>What it brings.</summary>
-    public static string Summary => "C# on Roslyn: syntactic classification of .cs and .csx files";
+    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers";
 
     /// <inheritdoc />
     protected override void RegisterParts()
     {
         Part(() => EditorLanguages.Register(new CSharpLanguage()), () => EditorLanguages.Unregister(CSharpLanguage.RegularName));
         Part(() => EditorLanguages.Register(new CSharpLanguage(SourceCodeKind.Script)), () => EditorLanguages.Unregister(CSharpLanguage.ScriptName));
+        Part(() => WorkspaceReaders.Register(new CsprojWorkspaceReader()), () => WorkspaceReaders.Unregister(CsprojWorkspaceReader.ReaderName));
+        Part(() => WorkspaceReaders.Register(new LooseWorkspaceReader()), () => WorkspaceReaders.Unregister(LooseWorkspaceReader.ReaderName));
     }
 }
 

@@ -75,6 +75,7 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
         VirtualKey.Escape => EditorKey.Escape,
         VirtualKey.Insert => EditorKey.Insert,
         VirtualKey.F3 => EditorKey.F3,
+        VirtualKey.Space => EditorKey.Space,
         VirtualKey.A => EditorKey.A,
         VirtualKey.C => EditorKey.C,
         VirtualKey.F => EditorKey.F,
@@ -177,7 +178,14 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
         private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
             var key = Map(e.Key);
-            if (key != EditorKey.None && _sink.OnKey(key, Modifiers()))
+            var modifiers = Modifiers();
+            if (key == EditorKey.Space && (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == 0)
+            {
+                // A plain (or shifted) space is typed text: it arrives through CharacterReceived.
+                return;
+            }
+
+            if (key != EditorKey.None && _sink.OnKey(key, modifiers))
             {
                 e.Handled = true;
             }

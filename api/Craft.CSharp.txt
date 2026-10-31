@@ -3,6 +3,7 @@ static class Craft.CSharp.CSharpClassifier
 sealed class Craft.CSharp.CSharpLanguage : Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
   Craft.Abstractions.LanguageRules Rules { get; }
   Craft.CSharp.CSharpLanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
+  Craft.CSharp.CSharpLanguageSession Open(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
   Microsoft.CodeAnalysis.CSharp.CSharpParseOptions ParseOptions { get; }
   Microsoft.CodeAnalysis.SourceCodeKind Kind { get; }
   System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
@@ -14,18 +15,35 @@ sealed class Craft.CSharp.CSharpLanguage : Craft.Abstractions.ILanguage, Idrak.A
   ctor(Microsoft.CodeAnalysis.SourceCodeKind kind)
   static Craft.CSharp.CSharpLanguage Script { get; }
   static System.Void Register()
+  static System.Void ReleaseWorkspaces()
   static System.Void Unregister()
-sealed class Craft.CSharp.CSharpLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
+sealed class Craft.CSharp.CSharpLanguageSession : Craft.Abstractions.ILanguageSession, Craft.Abstractions.ISemanticLanguageSession, System.IDisposable
+  Craft.Abstractions.DiagnosticSet Diagnostics { get; }
   Craft.Abstractions.ITextSnapshot Snapshot { get; }
+  Craft.Abstractions.LanguageOpenContext Context { get; }
+  Craft.Abstractions.SemanticTelemetry Telemetry { get; }
   Microsoft.CodeAnalysis.SyntaxTree Tree { get; }
   System.Boolean IsParsing { get; }
+  System.Boolean IsSemanticDeferred { get; }
   System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
   System.Exception ParseError { get; }
+  System.Exception SemanticError { get; }
+  System.Int32 DiagnosticsPasses { get; }
   System.Int32 Updates { get; }
+  System.Threading.Tasks.Task WhenDiagnosticsIdle()
   System.Threading.Tasks.Task WhenIdle()
+  System.Threading.Tasks.Task<Craft.Abstractions.CompletionItem> ResolveCompletionAsync(Craft.Abstractions.CompletionList list, Craft.Abstractions.CompletionItem item, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.CompletionList> GetCompletionsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.CompletionTrigger trigger, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.DefinitionLocation> GetDefinitionAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.HoverInfo> GetHoverAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.SignatureHelp> GetSignatureHelpAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
   System.TimeSpan LastUpdate { get; }
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   System.Void Dispose()
+  System.Void EnableSemantics()
+  System.Void Release()
+  event System.EventHandler DiagnosticsChanged
   event System.EventHandler Reclassified
 sealed class Craft.CSharp.CSharpPlugin : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
   ctor()
@@ -54,3 +72,34 @@ sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.Sourc
   static Craft.CSharp.SnapshotSourceText Since(Craft.Abstractions.ITextSnapshot after, System.Int32 previousVersion, Microsoft.CodeAnalysis.Text.TextChangeRange change)
   static Microsoft.CodeAnalysis.Text.TextChangeRange? Collapse(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits)
   static Microsoft.CodeAnalysis.Text.TextChangeRange? Compose(Microsoft.CodeAnalysis.Text.TextChangeRange? first, Microsoft.CodeAnalysis.Text.TextChangeRange? second)
+sealed class Craft.CSharp.Workspaces.CsprojWorkspaceReader : Craft.Abstractions.IWorkspaceReader, Idrak.Abstraction.IKind
+  Craft.Abstractions.WorkspaceModel Read(Craft.Abstractions.WorkspaceReadRequest request, System.Threading.CancellationToken cancellationToken)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String ReaderName = csproj
+  ctor()
+  static Craft.Abstractions.WorkspaceProject Read(System.String projectFile, Craft.Abstractions.LanguageSettings settings)
+  static System.String FindProject(System.String folder, System.String root)
+sealed class Craft.CSharp.Workspaces.FrameworkReferences : System.IEquatable<Craft.CSharp.Workspaces.FrameworkReferences>
+  Craft.CSharp.Workspaces.FrameworkReferences <Clone>$()
+  System.Boolean Equals(Craft.CSharp.Workspaces.FrameworkReferences other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Files { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Notes { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<System.String> Files, out System.Collections.Generic.IReadOnlyList<System.String> Notes)
+  ctor(System.Collections.Generic.IReadOnlyList<System.String> Files, System.Collections.Generic.IReadOnlyList<System.String> Notes)
+sealed class Craft.CSharp.Workspaces.LooseWorkspaceReader : Craft.Abstractions.IWorkspaceReader, Idrak.Abstraction.IKind
+  Craft.Abstractions.WorkspaceModel Read(Craft.Abstractions.WorkspaceReadRequest request, System.Threading.CancellationToken cancellationToken)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String ProjectName = Loose files
+  const System.String ReaderName = loose
+  ctor()
+static class Craft.CSharp.Workspaces.ReferenceAssemblies
+  static Craft.CSharp.Workspaces.FrameworkReferences For(System.String targetFramework, System.Collections.Generic.IEnumerable<System.String> frameworkReferences = null)
+  static System.String BaseFramework(System.String targetFramework)
+  static System.String RunningFramework { get; }
+  static System.String RuntimeFolder { get; }
+  static System.Void Clear()

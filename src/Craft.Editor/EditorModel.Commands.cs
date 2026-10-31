@@ -24,6 +24,12 @@ public sealed partial class EditorModel
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
         bool control = (modifiers & KeyModifiers.Control) != 0;
         bool alt = (modifiers & KeyModifiers.Alt) != 0;
+        if (OnSemanticKey(key, modifiers))
+        {
+            NoteInput();
+            return true;
+        }
+
         if (alt && key is not (EditorKey.Left or EditorKey.Right or EditorKey.Up or EditorKey.Down))
         {
             return false;
@@ -57,6 +63,10 @@ public sealed partial class EditorModel
         {
             _inputPending = false;
         }
+        else
+        {
+            AfterKey(key);
+        }
 
         return handled;
     }
@@ -74,6 +84,7 @@ public sealed partial class EditorModel
         var snapshot = Snapshot;
         if (text.Length == 1 && selection.IsEmpty && TryOvertypeClose(text[0]))
         {
+            AfterTyped(text);
             return;
         }
 
@@ -114,6 +125,7 @@ public sealed partial class EditorModel
         }
 
         EnsureCaretVisible();
+        AfterTyped(text);
     }
 
     /// <summary>
@@ -133,6 +145,15 @@ public sealed partial class EditorModel
         _lastClickY = viewY;
         _pointerDown = true;
 
+        if (PopupRowAt(viewX, viewY) is { } row)
+        {
+            _pointerDown = false;
+            Completion.Click(row, _clickCount);
+            return;
+        }
+
+        CloseTooltips();
+        _completion?.Close();
         int position = PositionFromView(viewX, viewY);
         if ((modifiers & KeyModifiers.Shift) != 0 && _clickCount == 1)
         {

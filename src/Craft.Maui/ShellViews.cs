@@ -18,14 +18,16 @@ public static class ThemeColors
 }
 
 /// <summary>A row of the folder tree as the list shows it.</summary>
-/// <param name="Text">The marker and the name.</param>
+/// <param name="Text">The name.</param>
 /// <param name="Indent">The row's indent.</param>
 /// <param name="Color">The text's colour.</param>
 /// <param name="Path">The entry's full path (a row is found by it, so rows after an inserted one stay the same items).</param>
 /// <param name="Active">Whether it is the active file's row (on the selection's fill).</param>
 /// <param name="FontFamily">The interface's font.</param>
 /// <param name="IsFolder">Whether it is a folder's row.</param>
-public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, bool Active, string? FontFamily, bool IsFolder = false);
+/// <param name="Badge">The file type's icon (<see cref="FileIcons"/>, as quick open shows it), or a folder's chevron.</param>
+/// <param name="BadgeColor">The icon's colour.</param>
+public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, bool Active, string? FontFamily, bool IsFolder = false, string Badge = "", Color? BadgeColor = null);
 
 /// <summary>
 /// The folder tree (<see cref="FolderTree"/>) as a virtualized list (only the rows on screen are made): a folder's row
@@ -172,11 +174,18 @@ public sealed class FolderTreeView : ContentView
 
     private ContentView MakeRow()
     {
-        var label = new Label { FontSize = 13, LineBreakMode = LineBreakMode.TailTruncation, Padding = new Thickness(0, 4) };
+        var label = new Label { FontSize = 13, LineBreakMode = LineBreakMode.TailTruncation, Padding = new Thickness(0, 4), VerticalOptions = LayoutOptions.Center };
         label.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Text);
-        label.SetBinding(MarginProperty, static (FolderTreeItem item) => item.Indent);
         label.SetBinding(Label.FontFamilyProperty, static (FolderTreeItem item) => item.FontFamily);
-        var row = new ContentView { Content = label };
+        // The file's icon by its type, as quick open shows it (FileIcons: a plug-in's types too); a folder's chevron.
+        var badge = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, WidthRequest = 22, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center };
+        badge.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Badge);
+        badge.SetBinding(Label.TextColorProperty, static (FolderTreeItem item) => item.BadgeColor);
+        var line = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) }, ColumnSpacing = 4 };
+        line.SetBinding(MarginProperty, static (FolderTreeItem item) => item.Indent);
+        line.Add(badge, 0, 0);
+        line.Add(label, 1, 0);
+        var row = new ContentView { Content = line };
         // Phase X: the row's hover, pressed and active looks from the theme (one mechanism); its text follows them.
         InteractiveStates? states = null;
         row.BindingContextChanged += (_, _) =>
@@ -233,10 +242,23 @@ public sealed class FolderTreeView : ContentView
         for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            var marker = row.Entry.IsFolder ? row.IsExpanded ? "▾ " : "▸ " : "   ";
             bool active = !row.Entry.IsFolder && string.Equals(row.Entry.FullPath, _activePath, StringComparison.OrdinalIgnoreCase);
-            items[i] = new FolderTreeItem(marker + row.Entry.Name, new Thickness(14 + (row.Depth * _indent), 0, 14, 0), _textColor, row.Entry.FullPath,
-                active, _fontFamily, row.Entry.IsFolder);
+            string badge;
+            Color badgeColor;
+            if (row.Entry.IsFolder)
+            {
+                badge = row.IsExpanded ? "▾" : "▸";
+                badgeColor = _textColor;
+            }
+            else
+            {
+                var icon = FileIcons.For(row.Entry.Name);
+                badge = icon.Badge;
+                badgeColor = ThemeColors.Of(icon.Argb);
+            }
+
+            items[i] = new FolderTreeItem(row.Entry.Name, new Thickness(8 + (row.Depth * _indent), 0, 14, 0), _textColor, row.Entry.FullPath,
+                active, _fontFamily, row.Entry.IsFolder, badge, badgeColor);
         }
 
         // Only the run that differs is replaced; the rows before and after it stay the same items on screen.

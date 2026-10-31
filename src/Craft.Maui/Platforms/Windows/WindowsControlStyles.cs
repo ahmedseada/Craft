@@ -56,7 +56,7 @@ public static class WindowsControlStyles
         {
             if (view is MauiElement { ClassId: CraftDialog.RowClassId } && handler.PlatformView is { } button)
             {
-                button.HorizontalContentAlignment = HorizontalAlignment.Left;
+                button.HorizontalContentAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left;
             }
         });
     }
@@ -64,7 +64,7 @@ public static class WindowsControlStyles
     private static void Borderless(Microsoft.UI.Xaml.Controls.TextBox box)
     {
         var none = new WinThickness(0);
-        var clear = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        var clear = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
         foreach (var key in BorderThicknesses)
         {
             box.Resources[key] = none;

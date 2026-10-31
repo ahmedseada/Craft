@@ -57,6 +57,10 @@ public sealed class EditorPage : ContentPage
     private readonly ContentView _panelsBox;
     private readonly Grid _body;
     private readonly List<IDisposable> _platformHooks = [];
+    private const int PlatformHookAttempts = 50;                 // 50 tries 100 ms apart: five seconds for WinUI to attach the content
+    private const int PlatformHookRetryMilliseconds = 100;
+    private bool _keysRouted;
+    private bool _closeGuarded;
     private Window? _window;
     private EditorView? _shown;
     private bool _started;
@@ -279,22 +283,55 @@ public sealed class EditorPage : ContentPage
         return csharp ? model.LanguageName + " (the C# plug-in is not installed or is disabled)" : model.LanguageName;
     }
 
-    // The platform's pieces need the window's native view, which exists once the page has appeared.
-    private void HookPlatform()
+    // The platform's pieces need the window's native view and its content, which WinUI may attach after the page has
+    // appeared: each piece is hooked on its own and retried until it takes (the keys outside the editor, the
+    // unsaved-changes question on closing), and only a piece still missing after the tries is reported.
+    private void HookPlatform(int attempt = 0)
     {
         if (_window is null)
         {
             return;
         }
 
-        try
+        string? missing = null;
+        if (!_keysRouted)
         {
-            _platformHooks.Add(_startup.Platform.RouteKeys(_window, _host));
-            _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Tabs.HasUnsaved, () => _shell.ConfirmCloseAllAsync()));
+            try
+            {
+                _platformHooks.Add(_startup.Platform.RouteKeys(_window, _host));
+                _keysRouted = true;
+            }
+            catch (InvalidOperationException error)
+            {
+                missing = error.Message;
+            }
         }
-        catch (InvalidOperationException error)
+
+        if (!_closeGuarded)
         {
-            _notice.Text = error.Message;
+            try
+            {
+                _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Tabs.HasUnsaved, () => _shell.ConfirmCloseAllAsync()));
+                _closeGuarded = true;
+            }
+            catch (InvalidOperationException error)
+            {
+                missing ??= error.Message;
+            }
+        }
+
+        if (missing is null)
+        {
+            return;
+        }
+
+        if (attempt < PlatformHookAttempts)
+        {
+            Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(PlatformHookRetryMilliseconds), () => HookPlatform(attempt + 1));
+        }
+        else
+        {
+            _notice.Text = missing;
         }
     }
 

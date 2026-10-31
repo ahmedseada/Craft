@@ -407,17 +407,39 @@ reimplements a trainer, a reward or an environment (a gap is fixed in Idrak firs
 
 | Piece | What it does | Idrak contract |
 |---|---|---|
-| Episodes from the editor | Opt-in, off by default, local only: each inline completion, chat diff, code action and agent task becomes an episode (the context, the model's answer, what the user did: accepted, edited after accepting and how far, rejected, undone). Stored under the app's data folder per workspace, with a size cap; the user sees, exports and deletes them on the Learning panel. | `Trajectory`, `EpisodeInfo` keys, `PromptsEnvironmentKind`'s prompt data |
+| Episodes from the editor | Only after the learning consent (below), local unless the sharing consent is also given: each inline completion, chat diff, code action and agent task becomes an episode (the context, the model's answer, what the user did: accepted, edited after accepting and how far, rejected, undone). Stored under the app's data folder per workspace, with a size cap; the user sees, exports and deletes them on the Learning panel. | `Trajectory`, `EpisodeInfo` keys, `PromptsEnvironmentKind`'s prompt data |
 | Rewards | The user's verdict (accepted and kept, edited, rejected, undone) as an editor reward registered by the plug-in; for code, whether it builds and its tests pass, through `csharp-build` and `csharp-tests` run in a registered sandbox (approved, or `container`); a judge model optional. Weights are settings. | `RewardFunctions` (Craft's "editor-verdict" registered by the plug-in; Idrak's `csharp-*`, `tests-passed`, `JudgeReward`) |
 | Tasks from the workspace | The workspace's own tests make tasks: a test that fails (or one the user marks) becomes a `CodingTask` whose hidden check is `dotnet test`; the suite is written in `task.json` form so `idrak reinforce` reads it too. | `CodingTask`, `CodingSuite`, `CodingWorkspace`, the "csharp" environment |
 | Training | In the background when the machine is idle (or on demand), bounded by `ComputeResources` and the settings: the policy is the user's local model, trained as an adapter (never the base weights), with the loss and the advantage estimator chosen by name; live progress (episodes, reward, loss, time left) in the status bar and the panel; stoppable at any step. | `ReinforcementTrainer`, `LanguageModelPolicy`, `PolicyLosses`, `AdvantageEstimators`, `FineTuning`, `OnPolicyDistiller` |
 | Promotion | A trained adapter replaces the current one only if it scores better on a held-out set of the workspace's tasks and episodes, measured and shown; one click rolls back; every version kept until deleted. | `CodingVerifier`, the coding suite's evaluation |
 | Testing the library | The same plug-in is Idrak's reinforcement stack's test from a real host: the "csharp" environment on a small suite built from Craft's own repository and from fixtures, run headless; the five checks of phase P hold (registered by name, overridden, "not registered" for a missing one, loaded from the plug-in folder, the same assembly under `idrak reinforce`). | `EnvironmentKinds`, `RewardFunctions`, `IdrakPlugins` |
 
-Settings (each `CRAFT_LEARN_*` and in Settings): on or off (off by default), what is recorded (completions, chat,
+**Consent (the owner's requirement, 2026-10-31: learning enabled with clear sharing consent).** Learning is offered,
+never assumed: the first time an AI plug-in answers, a consent screen asks, in plain words and in one place, for two
+separate choices, each with its own switch and nothing pre-ticked:
+
+1. **Learn on this machine:** what is recorded (the context sent to the model, its answer, and what the user did with
+   it), where it is stored (the folder shown, openable), how much (the cap), how long it is kept, what training runs
+   and when (idle only, the compute limits), and that a learned model still only proposes. Yes turns learning on;
+   No keeps the editor exactly as it was. Per workspace, with "all workspaces" as the default scope the user can change.
+2. **Share what was learned:** a separate consent, asked only after the first one and never bundled with it, naming
+   exactly what would leave the machine (episodes, an adapter, or only scores), to where (the destination is a setting
+   with no default: nothing is shared until the user names one), and that it can be withdrawn. Before each share the
+   user sees the items about to go (count, size, a preview of each, files and paths it touches) and confirms; secrets
+   and files matched by `.gitignore`, `.craft/learn-ignore` and a secrets scanner are left out, and the list says so.
+
+Each consent is stored with its time, its scope and the version of the consent text; a changed text (what is recorded,
+what is shared, where) asks again. Withdrawing is one switch in Settings and on the Learning panel: recording stops at
+once, nothing more is shared, and the user chooses whether the stored episodes and adapters are deleted (a delete
+removes them and says how much was freed). The status bar shows a recording mark while episodes are being recorded and a
+sharing mark while a share runs. Without both consents nothing is shared; without the first, nothing is recorded. Tests:
+no episode is written and no network request is made before consent; a changed consent text asks again; withdrawal stops
+recording on the next answer and deletes on request; a share sends exactly the previewed items and nothing ignored.
+
+Settings (each `CRAFT_LEARN_*` and in Settings): the two consents (recorded, never set by a variable alone: a variable can only turn them off), what is recorded (completions, chat,
 agent), the episode store's folder and cap, the reward weights, the sandbox, idle-only or on demand, the compute limits,
-the loss and estimator names, the held-out share and the promotion margin. Privacy: episodes and adapters never leave
-the machine; the status bar shows when a run is training. No silent edit still holds: a learned model proposes, the
+the loss and estimator names, the held-out share and the promotion margin. Privacy: episodes and adapters leave the machine only under the sharing consent, to the destination the
+user named, after the preview; the status bar shows when a run is training. No silent edit still holds: a learned model proposes, the
 user accepts.
 
 Checks: a fake policy over a fixture C# workspace with a failing test runs episodes through the "csharp" environment

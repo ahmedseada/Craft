@@ -782,6 +782,17 @@ sealed class Craft.Editor.Shell.DocumentTabs : System.IDisposable
   event System.EventHandler ActiveChanged
   event System.EventHandler TabsChanged
   event System.EventHandler<Craft.Editor.Shell.DocumentTab> TabChanged
+sealed class Craft.Editor.Shell.DropResult : System.IEquatable<Craft.Editor.Shell.DropResult>
+  Craft.Editor.Shell.DropResult <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.DropResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Files { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Skipped { get; init; }
+  System.Int32 GetHashCode()
+  System.String Folder { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<System.String> Files, out System.String Folder, out System.Collections.Generic.IReadOnlyList<System.String> Skipped)
+  ctor(System.Collections.Generic.IReadOnlyList<System.String> Files, System.String Folder, System.Collections.Generic.IReadOnlyList<System.String> Skipped)
 sealed class Craft.Editor.Shell.EmptyAction : System.IEquatable<Craft.Editor.Shell.EmptyAction>
   Craft.Editor.Shell.EmptyAction <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.EmptyAction other)
@@ -806,17 +817,6 @@ sealed class Craft.Editor.Shell.EmptyState : System.IEquatable<Craft.Editor.Shel
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String Text, out System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions)
   ctor(System.String Title, System.String Text, System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions)
-sealed class Craft.Editor.Shell.DropResult : System.IEquatable<Craft.Editor.Shell.DropResult>
-  Craft.Editor.Shell.DropResult <Clone>$()
-  System.Boolean Equals(Craft.Editor.Shell.DropResult other)
-  System.Boolean Equals(System.Object obj)
-  System.Collections.Generic.IReadOnlyList<System.String> Files { get; init; }
-  System.Collections.Generic.IReadOnlyList<System.String> Skipped { get; init; }
-  System.Int32 GetHashCode()
-  System.String Folder { get; init; }
-  System.String ToString()
-  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<System.String> Files, out System.String Folder, out System.Collections.Generic.IReadOnlyList<System.String> Skipped)
-  ctor(System.Collections.Generic.IReadOnlyList<System.String> Files, System.String Folder, System.Collections.Generic.IReadOnlyList<System.String> Skipped)
 sealed class Craft.Editor.Shell.FolderListing : System.IEquatable<Craft.Editor.Shell.FolderListing>
   Craft.Editor.Shell.FolderListing <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.FolderListing other)
@@ -1462,18 +1462,6 @@ sealed class Craft.Editor.Shell.TelemetryRow : System.IEquatable<Craft.Editor.Sh
   System.String Unit { get; init; }
   System.Void Deconstruct(out System.String Source, out System.String Metric, out System.Double Last, out System.String Unit, out System.Int32 Count, out System.Double Mean)
   ctor(System.String Source, System.String Metric, System.Double Last, System.String Unit, System.Int32 Count, System.Double Mean)
-sealed class Craft.Editor.SmoothScroll
-  System.Boolean IsMoving { get; }
-  System.Boolean Step(System.Int64 now, System.Int32 milliseconds, System.TimeProvider time)
-  System.Double TargetX { get; }
-  System.Double TargetY { get; }
-  System.Double X { get; }
-  System.Double Y { get; }
-  System.Void Jump(System.Double x, System.Double y)
-  System.Void ScrollBy(System.Double dx, System.Double dy, System.Double maxX, System.Double maxY, System.Int64 now)
-  System.Void ScrollTo(System.Double x, System.Double y, System.Double maxX, System.Double maxY, System.Int64 now)
-  ctor()
-  static System.Double WheelPixels(System.Double delta, System.Int32 lines, System.Double lineHeight)
 sealed class Craft.Editor.Shell.UndoBar : System.IDisposable
   Craft.Editor.Shell.UndoBarEntry Current { get; }
   Craft.Editor.Shell.UndoBarEntry Show(System.String text, System.Action undo)
@@ -1530,6 +1518,18 @@ sealed class Craft.Editor.Shell.WelcomeShortcut : System.IEquatable<Craft.Editor
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String CommandId, out System.String Keys)
   ctor(System.String Title, System.String CommandId, System.String Keys)
+sealed class Craft.Editor.SmoothScroll
+  System.Boolean IsMoving { get; }
+  System.Boolean Step(System.Int64 now, System.Int32 milliseconds, System.TimeProvider time)
+  System.Double TargetX { get; }
+  System.Double TargetY { get; }
+  System.Double X { get; }
+  System.Double Y { get; }
+  System.Void Jump(System.Double x, System.Double y)
+  System.Void ScrollBy(System.Double dx, System.Double dy, System.Double maxX, System.Double maxY, System.Int64 now)
+  System.Void ScrollTo(System.Double x, System.Double y, System.Double maxX, System.Double maxY, System.Int64 now)
+  ctor()
+  static System.Double WheelPixels(System.Double delta, System.Int32 lines, System.Double lineHeight)
 sealed class Craft.Editor.Terminal.OutputTerminalSession : Craft.Abstractions.ITerminalSession, System.IDisposable
   System.Boolean Append(System.String text)
   System.Boolean IsOpen { get; }

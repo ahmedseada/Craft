@@ -2556,7 +2556,7 @@ terminal) and every item above holds; the measured numbers are written here.
   `FuzzyMatch.Runs`: the name's runs, or the folder's and the name's when the path matched); recent first
   (`CRAFT_QUICK_OPEN_RECENT`, 20: every file opened, from anywhere, and every command picked; the recent list's files seed
   it at start; an empty query lists them in the order used, a query ranks them a little ahead; marked "recent"); each
-  command's keys read from the bindings in effect (`EditorHost.KeysOf`: the user's, then the keymap's, then the registered,
+  command's keys read from the bindings in effect (slice 1's `EditorHost.KeysOf`: the user's, then the keymap's, then the registered,
   then the editor's own; a remap or an unbinding shows at once); file icons by language (`Craft.Abstractions.FileIcons`, a
   registry by extension with the library's defaults for the files a C# developer opens, a language plug-in registers its
   own, `Plain` for the rest); Up and Down (wrapping), Page Up and Down, Ctrl+Home and Ctrl+End, Enter, Escape (the focus goes

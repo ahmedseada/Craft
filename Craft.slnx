@@ -3,6 +3,7 @@
     <Project Path="src/Craft.Abstractions/Craft.Abstractions.csproj" />
     <Project Path="src/Craft.Core/Craft.Core.csproj" />
     <Project Path="src/Craft.CSharp/Craft.CSharp.csproj" />
+    <Project Path="src/Craft.Ai/Craft.Ai.csproj" />
     <Project Path="src/Craft.Editor/Craft.Editor.csproj" />
     <Project Path="src/Craft.Maui/Craft.Maui.csproj" />
     <Project Path="src/Craft.App/Craft.App.csproj" />

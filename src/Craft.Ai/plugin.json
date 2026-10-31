@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Ai",
+  "version": "0.1.0",
+  "summary": "The AI host: the editor's tools (also served over MCP, off until asked), the diff for every model edit, the local model provider",
+  "contractVersion": "1.0",
+  "capabilities": ["files", "network", "model"]
+}

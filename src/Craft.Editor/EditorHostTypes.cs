@@ -16,6 +16,81 @@ namespace Craft.Editor;
 /// <param name="Summary">A short description for the confirmation: how many edits, which lines, the characters removed and added, and a preview.</param>
 public sealed record EditProposal(IEditorDocument Document, IReadOnlyList<TextEdit> Edits, string Title, string Source, int Version, string Summary)
 {
+    /// <summary>
+    /// What the edits do as a line diff (the lines they touch with <c>CRAFT_DIFF_CONTEXT_LINES</c> around them): what the
+    /// diff-and-accept view shows. The host makes it; empty for a proposal made elsewhere.
+    /// </summary>
+    public TextDiff Diff { get; init; } = TextDiff.Empty;
+
+    /// <summary>The hunk of <see cref="Diff"/> each edit belongs to (by index, one a edit); empty: every edit in hunk 0.</summary>
+    public IReadOnlyList<int> HunkOfEdit { get; init; } = [];
+
+    /// <summary>How the edits were placed (<see cref="ProposedEdits.Placement"/>), or null.</summary>
+    public string? Placement { get; init; }
+
+    /// <summary>Where they came from (<see cref="ProposedEdits.Origin"/>, else <see cref="Source"/>).</summary>
+    public string? Origin { get; init; }
+
+    /// <summary>
+    /// The language's check of the change before it is accepted (diagnostics now and after; <c>CRAFT_DIFF_CHECK</c>),
+    /// running while the user looks; its result is null when the language has no semantic layer or cannot tell.
+    /// </summary>
+    public Task<ProposalCheck?> Check { get; init; } = Task.FromResult<ProposalCheck?>(null);
+
+    /// <summary>The edits of the hunks <paramref name="answers"/> accepts (one answer a hunk), in order.</summary>
+    public TextEdit[] Accepted(IReadOnlyList<bool> answers)
+    {
+        ArgumentNullException.ThrowIfNull(answers);
+        var accepted = new List<TextEdit>(Edits.Count);
+        for (int i = 0; i < Edits.Count; i++)
+        {
+            int hunk = i < HunkOfEdit.Count ? HunkOfEdit[i] : 0;
+            if (hunk < answers.Count && answers[hunk])
+            {
+                accepted.Add(Edits[i]);
+            }
+        }
+
+        return [.. accepted];
+    }
+
+    /// <summary>
+    /// The hunk of <paramref name="diff"/> each of <paramref name="edits"/> belongs to: the first whose old lines meet the
+    /// edit's lines (an edit that changes no line goes with the nearest hunk before it).
+    /// </summary>
+    public static int[] HunksOf(ITextSnapshot snapshot, IReadOnlyList<TextEdit> edits, TextDiff diff)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(edits);
+        ArgumentNullException.ThrowIfNull(diff);
+        var result = new int[edits.Count];
+        var hunks = diff.Hunks;
+        for (int i = 0; i < edits.Count; i++)
+        {
+            int first = snapshot.GetLineIndex(edits[i].Start) + 1;
+            int last = snapshot.GetLineIndex(edits[i].End) + 1;
+            int found = 0;
+            for (int h = 0; h < hunks.Count; h++)
+            {
+                int start = hunks[h].OldStart;
+                int end = hunks[h].OldStart + Math.Max(hunks[h].OldCount, 1) - 1;
+                if (start <= last)
+                {
+                    found = h;
+                }
+
+                if (start <= last && end >= first)
+                {
+                    break;
+                }
+            }
+
+            result[i] = found;
+        }
+
+        return result;
+    }
+
     /// <summary>The summary of <paramref name="edits"/> to <paramref name="snapshot"/>, its preview cut at <paramref name="previewCharacters"/>.</summary>
     public static string Summarize(ITextSnapshot snapshot, string? filePath, IReadOnlyList<TextEdit> edits, int previewCharacters)
     {
@@ -56,6 +131,46 @@ public sealed record EditProposal(IEditorDocument Document, IReadOnlyList<TextEd
         }
 
         return text.ToString();
+    }
+}
+
+/// <summary>What the language reports before and after a proposed change (the diff view's "before you accept").</summary>
+/// <param name="ErrorsBefore">Errors in the document now.</param>
+/// <param name="WarningsBefore">Warnings now.</param>
+/// <param name="ErrorsAfter">Errors with the change applied.</param>
+/// <param name="WarningsAfter">Warnings with the change applied.</param>
+/// <param name="FirstErrors">The first errors after the change (id and message), at most five.</param>
+public sealed record ProposalCheck(int ErrorsBefore, int WarningsBefore, int ErrorsAfter, int WarningsAfter, IReadOnlyList<string> FirstErrors)
+{
+    /// <summary>The check of <paramref name="edits"/> to <paramref name="snapshot"/> through <paramref name="session"/>; null when it cannot tell or fails.</summary>
+    public static async Task<ProposalCheck?> RunAsync(ISemanticLanguageSession session, ITextSnapshot snapshot, IReadOnlyList<TextEdit> edits, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        try
+        {
+            var before = session.Diagnostics;
+            if (await session.DiagnoseEditsAsync(snapshot, edits, cancellationToken).ConfigureAwait(false) is not { } after)
+            {
+                return null;
+            }
+
+            var first = new List<string>(5);
+            foreach (var item in after.Items)
+            {
+                if (item.Severity == DiagnosticSeverity.Error && first.Count < 5)
+                {
+                    first.Add($"{item.Id}: {item.Message}");
+                }
+            }
+
+            return new ProposalCheck(before.Errors, before.Warnings, after.Errors, after.Warnings, first);
+        }
+#pragma warning disable CA1031 // A check that fails leaves the diff without it; the user still decides.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            return null;
+        }
     }
 }
 

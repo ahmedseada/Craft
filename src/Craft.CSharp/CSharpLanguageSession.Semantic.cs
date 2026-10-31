@@ -158,6 +158,35 @@ public sealed partial class CSharpLanguageSession
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The workspace's document for <paramref name="snapshot"/>, forked with the edits (<c>Document.WithText</c>: a new
+    /// solution beside the workspace's, which is not changed) and diagnosed as the live pass is (plan phase A1, the diff
+    /// view's check). Null for a script, which has no semantic layer here yet.
+    /// </remarks>
+    public Task<DiagnosticSet?> DiagnoseEditsAsync(ITextSnapshot snapshot, IReadOnlyList<TextEdit> edits, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(edits);
+        var changes = new TextChange[edits.Count];
+        for (int i = 0; i < changes.Length; i++)
+        {
+            changes[i] = new TextChange(new TextSpan(edits[i].Start, edits[i].Length), edits[i].Text);
+        }
+
+        return Task.Run(async () =>
+        {
+            if (await DocumentForAsync(snapshot, cancellationToken).ConfigureAwait(false) is not { } document)
+            {
+                return null;
+            }
+
+            var text = await document.GetTextAsync(cancellationToken).ConfigureAwait(false);
+            var items = await CSharpSemantics.DiagnosticsAsync(document.WithText(text.WithChanges(changes)), cancellationToken).ConfigureAwait(false);
+            return (DiagnosticSet?)new DiagnosticSet(null, items);
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public void Release()
     {
         lock (_gate)

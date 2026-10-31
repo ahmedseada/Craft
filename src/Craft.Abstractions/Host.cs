@@ -20,6 +20,12 @@ public interface IEditorDocument
 
     /// <summary>Its selection, as the editor last reported it.</summary>
     SelectionState Selection { get; }
+
+    /// <summary>
+    /// Its language's last diagnostics as the editor shows them (in the positions of <see cref="DiagnosticSet.Snapshot"/>);
+    /// empty when its language has no semantic layer or the host was not told any.
+    /// </summary>
+    DiagnosticSet Diagnostics => DiagnosticSet.Empty;
 }
 
 /// <summary>An event about one open document.</summary>
@@ -34,6 +40,18 @@ public sealed class EditorDocumentChangedEventArgs(IEditorDocument document, Tex
 {
     /// <summary>The change.</summary>
     public TextChangedEventArgs Change { get; } = change;
+}
+
+/// <summary>Edits a plug-in proposes (<see cref="IEditorHost.ProposeAsync"/>), with what the diff view shows beside them.</summary>
+/// <param name="Edits">The edits, in the positions of the document's current snapshot, in order, not overlapping.</param>
+/// <param name="Title">What they do ("Add doc comments"): the undo step's name.</param>
+public sealed record ProposedEdits(IReadOnlyList<TextEdit> Edits, string Title)
+{
+    /// <summary>How the edits were placed ("exact text match", "csharp-tokens · whitespace differed"), or null.</summary>
+    public string? Placement { get; init; }
+
+    /// <summary>Where they came from ("Chat · store:coder-q4", "MCP client"), or null for the plug-in's name.</summary>
+    public string? Origin { get; init; }
 }
 
 /// <summary>How much a log line matters.</summary>
@@ -79,6 +97,9 @@ public interface IEditorHost
     /// <summary>The active document's selection (a caret at 0 when there is none).</summary>
     SelectionState Selection { get; }
 
+    /// <summary>The folder open in the editor (its full path), or null when none is.</summary>
+    string? WorkspaceFolder => null;
+
     /// <summary>A document opened.</summary>
     event EventHandler<EditorDocumentEventArgs>? DocumentOpened;
 
@@ -106,6 +127,14 @@ public interface IEditorHost
     /// </summary>
     /// <exception cref="ArgumentException">An edit runs outside the text, or the edits overlap or are out of order.</exception>
     Task<bool> ProposeEditsAsync(IEditorDocument document, IReadOnlyList<TextEdit> edits, string title, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="ProposeEditsAsync"/> with what the diff view shows beside the edits (how they were placed, where they
+    /// came from). The user may accept some of the hunks only: those are applied, as one undo step, and the result is true.
+    /// </summary>
+    /// <exception cref="ArgumentException">An edit runs outside the text, or the edits overlap or are out of order.</exception>
+    Task<bool> ProposeAsync(IEditorDocument document, ProposedEdits proposal, CancellationToken cancellationToken = default) =>
+        ProposeEditsAsync(document, (proposal ?? throw new ArgumentNullException(nameof(proposal))).Edits, proposal.Title, cancellationToken);
 
     /// <summary>The registered commands (<see cref="EditorCommands"/>), in order.</summary>
     IReadOnlyList<IEditorCommand> Commands { get; }

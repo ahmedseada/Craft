@@ -15,13 +15,16 @@ panels, settings, languages and themes. Craft's own C# support is a plug-in on t
 | `IStatusItem` / `StatusItem` | A status bar item: text, tooltip, end of the bar, priority, a command a click runs. |
 | `IEditorPanel` / `ListPanel` | A panel in the side area: a title and lines (`PanelItem`), each of which may run a command. |
 | `PluginSetting` | A setting the plug-in declares: key, default, description. |
+| `IModelProvider` (registry `ModelProviders`) | How a plug-in reaches a model: `ModelProviders.Get("local").AcquireAsync(new ModelRequest(name))` gives a `ModelLease` with Idrak's `IChatModel` and `ITextModel` and the context window ("local" comes with the pre-installed AI plug-in, Craft.Ai). |
+| `TextDiff` | A line diff of edits or texts, as the diff view shows it, or a unified patch. |
 | `CraftContracts.Version` | The contracts' version (now 1.0). |
 
 Everything a plug-in is called with runs on the UI thread, and every host event is raised there. Work that takes time
 runs elsewhere and comes back with `host.Dispatch`.
 
-**No silent edits.** A plug-in never edits a document itself: `ProposeEditsAsync(document, edits, title)` shows the
-user a summary and applies the edits as one undo step only if the user accepts. A document that changed meanwhile is not
+**No silent edits.** A plug-in never edits a document itself: `ProposeEditsAsync(document, edits, title)` (or
+`ProposeAsync(document, new ProposedEdits(edits, title) { Placement = ..., Origin = ... })`) shows the user the change as
+a diff, hunk by hunk, and applies the hunks the user accepts as one undo step. A document that changed meanwhile is not
 edited, and a host with no way to ask applies nothing.
 
 **What the host takes back.** The `IEditorHost` a plug-in gets is its own view of the host: on deactivation, the host

@@ -23,6 +23,8 @@ public sealed partial class EditorHost
 
         public SelectionState Selection => host.Selection;
 
+        public string? WorkspaceFolder => host.WorkspaceFolder;
+
         public IReadOnlyList<IEditorCommand> Commands => host.Commands;
 
         public IPluginSettings Settings => host.Settings;
@@ -64,7 +66,11 @@ public sealed partial class EditorHost
         }
 
         public Task<bool> ProposeEditsAsync(IEditorDocument document, IReadOnlyList<TextEdit> edits, string title, CancellationToken cancellationToken = default) =>
-            _closed ? Task.FromResult(false) : host.ProposeAsync(document, edits, $"{name}: {title}", name, cancellationToken);
+            _closed ? Task.FromResult(false) : host.ProposeCoreAsync(document, new ProposedEdits(edits, $"{name}: {title}"), name, cancellationToken);
+
+        public Task<bool> ProposeAsync(IEditorDocument document, ProposedEdits proposal, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult(false)
+                : host.ProposeCoreAsync(document, (proposal ?? throw new ArgumentNullException(nameof(proposal))) with { Title = $"{name}: {proposal.Title}" }, name, cancellationToken);
 
         public Task<bool> ExecuteCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ExecuteCommandAsync(commandId, cancellationToken);

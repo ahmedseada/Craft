@@ -75,6 +75,10 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     public SelectionState Selection => _activeDocument?.Selection ?? default;
 
     /// <inheritdoc />
+    /// <remarks>Set by the shell when a folder opens or closes (the full path, or null).</remarks>
+    public string? WorkspaceFolder { get; set; }
+
+    /// <inheritdoc />
     public IReadOnlyList<IEditorCommand> Commands => EditorCommands.All;
 
     /// <inheritdoc />
@@ -191,6 +195,18 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         }
     }
 
+    /// <summary>
+    /// Records <paramref name="document"/>'s diagnostics as its editor shows them (mapped to its current snapshot), so a
+    /// plug-in reads them through <see cref="IEditorDocument.Diagnostics"/>; the editor calls it when its diagnostics change.
+    /// </summary>
+    public void SetDiagnostics(IEditorDocument document, ReadOnlySpan<EditorDiagnostic> diagnostics)
+    {
+        if (document is OpenDocument { IsClosed: false } open && open.Host == this)
+        {
+            open.Diagnostics = diagnostics.IsEmpty ? DiagnosticSet.Empty : new DiagnosticSet(open.Document.Buffer.Current, diagnostics.ToArray());
+        }
+    }
+
     /// <summary>Saves <paramref name="document"/> (to <paramref name="path"/> when given), then raises <see cref="DocumentSaved"/>.</summary>
     public async Task SaveAsync(IEditorDocument document, string? path = null, CancellationToken cancellationToken = default)
     {
@@ -204,7 +220,23 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
 
     /// <inheritdoc />
     public async Task<bool> ProposeEditsAsync(IEditorDocument document, IReadOnlyList<TextEdit> edits, string title, CancellationToken cancellationToken = default) =>
-        await ProposeAsync(document, edits, title, HostSource, cancellationToken);
+        await ProposeCoreAsync(document, new ProposedEdits(edits, title), HostSource, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<bool> ProposeAsync(IEditorDocument document, ProposedEdits proposal, CancellationToken cancellationToken = default) =>
+        await ProposeCoreAsync(document, proposal, HostSource, cancellationToken);
+
+    /// <summary>
+    /// Records the semantic session of <paramref name="document"/>'s editor (or null), so a proposal's diff view can show
+    /// what the language would report after the change (<see cref="ISemanticLanguageSession.DiagnoseEditsAsync"/>).
+    /// </summary>
+    public void SetSemanticSession(IEditorDocument document, ISemanticLanguageSession? session)
+    {
+        if (document is OpenDocument { IsClosed: false } open && open.Host == this)
+        {
+            open.SemanticSession = session;
+        }
+    }
 
     /// <inheritdoc />
     public async Task<bool> ExecuteCommandAsync(string commandId, CancellationToken cancellationToken = default)
@@ -388,9 +420,12 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         _disposed = true;
     }
 
-    internal async Task<bool> ProposeAsync(IEditorDocument document, IReadOnlyList<TextEdit> edits, string title, string source, CancellationToken cancellationToken)
+    internal async Task<bool> ProposeCoreAsync(IEditorDocument document, ProposedEdits proposed, string source, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(proposed);
+        var edits = proposed.Edits;
+        string title = proposed.Title;
         ArgumentNullException.ThrowIfNull(edits);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         if (document is not OpenDocument { IsClosed: false } open || open.Host != this)
@@ -413,13 +448,28 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
             return false;
         }
 
+        var diff = TextDiff.OfEdits(snapshot, copy, Options.DiffContextLines, Options.DiffLineLimit);
         var proposal = new EditProposal(open, copy, title, source, snapshot.Version,
-            EditProposal.Summarize(snapshot, open.FilePath, copy, Options.ProposalPreviewCharacters));
-        if (!await presenter.ConfirmEditsAsync(proposal, cancellationToken))
+            EditProposal.Summarize(snapshot, open.FilePath, copy, Options.ProposalPreviewCharacters))
+        {
+            Diff = diff,
+            HunkOfEdit = EditProposal.HunksOf(snapshot, copy, diff),
+            Placement = proposed.Placement,
+            Origin = proposed.Origin ?? source,
+            Check = Options.DiffCheck && open.SemanticSession is { } session
+                ? ProposalCheck.RunAsync(session, snapshot, copy, cancellationToken)
+                : Task.FromResult<ProposalCheck?>(null),
+        };
+        var answers = await presenter.ChooseHunksAsync(proposal, cancellationToken);
+        var chosen = proposal.Accepted(answers);
+        if (chosen.Length == 0)
         {
             Log(source, EditorLogLevel.Information, $"'{title}': rejected by the user.", null);
             return false;
         }
+
+        bool partial = chosen.Length < copy.Length;
+        copy = chosen;
 
         if (open.IsClosed || open.Document.Buffer.Current.Version != snapshot.Version)
         {
@@ -431,7 +481,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         var after = new SelectionState(MapThrough(before.Anchor, copy), MapThrough(before.Caret, copy));
         open.Document.Edit(copy, EditKind.Command, before, after);
         UpdateSelection(open, after);
-        Log(source, EditorLogLevel.Information, $"'{title}': applied ({copy.Length} {(copy.Length == 1 ? "edit" : "edits")}).", null);
+        Log(source, EditorLogLevel.Information, $"'{title}': applied ({copy.Length} {(copy.Length == 1 ? "edit" : "edits")}{(partial ? ", the hunks the user accepted" : "")}).", null);
         return true;
     }
 
@@ -676,6 +726,10 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         public ILanguage? Language { get; } = language;
 
         public SelectionState Selection { get; set; }
+
+        public DiagnosticSet Diagnostics { get; set; } = DiagnosticSet.Empty;
+
+        public ISemanticLanguageSession? SemanticSession { get; set; }
 
         public bool IsClosed { get; set; }
 

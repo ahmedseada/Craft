@@ -194,19 +194,44 @@ public sealed class PanelsView : ScrollView, IDisposable
 }
 
 /// <summary>
-/// The host's questions as a page's dialogs: a proposed edit is shown with its summary and applied only on "Apply"; a
-/// message is an alert. The diff view replaces the confirmation in phase A1.
+/// The host's questions as pages and dialogs: a proposed edit is shown as a diff (<see cref="ProposalDiffPage"/>) and
+/// applied only on Accept; a message is an alert.
 /// </summary>
-public sealed class MauiEditorPresenter(Page page) : IEditorPresenter
+/// <param name="page">The page the views are shown over.</param>
+/// <param name="theme">The theme in use (the shell's), read each time a view opens; null: the light or dark built-in by the app's theme.</param>
+public sealed class MauiEditorPresenter(Page page, Func<ITheme>? theme = null) : IEditorPresenter
 {
     private readonly Page _page = page ?? throw new ArgumentNullException(nameof(page));
 
     /// <inheritdoc />
-    public Task<bool> ConfirmEditsAsync(EditProposal proposal, CancellationToken cancellationToken)
+    /// <remarks>
+    /// The diff-and-accept view (<see cref="ProposalDiffPage"/>, plan phase A1) as a modal page: Accept applies, Reject,
+    /// closing it or a cancelled request leaves the document as it was.
+    /// </remarks>
+    public async Task<bool> ConfirmEditsAsync(EditProposal proposal, CancellationToken cancellationToken)
+    {
+        var answers = await ChooseHunksAsync(proposal, cancellationToken);
+        return answers.Count > 0 && answers.All(a => a);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<bool>> ChooseHunksAsync(EditProposal proposal, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(proposal);
-        return _page.DisplayAlertAsync(proposal.Title, $"{proposal.Summary}\n\nProposed by {proposal.Source}.", "Apply", "Reject");
+        var view = new ProposalDiffPage(proposal, Theme());
+        await using var cancel = cancellationToken.Register(view.Reject);
+        await _page.Navigation.PushModalAsync(view);
+        var answers = await view.Answer;
+        if (_page.Navigation.ModalStack.Contains(view))
+        {
+            await _page.Navigation.PopModalAsync();
+        }
+
+        return answers;
     }
+
+    private ITheme Theme() => theme?.Invoke()
+        ?? EditorThemes.Get(Application.Current?.RequestedTheme == AppTheme.Light ? EditorThemes.Light : EditorThemes.Dark);
 
     /// <inheritdoc />
     public Task ShowMessageAsync(string title, string message) => _page.DisplayAlertAsync(title, message, "OK");

@@ -14,6 +14,19 @@ public interface IEditorPresenter
     /// <summary>Shows <paramref name="proposal"/> and asks to apply it; true when the user accepts.</summary>
     Task<bool> ConfirmEditsAsync(EditProposal proposal, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Shows <paramref name="proposal"/> (its <see cref="EditProposal.Diff"/>) and asks which hunks to apply: one answer a
+    /// hunk, in order (one answer for a diff without hunks). The default asks for the whole (<see cref="ConfirmEditsAsync"/>).
+    /// </summary>
+    async Task<IReadOnlyList<bool>> ChooseHunksAsync(EditProposal proposal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(proposal);
+        bool all = await ConfirmEditsAsync(proposal, cancellationToken).ConfigureAwait(false);
+        var answers = new bool[Math.Max(1, proposal.Diff.Hunks.Count)];
+        Array.Fill(answers, all);
+        return answers;
+    }
+
     /// <summary>Shows a message; completes when the user dismissed it.</summary>
     Task ShowMessageAsync(string title, string message);
 }

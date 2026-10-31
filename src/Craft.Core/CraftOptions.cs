@@ -188,6 +188,20 @@ public sealed record CraftOptions
     /// <summary>The characters of an edit's new text a proposal's confirmation shows before it cuts (<c>CRAFT_PROPOSAL_PREVIEW_CHARS</c>).</summary>
     public int ProposalPreviewCharacters { get; init; } = 200;
 
+    // Phase A1: the diff-and-accept view.
+
+    /// <summary>The unchanged lines a proposed edit's diff shows around each change (<c>CRAFT_DIFF_CONTEXT_LINES</c>).</summary>
+    public int DiffContextLines { get; init; } = 3;
+
+    /// <summary>
+    /// The changed lines (removed plus added) a diff aligns line by line; a longer changed run is shown removed then added,
+    /// so the work stays bounded (<c>CRAFT_DIFF_LINE_LIMIT</c>).
+    /// </summary>
+    public int DiffLineLimit { get; init; } = 2000;
+
+    /// <summary>Whether the diff view asks the language for its diagnostics after the change before the user accepts (<c>CRAFT_DIFF_CHECK</c>).</summary>
+    public bool DiffCheck { get; init; } = true;
+
     // Phase E4: the app's shell (its data folder, the recent list, the layout's widths).
 
     /// <summary>
@@ -251,6 +265,9 @@ public sealed record CraftOptions
         new("CRAFT_KEY_BINDINGS", "(none)", "The user's key bindings, 'Chord=command' separated by ';' (Ctrl+Shift+W=sample.wordCount); they run before the editor's keys; an empty command unbinds a plug-in's chord."),
         new("CRAFT_HOST_LOG_LINES", "500", "Lines of the editor host's log (plug-ins' lines included) kept for the log view; 0 keeps none."),
         new("CRAFT_PROPOSAL_PREVIEW_CHARS", "200", "Characters of a proposed edit's new text its confirmation shows before it cuts."),
+        new("CRAFT_DIFF_CONTEXT_LINES", "3", "Unchanged lines a proposed edit's diff shows around each change."),
+        new("CRAFT_DIFF_LINE_LIMIT", "2000", "Changed lines a diff aligns line by line; a longer run is shown removed then added."),
+        new("CRAFT_DIFF_CHECK", "true", "Whether the diff view shows the language's errors and warnings after the change before it is accepted."),
         new("CRAFT_DATA_FOLDER", "(local app data)/Craft", "The folder of the app's own files (the recent list, the user's settings.json); from the environment only."),
         new("CRAFT_RECENT_LIMIT", "20", "The recent files and folders kept; 0 keeps none."),
         new("CRAFT_NARROW_WIDTH", "720", "The window width (device-independent units) below which the narrow (phone) layout shows."),
@@ -434,6 +451,22 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_PROPOSAL_PREVIEW_CHARS") is { } preview)
         {
             options = options with { ProposalPreviewCharacters = Whole(preview, "CRAFT_PROPOSAL_PREVIEW_CHARS", 0, 1_000_000) };
+        }
+
+        // Phase A1: the diff view.
+        if (Text(read, "CRAFT_DIFF_CONTEXT_LINES") is { } diffContext)
+        {
+            options = options with { DiffContextLines = Whole(diffContext, "CRAFT_DIFF_CONTEXT_LINES", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_DIFF_LINE_LIMIT") is { } diffLimit)
+        {
+            options = options with { DiffLineLimit = Whole(diffLimit, "CRAFT_DIFF_LINE_LIMIT", 0, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_DIFF_CHECK") is { } diffCheck)
+        {
+            options = options with { DiffCheck = Flag(diffCheck, "CRAFT_DIFF_CHECK") };
         }
 
         // Phase E4: the shell.

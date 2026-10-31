@@ -214,6 +214,7 @@ public sealed class ShellModel : IDisposable
         // Made again with the options that now include the workspace's own (its CRAFT_WORKSPACE_IGNORE applies to its tree);
         // a workspace lists nothing until asked, so this costs nothing.
         Workspace = new Workspace(workspace.Root, Options);
+        Host.WorkspaceFolder = Workspace.Root;
         Tree = new FolderTree(Workspace);
         Recent.Add(Workspace.Root, RecentKind.Folder);
         Layout.HasFolder = true;
@@ -231,6 +232,7 @@ public sealed class ShellModel : IDisposable
 
         Workspace.Dispose();
         Workspace = null;
+        Host.WorkspaceFolder = null;
         Tree = null;
         Settings.Workspace = null;
         ReloadOptions();

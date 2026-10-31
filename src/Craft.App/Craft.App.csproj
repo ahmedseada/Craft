@@ -43,6 +43,8 @@
     <MauiIcon Include="Resources\AppIcon\appicon.svg" Color="#101217" />
     <!-- C# is a pre-installed plug-in, not part of the app: built first, never referenced, copied to plugins\Craft.CSharp\. -->
     <ProjectReference Include="..\Craft.CSharp\Craft.CSharp.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- The AI host (plan phase A1) is a pre-installed plug-in too: built first, never referenced, copied to plugins\Craft.Ai\. -->
+    <ProjectReference Include="..\Craft.Ai\Craft.Ai.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <!--
@@ -77,6 +79,36 @@
 
   <Target Name="CraftPublishCSharpPlugin" AfterTargets="Publish" DependsOnTargets="CraftCSharpPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
     <Copy SourceFiles="@(_CraftCSharpPluginFile)" DestinationFiles="@(_CraftCSharpPluginFile->'$(PublishDir)plugins\Craft.CSharp\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    The pre-installed AI host (plan phase A1), as the C# plug-in: Craft.Ai's own output folder (Craft.Ai.dll, Idrak's
+    assemblies it loads in its own context, Craft.Ai.deps.json, plugin.json) copied to plugins\Craft.Ai\ after Build and
+    Publish, never the host's Craft.Abstractions, Craft.Core or Idrak.Abstraction. Deleting the folder (or
+    CRAFT_PLUGINS_DISABLED=Craft.Ai) removes it; the app still starts.
+  -->
+  <Target Name="CraftAiPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\Craft.Ai\Craft.Ai.csproj" Targets="Build"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;Platform;PlatformTarget;OutDir;OutputPath;PublishDir;WindowsPackageType;WindowsAppSDKSelfContained">
+      <Output TaskParameter="TargetOutputs" ItemName="_CraftAiPluginAssembly" />
+    </MSBuild>
+    <PropertyGroup>
+      <_CraftAiPluginFolder>@(_CraftAiPluginAssembly->'%(RootDir)%(Directory)')</_CraftAiPluginFolder>
+    </PropertyGroup>
+    <Error Condition="'$(_CraftAiPluginFolder)' == '' or !Exists('$(_CraftAiPluginFolder)plugin.json')" Text="The AI plug-in's build output or its plugin.json was not found (Craft.Ai built to '$(_CraftAiPluginFolder)')." />
+    <ItemGroup>
+      <_CraftAiPluginFile Include="$(_CraftAiPluginFolder)**\*"
+                          Exclude="$(_CraftAiPluginFolder)Craft.Abstractions.*;$(_CraftAiPluginFolder)Idrak.Abstraction.*;$(_CraftAiPluginFolder)Craft.Core.*" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CraftCopyAiPlugin" AfterTargets="Build" DependsOnTargets="CraftAiPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftAiPluginFile)" DestinationFiles="@(_CraftAiPluginFile->'$(OutDir)plugins\Craft.Ai\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CraftPublishAiPlugin" AfterTargets="Publish" DependsOnTargets="CraftAiPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftAiPluginFile)" DestinationFiles="@(_CraftAiPluginFile->'$(PublishDir)plugins\Craft.Ai\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('windows'))">

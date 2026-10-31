@@ -71,7 +71,7 @@ public sealed class EditorPage : ContentPage
         ArgumentNullException.ThrowIfNull(startup);
         _startup = startup;
         _initialPath = path;
-        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this), startup.Settings.Read);
+        _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, () => _shell.Theme), startup.Settings.Read);
         _shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(this, ShowSettingsAsync));
         _pluginStatus = new StatusItemsView(_host);
         _panels = new PanelsView(_host);
@@ -430,6 +430,13 @@ public sealed class EditorPage : ContentPage
         view.Open(tab.Document, tab.Language);
         view.DiagnosticsChanged += (_, _) =>
         {
+            // Phase A1: the plug-ins read a document's diagnostics, and the diff view checks a change, through the host.
+            if (view.Model is { } shownModel && _shell.Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } owner)
+            {
+                _host.SetDiagnostics(owner.HostDocument, shownModel.Diagnostics);
+                _host.SetSemanticSession(owner.HostDocument, shownModel.SemanticSession);
+            }
+
             if (ReferenceEquals(view, _shown))
             {
                 UpdateProblems();

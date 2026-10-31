@@ -6,6 +6,7 @@ interface Craft.Editor.Abstractions.IEditorKeyHandler
 interface Craft.Editor.Abstractions.IEditorPresenter
   System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
   System.Threading.Tasks.Task<System.Boolean> ConfirmEditsAsync(Craft.Editor.EditProposal proposal, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.Boolean>> ChooseHunksAsync(Craft.Editor.EditProposal proposal, System.Threading.CancellationToken cancellationToken)
 interface Craft.Editor.Abstractions.IFileDialogs
   System.Threading.Tasks.Task<System.String> PickFileAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PickFolderAsync(System.Threading.CancellationToken cancellationToken = null)
@@ -54,18 +55,25 @@ sealed class Craft.Editor.DefinitionRequestedEventArgs : System.EventArgs
   ctor(Craft.Abstractions.DefinitionLocation location)
 sealed class Craft.Editor.EditProposal : System.IEquatable<Craft.Editor.EditProposal>
   Craft.Abstractions.IEditorDocument Document { get; init; }
+  Craft.Abstractions.TextDiff Diff { get; init; }
+  Craft.Abstractions.TextEdit[] Accepted(System.Collections.Generic.IReadOnlyList<System.Boolean> answers)
   Craft.Editor.EditProposal <Clone>$()
   System.Boolean Equals(Craft.Editor.EditProposal other)
   System.Boolean Equals(System.Object obj)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.Int32> HunkOfEdit { get; init; }
   System.Int32 GetHashCode()
   System.Int32 Version { get; init; }
+  System.String Origin { get; init; }
+  System.String Placement { get; init; }
   System.String Source { get; init; }
   System.String Summary { get; init; }
   System.String Title { get; init; }
   System.String ToString()
+  System.Threading.Tasks.Task<Craft.Editor.ProposalCheck> Check { get; init; }
   System.Void Deconstruct(out Craft.Abstractions.IEditorDocument Document, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits, out System.String Title, out System.String Source, out System.Int32 Version, out System.String Summary)
   ctor(Craft.Abstractions.IEditorDocument Document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits, System.String Title, System.String Source, System.Int32 Version, System.String Summary)
+  static System.Int32[] HunksOf(Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextDiff diff)
   static System.String Summarize(Craft.Abstractions.ITextSnapshot snapshot, System.String filePath, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Int32 previewCharacters)
 sealed class Craft.Editor.EditorFind
   Craft.Editor.FindCount CountMatches()
@@ -98,9 +106,11 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Collections.Generic.IReadOnlyList<Craft.Editor.PluginActivation> RefreshPlugins()
   System.IDisposable AddPanel(Craft.Abstractions.IEditorPanel panel)
   System.IDisposable AddStatusItem(Craft.Abstractions.IStatusItem item)
+  System.String WorkspaceFolder { get; set; }
   System.Threading.Tasks.Task SaveAsync(Craft.Abstractions.IEditorDocument document, System.String path = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
   System.Threading.Tasks.Task<System.Boolean> ExecuteCommandAsync(System.String commandId, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
   System.Void Close(Craft.Abstractions.IEditorDocument document)
   System.Void Dispatch(System.Action action)
@@ -108,6 +118,8 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
   System.Void Record(System.String metric, System.Double value, System.String unit)
   System.Void SetActive(Craft.Abstractions.IEditorDocument document)
+  System.Void SetDiagnostics(Craft.Abstractions.IEditorDocument document, System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> diagnostics)
+  System.Void SetSemanticSession(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ISemanticLanguageSession session)
   System.Void UpdateSelection(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
   const System.String HostSource = host
   ctor(Craft.Core.CraftOptions options = null, System.Action<System.Action> dispatch = null, Craft.Editor.Abstractions.IEditorPresenter presenter = null, System.Func<System.String, System.String> readVariable = null)
@@ -310,6 +322,20 @@ struct Craft.Editor.PopupBox : System.IEquatable<Craft.Editor.PopupBox>
   System.String ToString()
   System.Void Deconstruct(out System.Single X, out System.Single Y, out System.Single Width, out System.Single Height, out System.Int32 Rows)
   ctor(System.Single X, System.Single Y, System.Single Width, System.Single Height, System.Int32 Rows)
+sealed class Craft.Editor.ProposalCheck : System.IEquatable<Craft.Editor.ProposalCheck>
+  Craft.Editor.ProposalCheck <Clone>$()
+  System.Boolean Equals(Craft.Editor.ProposalCheck other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> FirstErrors { get; init; }
+  System.Int32 ErrorsAfter { get; init; }
+  System.Int32 ErrorsBefore { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 WarningsAfter { get; init; }
+  System.Int32 WarningsBefore { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 ErrorsBefore, out System.Int32 WarningsBefore, out System.Int32 ErrorsAfter, out System.Int32 WarningsAfter, out System.Collections.Generic.IReadOnlyList<System.String> FirstErrors)
+  ctor(System.Int32 ErrorsBefore, System.Int32 WarningsBefore, System.Int32 ErrorsAfter, System.Int32 WarningsAfter, System.Collections.Generic.IReadOnlyList<System.String> FirstErrors)
+  static System.Threading.Tasks.Task<Craft.Editor.ProposalCheck> RunAsync(Craft.Abstractions.ISemanticLanguageSession session, Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Threading.CancellationToken cancellationToken)
 sealed class Craft.Editor.Shell.DocumentTab
   Craft.Abstractions.IEditorDocument HostDocument { get; }
   Craft.Abstractions.ILanguage Language { get; }

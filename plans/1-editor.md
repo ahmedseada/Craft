@@ -149,7 +149,14 @@ through public contracts in `Craft.Abstractions`, so a plug-in author needs only
   `ITextModel`. It starts after a pause in typing (a setting) and is cancelled at the next keystroke. The layout puts
   the prefix first so `KeepCache` reuses everything up to the caret. The context budget comes from the model's
   `MaxPositions`, never a fixed number. A model with no FIM format falls back to prefix-only completion, said so in the
-  status bar, never silently.
+  status bar, never silently. **Measured in A0 (Idrak b7c5222):** a prefix-first FIM layout (qwen, deepseek, gemma: the
+  prefix, then the suffix, then the middle) puts the suffix after the caret's text, so each keystroke changes the prompt
+  before the suffix and the whole suffix is processed again: about 25% of the prompt reused from the kept cache; a
+  suffix-first layout (mistral/Codestral: the suffix, then the prefix) keeps everything up to the caret, about 98% reused.
+  So the suffix budget (how much text after the caret is sent) is a `CRAFT_*` setting, because it sets the per-keystroke
+  cost on a prefix-first model, and A2 takes the layout from the model through `FillInMiddleFormats.Detect` / `For`
+  (`src/Idrak.Abstraction/Generation/FillInMiddleFormats.cs`) and reuses up to `FillInMiddlePrompt.PrefixEnd`, never a
+  family named in Craft.
 - **Chat panel.** `IChatModel` with the open document, the selection, Roslyn's diagnostics and the symbols in scope as
   context, and the editor's tools through `IToolRegistry`. Replies stream with tokens per second. Code blocks have
   "apply", which goes through the diff view.
@@ -607,7 +614,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | T | The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
-| A1 | `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
+| A1 | **Built (2026-10-31, "A1 as built" below).** `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
 | A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
 | V | Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
@@ -876,6 +883,65 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
   the merge on fixed spans; `ReleaseMemory` and the rebuilt workspace. `ThemeAndMemoryTests` (`Inventory`): every class's
   contrast in both themes, the static style, the monitors' registry and the languages' release.
 - **Not built (a candidate, measured before):** diagnosing the changed member first; one parse for both layers.
+
+## A1 as built (2026-10-31)
+
+- **`Craft.Ai`** (new, in `Craft.slnx`): a pre-installed, removable plug-in like Craft.CSharp (plug-in "ai",
+  `plugins\Craft.Ai\` beside the program, `CRAFT_PLUGINS_DISABLED=Craft.Ai` turns it off), built only on
+  `Craft.Abstractions` and Idrak (Idrak.Mcp, Idrak.Text, and Idrak.Text.Plugins as the model families it registers on
+  the first load, by the setting `idrakPlugins`: no family is named in Craft). Its own output keeps Craft.Abstractions so
+  the idrak tool loads the assembly alone; the app's copy leaves out the host's contracts. Android/AOT note: Idrak.Mcp is
+  AOT-compatible; the folder provider is made by reflection (the idrak tool's loader); the MCP SDK brings
+  Microsoft.Extensions.* assemblies, which the plug-in shares with the app when MAUI loaded them first (to watch on the
+  first Windows run).
+- **The editor's tools** (`EditorTools`, Idrak `ITool`s with explicit schemas): live over `IEditorHost` (`open_documents`,
+  `read_document`, `get_selection`, `get_diagnostics`, `search_workspace`, `propose_edit`) and over a folder
+  (`list_files`, `read_document`, `search_workspace`, `propose_edit` written as a unified patch under `.craft/patches`,
+  the file never changed). Live tools read the host on its UI thread and read snapshots off it; an open document's
+  unsaved text is what they see; paths outside the folder are refused; search reads a file's bytes once and skips it
+  without decoding when a case-sensitive query is not in them. `[assembly: ToolProvider(FolderToolProvider)]` over
+  `CRAFT_PLUGIN_AI_TOOLSFOLDER` (else the current folder): `idrak tools list|test Craft.Ai.dll` lists and calls the four
+  folder tools (4 of 4 answered here). `find_symbol` waits for a contract a plug-in can reach Roslyn's symbols through
+  (a seam for P/A2).
+- **Contracts added** (Craft.Abstractions, all additive, contracts still 1.0 as K and E4 kept them, nothing released):
+  `IModelProvider : IKind` with `ModelProviders` ("local"), `ModelRequest`, `ModelLease`, `ModelLoadStatus`; `TextDiff`
+  (a Myers line diff between the common start and end, bounded by `CRAFT_DIFF_LINE_LIMIT`, hunks with
+  `CRAFT_DIFF_CONTEXT_LINES`, unified patches); `IEditorHost.WorkspaceFolder`, `IEditorDocument.Diagnostics` (E5's
+  diagnostics as the editor shows them, set by the app through `EditorHost.SetDiagnostics`),
+  `IEditorHost.ProposeAsync(ProposedEdits)` (placement and origin beside the edits; the user may accept some hunks);
+  `ISemanticLanguageSession.DiagnoseEditsAsync` (Craft.CSharp forks the workspace's document with `Document.WithText`,
+  the workspace untouched); `EditorColors` gains the approved design's tokens (ground, surface, border, secondary text,
+  accent, success, the diff's added and removed backgrounds; dark error and warning now the design's #F07178/#E3B27A).
+- **The diff-and-accept view** (`Craft.Maui.ProposalDiffPage`, from `docs/design/Diff.dc.html`, replacing K's summary
+  dialog through `IEditorPresenter.ChooseHunksAsync`): the hunks (number, lines, how the edit was placed) each with
+  Accept and Reject, Accept all / Reject all / Apply accepted hunks, the lines with old and new numbers, and the column
+  "Before you accept" (the language's errors and warnings after the change against now, from `EditProposal.Check`, run
+  while the user looks; `CRAFT_DIFF_CHECK`), "How the edit was placed", "one undo step". Colours only from the theme. The
+  host applies the accepted hunks' edits as one `EditKind.Command` undo step; all rejected, or the document changed
+  meanwhile, nothing changes.
+- **MCP from the running app**: `EditorMcpServer` on Idrak's `McpHost` "http" (loopback, a token): off by default; the
+  command "AI: Serve the editor's tools over MCP" (`ai.mcpStart`, or `CRAFT_PLUGIN_AI_MCPONSTART=true`) starts it, the
+  status bar shows "MCP http://127.0.0.1:PORT/mcp" (a click shows the token and the `idrak chat --mcp` line),
+  `ai.mcpStop` stops it. Address and token: `CRAFT_PLUGIN_AI_MCPADDRESS` (127.0.0.1:0), `CRAFT_PLUGIN_AI_MCPTOKEN`
+  (empty: random each start; "none": no token), on the settings page with the plug-in's other settings.
+- **"local" model provider** (`LocalModelProvider`): the name through Idrak's `ModelSource.Resolve` (`ModelSources`),
+  `PretrainedModel.Load` on the device setting (auto, cpu, vulkan:0, cuda:0), its chat template's `ChatGenerator` and the
+  `TextGenerator` (for FIM), the context window the model's own unless set, kept by `ModelHost` for
+  `keepAliveMinutes`; `threads`, `cpuMemoryMb`, `gpuMemoryMb` set Idrak's `ComputeResources` (0: none, the device's
+  own). Loading shows its stage and elapsed time in the status bar (the library reports no fraction for a load). The
+  design's "Models and devices" is a panel for now (where models run, the chat model and its state, device, limits, how
+  a name is resolved, what is loaded); its page is phase D's.
+- **Tests** (group `Ai`): the diff (hunks, unified patch, no-newline marker, the line limit; 300 random edits rebuilt
+  from the hunks); a `FakeChatModel` reads the document and proposes an edit through `propose_edit`, which arrives as a
+  one-hunk diff, is accepted and undone in one step; per-hunk answers; an MCP client (`McpTools.ConnectHttpAsync`)
+  against the in-process server lists the live tools and reads an open document, a wrong token refused; the folder
+  tools (bin skipped, a path outside refused, the patch exact, the file unchanged); the plug-in registered from its
+  assembly, activated, MCP started and stopped by command with the token setting, a folder with no model failing, all
+  taken back on unregister; the settings. With `ApiGuard`, `Inventory`, `PluginKit`, `Shell`, `Editor`, `Semantic`: 65
+  passed here (after one fix: the server lists tools in its own order).
+- **Not yet**: no real model was loaded here (the owner's run); the check before accepting covers all the hunks, not
+  the accepted subset; `find_symbol`; a load's fraction (Idrak's loader reports none); the MCP server serves the tools,
+  not the models.
 
 ## Commands for the owner (once a phase is built)
 

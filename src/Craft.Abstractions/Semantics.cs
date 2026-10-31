@@ -381,4 +381,12 @@ public interface ISemanticLanguageSession : ILanguageSession
     /// the platform's memory-pressure signal; the next request or change builds it again. Any thread.
     /// </summary>
     void Release();
+
+    /// <summary>
+    /// The diagnostics <paramref name="snapshot"/> would have with <paramref name="edits"/> applied (in its positions, in
+    /// order, not overlapping), without changing the document: the diff view's "before you accept" check. The positions
+    /// are the changed text's. Null when the layer cannot tell (the default).
+    /// </summary>
+    Task<DiagnosticSet?> DiagnoseEditsAsync(ITextSnapshot snapshot, IReadOnlyList<TextEdit> edits, CancellationToken cancellationToken) =>
+        Task.FromResult<DiagnosticSet?>(null);
 }

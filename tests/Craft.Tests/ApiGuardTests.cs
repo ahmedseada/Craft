@@ -23,6 +23,7 @@ public static class ApiGuardTests
         typeof(CraftOptions).Assembly,
         Assembly.Load(new AssemblyName("Craft.Editor")),
         Assembly.Load(new AssemblyName("Craft.CSharp")),
+        Assembly.Load(new AssemblyName("Craft.Ai")),
     ];
 
     [Test]

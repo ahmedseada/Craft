@@ -45,6 +45,32 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
 
     /// <summary>The popups' text.</summary>
     public uint PopupText { get; init; } = 0xFFD5D9E0;
+
+    // The approved design's tokens (docs/design, phase D), for the app's own screens (the diff view first).
+
+    /// <summary>The window's ground, behind the surfaces.</summary>
+    public uint Ground { get; init; } = 0xFF101217;
+
+    /// <summary>A panel's or a page's surface.</summary>
+    public uint Surface { get; init; } = 0xFF16181D;
+
+    /// <summary>A surface's border and dividers.</summary>
+    public uint Border { get; init; } = 0xFF2A2E37;
+
+    /// <summary>Secondary text (labels, line numbers, details).</summary>
+    public uint SecondaryText { get; init; } = 0xFF9AA2B1;
+
+    /// <summary>The accent (the primary action, the active tab's line).</summary>
+    public uint Accent { get; init; } = 0xFFE5A54B;
+
+    /// <summary>Success (an added line's marker, a check that passed).</summary>
+    public uint Success { get; init; } = 0xFF5FC9B4;
+
+    /// <summary>An added line's background in a diff.</summary>
+    public uint DiffAdded { get; init; } = 0xFF15302C;
+
+    /// <summary>A removed line's background in a diff.</summary>
+    public uint DiffRemoved { get; init; } = 0xFF3A1F26;
 }
 
 /// <summary>A theme, registered in <see cref="EditorThemes"/>: the surface's colours and a style per token class.</summary>
@@ -157,8 +183,10 @@ public static class EditorThemes
         new EditorColors(Background: 0xFF16181D, Foreground: 0xFFD5D9E0, Selection: 0xFF2C3A55, CurrentLine: 0xFF1E222B, Caret: 0xFFE5A54B,
             Gutter: 0xFF16181D, GutterText: 0xFF7D8696, GutterCurrentText: 0xFFD5D9E0, BracketMatch: 0xFF34404F, FindMatch: 0xFF5A4520)
         {
-            Error = 0xFFF47067, Warning = 0xFFD9A93A, Info = 0xFF6CB6FF,
+            Error = 0xFFF07178, Warning = 0xFFE3B27A, Info = 0xFF6CB6FF,
             PopupBackground = 0xFF22262E, PopupBorder = 0xFF4A5260, PopupSelection = 0xFF2C3A55, PopupText = 0xFFD5D9E0,
+            Ground = 0xFF101217, Surface = 0xFF16181D, Border = 0xFF2A2E37, SecondaryText = 0xFF9AA2B1, Accent = 0xFFE5A54B, Success = 0xFF5FC9B4,
+            DiffAdded = 0xFF15302C, DiffRemoved = 0xFF3A1F26,
         },
         Styles(keyword: 0xFF82AAFF, type: 0xFF5FC9B4, @string: 0xFFE3B27A, comment: 0xFF8790A0, number: 0xFFD9A0E8, method: 0xFFE8D58A,
             local: 0xFFB8C7DC, preprocessor: 0xFFB09EE0, excluded: 0xFF6B7382, punctuation: 0xFFAEB6C2,
@@ -171,6 +199,8 @@ public static class EditorThemes
         {
             Error = 0xFFCF222E, Warning = 0xFF9A6700, Info = 0xFF0969DA,
             PopupBackground = 0xFFF6F8FA, PopupBorder = 0xFF8C959F, PopupSelection = 0xFFC8DAF8, PopupText = 0xFF1F2328,
+            Ground = 0xFFF3F4F6, Surface = 0xFFFFFFFF, Border = 0xFFD0D7DE, SecondaryText = 0xFF57606A, Accent = 0xFFB2650F, Success = 0xFF0E7A6B,
+            DiffAdded = 0xFFDDF4EC, DiffRemoved = 0xFFFCE4E6,
         },
         Styles(keyword: 0xFF0B4FC6, type: 0xFF0E7A6B, @string: 0xFF9A4A06, comment: 0xFF5F6B78, number: 0xFF8A2BB8, method: 0xFF795E00,
             local: 0xFF2A4A75, preprocessor: 0xFF6F42C1, excluded: 0xFF8C959F, punctuation: 0xFF404852,

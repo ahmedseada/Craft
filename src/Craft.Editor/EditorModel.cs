@@ -28,6 +28,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private SelectionState _selection;
     private int _desiredColumn = -1;
     private bool _applying;
+    private SelectionState? _applyingAfter;
     private bool _disposed;
     private int _maxColumns;
     private int _lastLineCount;
@@ -172,10 +173,15 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     public event EventHandler<ClipboardFailedEventArgs>? ClipboardFailed;
 
     /// <summary>The caret's line index.</summary>
-    public int CaretLine => Snapshot.GetLineIndex(_selection.Caret);
+    public int CaretLine => Snapshot.GetLineIndex(CaretPosition);
 
     /// <summary>The caret's column (tabs expanded), from 0.</summary>
-    public int CaretColumn => ColumnOf(_selection.Caret);
+    public int CaretColumn => ColumnOf(CaretPosition);
+
+    // The caret in the current snapshot. While an edit is applied, the document's own events (StateChanged, the buffer's
+    // Changed) run with the new text but before the selection moves: they get the selection the edit ends with, so a
+    // listener that reads the caret then (the status bar, a plug-in) never sees a position past the new text's end.
+    private int CaretPosition => Math.Min((_applyingAfter ?? _selection).Caret, Snapshot.Length);
 
     /// <summary>The line-number gutter's width: the line count's digits plus the padding, in cells.</summary>
     public float GutterWidth => (TextReading.Digits(Snapshot.LineCount) + Options.GutterPaddingCells) * Metrics.CellWidth;

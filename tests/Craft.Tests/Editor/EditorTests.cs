@@ -653,4 +653,27 @@ public static class EditorTests
             }
         }
     }
+
+    [Test]
+    public static void ADocumentEventDuringAnEditReadsTheCaretAfterIt()
+    {
+        // The owner's crash (Windows, 2026-10-31): Ctrl+Backspace emptied the text; the document's StateChanged ran inside
+        // the edit, the status bar read CaretLine with the caret still at the old end, and GetLineIndex threw.
+        var (model, document, _) = Editors.MakeMarked("int x|");
+        var seen = new List<(int Line, int Column)>();
+        document.StateChanged += (_, _) => seen.Add((model.CaretLine, model.CaretColumn));
+        model.OnKey(EditorKey.End, None);
+        model.OnKey(EditorKey.Backspace, Ctrl);
+        model.OnKey(EditorKey.Backspace, Ctrl);
+        Check.Equal(0, document.Buffer.Current.Length, "both words deleted");
+        Check.True(seen.Count >= 2, "the document's event ran during each edit");
+        Check.Equal((0, 0), seen[^1], "the caret read during the last edit is where the edit leaves it (the start of the empty text)");
+
+        var (multi, multiDocument, _) = Editors.MakeMarked("line one\nline two|");
+        var lines = new List<int>();
+        multiDocument.StateChanged += (_, _) => lines.Add(multi.CaretLine);
+        multi.OnKey(EditorKey.A, Ctrl);
+        multi.OnKey(EditorKey.Backspace, None);
+        Check.Equal(0, lines[^1], "select all and Backspace: the caret read inside the edit is on line 0, not past the text");
+    }
 }

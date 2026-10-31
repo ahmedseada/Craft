@@ -499,6 +499,7 @@ public sealed partial class EditorModel
     {
         var before = _selection;
         _applying = true;
+        _applyingAfter = after;
         try
         {
             _document.Edit(edits, kind, before, after);
@@ -506,6 +507,7 @@ public sealed partial class EditorModel
         finally
         {
             _applying = false;
+            _applyingAfter = null;
         }
 
         SetSelection(after, keepAutoClosed: keepAutoClosed);

@@ -12,8 +12,13 @@ namespace Craft.Tests;
 /// <summary>A folder under test-output/tmp for one test, deleted after it.</summary>
 internal sealed class TempFolder : IDisposable
 {
+    // Earlier runs' folders are swept once per run: a plug-in a test loaded stays loaded (and, on Windows, its files
+    // locked) until that run's process ends, so its folder can only be deleted by a later run.
+    private static readonly Lazy<bool> Swept = new(SweepEarlierRuns);
+
     public TempFolder()
     {
+        _ = Swept.Value;
         Path = TestRunner.RepositoryPath("test-output", "tmp", Guid.NewGuid().ToString("N")[..12]);
         Directory.CreateDirectory(Path);
     }
@@ -22,15 +27,33 @@ internal sealed class TempFolder : IDisposable
 
     public string File(string name) => System.IO.Path.Combine(Path, name);
 
-    public void Dispose()
+    public void Dispose() => TryDelete(Path);
+
+    // A file still open or loaded (Windows locks a loaded assembly: UnauthorizedAccessException; another holder:
+    // IOException) is left for the next run's sweep, never a failure of the test that used it.
+    private static void TryDelete(string folder)
     {
         try
         {
-            Directory.Delete(Path, recursive: true);
+            Directory.Delete(folder, recursive: true);
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    private static bool SweepEarlierRuns()
+    {
+        var root = TestRunner.RepositoryPath("test-output", "tmp");
+        if (Directory.Exists(root))
+        {
+            foreach (var folder in Directory.GetDirectories(root))
+            {
+                TryDelete(folder);
+            }
+        }
+
+        return true;
     }
 }
 

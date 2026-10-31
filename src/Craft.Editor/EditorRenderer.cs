@@ -10,8 +10,8 @@ namespace Craft.Editor;
 /// Draws an <see cref="EditorModel"/> through an <see cref="IEditorCanvas"/>: only the visible lines (plus one), in the
 /// order background, current line, find matches, selection, bracket match, text, gutter, caret. The visible range is
 /// classified in one call per frame into a reused buffer; each line's runs (its text cut where its style changes, tabs
-/// expanded) are kept while the snapshot's version and the line's spans stay the same, so scrolling in place and the
-/// caret's blink make no strings. One renderer per drawn surface; dispose it to return its buffers.
+/// expanded) are kept while the line's characters and spans stay the same (compared as spans, whatever the snapshot's
+/// version), so scrolling in place and the caret's blink make no strings and a keystroke rebuilds only its own line. One renderer per drawn surface; dispose it to return its buffers.
 /// </summary>
 public sealed class EditorRenderer : IDisposable
 {
@@ -21,7 +21,6 @@ public sealed class EditorRenderer : IDisposable
     private TokenSpan[] _clipped = ArrayPool<TokenSpan>.Shared.Rent(64);
     private EditorModel? _model;
     private ITheme? _theme;
-    private int _version = -1;
     private bool _disposed;
 
     /// <summary>How many run strings it has made since it was created (the run cache's misses).</summary>
@@ -53,12 +52,11 @@ public sealed class EditorRenderer : IDisposable
             _lines.Clear();
         }
 
-        if (!ReferenceEquals(model, _model) || !ReferenceEquals(theme, _theme) || snapshot.Version != _version)
+        if (!ReferenceEquals(model, _model) || !ReferenceEquals(theme, _theme))
         {
             _lines.Clear();
             _model = model;
             _theme = theme;
-            _version = snapshot.Version;
         }
 
         var colors = theme.Colors;
@@ -282,13 +280,14 @@ public sealed class EditorRenderer : IDisposable
         }
 
         var clipped = _clipped.AsSpan(0, clippedCount);
-        if (_lines.TryGetValue(index, out var cached) && SameSpans(cached.Spans, clipped))
+        if (_lines.TryGetValue(index, out var cached) && SameSpans(cached.Spans, clipped) && text.SequenceEqual(cached.Source))
         {
             return cached;
         }
 
         var runs = Build(text, clipped, theme, tabSize, ref expanded);
         runs.Spans = clipped.ToArray();
+        runs.Source = text.ToArray();
         _lines[index] = runs;
         return runs;
     }
@@ -410,6 +409,8 @@ public sealed class EditorRenderer : IDisposable
         private Run[] _items = [];
 
         public TokenSpan[] Spans { get; set; } = [];
+
+        public char[] Source { get; set; } = [];
 
         public int Columns { get; set; }
 

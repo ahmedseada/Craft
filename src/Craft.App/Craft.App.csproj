@@ -37,8 +37,41 @@
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
     <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
     <ProjectReference Include="..\Craft.Maui\Craft.Maui.csproj" />
-    <ProjectReference Include="..\Craft.CSharp\Craft.CSharp.csproj" />
+    <!-- C# is a pre-installed plug-in, not part of the app: built first, never referenced, copied to plugins\Craft.CSharp\. -->
+    <ProjectReference Include="..\Craft.CSharp\Craft.CSharp.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
+
+  <!--
+    The pre-installed C# plug-in: Craft.CSharp is built as a plain library (no runtime identifier, so its own output folder
+    bin\<Configuration>\net10.0\), and that folder (Craft.CSharp.dll, Roslyn's assemblies, Craft.CSharp.deps.json; never the host's Craft.Abstractions, Craft.Core or
+    Idrak.Abstraction) is copied to
+    plugins\Craft.CSharp\ beside the program after Build, and beside the published program after Publish. Deleting that
+    folder (or CRAFT_PLUGINS_DISABLED=csharp) removes C#; the app still starts, opening .cs files as plain text.
+  -->
+  <Target Name="CraftCSharpPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\Craft.CSharp\Craft.CSharp.csproj" Targets="Build"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;Platform;PlatformTarget;OutDir;OutputPath;PublishDir;WindowsPackageType;WindowsAppSDKSelfContained">
+      <Output TaskParameter="TargetOutputs" ItemName="_CraftCSharpPluginAssembly" />
+    </MSBuild>
+    <PropertyGroup>
+      <_CraftCSharpPluginFolder>@(_CraftCSharpPluginAssembly->'%(RootDir)%(Directory)')</_CraftCSharpPluginFolder>
+    </PropertyGroup>
+    <Error Condition="'$(_CraftCSharpPluginFolder)' == '' or !Exists('$(_CraftCSharpPluginFolder)')" Text="The C# plug-in's build output was not found (Craft.CSharp built to '$(_CraftCSharpPluginFolder)')." />
+    <ItemGroup>
+      <!-- The host's own contracts are never copied: the app provides them, so the plug-in shares the same types. -->
+      <_CraftCSharpPluginFile Include="$(_CraftCSharpPluginFolder)**\*"
+                              Exclude="$(_CraftCSharpPluginFolder)Craft.Abstractions.*;$(_CraftCSharpPluginFolder)Idrak.Abstraction.*;$(_CraftCSharpPluginFolder)Craft.Core.*" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CraftCopyCSharpPlugin" AfterTargets="Build" DependsOnTargets="CraftCSharpPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftCSharpPluginFile)" DestinationFiles="@(_CraftCSharpPluginFile->'$(OutDir)plugins\Craft.CSharp\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CraftPublishCSharpPlugin" AfterTargets="Publish" DependsOnTargets="CraftCSharpPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftCSharpPluginFile)" DestinationFiles="@(_CraftCSharpPluginFile->'$(PublishDir)plugins\Craft.CSharp\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
 
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('windows'))">
     <Compile Remove="**/*.cs" />

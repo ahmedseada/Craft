@@ -340,6 +340,43 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | L | Held, far later: more languages, each its own pre-installed, removable plug-in like C# (an `ILanguage` in `EditorLanguages`, loaded from `plugins/`): TypeScript, JavaScript, HTML, CSS. The parser for each is chosen when the phase starts, measured against the keystroke budget; nothing native (no tree-sitter binaries), so a C# incremental parser or lexer per language. | Each opens, colours and matches brackets like C#; removing its folder turns its files to plain text. | the owner's word, after a good Windows version |
 | A3 | Held: the "remote" model provider, the `kestrel` MCP transport in Idrak.AspNetCore, screen-reader access to the drawn editor, iOS and macOS. | the owner's call | the owner |
 
+## E3 as built (2026-10-31)
+
+- **The control's logic is in `Craft.Editor`, UI-free**: `EditorModel` (one selection, kept as a `SelectionState` value the
+  commands take and return, so several carets later map the same commands), `EditorFind`, bracket matching, and
+  `EditorRenderer`. `Craft.Maui` holds only what needs MAUI: `EditorView`, `EditorDrawable`, `MauiEditorCanvas`,
+  `MauiTextMeasurer`, `MauiEditorClipboard`, and `Platforms/Windows/WindowsTextInputAdapter` (namespace `Craft.Maui.WinUI`,
+  so `Windows.*` names stay unambiguous). The clipboard is `Craft.Editor.Abstractions.IEditorClipboard` (only the editor
+  uses it). The headless tests drive `Craft.Editor` (group `Editor`), not `Craft.Maui`'s `net10.0` target.
+- **Scrolling**: a `ScrollView` (both ways) over a spacer of the content's size, with the `GraphicsView` kept over the
+  viewport (translated by the scroll offsets), so the native scroll bars and the wheel work with no platform code.
+  `ContentWidth` grows with the longest line drawn (never a whole-file scan); the gutter stays fixed on the left.
+- **Text**: one run per change of style in a line, tabs expanded, drawn left-aligned and centred in the line's height.
+  The font is measured inside the first frame (64 "M"s on the platform canvas) and the model re-measures then.
+- **Run cache**: per line, kept while the line's characters and its clipped spans are the same (compared as spans), not
+  while the snapshot's version is: a keystroke rebuilds its own line only. Measured: median keystroke-to-render 17.9 us
+  with 43 run strings and 11.4 KB per keystroke when cleared on every version, 6.6 us with 1 run string and 1 KB after.
+- **Keyboard**: `PreviewKeyDown` (so Tab never moves the focus when the editor handles it) and `CharacterReceived`
+  (control characters dropped, Ctrl without Alt dropped so AltGr types, surrogate pairs joined). IME composition beyond
+  committed characters is not handled yet.
+- **Settings added** (each a `CRAFT_*` variable): caret blink and width, double-click time and distance, bracket scan
+  lines, scroll margins (lines and columns), bottom margin lines, gutter padding, auto-close brackets (off by default),
+  find's count limit. Enter's line break follows the document, else E1's `CRAFT_LINE_ENDING`.
+- **`Craft.App`**: code only (no XAML pages). C# is not referenced: it is a pre-installed plug-in copied after Build and
+  Publish into `plugins\Craft.CSharp\` beside the program (Craft.CSharp's own output folder, without the host's
+  Craft.Abstractions, Craft.Core and Idrak.Abstraction) and loaded by `CraftPlugins.LoadInstalled`; deleting that folder
+  or `CRAFT_PLUGINS_DISABLED=csharp` turns .cs files to plain text, said so in the status bar. Save is for a file that
+  has a path (Save As waits for E4's shell).
+
+E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a 4-core Linux container, the generated
+100,000-line file as plain text, a counting canvas with fixed metrics, viewport 1600x900, 49 lines drawn):
+
+| What | Cold | Warm median | Warm p99 | Allocated |
+|---|---|---|---|---|
+| Keystroke to render (type or Backspace, then the frame) | 29 ms | 6.6 us | 23 us | 1.0 KB, 1 run string per keystroke |
+| Caret-blink frame | | 5.0 us | 13.5 us | 0 bytes |
+| Scroll frame, one line each | | 5.3 us | 33 us | 0.3 KB, 0.9 run strings per frame |
+
 ## Commands for the owner (once a phase is built)
 
 Given per phase with the exact project names, in the shape of `CLAUDE.md`: one pull, one build, then the targeted runs

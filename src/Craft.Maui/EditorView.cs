@@ -141,6 +141,14 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>Raised after each frame, outside it (the status bar reads the model's telemetry then).</summary>
     public event EventHandler? Painted;
 
+    /// <summary>Shows <paramref name="document"/> in <paramref name="language"/> (null for plain text), making one new model.</summary>
+    public void Open(ITextDocument? document, ILanguage? language)
+    {
+        _document = document;
+        _language = language;
+        Rebuild();
+    }
+
     /// <summary>Redraws.</summary>
     public void Invalidate() => _graphics.Invalidate();
 

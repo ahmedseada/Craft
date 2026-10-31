@@ -502,9 +502,16 @@ public static class EditorTests
         Check.Equal(built, renderer.RunStringsBuilt, "a caret move builds none");
         renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: true);
         Check.Equal(built, renderer.RunStringsBuilt, "a scroll in place builds none");
+        Check.Equal(4L, built, "four runs: 'alpha ', '\"b\"', 'gamma', 'delta'");
         model.OnText("z");
         renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: true);
-        Check.True(renderer.RunStringsBuilt > built, "an edit rebuilds the visible runs");
+        Check.Equal(built + 2, renderer.RunStringsBuilt, "an edit rebuilds only its own line's two runs");
+        model.Select(0, 0);
+        model.OnKey(EditorKey.Enter, None);
+        canvas.Clear();
+        renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: true);
+        var drawn = canvas.Texts.Where(t => t.X >= model.TextLeft).Select(t => (t.Text, t.Top)).ToList();
+        Check.SequenceEqual([("azlpha ", 20f), ("\"b\"", 20f), ("gamma", 40f), ("delta", 60f)], drawn, "lines moved down by Enter are drawn with their own text");
     }
 
     [Test]

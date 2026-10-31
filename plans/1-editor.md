@@ -700,7 +700,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | A1 | **Built (2026-10-31, "A1 as built" below).** `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
 | A2 | **Built (2026-10-31, "A2 as built" below; Idrak 6eb11a2 for the agent's steering note). Left: the owner's run on a real model.** The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. **First batch built (2026-10-31, "P as built (first batch)" below): P1, P2, P3, P5 and P4. Left: P6, P9, P10, P8, P11.** | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
-| V | Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
+| V | **Built (2026-10-31, "V as built" below); left: the owner codes by voice on Windows (a real recognizer and microphone).** Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
 | R0 | **Built (2026-10-31, Idrak f419399).** Idrak: preference learning from episodes ("Idrak library gaps", R0): `PreferencePairSources` ("group", "verdict"), the preference losses by name ("dpo", "orpo", "simpo") over the existing `FineTuningLosses`, iterative preference training usable by `idrak reinforce`, the suite and the bench. | Pairs from a scored rollout train a tiny model with the DPO loss falling and the margin rising; memory flat over many rounds; `idrak reinforce --pairs group --loss dpo` runs. | A0 (a slot in Idrak); before R |
 | R | Learning in the editor on Idrak's reinforcement learning ("Learning in the editor" above): episodes from the editor, the editor-verdict reward with `csharp-build`/`csharp-tests`, tasks from the workspace's tests, background adapter training, promotion and rollback, the Learning panel; and the plug-in as the test of Idrak's reinforcement stack through its C# environment. | A fixture workspace's failing test becomes a task the "csharp" environment rewards; recorded episodes replay; an adapter trains with flat memory and is promoted only when better; the same assembly runs under `idrak reinforce`; the owner trains on a real model on Windows. | A2 (the episodes come from its plug-ins), P5 (the sandbox), R0 |
 | M | Android, when the owner says "compile Android": the `net10.0-android` target added to every project in one step; `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | Every project builds for Android; the owner edits a file on a phone; the numbers are written here. | the owner's word, after a good Windows version |
@@ -1434,6 +1434,108 @@ its own load context, and check it only through the registry its consumer reads.
   base; a hyperlink (OSC 8) or clipboard (OSC 52) from the shell; Windows' "win32-input-mode" (ConPTY translates VT keys);
   find in the terminal; the narrow (phone) layout has no terminal (phase M decides: a phone may report it has no shell
   through `ITerminalHost.Unavailable`).
+
+## V as built (2026-10-31)
+
+- **Craft.Voice** (`plugins/Craft.Voice`, in `Craft.slnx`; P7 is its first part): a pre-installed, removable plug-in
+  ("voice", `plugins\Craft.Voice\` beside the program through P's generic `CraftPreinstalledPlugins` target, so
+  Craft.App.csproj did not change; `CRAFT_PLUGINS_DISABLED=Craft.Voice` turns it off), built on `Craft.Abstractions` and
+  Idrak (Idrak.Audio, Idrak.Data for Hugging Face names, Idrak.Gpu for the GPU devices, Idrak.Audio.Plugins as the speech
+  families registered by the setting `idrakPlugins`: no family is named in Craft). It reaches the AI plug-in only through
+  public contracts: `ModelProviders` for the chat model, the host's panels for the last reply, and reads the "ai" plug-in's
+  `model` setting when its own `codeModel` is empty. plugin.json capabilities: microphone, input, model, network.
+  Android/AOT: Idrak.Audio and Idrak.Audio.Plugins are AOT-compatible; the capture and playback load the system's audio
+  library at run time ("aaudio" for phase M).
+- **The Windows lesson** (a library in a plug-in's own folder registers no built-ins): `Craft.Abstractions.IdrakInPlugins`
+  (new, public) holds what Craft.Ai's `IdrakLibraries` did, for any plug-in: `IncludeLibraries(assembly)` hands each
+  Idrak library beside the plug-in, from its own load context, to `IdrakPlugins.Load`; `IncludePackages(assembly, names)`
+  the packages a setting names. Craft.Ai's `IdrakLibraries` now calls it; the voice plug-in calls both at activation. The
+  test runs the test program again with `--probe-plugin FOLDER` (a fresh process, nothing of Idrak.Audio touched before
+  it) on a copy of the plug-in's output folder: Idrak.Audio lives in the `Craft.Voice` context; `AudioCaptures` holds
+  aaudio, alsa, winmm, `AudioPlaybacks` the same, `SpeechFamilies` IdrakAudio and WhisperForConditionalGeneration,
+  `SpeechSynthesisFamilies` IdrakAudio and VitsModel, `LiveCommitPolicies` agreement; the "audio" chat part was
+  registered by the plug-in's own copy; Idrak.Gpu's Cuda, Vulkan and Hip providers are registered (so "auto" finds the
+  GPU, the owner's Craft.Ai finding of 3b7f0c7); the commands and both keys are there.
+- **Contracts added** (Craft.Abstractions, additive, contracts still 1.0): `IEditorHost.TypeText(document, text)` (the
+  user's own input at the caret over the selection, one `EditKind.Command` undo step; for an input method such as
+  dictation, never a model's text, which stays a diff through `ProposeAsync`: Decision, dictation is the user typing by
+  voice, not a plug-in's edit), `IEditorHost.Select(document, selection)` (a caret move the editor shows; `EditorHost`
+  raises `SelectionRequested`, which ShellPage answers on the tab's `EditorModel` with `EnsureCaretVisible`; `TypeText`
+  raises it too, so the view's caret follows the host's and a replaced selection is not left selected),
+  `IEditorHost.Panels`, `IEditorHost.KeyPressed` (`EditorKeyEventArgs`, raised by `HandleKey` before routing, nothing
+  made while no one listens), `PluginCapabilities.Input` and `Microphone`, and the registries `SpokenSymbols`
+  (`SpokenSymbol`: words, text, language or every language, spaces before and after; `For(language)` gives the
+  language's own first; `Version` for the dictation's cached table) and `SpokenCommands` (`SpokenCommand`: a phrase that
+  runs a command id, or a phrase with `#` that runs an action with the number said). Craft.CSharp registers C#'s symbols
+  ("arrow" and "lambda" `=>`, "null coalescing" `??`, "nullable", "open/close generic") over the every-language table.
+  `IEditorDocument.SemanticSession` (P's) gives the hover.
+- **Capture and live transcription**: `voice.listen` (Ctrl+Shift+M, `key`) opens the microphone (`capture`: auto is
+  `AudioCaptures.ForThisMachine`, "winmm" on Windows; `device`, `sampleRate`), `voice.code` (Ctrl+Shift+Alt+M, `codeKey`)
+  opens it for spoken code; `mode` toggle (the key again closes it) or push (one phrase a press: the editor's keys have
+  no key-up, so a held key is not used). The recognizer (`recognizer`, a name through Idrak's `ModelSource.Resolve`,
+  `SpeechModels.Load` on `computeDevice`, auto by default) loads once off the UI thread with its stage and seconds in
+  the status bar (`voice.loadRecognizer` loads it ahead), is shared while in use and let go `keepAliveMinutes` after.
+  Idrak's `LiveTranscriber` runs over the input on the thread pool (`stepSeconds`, `windowSeconds`, `silenceSeconds`,
+  `commitPolicy`, `agreement`, `language`); each block passes once through the listener for its level (the loudest in
+  dBFS every `levelMs`, eight bars: "● Mic ▅" in the status bar while it is open, a click closes it) and, unless `codeAs`
+  is text, into a fixed ring of the last window's samples. A2 has no push seam for ghost text (its ghost is a provider
+  the editor asks after typing), so the live words are a status item: the committed words, then the open ones in
+  brackets. Stopping ends the input (the phrase being said is finished first); the device opens, closes and the models
+  are freed off the UI thread (the rule of e04652c), cancellations with `CancelAsync`.
+- **Dictation**: each phrase (a segment the transcriber ended) in the order said: `codePrefix` ("code") sends the rest as
+  spoken code; `dictatePrefix` ("type") types the rest; a phrase naming a command runs it (`commandPrefix`, empty: any);
+  anything else is typed at the caret through `TypeText`, one undo step a phrase. The text: the longest spoken symbol
+  first ("double equals" before "equals"), the symbol's spaces, number words as digits (`digits`: "forty two", "one
+  hundred and five"; a unit after a unit ends a number), the recognizer's own punctuation dropped (`punctuation` spoken,
+  or heard), a space before the first word when the caret follows a word.
+- **Voice commands**: every registered command's title without its "Area: " part, or whole ("save" runs "File: Save",
+  "format the document" "Edit: Format document"; "the", "a", "an", "please" left out), and the `SpokenCommands`: "go to
+  line #" and "line #" (through `Select`), "next error"/"previous error" (the plug-in's `voice.nextProblem` and
+  `voice.previousProblem`, "Go: Next problem" in the palette), "read selection", "read that", "read error", "read hover",
+  "read reply", "stop listening", "stop reading".
+- **Spoken code**: the request, the selection (or "at the caret"), the file's name and language and `codeContextLines`
+  lines around the caret go to the chat model of `modelProvider` (local) and `codeModel` (empty: the AI plug-in's
+  `model`); its first fenced block is proposed over the selection or at the caret through `ProposeAsync` (placement and
+  origin "Voice · MODEL · heard the sound | the transcript" in the diff view). `codeAs` auto sends the phrase's sound
+  itself (a WAV through Idrak's "wav" encoder as a `ChatAudio` part) to a model whose `PartKinds` hold "audio", else the
+  transcript; sound refuses a text-only model by name; text never sends sound. `codeMaxTokens`.
+- **Read back**: `voice.readSelection` (the caret's line when nothing is selected), `voice.readProblem` (the problem at the
+  caret, else the next), `voice.readHover` (`IEditorDocument.SemanticSession.GetHoverAsync`), `voice.readReply` (the last
+  assistant entry of a conversation panel); `synthesizer` through `ModelSource.Resolve`, `SpeechSynthesisModels.Load`,
+  Idrak's `VoicedSynthesizer` (`voice`: a speaker or an installed voice), streamed block by block to `playback` (auto:
+  `AudioPlaybacks.ForThisMachine`; `outputDevice`) off the UI thread; the status bar says "Speaking … · any key stops";
+  any key (`KeyPressed`, subscribed only while speaking) or `voice.stopReading` cancels it within a block.
+- **Measured** (group `Voice`, the 4-core container, a fake recognizer, 160 phrases through `PcmStreamInput` at 40 times
+  real time, a synchronous dispatcher so the time is the pipeline's own): from the transcriber's end of a phrase to the
+  text in the document first 0.33 ms, median 0.24-0.27 ms, p99 0.7-7.8 ms over two runs (the p99 is a GC or the thread
+  pool); managed memory after 40 and after 160 phrases 11,485 and 11,500 KiB (133 bytes a phrase, the document's own
+  text and undo steps included; an earlier run read -608 bytes a phrase): flat. 679 recognizer calls for 160 phrases (the
+  open phrase read again every step). The first words on screen with a real recognizer are the recognizer's step plus its
+  time per step: the owner's run.
+- **Tests** (group `Voice`, headless): a generated WAV (a tone a phrase) through a test capture registered in
+  `AudioCaptures` and Idrak's `PcmStreamInput`, paced, with a fake recognizer (the phrase by its tone, the share of its
+  words heard while it sounds): three phrases dictate "Var total = 0;\nPrint(total);" as three undo steps, the open words
+  shown in brackets, the microphone's mark with its level, gone when it closes; "Save." runs a command titled "File: Save",
+  "Go to line two." moves the caret (the editor told), "Format the document." runs "Edit: Format document", "Type save."
+  types it, "next error" with no problem says it cannot run; a spoken-code phrase arrives as a diff from a fake chat model,
+  accepted as one undo step, the transcript to a text-only model and the phrase's own sound (its tone's frequency checked)
+  to one that hears; read back plays block by block through a fake playback and any key stops it, the output closed,
+  nothing played after; the symbols, numbers, C#'s own table and command matching; the measure above; the plug-in from a
+  copied folder in a fresh process (above). With `Editor`, `PhaseP`, `Ai`, `AiPlugins`, `PluginKit`, `Plugins`, `ApiGuard`
+  and `Inventory`: 88 ran, 87 passed on the first run; the one failure was the probe's check that the default context
+  holds no Idrak.Audio, which the test program's own folder (unlike the app's) does put there through Idrak's
+  LibraryDefaults: replaced by the check that the "audio" chat part came from the plug-in's own copy; `Voice`,
+  `ApiGuard`, `Inventory` then 14 of 14. `api/Craft.Voice.txt` new; `api/Craft.Abstractions.txt`, `api/Craft.Editor.txt`
+  and `plans/inventory.md` (SpokenCommands, SpokenSymbols) regenerated.
+- **Not compiled here** (Windows only): nothing; ShellPage (`Craft.Maui`, net10.0) was built here with nullable
+  analysis. No line under `Platforms/Windows` or in Craft.App changed.
+- **Not yet / the owner's**: no real recognizer, synthesizer, microphone or speaker was run here (the owner's run: a
+  Whisper checkpoint through `recognizer`, a VITS one through `synthesizer`); the first-words latency and the accuracy on
+  code words with a real recognizer (a keyword-biasing contract in Idrak only if measured necessary, as the plan says);
+  push mode holds one phrase a press, not a held key (no key-up in the editor's keys); the live words are in the status
+  bar, not ghost text (A2 has no push seam); the casing of dictated words is the recognizer's ("Var"), no setting yet;
+  the hover read needs a language with a semantic layer; P7's conformance suite (`SpeechRecognizerSuite`) is for a real
+  recognizer and runs in Idrak, not on Craft's fake.
 
 ## Commands for the owner (once a phase is built)
 

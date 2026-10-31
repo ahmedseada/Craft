@@ -98,6 +98,8 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   Craft.Editor.Abstractions.IEditorPresenter Presenter { get; set; }
   System.Boolean Deactivate(System.String name)
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
+  System.Boolean Select(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
+  System.Boolean TypeText(Craft.Abstractions.IEditorDocument document, System.String text)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Documents { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPanel> Panels { get; }
@@ -137,9 +139,11 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentOpened
   event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentSaved
   event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> SelectionChanged
+  event System.EventHandler<Craft.Abstractions.EditorKeyEventArgs> KeyPressed
   event System.EventHandler<Craft.Editor.EditorLogEntry> Logged
   event System.EventHandler<Craft.Editor.EditorMeasureEventArgs> Recorded
   event System.EventHandler<Craft.Editor.EditorProgressItem> ProgressChanged
+  event System.EventHandler<Craft.Editor.EditorSelectionRequestEventArgs> SelectionRequested
   event System.EventHandler<System.String> PanelShowRequested
 sealed class Craft.Editor.EditorLogEntry : System.IEquatable<Craft.Editor.EditorLogEntry>
   Craft.Abstractions.EditorLogLevel Level { get; init; }
@@ -275,6 +279,9 @@ sealed class Craft.Editor.EditorScrollEventArgs : System.EventArgs
   System.Single X { get; }
   System.Single Y { get; }
   ctor(System.Single x, System.Single y)
+sealed class Craft.Editor.EditorSelectionRequestEventArgs : Craft.Abstractions.EditorDocumentEventArgs
+  Craft.Abstractions.SelectionState Selection { get; }
+  ctor(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
 struct Craft.Editor.EditorTooltip : System.IEquatable<Craft.Editor.EditorTooltip>
   System.Boolean Equals(Craft.Editor.EditorTooltip other)
   System.Boolean Equals(System.Object obj)

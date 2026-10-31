@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Voice",
+  "version": "0.1.0",
+  "summary": "Coding by voice: dictation at the caret, voice commands, spoken code as a diff, and read back, on Idrak.Audio",
+  "contractVersion": "1.0",
+  "capabilities": ["microphone", "input", "model", "network"]
+}

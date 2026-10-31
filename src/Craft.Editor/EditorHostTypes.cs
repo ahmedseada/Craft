@@ -189,6 +189,13 @@ public sealed record PluginActivation(string Name, bool Active, string? Error, d
 /// <param name="Error">The error it reports, or null.</param>
 public sealed record EditorLogEntry(DateTimeOffset Time, EditorLogLevel Level, string Source, string Message, Exception? Error);
 
+/// <summary>A selection a plug-in set (<see cref="EditorHost.SelectionRequested"/>), for the document's editor to show.</summary>
+public sealed class EditorSelectionRequestEventArgs(IEditorDocument document, SelectionState selection) : EditorDocumentEventArgs(document)
+{
+    /// <summary>The selection, clamped to the document's text.</summary>
+    public SelectionState Selection { get; } = selection;
+}
+
 /// <summary>A measure recorded through the host (telemetry).</summary>
 public sealed class EditorMeasureEventArgs(string source, string metric, double value, string unit) : EventArgs
 {

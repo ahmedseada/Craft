@@ -1,0 +1,117 @@
+enum Craft.Voice.VoiceMode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Code = 1
+  Dictate = 0
+sealed class Craft.Voice.VoicePackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+sealed class Craft.Voice.VoicePhrase : System.IEquatable<Craft.Voice.VoicePhrase>
+  Craft.Voice.VoicePhrase <Clone>$()
+  Craft.Voice.VoicePhraseKind Kind { get; init; }
+  System.Boolean Equals(Craft.Voice.VoicePhrase other)
+  System.Boolean Equals(System.Object obj)
+  System.Double Milliseconds { get; init; }
+  System.Int32 GetHashCode()
+  System.String Detail { get; init; }
+  System.String Heard { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Heard, out Craft.Voice.VoicePhraseKind Kind, out System.String Detail, out System.Double Milliseconds)
+  ctor(System.String Heard, Craft.Voice.VoicePhraseKind Kind, System.String Detail, System.Double Milliseconds)
+enum Craft.Voice.VoicePhraseKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Code = 2
+  Command = 1
+  Dictated = 0
+  Ignored = 3
+sealed class Craft.Voice.VoicePlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String CodeCommand = voice.code
+  const System.String ListenCommand = voice.listen
+  const System.String LoadCommand = voice.loadRecognizer
+  const System.String NextProblemCommand = voice.nextProblem
+  const System.String PreviousProblemCommand = voice.previousProblem
+  const System.String ReadHoverCommand = voice.readHover
+  const System.String ReadProblemCommand = voice.readProblem
+  const System.String ReadReplyCommand = voice.readReply
+  const System.String ReadSelectionCommand = voice.readSelection
+  const System.String StopCommand = voice.stop
+  const System.String StopReadingCommand = voice.stopReading
+  static Craft.Voice.VoicePlugin Instance { get; }
+  static Craft.Voice.VoiceSession Current { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SpokenCommand> SpokenAliases { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SpokenSymbol> Symbols { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> DescribeRegistries()
+sealed class Craft.Voice.VoiceRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+sealed class Craft.Voice.VoiceSession : System.IDisposable
+  Craft.Abstractions.IEditorHost Host { get; }
+  Craft.Voice.VoiceMode Mode { get; }
+  Craft.Voice.VoicePhrase LastPhrase { get; }
+  Craft.Voice.VoiceSettings Settings { get; }
+  System.Boolean IsListening { get; }
+  System.Boolean IsSpeaking { get; }
+  System.Int32 Phrases { get; }
+  System.String HeardText { get; }
+  System.String MicText { get; }
+  System.Threading.Tasks.Task LoadRecognizerAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task ReadAloudAsync(System.String text, System.String what, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task ReadHoverAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task ReadProblemAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task ReadReplyAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task ReadSelectionAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task StartAsync(Craft.Voice.VoiceMode mode, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task ToggleAsync(Craft.Voice.VoiceMode mode, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Voice.VoicePhrase> HandlePhraseAsync(System.String phrase, Idrak.Audio.Abstractions.AudioData sound = null, System.Int64 arrived = 0, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Dispose()
+  System.Void Stop()
+  System.Void StopReading()
+  event System.EventHandler ListeningEnded
+  event System.EventHandler ReadingEnded
+  event System.EventHandler<Craft.Voice.VoicePhrase> PhraseHandled
+  static System.Threading.Tasks.Task GoToLineAsync(Craft.Abstractions.IEditorHost host, System.Int32 number, System.Threading.CancellationToken cancellationToken)
+  static System.Void GoToProblem(Craft.Abstractions.IEditorHost host, System.Boolean forward)
+sealed class Craft.Voice.VoiceSettings : System.IEquatable<Craft.Voice.VoiceSettings>
+  Craft.Voice.VoiceSettings <Clone>$()
+  System.Boolean Digits { get; init; }
+  System.Boolean Equals(Craft.Voice.VoiceSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> IdrakPlugins { get; init; }
+  System.Double KeepAliveMinutes { get; init; }
+  System.Double SilenceSeconds { get; init; }
+  System.Double StepSeconds { get; init; }
+  System.Double WindowSeconds { get; init; }
+  System.Int32 Agreement { get; init; }
+  System.Int32 CodeContextLines { get; init; }
+  System.Int32 CodeMaxTokens { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 LevelMilliseconds { get; init; }
+  System.Int32 SampleRate { get; init; }
+  System.String Capture { get; init; }
+  System.String CodeAs { get; init; }
+  System.String CodeKey { get; init; }
+  System.String CodeModel { get; init; }
+  System.String CodePrefix { get; init; }
+  System.String CommandPrefix { get; init; }
+  System.String CommitPolicy { get; init; }
+  System.String ComputeDevice { get; init; }
+  System.String Device { get; init; }
+  System.String DictatePrefix { get; init; }
+  System.String Key { get; init; }
+  System.String Language { get; init; }
+  System.String Mode { get; init; }
+  System.String ModelProvider { get; init; }
+  System.String OutputDevice { get; init; }
+  System.String Playback { get; init; }
+  System.String Punctuation { get; init; }
+  System.String Recognizer { get; init; }
+  System.String Synthesizer { get; init; }
+  System.String ToString()
+  System.String Voice { get; init; }
+  const System.String PluginName = voice
+  ctor()
+  static Craft.Voice.VoiceSettings From(Craft.Abstractions.IPluginSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }

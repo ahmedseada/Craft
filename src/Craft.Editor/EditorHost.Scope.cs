@@ -33,6 +33,14 @@ public sealed partial class EditorHost
 
         public IPluginSettings Settings => host.Settings;
 
+        public IReadOnlyList<IEditorPanel> Panels => host.Panels;
+
+        public event EventHandler<EditorKeyEventArgs>? KeyPressed
+        {
+            add => Track(host._keyPressed, value);
+            remove => host._keyPressed.Remove(value);
+        }
+
         public event EventHandler<EditorDocumentEventArgs>? DocumentOpened
         {
             add => Track(host._opened, value);
@@ -86,6 +94,10 @@ public sealed partial class EditorHost
 
         public Task<IEditorDocument?> OpenDocumentAsync(string path, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult<IEditorDocument?>(null) : host.OpenDocumentAsync(path, cancellationToken);
+
+        public bool TypeText(IEditorDocument document, string text) => !_closed && host.TypeCore(document, text, name);
+
+        public bool Select(IEditorDocument document, SelectionState selection) => !_closed && host.Select(document, selection);
 
         public Task<bool> ExecuteCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ExecuteCommandAsync(commandId, cancellationToken);

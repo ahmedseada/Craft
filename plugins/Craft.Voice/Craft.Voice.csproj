@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Craft.Voice (plan 1, phase V): coding by voice on Idrak.Audio, a pre-installed, removable plug-in built only on Craft's
+    public plug-in contracts (Craft.Abstractions) and Idrak (Idrak.Audio, and Idrak.Audio.Plugins as the speech families
+    it registers by the setting idrakPlugins: no family is named in Craft). The microphone (Idrak's AudioCaptures, "winmm"
+    on Windows), live transcription (LiveTranscriber with a recognizer named through Idrak's ModelSources), dictation at the
+    caret (one undo step a phrase, spoken symbols per language), voice commands (every registered command's title and the
+    SpokenCommands), spoken code (the phrase, the selection and the file to the chat model of a ModelProviders provider, the
+    answer a diff the user accepts; the sound itself to a model that hears), and read back (a synthesizer and AudioPlaybacks,
+    any key stops it). It reaches the AI plug-in (Craft.Ai) only through those contracts: ModelProviders, the host's panels.
+
+    Phase P's P7 ("voice dictation and commands") is its first part. Pre-installed as the other plugins\<Name>\ are:
+    Craft.App's CraftPreinstalledPlugins target copies this project's output folder to plugins\Craft.Voice\ (without the
+    host's Craft.Abstractions and Idrak.Abstraction); CRAFT_PLUGINS_DISABLED=Craft.Voice turns it off. Its Idrak
+    libraries are shared with the other plug-ins (CraftPlugins loads each once) and registered at activation
+    (IdrakInPlugins), Idrak.Gpu among them, so the "auto" device finds the GPU for the speech models.
+
+    Android (phase M): Idrak.Audio and Idrak.Audio.Plugins are AOT-compatible (IsAotCompatible); the capture and playback
+    load the system's audio library at run time ("aaudio" on Android); the plug-in's package is made by reflection
+    (IdrakPluginPackage), as every plug-in's is.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Voice</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <PackageReference Include="Idrak.Audio" Version="$(IdrakVersion)" />
+    <!-- Idrak.Gpu adds the GPU devices (CUDA, Vulkan, HIP; the system's own drivers, loaded at run time): without it the
+         "auto" device finds only the CPU. Its devices register through IdrakInPlugins at activation. -->
+    <PackageReference Include="Idrak.Gpu" Version="$(IdrakVersion)" />
+    <!-- Idrak.Data adds the Hugging Face model source: a recognizer named by its Hugging Face id resolves and downloads. -->
+    <PackageReference Include="Idrak.Data" Version="$(IdrakVersion)" />
+    <!-- The speech families (recognition and synthesis): Idrak's own plug-in package, registered at activation by the
+         setting idrakPlugins (empty registers none). No family is written in Craft. -->
+    <PackageReference Include="Idrak.Audio.Plugins" Version="$(IdrakVersion)" />
+  </ItemGroup>
+
+  <!-- Idrak.Abstraction comes through Craft.Abstractions; as a contract shared with the host it is not copied either.
+       Its plugin.json goes beside its dll through plugins\Directory.Build.targets. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

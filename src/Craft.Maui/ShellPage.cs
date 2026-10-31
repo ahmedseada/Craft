@@ -128,6 +128,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _chatBox = new ContentView { Content = _conversations, WidthRequest = _shell.Options.ChatWidth };
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
         _host.PanelShowRequested += OnPanelShowRequested;
+        _host.SelectionRequested += OnSelectionRequested;
         RegisterAppCommands();
 
         _titleWide = new TitleBarView(_palette);
@@ -318,6 +319,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _disposed = true;
         EditorMenus.Changed -= OnMenusChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
+        _host.SelectionRequested -= OnSelectionRequested;
         _conversations.Dispose();
         foreach (var provider in _watchedProviders)
         {
@@ -1006,6 +1008,20 @@ public sealed class ShellPage : ContentPage, IDisposable
             int start = Math.Clamp(location.Start, 0, model.Snapshot.Length);
             model.Select(Math.Min(model.Snapshot.Length, start + location.Length), start);
             model.EnsureCaretVisible();
+        }
+    }
+
+    // A plug-in moved a document's selection or typed into it (phase V: "go to line 40", dictation): its editor shows it.
+    private void OnSelectionRequested(object? sender, EditorSelectionRequestEventArgs e)
+    {
+        foreach (var tab in _shell.Tabs.Tabs)
+        {
+            if (ReferenceEquals(tab.HostDocument, e.Document) && tab.View is EditorView { Model: { } model })
+            {
+                model.Select(e.Selection.Anchor, e.Selection.Caret);
+                model.EnsureCaretVisible();
+                return;
+            }
         }
     }
 

@@ -57,6 +57,13 @@ public sealed record ProposedEdits(IReadOnlyList<TextEdit> Edits, string Title)
     public string? Origin { get; init; }
 }
 
+/// <summary>A key that reached the editor (<see cref="IEditorHost.KeyPressed"/>): its chord.</summary>
+public sealed class EditorKeyEventArgs(KeyChord chord) : EventArgs
+{
+    /// <summary>The key and its modifiers.</summary>
+    public KeyChord Chord { get; } = chord;
+}
+
 /// <summary>How much a log line matters.</summary>
 public enum EditorLogLevel
 {
@@ -158,6 +165,37 @@ public interface IEditorHost
     /// </summary>
     void ShowPanel(string panelId)
     {
+    }
+
+    /// <summary>
+    /// Types <paramref name="text"/> into <paramref name="document"/> at its caret, replacing its selection, as the user's
+    /// own input: one undo step (<see cref="EditKind.Command"/>), the caret after it, the editor following. It is for an
+    /// input method a plug-in brings (dictation: the user says what the keyboard would type), never for text a model
+    /// wrote, which goes through <see cref="ProposeAsync"/> as a diff the user accepts. A plug-in that types declares the
+    /// capability "input" in its plugin.json. False when the host takes no input from plug-ins or the document is not open.
+    /// </summary>
+    bool TypeText(IEditorDocument document, string text) => false;
+
+    /// <summary>
+    /// Moves <paramref name="document"/>'s selection (clamped to its text) and has its editor show it, scrolled into view:
+    /// a caret move ("go to line 40", the next problem), never an edit. False when the host cannot.
+    /// </summary>
+    bool Select(IEditorDocument document, SelectionState selection) => false;
+
+    /// <summary>
+    /// The panels the plug-ins added, in order: a plug-in reads another's (the last reply of a chat, through
+    /// <see cref="IConversationPanel"/>) without referencing it. None by default.
+    /// </summary>
+    IReadOnlyList<IEditorPanel> Panels => [];
+
+    /// <summary>
+    /// A key reached the editor: raised before the key is routed, and the key still does what it does (a plug-in that
+    /// stops its work on any key, as reading aloud does, listens only while that work runs). Never by default.
+    /// </summary>
+    event EventHandler<EditorKeyEventArgs>? KeyPressed
+    {
+        add { }
+        remove { }
     }
 
     /// <summary>The registered commands (<see cref="EditorCommands"/>), in order.</summary>

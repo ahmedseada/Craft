@@ -3,6 +3,12 @@
 
 using Craft.Tests.Runner;
 
+// A plug-in folder probed in this fresh process (the Voice group's from-a-folder check), before any test type is loaded.
+if (args is ["--probe-plugin", var probed, ..])
+{
+    return Craft.Tests.PluginProbe.Run(probed);
+}
+
 // Flags (as Idrak's runner): --progress, --failures-only, --failures-file PATH, --filter TEXT (or CRAFT_FILTER), --list.
 var filters = new List<string>(TestRunner.SplitFilter(Environment.GetEnvironmentVariable("CRAFT_FILTER")));
 bool progress = false, failuresOnly = false, list = false;

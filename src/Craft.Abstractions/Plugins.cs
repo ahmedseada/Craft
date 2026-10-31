@@ -81,8 +81,14 @@ public static class PluginCapabilities
     /// <summary>Uses a model (chat or text) through Craft's model providers.</summary>
     public const string Model = "model";
 
+    /// <summary>Types the user's own input into documents (<see cref="IEditorHost.TypeText"/>: dictation).</summary>
+    public const string Input = "input";
+
+    /// <summary>Records from the microphone (the status bar says while it is open) and plays sound.</summary>
+    public const string Microphone = "microphone";
+
     /// <summary>Every capability a <c>plugin.json</c> may name, in order.</summary>
-    public static IReadOnlyList<string> All { get; } = [Files, Network, Sandbox, Model];
+    public static IReadOnlyList<string> All { get; } = [Files, Network, Sandbox, Model, Input, Microphone];
 
     /// <summary>Whether <paramref name="name"/> is one of <see cref="All"/> (ignoring case).</summary>
     public static bool IsKnown(ReadOnlySpan<char> name)

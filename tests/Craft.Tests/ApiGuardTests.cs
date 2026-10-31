@@ -29,6 +29,7 @@ public static class ApiGuardTests
         Assembly.Load(new AssemblyName("Craft.Plugins.Sampler")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Sandbox")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Placement")),
+        Assembly.Load(new AssemblyName("Craft.Voice")),
     ];
 
     [Test]

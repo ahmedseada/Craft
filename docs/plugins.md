@@ -30,6 +30,12 @@ panels, settings, languages and themes. Craft's own C# support is a plug-in on t
 | `ISemanticLanguageSession.FindSymbolsAsync`, `ILanguage.FindSymbolsAsync` | Declared symbols by name (`SymbolLocation`: name, kind, container, file, line, column, signature), from an open document's session (its unsaved text included) or over a folder; `IEditorDocument.SemanticSession` gives a document's session. The tools' `find_symbol`. |
 | `IEditorHost.Terminals` (`IEditorTerminals`, `IEditorTerminal`) | The integrated terminals: `Open(new EditorTerminalRequest { Folder = ..., Name = ..., Shell = ..., Environment = ..., Show = ... })` starts a shell (the user's by default, in the start folder by the user's rule), `Write("dotnet build\r")` sends text as typed, `Show()`, `Exited`. A plug-in never reads what the user types; its handles stop working when it is deactivated (the terminal stays the user's). Null when the host has no terminal. |
 | `ITerminalHost` / `ITerminalSession` (registry `TerminalHosts`) | What runs a shell: start with a shell, a folder, a size and an environment; output as bytes; write input; resize; exit code; dispose ends it. The library's "pipe" (plain redirected pipes, any platform), the Windows app's "conpty"; `CRAFT_TERMINAL_HOST` chooses ("auto": the platform's). A plug-in may register another. |
+| `IEditorHost.TypeText` | Types the user's own input at a document's caret over its selection, one undo step (an input method: the voice plug-in's dictation). Never for a model's text, which goes through `ProposeAsync`; a plug-in that types declares the capability `input`. |
+| `IEditorHost.Select` | Moves a document's selection and has its editor show it ("go to line 40", the next problem): a caret move, never an edit. |
+| `IEditorHost.Panels` / `KeyPressed` | The panels the plug-ins added (read another's conversation, such as the last chat reply, through `IConversationPanel`); a key that reached the editor, raised before it is routed (listen only while work that any key stops runs). |
+| `SpokenSymbol` (registry `SpokenSymbols`) | Dictation's spoken symbols: the words said ("open paren"), the text typed, the language (or every language) and the spaces around it. The voice plug-in registers the every-language table; a language plug-in registers its own, which win for its documents (Craft.CSharp's "arrow" types `=>`). |
+| `SpokenCommand` (registry `SpokenCommands`) | A spoken phrase that runs a command ("next error"), or one with a number in it (`#`) that runs an action ("go to line #"). Every command's title is already speakable ("save" runs "File: Save"); these are the aliases and the commands that take a number. |
+| `IdrakInPlugins` | `IncludeLibraries(assembly)` registers the Idrak libraries a plug-in carries from its own load context (their built-ins: model sources, the GPU devices, the "audio" chat part), which Idrak's default-context lookup cannot see; `IncludePackages` registers the Idrak plug-in packages a setting names. Call both at activation. |
 | `CraftContracts.Version` | The contracts' version (now 1.0). |
 
 Everything a plug-in is called with runs on the UI thread, and every host event is raised there. Work that takes time
@@ -141,7 +147,7 @@ types. Its project references `Craft.Abstractions` with `Private=false` and `Exc
 ```
 
 `name` matches the folder; `version` is the plug-in's own; `contractVersion` is the `CraftContracts.Version` it was built
-against; `capabilities` (any of `files`, `network`, `sandbox`, `model`) are what it asks for: shown on the Plug-ins page
+against; `capabilities` (any of `files`, `network`, `sandbox`, `model`, `input`, `microphone`) are what it asks for: shown on the Plug-ins page
 now, enforced later. The file is checked before any of the plug-in's code loads: a file that does not parse, or names a
 wrong field, refuses the plug-in with every reason. A folder without `plugin.json` still loads, marked as having none.
 

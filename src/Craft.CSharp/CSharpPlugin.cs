@@ -28,7 +28,23 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
         Part(() => EditorLanguages.Register(new CSharpLanguage(SourceCodeKind.Script)), () => EditorLanguages.Unregister(CSharpLanguage.ScriptName));
         Part(() => WorkspaceReaders.Register(new CsprojWorkspaceReader()), () => WorkspaceReaders.Unregister(CsprojWorkspaceReader.ReaderName));
         Part(() => WorkspaceReaders.Register(new LooseWorkspaceReader()), () => WorkspaceReaders.Unregister(LooseWorkspaceReader.ReaderName));
+        // Dictation's C# words (phase V): what they type in a C# document, over the voice plug-in's every-language table.
+        foreach (var symbol in SpokenSymbolsOfCSharp)
+        {
+            Part(() => SpokenSymbols.Register(symbol), () => SpokenSymbols.Unregister(symbol.Name));
+        }
     }
+
+    /// <summary>C#'s spoken symbols: "arrow" and "lambda" type " => ", "null coalescing" " ?? ", "nullable" "?", "generic" "&lt;".</summary>
+    internal static IReadOnlyList<SpokenSymbol> SpokenSymbolsOfCSharp { get; } =
+    [
+        new("arrow", "=>", CSharpLanguage.RegularName, SpaceBefore: true, SpaceAfter: true),
+        new("lambda", "=>", CSharpLanguage.RegularName, SpaceBefore: true, SpaceAfter: true),
+        new("null coalescing", "??", CSharpLanguage.RegularName, SpaceBefore: true, SpaceAfter: true),
+        new("nullable", "?", CSharpLanguage.RegularName, SpaceAfter: true),
+        new("open generic", "<", CSharpLanguage.RegularName),
+        new("close generic", ">", CSharpLanguage.RegularName, SpaceAfter: true),
+    ];
 }
 
 /// <summary>Craft.CSharp's plug-in package: <see cref="CSharpPlugin"/>.</summary>

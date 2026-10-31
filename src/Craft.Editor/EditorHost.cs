@@ -38,6 +38,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     private readonly HandlerList<EventHandler<EditorDocumentEventArgs>> _closed = new();
     private readonly HandlerList<EventHandler> _activeChanged = new();
     private readonly HandlerList<EventHandler<EditorDocumentEventArgs>> _selectionChanged = new();
+    private readonly HandlerList<EventHandler<EditorKeyEventArgs>> _keyPressed = new();
     private IStatusItem[] _sortedStatus = [];
     private OpenDocument? _activeDocument;
     private bool _disposed;
@@ -185,6 +186,16 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <inheritdoc />
     public event EventHandler<EditorDocumentEventArgs>? SelectionChanged { add => _selectionChanged.Add(value); remove => _selectionChanged.Remove(value); }
 
+    /// <inheritdoc />
+    /// <remarks>Raised by <see cref="HandleKey"/> before it routes the key; nothing is made for it while no one listens.</remarks>
+    public event EventHandler<EditorKeyEventArgs>? KeyPressed { add => _keyPressed.Add(value); remove => _keyPressed.Remove(value); }
+
+    /// <summary>
+    /// A plug-in moved a document's selection (<see cref="Select"/>) or typed into it (<see cref="TypeText"/>): the shell
+    /// sets that selection on the document's editor and scrolls it into view.
+    /// </summary>
+    public event EventHandler<EditorSelectionRequestEventArgs>? SelectionRequested;
+
     /// <summary>
     /// Opens <paramref name="document"/> (the caller keeps owning it) in <paramref name="language"/> (null for plain
     /// text, named <paramref name="languageName"/> or "Plain text"); the first one opened becomes the active one.
@@ -272,6 +283,25 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     }
 
     /// <inheritdoc />
+    public bool TypeText(IEditorDocument document, string text) => TypeCore(document, text, HostSource);
+
+    /// <inheritdoc />
+    public bool Select(IEditorDocument document, SelectionState selection)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (document is not OpenDocument { IsClosed: false } open || open.Host != this)
+        {
+            return false;
+        }
+
+        int length = open.Document.Buffer.Current.Length;
+        var clamped = new SelectionState(Math.Clamp(selection.Anchor, 0, length), Math.Clamp(selection.Caret, 0, length));
+        UpdateSelection(open, clamped);
+        SelectionRequested?.Invoke(this, new EditorSelectionRequestEventArgs(open, clamped));
+        return true;
+    }
+
+    /// <inheritdoc />
     public async Task<bool> ProposeEditsAsync(IEditorDocument document, IReadOnlyList<TextEdit> edits, string title, CancellationToken cancellationToken = default) =>
         await ProposeCoreAsync(document, new ProposedEdits(edits, title), HostSource, cancellationToken);
 
@@ -343,6 +373,11 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         }
 
         var chord = new KeyChord(key, modifiers);
+        if (!_keyPressed.IsEmpty)
+        {
+            Raise(_keyPressed, new EditorKeyEventArgs(chord), nameof(KeyPressed));
+        }
+
         if (_userBindings.TryGetValue(chord, out var userCommand))
         {
             if (userCommand.Length == 0)
@@ -552,6 +587,33 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         open.Document.Edit(copy, EditKind.Command, before, after);
         UpdateSelection(open, after);
         Log(source, EditorLogLevel.Information, $"'{title}': applied ({copy.Length} {(copy.Length == 1 ? "edit" : "edits")}{(partial ? ", the hunks the user accepted" : "")}).", null);
+        return true;
+    }
+
+    // The user's own text typed at the document's caret over its selection: one undo step, the caret after it.
+    internal bool TypeCore(IEditorDocument document, string text, string source)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(text);
+        if (document is not OpenDocument { IsClosed: false } open || open.Host != this)
+        {
+            Log(source, EditorLogLevel.Warning, "Typed text for a document that is not open was dropped.", null);
+            return false;
+        }
+
+        var snapshot = open.Document.Buffer.Current;
+        var before = open.Selection;
+        int start = Math.Clamp(before.Start, 0, snapshot.Length);
+        int end = Math.Clamp(before.End, start, snapshot.Length);
+        if (text.Length == 0 && start == end)
+        {
+            return false;
+        }
+
+        var after = SelectionState.At(start + text.Length);
+        open.Document.Edit([new TextEdit(start, end - start, text)], EditKind.Command, before, after);
+        UpdateSelection(open, after);
+        SelectionRequested?.Invoke(this, new EditorSelectionRequestEventArgs(open, after));
         return true;
     }
 

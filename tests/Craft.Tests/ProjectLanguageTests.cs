@@ -358,7 +358,7 @@ public static class ProjectLanguageTests
         int steps = document.Kinds.Count;
         Check.True(model.FormattingSession is not null && model.SemanticSession is null, "JSON formats without a semantic layer");
         Check.True(await model.FormatDocumentAsync(), "the format applied edits");
-        Check.Equal("{\n  \"a\": [\n    1,\n    2\n  ],\n  \"b\": {}\n}", document.Text, "formatted with the editor's tab size and spaces");
+        Check.Equal("{\n  \"a\": [\n    1,\n    2\n  ],\n  \"b\": {}\n}".Replace("\n", Environment.NewLine, StringComparison.Ordinal), document.Text, "formatted with the editor's tab size and spaces (a one-line file takes the platform's line break)");
         Check.Equal(steps + 1, document.Kinds.Count, "as one step");
         model.OnKey(EditorKey.Z, KeyModifiers.Control);
         Check.Equal("{\"a\":[1,2],\"b\":{}}", document.Text, "one undo takes the whole format back");
@@ -369,7 +369,7 @@ public static class ProjectLanguageTests
             await Task.Delay(10);
         }
 
-        Check.True(document.Text.StartsWith("{\n  \"a\"", StringComparison.Ordinal), "Shift+Alt+F formats it too");
+        Check.True(document.Text.StartsWith("{" + Environment.NewLine + "  \"a\"", StringComparison.Ordinal), "Shift+Alt+F formats it too");
 
         var (broken, brokenDocument, _) = Editors.Make("{\"a\": 1 \"b\": 2}", options, json);
         broken.Dispatch = action => action();

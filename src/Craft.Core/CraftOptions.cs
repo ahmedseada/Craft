@@ -92,6 +92,15 @@ public sealed record CraftOptions
     /// <summary>Find stops counting matches at this many (the count then shows as "at least") (<c>CRAFT_FIND_COUNT_LIMIT</c>).</summary>
     public int FindCountLimit { get; init; } = 100_000;
 
+    /// <summary>
+    /// Folders of user plug-ins (each holding a <c>Name/Name.dll</c> folder per plug-in), loaded after the app's own
+    /// <c>plugins</c> folder; none by default, since a plug-in is code (<c>CRAFT_PLUGIN_FOLDERS</c>, separated by ';').
+    /// </summary>
+    public IReadOnlyList<string> PluginFolders { get; init; } = [];
+
+    /// <summary>The plug-ins (by folder name, ignoring case) not loaded, the pre-installed ones included (<c>CRAFT_PLUGINS_DISABLED</c>, separated by ',').</summary>
+    public IReadOnlyList<string> DisabledPlugins { get; init; } = [];
+
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
     [
@@ -106,6 +115,8 @@ public sealed record CraftOptions
         new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept."),
         new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by."),
         new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's)."),
+        new("CRAFT_PLUGIN_FOLDERS", "(none)", "Folders of user plug-ins (a Name/Name.dll folder each), loaded after the app's own; separated by ';'."),
+        new("CRAFT_PLUGINS_DISABLED", "(none)", "Plug-ins not loaded, by folder name (Craft.CSharp), the pre-installed ones included; separated by ','."),
         new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','."),
         new("CRAFT_CARET_BLINK_MS", "530", "Milliseconds between the caret's blinks; 0 shows it solid."),
         new("CRAFT_CARET_WIDTH", "2", "The caret bar's width, in device-independent units."),
@@ -253,6 +264,16 @@ public sealed record CraftOptions
             options = options with { FindCountLimit = Whole(findLimit, "CRAFT_FIND_COUNT_LIMIT", 1, int.MaxValue) };
         }
 
+
+        if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)
+        {
+            options = options with { PluginFolders = folders.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
+        }
+
+        if (Text(read, "CRAFT_PLUGINS_DISABLED") is { } disabled)
+        {
+            options = options with { DisabledPlugins = disabled.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
+        }
 
         return options;
     }

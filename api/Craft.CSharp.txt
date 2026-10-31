@@ -1,0 +1,48 @@
+static class Craft.CSharp.CSharpClassifier
+  static System.Void Classify(Microsoft.CodeAnalysis.SyntaxNode root, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+sealed class Craft.CSharp.CSharpLanguage : Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
+  Craft.Abstractions.LanguageRules Rules { get; }
+  Craft.CSharp.CSharpLanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
+  Microsoft.CodeAnalysis.CSharp.CSharpParseOptions ParseOptions { get; }
+  Microsoft.CodeAnalysis.SourceCodeKind Kind { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String RegularName = csharp
+  const System.String ScriptName = csharp-script
+  ctor()
+  ctor(Microsoft.CodeAnalysis.SourceCodeKind kind)
+  static Craft.CSharp.CSharpLanguage Script { get; }
+  static System.Void Register()
+  static System.Void Unregister()
+sealed class Craft.CSharp.CSharpLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
+  Craft.Abstractions.ITextSnapshot Snapshot { get; }
+  Microsoft.CodeAnalysis.SyntaxTree Tree { get; }
+  System.Int32 Updates { get; }
+  System.TimeSpan LastUpdate { get; }
+  System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+  System.Void Dispose()
+sealed class Craft.CSharp.CSharpPlugin : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+  static System.String Summary { get; }
+sealed class Craft.CSharp.CSharpPluginPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+static class Craft.CSharp.CSharpTokenClasses
+  const System.String ConstantName = constant name
+  const System.String DocCommentComment = xml doc comment - comment
+  const System.String EnumMemberName = enum member name
+  const System.String EventName = event name
+  const System.String ExtensionMethodName = extension method name
+  const System.String LabelName = label name
+sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.SourceText
+  Craft.Abstractions.ITextSnapshot Snapshot { get; }
+  System.Char Item[System.Int32] { get; }
+  System.Collections.Generic.IReadOnlyList<Microsoft.CodeAnalysis.Text.TextChangeRange> GetChangeRanges(Microsoft.CodeAnalysis.Text.SourceText oldText)
+  System.Int32 Length { get; }
+  System.Text.Encoding Encoding { get; }
+  System.Void CopyTo(System.Int32 sourceIndex, System.Char[] destination, System.Int32 destinationIndex, System.Int32 count)
+  ctor(Craft.Abstractions.ITextSnapshot snapshot)
+  static Craft.CSharp.SnapshotSourceText FromChange(Craft.Abstractions.TextChangedEventArgs change)

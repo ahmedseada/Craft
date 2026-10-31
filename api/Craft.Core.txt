@@ -4,6 +4,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
   System.Boolean InsertSpaces { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> PluginFolders { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
   System.Int32 AutosaveSeconds { get; init; }
   System.Int32 BottomMarginLines { get; init; }
@@ -86,6 +88,22 @@ sealed class Craft.Core.Documents.TextDocument : Craft.Abstractions.ITextDocumen
   event System.EventHandler StateChanged
   static Craft.Core.Documents.TextDocument Create(System.String text = "", Craft.Core.CraftOptions options = null, System.Func<System.Int64> clock = null)
   static System.Threading.Tasks.Task<Craft.Core.Documents.TextDocument> OpenAsync(System.String path, Craft.Core.CraftOptions options = null, System.Threading.CancellationToken cancellationToken = null)
+static class Craft.Core.Plugins.CraftPlugins
+  static Craft.Core.Plugins.PluginLoadResult LoadFolder(System.String pluginFolder)
+  static System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> LoadInstalled(Craft.Core.CraftOptions options)
+  static System.String InstalledFolder { get; }
+sealed class Craft.Core.Plugins.PluginLoadResult : System.IEquatable<Craft.Core.Plugins.PluginLoadResult>
+  Craft.Core.Plugins.PluginLoadResult <Clone>$()
+  System.Boolean Equals(Craft.Core.Plugins.PluginLoadResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Loaded { get; init; }
+  System.Int32 GetHashCode()
+  System.String Error { get; init; }
+  System.String Folder { get; init; }
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Folder, out System.Boolean Loaded, out System.String Error)
+  ctor(System.String Name, System.String Folder, System.Boolean Loaded, System.String Error)
 sealed class Craft.Core.Text.PieceTableBuffer : Craft.Abstractions.ITextBuffer
   Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
   Craft.Abstractions.ITextSnapshot Current { get; }

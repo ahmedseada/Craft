@@ -66,7 +66,7 @@ Every Idrak capability this plan leans on, checked in the source. A claim that d
 |---|---|
 | `Craft.Abstractions` | The editor's contracts and their registries (`SlotTable` / `KindTable`). Reference it alone to write a plug-in. |
 | `Craft.Core` | Text buffer, documents, undo, autosave and recovery, workspace, the classification layers, themes, the plug-in host. No UI, `net10.0`, AOT-compatible, tested on any machine. |
-| `Craft.CSharp` | C# on Roslyn (`Microsoft.CodeAnalysis.CSharp.Workspaces` and `.Features`): syntactic and semantic classification, diagnostics, completion, signature help, hover, go to definition, formatting. Registered as the "csharp" language on both platforms. Not AOT-compatible (Roslyn's MEF uses reflection): `IsAotCompatible` false, its assemblies rooted for the trimmer; Craft never uses NativeAOT. |
+| `Craft.CSharp` | C# on Roslyn (`Microsoft.CodeAnalysis.CSharp.Workspaces` and `.Features`): syntactic and semantic classification, diagnostics, completion, signature help, hover, go to definition, formatting. Registered as the "csharp" language (".cs") and "csharp-script" (".csx") on both platforms, as a **pre-installed, removable plug-in**: an Idrak plug-in package (`CSharpPlugin`, `[assembly: IdrakPluginPackage]`) that the app never references in code and loads from `plugins/Craft.CSharp/` beside the exe (`CraftPlugins.LoadInstalled`, its own `AssemblyLoadContext`, the contracts shared with the host); without it, or with `CRAFT_PLUGINS_DISABLED=Craft.CSharp`, a .cs file opens as plain text. Not AOT-compatible (Roslyn's MEF uses reflection): `IsAotCompatible` false, its assemblies rooted for the trimmer; Craft never uses NativeAOT. |
 | `Craft.Editor` | The editor without a UI: caret, selection, commands, layout, hit-testing, find and replace, bracket matching, and the drawing of the visible lines through `IEditorCanvas`. The UI hosts it; the tests drive it headless. (Split from `Craft.Maui` in E0 so the control's logic is tested without MAUI.) |
 | `Craft.Ai` | The AI plug-ins on Idrak's contracts: inline completion, chat panel, code actions, agent, and the editor's tools. |
 | `Craft.Maui` | The editor control and the pages: the drawn surface behind `IEditorCanvas`, the input adapters per platform, features registered into Idrak.Maui. Targets `net10.0` (headless, for tests) and the Windows target; `net10.0-android` is added in M. |
@@ -271,6 +271,19 @@ Android out:
   the piece before the caret and a deletion at a piece's edge rebuild one path of the tree (no split and join); it took
   the warm edit from 14.5 µs to 2.24 µs mean and 2,809 to 1,550 B an edit, the random-edit tests unchanged.
 
+- **Measured (E2, 2026-10-31, `benches/Craft.Benches -- csharp`, the same container and file):** the first full parse
+  of the 100,005-line file takes 948 ms cold, and its syntax tree holds 27.6 MB = 5.16 x the text (Roslyn's green tree
+  carries its tokens' own text; the buffer's text is still read once, through `SnapshotSourceText`). A keystroke in a
+  method body (the buffer's edit plus Roslyn's incremental parse, on the UI thread): 51.6 ms cold (JIT), warm 1.16 ms
+  median, 9.4 ms p99, 125 KB allocated. The reference, Roslyn's own `SourceText.WithChanges` with the same parse:
+  1.18 ms median, 130 KB, so the cost is Roslyn's incremental parse of a file of some 2,000 types, not the text. The 60
+  visible lines (414 spans) classify in 47 ms cold, 344 µs warm, 1.5 KB a call (Roslyn's red nodes). Typing `/*` at line
+  10 re-parses in 9.5 ms and then the top 60 lines classify in 28 µs, the commented-out middle in 0.7 µs (one span);
+  deleting that `/*` again re-lexes everything after it: **305-561 ms on the UI thread**. A keystroke inside a raw
+  string: 0.8 ms median; a raw string opened at line 10: 25 ms. Candidate, measured here and not yet taken: parse off the
+  UI thread on a snapshot and classify from the last finished tree (the plan's "nothing waits on the UI thread"),
+  because an edit that changes the meaning of the rest of a large file costs a full parse.
+
 ### Tests and benches
 
 - `Craft.Tests` has its own small runner with the same flags as Idrak's (`--progress`, `--failures-only`,
@@ -327,7 +340,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | S0 | Idrak.Mcp served from a running app: `IMcpServerTransport` and `McpServerTransports` (`stdio`, `http`), `McpHost`, the CLI's `mcp serve` and `serve --mcp` on it with `--transport` and the variables, the `Mcp` test group, the API dump. | `IDRAK_FILTER=Mcp` passes on the CPU; the owner's two-window check (`mcp serve --transport http`, `chat --mcp http://127.0.0.1:PORT`) lists and calls a tool; the `http` overhead against `stdio` is written here. | the owner's go (first) |
 | E0 | Craft skeleton: solution, `Directory.Build.props/targets` with Idrak's settings and the `IdrakFromSource` switch, `MauiVersion`, `Craft.Abstractions` with the registries, the inventory test, the API guard per package, the test runner, `Craft.Benches` empty. Windows and `net10.0` targets only. | `dotnet build` passes; the inventory and API-guard tests pass. | the owner's go |
 | E1 | `Craft.Core`: piece table, snapshots, edits, undo and redo (grouped by typing pause), file open and save (encodings and line endings kept), autosave and recovery, workspace folder. | Random-edit equivalence against a plain string; a 100,000-line file opens and edits in the bench with memory ≈ text + pieces. | E0 |
-| E2 | `Craft.CSharp`, syntactic layer: the snapshot as `SourceText`, the incremental parse, classified spans for a line range, Roslyn's classification names mapped to theme classes, light and dark themes. | Spans of fixed C# 14 files (every string kind, comments, preprocessor lines, contextual keywords) match; spans after random edits equal a fresh parse; the snapshot-`SourceText` equals `SourceText.From` on random edits. | E1 |
+| E2 | `Craft.CSharp`, syntactic layer: the snapshot as `SourceText`, the incremental parse, classified spans for a line range, Roslyn's classification names mapped to theme classes, light and dark themes; C# shipped as a pre-installed, removable plug-in loaded from `plugins/` (`Craft.Core.Plugins.CraftPlugins`, `CRAFT_PLUGIN_FOLDERS`, `CRAFT_PLUGINS_DISABLED`). | Spans of fixed C# 14 files (every string kind, comments, preprocessor lines, contextual keywords) match; spans after random edits equal a fresh parse; the snapshot-`SourceText` equals `SourceText.From` on random edits. | E1 |
 | E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows. | E2 |
 | E4 | `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |

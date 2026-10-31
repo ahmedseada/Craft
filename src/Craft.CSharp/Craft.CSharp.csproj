@@ -9,11 +9,24 @@
   <PropertyGroup>
     <RootNamespace>Craft.CSharp</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- A plug-in, loaded from the app's plugins/Craft.CSharp/ folder: its output carries Roslyn and a .deps.json, and not
+         the contracts it shares with the host (Craft.Abstractions, Idrak.Abstraction), which come from the host. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(RoslynVersion)" />
-    <ProjectReference Include="..\Craft.Abstractions\Craft.Abstractions.csproj" />
+    <ProjectReference Include="..\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
   </ItemGroup>
+
+  <!-- Idrak.Abstraction comes through Craft.Abstractions; as a contract shared with the host it is not copied either. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
 
 </Project>

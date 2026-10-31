@@ -19,14 +19,32 @@ public sealed record CraftVariable(string Name, string Default, string Meaning);
 /// </summary>
 public sealed record CraftOptions
 {
-    /// <summary>The font family; the platform's monospaced font when it has none of this name (<c>CRAFT_FONT</c>).</summary>
-    public string FontFamily { get; init; } = "Cascadia Mono";
+    /// <summary>
+    /// The code font's family (<c>CRAFT_FONT</c>): JetBrains Mono, bundled with the app (phase D); a family that does not
+    /// draw monospaced on the platform gives way to <see cref="FontFallback"/>.
+    /// </summary>
+    public string FontFamily { get; init; } = "JetBrains Mono";
 
-    /// <summary>The font size in device-independent units (<c>CRAFT_FONT_SIZE</c>).</summary>
-    public float FontSize { get; init; } = 14;
+    /// <summary>The code font's size in device-independent units (<c>CRAFT_FONT_SIZE</c>; the design's 13).</summary>
+    public float FontSize { get; init; } = 13;
 
-    /// <summary>A line's height as a multiple of the font's (<c>CRAFT_LINE_SPACING</c>).</summary>
-    public float LineSpacing { get; init; } = 1.35f;
+    /// <summary>A line's height as a multiple of the font's (<c>CRAFT_LINE_SPACING</c>; 1.69 gives the design's 22-unit lines at 13).</summary>
+    public float LineSpacing { get; init; } = 1.69f;
+
+    /// <summary>The code font used when <see cref="FontFamily"/> does not draw monospaced on the platform (<c>CRAFT_FONT_FALLBACK</c>).</summary>
+    public string FontFallback { get; init; } = "Cascadia Mono";
+
+    /// <summary>The interface's font family (<c>CRAFT_INTERFACE_FONT</c>): Inter, bundled with the app.</summary>
+    public string InterfaceFont { get; init; } = "Inter";
+
+    /// <summary>The interface's text size in device-independent units (<c>CRAFT_INTERFACE_FONT_SIZE</c>; the design's 13).</summary>
+    public float InterfaceFontSize { get; init; } = 13;
+
+    /// <summary>
+    /// The accent over the theme's (<c>CRAFT_ACCENT</c>: amber, teal, blue, rose, or #RRGGBB), or null for the theme's
+    /// own; moved until it reads at 4.5:1 on the theme's grounds.
+    /// </summary>
+    public uint? Accent { get; init; }
 
     /// <summary>The columns a tab spans (<c>CRAFT_TAB_SIZE</c>).</summary>
     public int TabSize { get; init; } = 4;
@@ -228,6 +246,26 @@ public sealed record CraftOptions
     /// <summary>The plug-ins' side panels' width in the wide layout, in device-independent units (<c>CRAFT_PANEL_WIDTH</c>).</summary>
     public float PanelWidth { get; init; } = 280;
 
+    // Phase D: the approved design's shell.
+
+    /// <summary>The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), in device-independent units (<c>CRAFT_BOTTOM_PANEL_HEIGHT</c>).</summary>
+    public float BottomPanelHeight { get; init; } = 132;
+
+    /// <summary>The most files quick open (Ctrl+P) lists from the workspace; the rest are said to be left out (<c>CRAFT_QUICK_OPEN_FILES</c>).</summary>
+    public int QuickOpenFiles { get; init; } = 200_000;
+
+    /// <summary>The rows quick open shows (<c>CRAFT_QUICK_OPEN_ROWS</c>).</summary>
+    public int QuickOpenRows { get; init; } = 12;
+
+    /// <summary>The smallest touch target of the narrow layout, in device-independent units (<c>CRAFT_TOUCH_TARGET</c>; the design's 44).</summary>
+    public float TouchTarget { get; init; } = 44;
+
+    /// <summary>
+    /// Where the title bar's row (the logo, the menus, the search box, the model chip) goes (<c>CRAFT_TITLE_BAR</c>):
+    /// "window", in the window's own caption where the platform lets an app draw there, or "page", a row under the caption.
+    /// </summary>
+    public string TitleBar { get; init; } = "window";
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -235,9 +273,13 @@ public sealed record CraftOptions
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
     [
-        new("CRAFT_FONT", "Cascadia Mono", "The editor's font family (the platform's monospaced font when it has none of this name)."),
-        new("CRAFT_FONT_SIZE", "14", "The font size, in device-independent units."),
-        new("CRAFT_LINE_SPACING", "1.35", "A line's height as a multiple of the font's height."),
+        new("CRAFT_FONT", "JetBrains Mono", "The code font's family (bundled; one that does not draw monospaced gives way to CRAFT_FONT_FALLBACK)."),
+        new("CRAFT_FONT_SIZE", "13", "The code font's size, in device-independent units."),
+        new("CRAFT_LINE_SPACING", "1.69", "A line's height as a multiple of the font's height (1.69 at 13: 22-unit lines)."),
+        new("CRAFT_FONT_FALLBACK", "Cascadia Mono", "The code font used when CRAFT_FONT does not draw monospaced on this platform."),
+        new("CRAFT_INTERFACE_FONT", "Inter", "The interface's font family (bundled)."),
+        new("CRAFT_INTERFACE_FONT_SIZE", "13", "The interface's text size, in device-independent units."),
+        new("CRAFT_ACCENT", "(the theme's)", "The accent: amber, teal, blue, rose, or #RRGGBB; moved until it reads at 4.5:1 on the theme."),
         new("CRAFT_TAB_SIZE", "4", "The columns a tab spans."),
         new("CRAFT_INSERT_SPACES", "true", "Whether Tab inserts spaces rather than a tab character."),
         new("CRAFT_THEME", "dark", "The theme's name (dark, light, or a registered one)."),
@@ -274,6 +316,11 @@ public sealed record CraftOptions
         new("CRAFT_TREE_WIDTH", "260", "The folder tree's width in the wide layout (device-independent units)."),
         new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units)."),
         new("CRAFT_PANEL_WIDTH", "280", "The plug-ins' side panels' width in the wide layout (device-independent units)."),
+        new("CRAFT_BOTTOM_PANEL_HEIGHT", "132", "The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), device-independent units."),
+        new("CRAFT_QUICK_OPEN_FILES", "200000", "The most files quick open (Ctrl+P) lists from the workspace."),
+        new("CRAFT_QUICK_OPEN_ROWS", "12", "The rows quick open shows."),
+        new("CRAFT_TOUCH_TARGET", "44", "The smallest touch target of the narrow layout (device-independent units)."),
+        new("CRAFT_TITLE_BAR", "window", "Where the title bar's row goes: window (in the window's caption) or page (a row under it)."),
         new("CRAFT_DIAGNOSTICS_DELAY_MS", "400", "Milliseconds after the last change before the document's diagnostics are computed again (off the UI thread)."),
         new("CRAFT_SEMANTIC_MAX_CHARS", "1000000", "Above this many characters the semantic layer (diagnostics, completion while typing) waits for a command; 0 never waits."),
         new("CRAFT_WORKSPACE_READERS", "csproj,loose", "The workspace readers tried in order to make a folder's projects, separated by ','."),
@@ -498,6 +545,60 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_PANEL_WIDTH") is { } panelWidth)
         {
             options = options with { PanelWidth = Positive(panelWidth, "CRAFT_PANEL_WIDTH", 40, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_FONT_FALLBACK") is { } fallback)
+        {
+            options = options with { FontFallback = fallback };
+        }
+
+        if (Text(read, "CRAFT_INTERFACE_FONT") is { } interfaceFont)
+        {
+            options = options with { InterfaceFont = interfaceFont };
+        }
+
+        if (Text(read, "CRAFT_INTERFACE_FONT_SIZE") is { } interfaceSize)
+        {
+            options = options with { InterfaceFontSize = Positive(interfaceSize, "CRAFT_INTERFACE_FONT_SIZE", 6, 72) };
+        }
+
+        if (Text(read, "CRAFT_ACCENT") is { } accent)
+        {
+            options = options with
+            {
+                Accent = AccentColors.TryParse(accent, out uint argb) ? argb
+                    : throw new ArgumentException($"CRAFT_ACCENT is '{accent}': it takes {string.Join(", ", AccentColors.Names)} or #RRGGBB.", "CRAFT_ACCENT"),
+            };
+        }
+
+        if (Text(read, "CRAFT_BOTTOM_PANEL_HEIGHT") is { } bottomHeight)
+        {
+            options = options with { BottomPanelHeight = Positive(bottomHeight, "CRAFT_BOTTOM_PANEL_HEIGHT", 40, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_QUICK_OPEN_FILES") is { } quickFiles)
+        {
+            options = options with { QuickOpenFiles = Whole(quickFiles, "CRAFT_QUICK_OPEN_FILES", 0, 100_000_000) };
+        }
+
+        if (Text(read, "CRAFT_QUICK_OPEN_ROWS") is { } quickRows)
+        {
+            options = options with { QuickOpenRows = Whole(quickRows, "CRAFT_QUICK_OPEN_ROWS", 1, 200) };
+        }
+
+        if (Text(read, "CRAFT_TITLE_BAR") is { } titleBar)
+        {
+            options = options with
+            {
+                TitleBar = titleBar.Equals("window", StringComparison.OrdinalIgnoreCase) ? "window"
+                    : titleBar.Equals("page", StringComparison.OrdinalIgnoreCase) ? "page"
+                    : throw new ArgumentException($"CRAFT_TITLE_BAR is '{titleBar}': it takes window or page.", "CRAFT_TITLE_BAR"),
+            };
+        }
+
+        if (Text(read, "CRAFT_TOUCH_TARGET") is { } touch)
+        {
+            options = options with { TouchTarget = Positive(touch, "CRAFT_TOUCH_TARGET", 16, 200) };
         }
 
         if (Text(read, "CRAFT_DIAGNOSTICS_DELAY_MS") is { } diagnosticsDelay)

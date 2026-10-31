@@ -321,6 +321,15 @@ public sealed record SemanticTelemetry(string? WorkspaceRoot, string? Reader, in
 {
     /// <summary>Nothing built yet.</summary>
     public static SemanticTelemetry None { get; } = new(null, null, 0, 0, 0, 0, 0, TimeSpan.Zero, TimeSpan.Zero, 0);
+
+    /// <summary>What computes it, as the shell names it ("Roslyn"), or null for the language's name.</summary>
+    public string? Engine { get; init; }
+
+    /// <summary>Whether a workspace has been built (its projects are known).</summary>
+    public bool IsBuilt => Projects > 0;
+
+    /// <summary>The memory it holds, as measured: the heap its build added and the referenced files' bytes.</summary>
+    public long MemoryBytes => HeapBytes + ReferenceBytes;
 }
 
 /// <summary>

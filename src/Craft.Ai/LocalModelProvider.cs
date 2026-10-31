@@ -44,6 +44,55 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     /// <summary>The models loaded now.</summary>
     public IReadOnlyList<LoadedModel> Loaded => _models?.Loaded ?? [];
 
+    private string _state = "not loaded";
+    private bool _stateIsProblem;
+    private string? _device;
+
+    /// <summary>
+    /// What the provider holds (phase D's Models page and the model chip): the chat model of the settings and its state,
+    /// the device a load used, and the settings the page edits. Nothing unmeasured is guessed.
+    /// </summary>
+    public ModelProviderStatus Status
+    {
+        get
+        {
+            var settings = Settings;
+            string? model = settings.Model.Length == 0 ? null : settings.Model;
+            return new ModelProviderStatus
+            {
+                Where = "local",
+                Roles =
+                [
+                    new ModelRole("Chat and agent", model, model is null ? "none set" : _state, model is not null && _stateIsProblem),
+                    new ModelRole("Inline completion", model, model is null ? "none set" : "the chat model (fill-in-the-middle when its family registers a format)"),
+                ],
+                Device = _device,
+                LoadCommand = AiPlugin.LoadModelCommand,
+                ModelSetting = new ModelSettingField(Variable("model"), "Model name: a folder, store:name, a .gguf file, a Hugging Face id"),
+                DeviceSetting = new ModelSettingField(Variable("device"), "Run on", "auto (the fastest found)"),
+                Limits =
+                [
+                    new ModelSettingField(Variable("gpuMemoryMb"), "Device memory cap, MiB (0: none)", "0"),
+                    new ModelSettingField(Variable("cpuMemoryMb"), "CPU memory cap, MiB (0: none)", "0"),
+                    new ModelSettingField(Variable("threads"), "CPU threads (0: all cores)", "0"),
+                ],
+            };
+        }
+    }
+
+    /// <summary>Raised when <see cref="Status"/> changed (a load's stage, its end), on the reporting thread.</summary>
+    public event EventHandler? StatusChanged;
+
+    /// <summary>Sets the chat model's state line (the plug-in's load command reports through it) and raises <see cref="StatusChanged"/>.</summary>
+    internal void SetState(string state, bool isProblem = false)
+    {
+        _state = state;
+        _stateIsProblem = isProblem;
+        StatusChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static string Variable(string key) => PluginSetting.VariableName(AiSettings.PluginName, key);
+
     /// <inheritdoc />
     public Task<ModelLease> AcquireAsync(ModelRequest request, IProgress<ModelLoadStatus>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -74,6 +123,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         progress?.Report(new ModelLoadStatus("resolving", null, $"resolving {key.Model} (Idrak's model sources)"));
         var lease = host.Acquire(key.Text, _keepAlive);
         var model = lease.Model;
+        _device = model.Device;
         progress?.Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
             ? string.Create(CultureInfo.InvariantCulture, $"{key.Model} loaded on {model.Device} in {lease.LoadDuration.TotalSeconds:F1} s, context {model.ContextLength}")
             : $"{key.Model} on {model.Device} (loaded already)"));

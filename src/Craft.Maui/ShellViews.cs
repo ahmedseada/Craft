@@ -4,6 +4,7 @@
 using Craft.Editor.Abstractions;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
 
 namespace Craft.Maui;
@@ -20,7 +21,9 @@ public static class ThemeColors
 /// <param name="Indent">The row's indent.</param>
 /// <param name="Color">The text's colour.</param>
 /// <param name="Index">The row's index in the tree.</param>
-public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, int Index);
+/// <param name="Background">The row's fill (the active file's is the selection's).</param>
+/// <param name="FontFamily">The interface's font.</param>
+public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, int Index, Color Background, string? FontFamily);
 
 /// <summary>
 /// The folder tree (<see cref="FolderTree"/>) as a virtualized list (only the rows on screen are made): a folder's row
@@ -32,6 +35,9 @@ public sealed class FolderTreeView : ContentView
     private FolderTree? _tree;
     private Color _textColor = Colors.Gray;
     private float _indent = 14;
+    private Color _selected = Colors.Transparent;
+    private string? _fontFamily;
+    private string? _activePath;
 
     /// <summary>An empty tree (set <see cref="Tree"/>).</summary>
     public FolderTreeView()
@@ -88,16 +94,55 @@ public sealed class FolderTreeView : ContentView
         }
     }
 
+    /// <summary>The fill of the active file's row (the design's selection).</summary>
+    public Color SelectedColor
+    {
+        get => _selected;
+        set
+        {
+            _selected = value;
+            Refresh();
+        }
+    }
+
+    /// <summary>The rows' font family, or null for the platform's.</summary>
+    public string? FontFamily
+    {
+        get => _fontFamily;
+        set
+        {
+            _fontFamily = value;
+            Refresh();
+        }
+    }
+
+    /// <summary>The active document's path (its row is filled), or null.</summary>
+    public string? ActivePath
+    {
+        get => _activePath;
+        set
+        {
+            if (!string.Equals(_activePath, value, StringComparison.OrdinalIgnoreCase))
+            {
+                _activePath = value;
+                Refresh();
+            }
+        }
+    }
+
     /// <summary>Raised with a file's full path when its row is picked.</summary>
     public event EventHandler<string>? FileActivated;
 
-    private static Label MakeRow()
+    private static ContentView MakeRow()
     {
-        var label = new Label { FontSize = 13, LineBreakMode = LineBreakMode.TailTruncation, Padding = new Thickness(0, 3) };
+        var label = new Label { FontSize = 13, LineBreakMode = LineBreakMode.TailTruncation, Padding = new Thickness(0, 4) };
         label.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Text);
         label.SetBinding(MarginProperty, static (FolderTreeItem item) => item.Indent);
         label.SetBinding(Label.TextColorProperty, static (FolderTreeItem item) => item.Color);
-        return label;
+        label.SetBinding(Label.FontFamilyProperty, static (FolderTreeItem item) => item.FontFamily);
+        var row = new ContentView { Content = label };
+        row.SetBinding(BackgroundColorProperty, static (FolderTreeItem item) => item.Background);
+        return row;
     }
 
     private void OnTreeChanged(object? sender, EventArgs e) => Refresh();
@@ -116,7 +161,9 @@ public sealed class FolderTreeView : ContentView
         {
             var row = rows[i];
             var marker = row.Entry.IsFolder ? row.IsExpanded ? "▾ " : "▸ " : "   ";
-            items[i] = new FolderTreeItem(marker + row.Entry.Name, new Thickness(6 + (row.Depth * _indent), 0, 6, 0), _textColor, i);
+            bool active = !row.Entry.IsFolder && string.Equals(row.Entry.FullPath, _activePath, StringComparison.OrdinalIgnoreCase);
+            items[i] = new FolderTreeItem(marker + row.Entry.Name, new Thickness(14 + (row.Depth * _indent), 0, 14, 0), _textColor, i,
+                active ? _selected : Colors.Transparent, _fontFamily);
         }
 
         _list.ItemsSource = items;
@@ -152,21 +199,20 @@ public sealed class FolderTreeView : ContentView
 }
 
 /// <summary>
-/// The tabs (<see cref="DocumentTabs"/>): in the wide layout a scrolling strip of tabs, each its title (a dot when it has
-/// unsaved changes) and a close button; in the <see cref="Compact"/> (narrow) layout one switcher: previous, the active
-/// tab's title and place (which asks for the list), next, close. A click activates; a close raises
-/// <see cref="CloseRequested"/>, so the shell asks about unsaved changes. A tab's title is redrawn only when it changes.
+/// The tabs (<see cref="DocumentTabs"/>, docs/design/Main.dc.html): in the wide layout a scrolling strip on the ground,
+/// the active tab on the surface under the accent's line, each its title, a dot when it has unsaved changes, and a close
+/// button; in the <see cref="Compact"/> (narrow) layout one switcher of touch targets: previous, the active tab's title and
+/// place (which asks for the list), next, close. A click activates; a close raises <see cref="CloseRequested"/>, so the
+/// shell asks about unsaved changes. A tab is redrawn only when its title or dirty marker changes.
 /// </summary>
 public sealed class TabStripView : ContentView, IDisposable
 {
     private readonly DocumentTabs _tabs;
-    private readonly HorizontalStackLayout _strip = new() { Spacing = 2, Padding = new Thickness(4, 2) };
+    private readonly HorizontalStackLayout _strip = new() { Spacing = 0 };
     private readonly ScrollView _scroll;
-    private readonly Dictionary<DocumentTab, Button> _titles = [];
+    private readonly Dictionary<DocumentTab, (Label Title, Ellipse Dot)> _titles = [];
     private bool _compact;
-    private Color _text = Colors.Gray;
-    private Color _background = Colors.Transparent;
-    private Color _active = Colors.LightGray;
+    private ShellPalette? _palette;
 
     /// <summary>The strip of <paramref name="tabs"/>.</summary>
     public TabStripView(DocumentTabs tabs)
@@ -201,12 +247,11 @@ public sealed class TabStripView : ContentView, IDisposable
     /// <summary>Raised when the compact switcher's title is clicked (the page lists the tabs).</summary>
     public event EventHandler? ListRequested;
 
-    /// <summary>Sets the colours: the text, the strip's background, the active tab's background.</summary>
-    public void SetColors(Color text, Color background, Color active)
+    /// <summary>Takes <paramref name="palette"/>'s colours and fonts.</summary>
+    public void Apply(ShellPalette palette)
     {
-        _text = text;
-        _background = background;
-        _active = active;
+        ArgumentNullException.ThrowIfNull(palette);
+        _palette = palette;
         Rebuild();
     }
 
@@ -233,40 +278,40 @@ public sealed class TabStripView : ContentView, IDisposable
         {
             Rebuild();
         }
-        else if (_titles.TryGetValue(tab, out var button))
+        else if (_titles.TryGetValue(tab, out var shown))
         {
-            button.Text = TitleOf(tab);
+            shown.Title.Text = tab.Title;
+            shown.Dot.IsVisible = tab.IsDirty;
         }
     }
-
-    private Button Flat(string text) => new()
-    {
-        Text = text,
-        TextColor = _text,
-        BackgroundColor = Colors.Transparent,
-        BorderWidth = 0,
-        Padding = new Thickness(8, 2),
-        FontSize = 13,
-        MinimumHeightRequest = 28,
-    };
 
     private void Rebuild()
     {
         _strip.Children.Clear();
         _titles.Clear();
-        BackgroundColor = _background;
         IsVisible = _tabs.Tabs.Count > 0;
+        if (_palette is not { } palette)
+        {
+            return;
+        }
+
+        BackgroundColor = palette.Ground;
         if (_compact)
         {
+            double size = Math.Max(44, palette.Options.TouchTarget);
+            HeightRequest = size;
             var active = _tabs.Active;
-            var previous = Flat("‹");
+            var previous = palette.Flat("‹", palette.Text, size, palette.FontSize + 4);
+            previous.WidthRequest = size;
             previous.Clicked += (_, _) => _tabs.Previous();
-            var title = Flat(active is null ? "" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{TitleOf(active)}  ({_tabs.ActiveIndex + 1}/{_tabs.Tabs.Count}) ▾"));
-            title.BackgroundColor = _active;
+            var title = palette.Flat(active is null ? "" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{TitleOf(active)}  ({_tabs.ActiveIndex + 1}/{_tabs.Tabs.Count}) ▾"), palette.Text, size);
+            title.BackgroundColor = palette.Surface;
             title.Clicked += (_, _) => ListRequested?.Invoke(this, EventArgs.Empty);
-            var next = Flat("›");
+            var next = palette.Flat("›", palette.Text, size, palette.FontSize + 4);
+            next.WidthRequest = size;
             next.Clicked += (_, _) => _tabs.Next();
-            var close = Flat("×");
+            var close = palette.Flat("×", palette.Text, size, palette.FontSize + 4);
+            close.WidthRequest = size;
             close.Clicked += (_, _) =>
             {
                 if (_tabs.Active is { } tab)
@@ -281,17 +326,35 @@ public sealed class TabStripView : ContentView, IDisposable
             return;
         }
 
+        HeightRequest = 36;
         foreach (var tab in _tabs.Tabs)
         {
-            var title = Flat(TitleOf(tab));
-            ToolTipProperties.SetText(title, tab.FilePath ?? tab.Title);
-            title.Clicked += (_, _) => _tabs.Activate(tab);
-            var close = Flat("×");
+            bool isActive = ReferenceEquals(tab, _tabs.Active);
+            var title = palette.Label(tab.Title, isActive ? palette.Text : palette.Secondary);
+            var dot = new Ellipse { WidthRequest = 8, HeightRequest = 8, Fill = new SolidColorBrush(palette.Text), IsVisible = tab.IsDirty, VerticalOptions = LayoutOptions.Center };
+            var close = palette.Flat("×", palette.Secondary, 24, palette.SmallSize);
+            close.WidthRequest = 24;
+            close.Padding = new Thickness(0);
             ToolTipProperties.SetText(close, "Close (Ctrl+W)");
             close.Clicked += (_, _) => CloseRequested?.Invoke(this, tab);
-            var cell = new HorizontalStackLayout { Spacing = 0, Children = { title, close } };
-            cell.BackgroundColor = ReferenceEquals(tab, _tabs.Active) ? _active : Colors.Transparent;
-            _titles[tab] = title;
+            var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, dot, close } };
+            var cell = new Grid
+            {
+                RowDefinitions = [new RowDefinition(new GridLength(2)), new RowDefinition(GridLength.Star)],
+                ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(new GridLength(1))],
+                BackgroundColor = isActive ? palette.Surface : Colors.Transparent,
+                HeightRequest = 36,
+            };
+            var accentLine = new BoxView { Color = isActive ? palette.Accent : Colors.Transparent };
+            cell.Add(accentLine, 0, 0);
+            Grid.SetColumnSpan(accentLine, 2);
+            cell.Add(row, 0, 1);
+            cell.Add(new BoxView { Color = isActive ? Colors.Transparent : palette.Border }, 1, 1);
+            ToolTipProperties.SetText(cell, tab.FilePath ?? tab.Title);
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += (_, _) => _tabs.Activate(tab);
+            cell.GestureRecognizers.Add(tap);
+            _titles[tab] = (title, dot);
             _strip.Children.Add(cell);
         }
     }

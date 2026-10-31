@@ -92,6 +92,35 @@ public interface ILanguageSession : IDisposable
     /// that classifies each snapshot completely when asked returns true at once (the default).
     /// </summary>
     bool WaitUntilClassified(ITextSnapshot snapshot, TimeSpan timeout) => true;
+
+    /// <summary>
+    /// The named scopes that hold <paramref name="position"/>, outermost first (a type, a nested type, a member), for
+    /// the breadcrumb: from the session's last parse, never waiting for one (a parse older than
+    /// <paramref name="snapshot"/> answers for its own text). It is asked when the caret moves, so a session answers
+    /// from what it holds and returns the same list while the scopes are the same. None by default.
+    /// </summary>
+    IReadOnlyList<ScopeName> ScopeAt(ITextSnapshot snapshot, int position) => [];
+}
+
+/// <summary>A named scope of a document (the breadcrumb's part): its name and what it is.</summary>
+/// <param name="Name">The name ("EditorTools", "GetDiagnosticsAsync").</param>
+/// <param name="Kind">What it is.</param>
+public readonly record struct ScopeName(string Name, ScopeKind Kind);
+
+/// <summary>What a named scope is.</summary>
+public enum ScopeKind
+{
+    /// <summary>A namespace.</summary>
+    Namespace,
+
+    /// <summary>A type (class, struct, interface, enum, record, delegate).</summary>
+    Type,
+
+    /// <summary>A method, constructor, operator or local function.</summary>
+    Method,
+
+    /// <summary>A property, indexer, event or field.</summary>
+    Member,
 }
 
 /// <summary>

@@ -15,6 +15,10 @@ panels, settings, languages and themes. Craft's own C# support is a plug-in on t
 | `IStatusItem` / `StatusItem` | A status bar item: text, tooltip, end of the bar, priority, a command a click runs. |
 | `IEditorPanel` / `ListPanel` | A panel in the side area: a title and lines (`PanelItem`), each of which may run a command. |
 | `PluginSetting` | A setting the plug-in declares: key, default, description. |
+| `MenuItem` (registry `EditorMenus`) | An item of a title-bar menu (File, Edit, View, Run, Plug-ins, Help, or a menu of its own): the menu, the command it runs, its group and order. It shows while its command is registered, with the command's chord. |
+| `RailItem` (registry `EditorRailItems`) | An icon of the activity rail: its title, the command it runs, its icon as SVG path data on a 24 by 24 box (`RailIcons` has the design's), its order, whether it sits at the foot. It shows while its command is registered. |
+| `ILanguageSession.ScopeAt` | The named scopes (types, members) around a position, for the breadcrumb; none by default. |
+| `IModelProvider.Status` / `StatusChanged` | What a provider holds (where it runs, the models by role, the device and what it measured, the settings the Models page edits): the title bar's model chip, the status bar and the Models and devices page show it. |
 | `IModelProvider` (registry `ModelProviders`) | How a plug-in reaches a model: `ModelProviders.Get("local").AcquireAsync(new ModelRequest(name))` gives a `ModelLease` with Idrak's `IChatModel` and `ITextModel` and the context window ("local" comes with the pre-installed AI plug-in, Craft.Ai). |
 | `TextDiff` | A line diff of edits or texts, as the diff view shows it, or a unified patch. |
 | `CraftContracts.Version` | The contracts' version (now 1.0). |
@@ -58,6 +62,20 @@ public sealed class MyRegistration() : IdrakPlugin("myplugin")
 
 The sample, `samples/Craft.Plugins.Sample`, is a complete one: a word count in the status bar, kept up to date from the
 lines each change touched (never the whole text on a keystroke), and the command `sample.wordCount` on Ctrl+Shift+W.
+
+## Menus and the rail
+
+The title bar's menus and the activity rail are registries of commands, so a plug-in adds to them as the app does:
+
+```csharp
+Part(() => EditorMenus.Register(new MenuItem(EditorMenus.Plugins, "myplugin.hello")), () => EditorMenus.Unregister(EditorMenus.Plugins, "myplugin.hello"));
+Part(() => EditorRailItems.Register(new RailItem("myplugin.view", "My view", "myplugin.show", RailIcons.SourceControl, Order: 20)),
+    () => EditorRailItems.Unregister("myplugin.view"));
+```
+
+An item shows only while its command is registered: the app's own rail item for the agent waits for the agent's
+command (phase A2), and source control has no item until a plug-in brings one. A menu item's title is the command's
+title without its "Area: " prefix, unless it gives its own; its chord is the command's key binding.
 
 ## Key bindings
 

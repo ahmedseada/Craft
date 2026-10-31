@@ -15,6 +15,7 @@ public sealed class EditorDrawable : IDrawable, IDisposable
 {
     private readonly EditorRenderer _renderer = new();
     private readonly MauiTextMeasurer _measurer;
+    private string? _fellBackFrom;
     private MauiEditorCanvas? _canvas;
 
     /// <summary>A drawable measuring with <paramref name="measurer"/> (the one the model was made with).</summary>
@@ -48,6 +49,12 @@ public sealed class EditorDrawable : IDrawable, IDisposable
     /// <summary>The renderer (its counters are the paint's telemetry).</summary>
     public EditorRenderer Renderer => _renderer;
 
+    /// <summary>The code font that did not draw monospaced and gave way to <c>CRAFT_FONT_FALLBACK</c>, or null.</summary>
+    public string? FellBackFrom => _fellBackFrom;
+
+    /// <summary>Raised inside a frame, with the family, when the code font gave way to the fallback.</summary>
+    public event EventHandler<string>? FontFellBack;
+
     /// <summary>Raised at the end of each frame, inside it (a handler that changes the UI dispatches the change).</summary>
     public event EventHandler? Drawn;
 
@@ -65,14 +72,25 @@ public sealed class EditorDrawable : IDrawable, IDisposable
         try
         {
             var options = model.Options;
-            if (_canvas is null || _canvas.Font.Name != options.FontFamily || _canvas.FontSize != options.FontSize)
+            string family = string.Equals(_fellBackFrom, options.FontFamily, StringComparison.Ordinal) ? options.FontFallback : options.FontFamily;
+            if (_canvas is null || _canvas.Font.Name != family || _canvas.FontSize != options.FontSize)
             {
-                _canvas = new MauiEditorCanvas(options.FontFamily, options.FontSize);
+                _canvas = new MauiEditorCanvas(family, options.FontSize);
             }
 
             var font = new EditorFont(options.FontFamily, options.FontSize);
             if (_measurer.EnsureMeasured(canvas, font, _canvas.Font))
             {
+                if (!_measurer.IsMonospaced && family != options.FontFallback)
+                {
+                    // Measured once per family: the code font is not on this platform (or not monospaced); the fallback is.
+                    _fellBackFrom = options.FontFamily;
+                    _canvas = new MauiEditorCanvas(options.FontFallback, options.FontSize);
+                    _measurer.Reset();
+                    _measurer.EnsureMeasured(canvas, font, _canvas.Font);
+                    FontFellBack?.Invoke(this, options.FontFamily);
+                }
+
                 model.Remeasure();
             }
 

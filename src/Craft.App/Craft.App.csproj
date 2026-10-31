@@ -41,6 +41,10 @@
     <ProjectReference Include="..\Craft.Maui\Craft.Maui.csproj" />
     <!-- The app's icon: MAUI makes the .exe's and the window's icon from it (and Android's launcher icon in phase M). -->
     <MauiIcon Include="Resources\AppIcon\appicon.svg" Color="#101217" />
+    <!-- Phase D: Inter (the interface) and JetBrains Mono (the code), both SIL Open Font License 1.1 (their licences beside
+         them, Resources\Fonts\*-OFL.txt), registered by MauiProgram under Craft.Maui's CraftFonts aliases. -->
+    <MauiFont Include="Resources\Fonts\*.ttf" />
+    <Content Include="Resources\Fonts\*-OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="licenses\%(Filename)%(Extension)" />
     <!-- C# is a pre-installed plug-in, not part of the app: built first, never referenced, copied to plugins\Craft.CSharp\. -->
     <ProjectReference Include="..\Craft.CSharp\Craft.CSharp.csproj" ReferenceOutputAssembly="false" Private="false" />
     <!-- The AI host (plan phase A1) is a pre-installed plug-in too: built first, never referenced, copied to plugins\Craft.Ai\. -->

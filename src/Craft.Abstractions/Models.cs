@@ -88,6 +88,76 @@ public interface IModelProvider : IKind
     /// </summary>
     /// <exception cref="NotRegisteredException">The name's model source, or the model's family, is not registered.</exception>
     Task<ModelLease> AcquireAsync(ModelRequest request, IProgress<ModelLoadStatus>? progress = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// What the provider holds now, for the shell (the title bar's model chip, the status bar's device, memory and speed,
+    /// the Models and devices page): <see cref="ModelProviderStatus.None"/> by default.
+    /// </summary>
+    ModelProviderStatus Status => ModelProviderStatus.None;
+
+    /// <summary>Raised when <see cref="Status"/> changed, on any thread (the shell marshals to its UI thread). Never by default.</summary>
+    event EventHandler? StatusChanged
+    {
+        add { }
+        remove { }
+    }
+}
+
+/// <summary>A model by its role ("Chat and agent", "Inline completion"): the name set for it and its state.</summary>
+/// <param name="Role">The role.</param>
+/// <param name="Model">The model's name, or null when none is set.</param>
+/// <param name="State">Its state ("Loaded · chat · text", "not loaded").</param>
+/// <param name="IsProblem">Whether the state is a problem to show as one (a family not registered, a load that failed).</param>
+public sealed record ModelRole(string Role, string? Model, string State, bool IsProblem = false);
+
+/// <summary>A setting the Models page edits for the provider: its variable, its label, and a hint for an empty value.</summary>
+/// <param name="Variable">The setting's variable ("CRAFT_PLUGIN_AI_MODEL").</param>
+/// <param name="Label">The label ("Model name").</param>
+/// <param name="Placeholder">What an empty field shows ("all cores").</param>
+public sealed record ModelSettingField(string Variable, string Label, string? Placeholder = null);
+
+/// <summary>
+/// What a model provider holds now (<see cref="IModelProvider.Status"/>): where it runs, the models by role, the device in
+/// use and what it measured, and the settings the Models page edits. Every value the provider has not measured is null,
+/// so the shell shows nothing rather than a guess.
+/// </summary>
+public sealed record ModelProviderStatus
+{
+    /// <summary>Nothing set or loaded.</summary>
+    public static ModelProviderStatus None { get; } = new();
+
+    /// <summary>Where it runs, as the user reads it ("local").</summary>
+    public string Where { get; init; } = "";
+
+    /// <summary>The models by role.</summary>
+    public IReadOnlyList<ModelRole> Roles { get; init; } = [];
+
+    /// <summary>The device in use ("vulkan:0"), or null before a model is loaded.</summary>
+    public string? Device { get; init; }
+
+    /// <summary>The device memory the loaded models use, or null when not measured.</summary>
+    public long? DeviceMemoryBytes { get; init; }
+
+    /// <summary>The last generation's speed, or null when nothing was generated.</summary>
+    public double? TokensPerSecond { get; init; }
+
+    /// <summary>The last generation's time to its first token, or null.</summary>
+    public TimeSpan? FirstToken { get; init; }
+
+    /// <summary>The command that loads the chat model, or null.</summary>
+    public string? LoadCommand { get; init; }
+
+    /// <summary>The setting that names the chat model (the page's "Add a model" sets it), or null.</summary>
+    public ModelSettingField? ModelSetting { get; init; }
+
+    /// <summary>The setting of the device to run on, or null.</summary>
+    public ModelSettingField? DeviceSetting { get; init; }
+
+    /// <summary>The limits the user may set (threads, memory caps), each a setting.</summary>
+    public IReadOnlyList<ModelSettingField> Limits { get; init; } = [];
+
+    /// <summary>The chat model's name, or null.</summary>
+    public string? ChatModel => Roles.Count > 0 ? Roles[0].Model : null;
 }
 
 /// <summary>

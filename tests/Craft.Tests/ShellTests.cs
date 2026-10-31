@@ -77,7 +77,7 @@ public static class ShellTests
         var options = settings.BuildOptions(out var problems);
         Check.Equal(8, options.TabSize, "the workspace's tab size");
         Check.Equal("dark", options.Theme, "the environment's theme");
-        Check.Equal(14f, options.FontSize, "a value that does not parse keeps its own default (the user's 20 is under it, not taken)");
+        Check.Equal(new CraftOptions().FontSize, options.FontSize, "a value that does not parse keeps its own default (the user's 20 is under it, not taken)");
         Check.True(problems is [var problem] && problem.Contains("CRAFT_FONT_SIZE", StringComparison.Ordinal) && problem.Contains("workspace", StringComparison.Ordinal),
             "the problem names the variable and the file: " + string.Join(" | ", problems));
         Check.SequenceEqual(["u"], options.PluginFolders, "every other setting is still taken");

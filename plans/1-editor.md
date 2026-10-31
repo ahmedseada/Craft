@@ -622,7 +622,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E3 | `Craft.Maui` editor control over `IEditorCanvas`: drawn surface, caret, selection, scrolling, gutter, bracket match, find and replace; Windows `ITextInputAdapter` (keyboard, mouse, IME, clipboard). **A minimal window in `Craft.App` opens one file**, so the owner runs the control before the shell exists. | Headless tests of layout, caret, selection and hit-testing pass; the owner opens, edits and saves a file on Windows. | E2 |
 | E4 | **Built (2026-10-31, "E4 as built" below).** `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below), semantic colours and source generators included; Craft's own solution compiles with 0 errors in the reader's model (the bench and the `Semantic` tests). Left: the window on Windows (the owner's run).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
-| D | The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
+| D | **Built (2026-10-31, "D as built" below); left: the window beside the design on Windows (the owner's run).** The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
 | T | The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
@@ -954,6 +954,100 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
 - **Not yet**: no real model was loaded here (the owner's run); the check before accepting covers all the hunks, not
   the accepted subset; `find_symbol`; a load's fraction (Idrak's loader reports none); the MCP server serves the tools,
   not the models.
+
+## D as built (2026-10-31)
+
+- **Theme tokens** (`Craft.Abstractions/Themes.cs`, all additive, the record's constructor unchanged as E5 and A1 kept
+  it): beside A1's ground, surface, border, secondary text, accent and success, `EditorColors` gained `Raised`,
+  `RaisedHigh`, `InterfaceSelection`, `BorderStrong`, `Text` and `AccentInk`, each defaulting from the constructor's
+  colours (a plug-in's theme made before them draws the shell in its own colours). The dark theme is the design's exact
+  values (ground #101217, surface #16181D, raised #1A1D23/#1F232B, selection #252A33, borders #2A2E37/#343944, text
+  #D5D9E0, secondary #9AA2B1, accent #E5A54B on ink #1A1206, success #5FC9B4, warning #E3B27A, error #F07178) and the
+  design's code classes: `.k` keyword #82AAFF, `.t` every type name (classes, records, interfaces, structs, enums,
+  delegates) #5FC9B4, `.s` #E3B27A, `.c` #8790A0 italic, `.m` #E8D58A, `.v` locals and parameters #B8C7DC, `.p` plain
+  and punctuation #D5D9E0; the classes the design does not show keep E5's hues. The light theme is derived with the
+  same roles: its status colours, secondary text and accent are moved by `ColorContrast.Ensure` (public: WCAG ratio,
+  a colour mixed toward black or white in 1/64 steps until it reads on every given background) until they read at
+  4.5:1 on its ground, surfaces, selected row and caret line. `CRAFT_ACCENT` (amber, teal, blue, rose: the design's
+  four, `AccentColors`; or any #RRGGBB) goes through `EditorThemes.WithAccent`: the accent and the caret, moved to
+  4.5:1 on the theme's grounds (it marks text: the explorer's "M", "Completion"), its ink the theme's background or
+  text, whichever reads on it; a design accent on the dark theme is kept exactly. The test (`Design`) checks every
+  interface pair of both themes and of each accent (text, secondary, accent, success, warning, error on the ground, the
+  surfaces, the selected row and the caret line; ink on accent; line numbers on the editor) at 4.5:1. Borders and
+  dividers are decorative, not checked. Every view takes its colours from `ShellPalette` (the theme's tokens as MAUI
+  colours); no colour of the shell is written in a view.
+- **Fonts**: Inter 4.1 (Regular, Medium, SemiBold) and JetBrains Mono 2.304 (Regular, Italic, Bold, BoldItalic), the
+  official release files (github.com/rsms/inter, github.com/JetBrains/JetBrainsMono), both SIL OFL 1.1, in
+  `src/Craft.App/Resources/Fonts` with `Inter-OFL.txt` and `JetBrainsMono-OFL.txt` (copied beside the program under
+  `licenses\`), `MauiFont` items registered by `MauiProgram` under `Craft.Maui.CraftFonts`' aliases. Defaults:
+  `CRAFT_FONT` JetBrains Mono at 13 on 1.69 (the design's 22-unit lines), `CRAFT_INTERFACE_FONT` Inter at
+  `CRAFT_INTERFACE_FONT_SIZE` 13. A code font the platform does not draw monospaced (a run of "i"s measured against
+  the "M"s, once per family, inside the first frame) gives way to `CRAFT_FONT_FALLBACK` (Cascadia Mono), so a missing
+  font never breaks the columns. Android AOT/trim: fonts are data, nothing to root.
+- **The shell** (`Craft.Maui/ShellPage.cs`, moved from `Craft.App/EditorPage.cs` so it compiles here, with nullable
+  analysis, on Craft.Maui's net10.0 target; `Craft.App` now only builds the `ShellStartup` and the window): the title
+  bar's row (the logo drawn from `logo.svg`'s geometry with the accent's C, "Craft", the menus, the search box, the
+  model chip) in the window's caption through MAUI's `TitleBar` (`CRAFT_TITLE_BAR=window`, the default) or as a page
+  row (`page`); the menus are `EditorMenus` (new registry, `MenuItem` named "Menu/command") over registered commands,
+  shown only while their command is registered, with its chord, in groups, in a popup layer of the page; the Edit menu
+  sends the editor's own keys to the active editor (`ShellEditCommands`), so menu and keys do one thing. Ctrl+P is
+  `craft.quickOpen` (`QuickOpen`: the workspace's files listed once off the UI thread through
+  `Workspace.EnumerateFiles`, at most `CRAFT_QUICK_OPEN_FILES`, said so when capped; a query keeps only the best
+  `CRAFT_QUICK_OPEN_ROWS` by insertion, no sort of the list; `FuzzyMatch` scores word starts, camel humps and runs, two
+  walks without allocating; '>' gives the commands that can run, with their chords). The model chip and the status
+  bar's model text read `IModelProvider.Status` (new, a default member: where, the models by role, device, memory,
+  tokens per second, first token, the settings the page edits), "no model" until a provider has one; A1's "local"
+  fills it (its chat model and state from the settings and the load's progress, the device a load used) and raises
+  `StatusChanged`. The activity rail is `EditorRailItems` (new registry, `RailItem` with SVG path data,
+  `RailIcons` the design's): Explorer (the tree), Search (quick open), Agent (`craft.agent`, hidden until A2 registers
+  it), Plug-ins, Settings at the foot; source control has no item until a plug-in brings one. The explorer: the
+  folder's name in capitals, the tree (the active file's row on the selection), and the semantic card from
+  `SemanticTelemetry` through the language's contract (`Engine` "Roslyn", set by Craft.CSharp; Ready with projects and
+  memory, Loading, Waiting for a large file; hidden for a language without a semantic layer). The tabs on the ground,
+  the active one on the surface under the accent's 2-unit line, a dot for unsaved changes. The breadcrumb: the folder,
+  the file, then `ILanguageSession.ScopeAt` (new, a default member returning none): Craft.CSharp walks its last parse
+  from the caret's token up, reusing one buffer and returning the same array while the scopes are the same (a caret
+  move makes nothing). The bottom panel (`CRAFT_BOTTOM_PANEL_HEIGHT`, Ctrl+J): Problems with the count (virtualized,
+  errors first, a row moves the caret), Terminal (phase T's placeholder), Output (the host's log, live, bounded by
+  `CRAFT_HOST_LOG_LINES`), Idrak telemetry (`TelemetryLog`: one row per source and metric of `IEditorHost.Record`, so
+  memory follows the metrics' names, not the measures; a placeholder until something is recorded). The status bar:
+  the branch (`GitBranch`: `.git/HEAD` read as bytes, a worktree's `gitdir:` file followed, a detached head's short
+  hash; no git program), the problems in the warning or error colour (a tap opens them), the semantic state, the
+  position, the indentation, the encoding, the line break, the language, the plug-ins' items, the model's text; each
+  label is set only when its text changed. Narrow (below `CRAFT_NARROW_WIDTH`, the measured width): the phone's top
+  bar (files, the file's title and place, undo, commands), the tree in the editor's place, the tab switcher, the
+  status bar's position and problems only; every control there at least `CRAFT_TOUCH_TARGET` (44) tall; no rail,
+  panels, breadcrumb or bottom panel. Commands added: `craft.quickOpen`, `craft.togglePanel`, `craft.showProblems`,
+  `craft.showTerminal`, `craft.showOutput`, `craft.showTelemetry`, `craft.models`, `craft.pluginGuide`, `craft.about`,
+  the ten edit commands.
+- **Pages** (`Craft.Maui/DesignPages.cs`): the Plug-ins page from `Plugins.dc.html` over `PluginList` (K's load results,
+  the host's activations, what each plug-in's assembly registered in the public registries by the registered object's
+  type, and Idrak's plug-ins from `IdrakPlugins`): All / Overrides / Problems with counts, a filter by name or registry,
+  "Load from folder…" (`CRAFT_PLUGIN_FOLDERS` in the user's settings, at the next start), the table, the chosen one's
+  details, its problem, and "Disable/Enable at the next start" (`CRAFT_PLUGINS_DISABLED`). The Models and devices page
+  from `Models.dc.html` over the first provider's status: where models run (Local; Remote later, A3), the models by
+  role, "Add a model" (the provider's model setting, then its load command, the host's progress bars), how a name is
+  resolved (Idrak's `ModelSources`, in order, with who registered each), the device setting and what was measured
+  (nothing unmeasured is shown as a number), the limits (the provider's settings: Idrak's ComputeResources). With no
+  provider it says so.
+- **Measured** (the editor bench, `-- editor`, the same 4-core container and workload as E3's): keystroke to render
+  median 6.6 us, p99 24.2 us, 1,028 bytes and 1 run string per keystroke (E3: 6.6 us, 23 us, 1.0 KB, 1); blink frame
+  5.0 us, 0 bytes (E3: 5.0 us); scroll frame 5.3 us, 0.3 KB (E3: 5.3 us); cold 32 ms (E3: 29 ms): unchanged. The shell's
+  work per caret move (labels set when changed, the breadcrumb's cached scopes) is outside the bench's editor path.
+- **Tests**: group `Design` (the tokens and every pair's contrast in both themes and each accent, the dark code classes,
+  the options, the menus and rail as registries of commands taken back on dispose, quick open, the branch, the status
+  texts, the C# scopes, the plug-in list, the telemetry), with `Ai`, `Editor`, `Shell`, `PluginKit`, `Semantic`,
+  `ApiGuard`, `Inventory`: 84 ran here; two failed on the first run (E4's test expected the old 14-unit font; greedy
+  fuzzy matching missed a camel hump, fixed with the word-start walk) and passed after the fix.
+- **Not compiled here** (Windows only): `src/Craft.App/MauiProgram.cs`, `src/Craft.App/App.cs`, `src/Craft.App/Craft.App.csproj`
+  (the `MauiFont` and licence items). Nothing under `Platforms/Windows` changed. Not run here: the window itself (the
+  `TitleBar` in the caption, the bundled fonts in the drawn editor on Windows, the popups' places).
+- **Not yet**: quick open is clicked or takes the first row on Enter (no arrow keys in the list, no Escape: a tap
+  outside closes it); the search box finds files and commands, not symbols; the problems' "Fix with Roslyn" and
+  "Explain" (code actions, A2), the chat column and the completion hint bar (A2); the phone's key row (M); the Models
+  page's device is a setting typed as text (no device list from the library yet), and tokens per second and device
+  memory stay empty until the provider measures them (A2's generation); the settings page has no sections yet (the
+  Models page's other sections open it whole); A1's "Models and devices" side panel is still shown beside the page.
 
 ## Commands for the owner (once a phase is built)
 

@@ -59,8 +59,8 @@ public sealed partial class CSharpLanguageSession
     }
 
     /// <inheritdoc />
-    public SemanticTelemetry Telemetry => Volatile.Read(ref _workspace)?.Telemetry(TimeSpan.FromTicks(Volatile.Read(ref _lastDiagnosticsTicks)))
-        ?? SemanticTelemetry.None with { LastDiagnosticsTime = TimeSpan.FromTicks(Volatile.Read(ref _lastDiagnosticsTicks)) };
+    public SemanticTelemetry Telemetry => (Volatile.Read(ref _workspace)?.Telemetry(TimeSpan.FromTicks(Volatile.Read(ref _lastDiagnosticsTicks)))
+        ?? SemanticTelemetry.None with { LastDiagnosticsTime = TimeSpan.FromTicks(Volatile.Read(ref _lastDiagnosticsTicks)) }) with { Engine = "Roslyn" };
 
     /// <summary>The diagnostics passes that finished since the session opened.</summary>
     public int DiagnosticsPasses => Volatile.Read(ref _diagnosticsPasses);

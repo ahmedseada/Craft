@@ -203,6 +203,7 @@ public sealed class AiSession : IDisposable
         {
             progress.Report(status.Fraction, status.Message);
             _modelState = status.Message;
+            AiPlugin.Local.SetState(status.Message);
             RefreshModels();
         }));
         try
@@ -211,10 +212,12 @@ public sealed class AiSession : IDisposable
             _modelState = string.Create(CultureInfo.InvariantCulture,
                 $"loaded{(lease.Loaded ? $" in {lease.LoadDuration.TotalSeconds:F1} s" : "")} · context {lease.ContextLength} · {(lease.Chat is null ? "no chat template" : "chat")} · text");
             _host.Record("ai.model.load", lease.LoadDuration.TotalMilliseconds, "ms");
+            AiPlugin.Local.SetState(_modelState);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             _modelState = "failed: " + error.Message;
+            AiPlugin.Local.SetState(_modelState, isProblem: true);
             _host.Log(EditorLogLevel.Error, $"The model {settings.Model} did not load.", error);
             await _host.ShowMessageAsync("AI: the model did not load", error.Message);
         }

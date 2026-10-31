@@ -55,6 +55,69 @@ public static class ShellCommandIds
 
     /// <summary>Switches between the light and the dark theme (for this run; CRAFT_THEME sets it for good).</summary>
     public const string ToggleTheme = "craft.toggleTheme";
+
+    // Phase D: the approved design's shell.
+
+    /// <summary>Quick open, the title bar's search box: files by name, '&gt;' commands (Ctrl+P).</summary>
+    public const string QuickOpen = "craft.quickOpen";
+
+    /// <summary>Shows or hides the bottom panel (Ctrl+J).</summary>
+    public const string TogglePanel = "craft.togglePanel";
+
+    /// <summary>The bottom panel's Problems tab.</summary>
+    public const string ShowProblems = "craft.showProblems";
+
+    /// <summary>The bottom panel's Terminal tab (phase T).</summary>
+    public const string ShowTerminal = "craft.showTerminal";
+
+    /// <summary>The bottom panel's Output tab (the host's log).</summary>
+    public const string ShowOutput = "craft.showOutput";
+
+    /// <summary>The bottom panel's Idrak telemetry tab (the measures recorded through the host).</summary>
+    public const string ShowTelemetry = "craft.showTelemetry";
+
+    /// <summary>The Models and devices page.</summary>
+    public const string Models = "craft.models";
+
+    /// <summary>The plug-in guide (where docs/plugins.md is).</summary>
+    public const string PluginGuide = "craft.pluginGuide";
+
+    /// <summary>About Craft.</summary>
+    public const string About = "craft.about";
+
+    /// <summary>The command palette (the app registers it: it is a view).</summary>
+    public const string CommandPalette = "craft.commandPalette";
+
+    /// <summary>The Plug-ins page (the app registers it: it is a view).</summary>
+    public const string Plugins = "craft.plugins";
+
+    /// <summary>The agent (phase A2's plug-in registers it; its rail item shows from then).</summary>
+    public const string Agent = "craft.agent";
+}
+
+/// <summary>The views a shell command asks the app to show (<see cref="ShellModel.ViewRequested"/>).</summary>
+public static class ShellViewNames
+{
+    /// <summary>The search box, focused, for quick open.</summary>
+    public const string QuickOpen = "quickOpen";
+
+    /// <summary>The bottom panel shown or hidden.</summary>
+    public const string TogglePanel = "panel";
+
+    /// <summary>The bottom panel's Problems tab.</summary>
+    public const string Problems = "panel.problems";
+
+    /// <summary>The bottom panel's Terminal tab.</summary>
+    public const string Terminal = "panel.terminal";
+
+    /// <summary>The bottom panel's Output tab.</summary>
+    public const string Output = "panel.output";
+
+    /// <summary>The bottom panel's Idrak telemetry tab.</summary>
+    public const string Telemetry = "panel.telemetry";
+
+    /// <summary>The Models and devices page.</summary>
+    public const string Models = "models";
 }
 
 /// <summary>
@@ -79,6 +142,8 @@ public sealed class ShellModel : IDisposable
     private readonly Func<string, CraftOptions, CancellationToken, Task<ITextDocument>> _openDocument;
     private readonly List<string> _commandIds = [];
     private readonly List<KeyBinding> _bindings = [];
+    private readonly List<(string Menu, string Command)> _menuItems = [];
+    private readonly List<string> _railItems = [];
     private string _optionsSignature;
     private bool _disposed;
     private IDisposable? _memoryWatch;
@@ -148,6 +213,9 @@ public sealed class ShellModel : IDisposable
     /// <summary>The editor host.</summary>
     public EditorHost Host { get; }
 
+    /// <summary>The platform's file dialogs (the Plug-ins page picks a plug-in folder with them).</summary>
+    public IFileDialogs FileDialogs => _dialogs;
+
     /// <summary>The layered settings.</summary>
     public CraftSettings Settings { get; }
 
@@ -184,6 +252,12 @@ public sealed class ShellModel : IDisposable
     /// <summary>Raised after <see cref="Theme"/> changed.</summary>
     public event EventHandler? ThemeChanged;
 
+    /// <summary>Raised when a command asks the app for a view (<see cref="ShellViewNames"/>).</summary>
+    public event EventHandler<string>? ViewRequested;
+
+    /// <summary>The branch of the open folder's git repository, or null (read when the folder opens).</summary>
+    public string? Branch { get; private set; }
+
     /// <summary>The settings page's rows: every Craft option, then every plug-in's declared setting.</summary>
     public IReadOnlyList<SettingRow> SettingRows() =>
         Settings.Rows(Host.Settings.All.Select(p => new CraftVariable(p.Variable, p.Setting.Default, $"{p.Plugin}: {p.Setting.Description}")));
@@ -218,6 +292,7 @@ public sealed class ShellModel : IDisposable
         Tree = new FolderTree(Workspace);
         Recent.Add(Workspace.Root, RecentKind.Folder);
         Layout.HasFolder = true;
+        Branch = GitBranch.Read(Workspace.Root);
         WorkspaceChanged?.Invoke(this, EventArgs.Empty);
         return true;
     }
@@ -237,6 +312,7 @@ public sealed class ShellModel : IDisposable
         Settings.Workspace = null;
         ReloadOptions();
         Layout.HasFolder = false;
+        Branch = null;
         WorkspaceChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -452,7 +528,7 @@ public sealed class ShellModel : IDisposable
         }
 
         _optionsSignature = signature;
-        bool themeChanged = !string.Equals(options.Theme, Options.Theme, StringComparison.OrdinalIgnoreCase);
+        bool themeChanged = !string.Equals(options.Theme, Options.Theme, StringComparison.OrdinalIgnoreCase) || options.Accent != Options.Accent;
         bool monitorChanged = !string.Equals(options.MemoryMonitor, Options.MemoryMonitor, StringComparison.OrdinalIgnoreCase);
         Options = options;
         if (monitorChanged)
@@ -470,7 +546,7 @@ public sealed class ShellModel : IDisposable
     }
 
     /// <summary>Switches between the light and the dark theme for this run.</summary>
-    public void ToggleTheme() => SetTheme(EditorThemes.Get(Theme.IsDark ? EditorThemes.Light : EditorThemes.Dark));
+    public void ToggleTheme() => SetTheme(Accented(EditorThemes.Get(Theme.IsDark ? EditorThemes.Light : EditorThemes.Dark), Options));
 
     /// <summary>Takes the shell's commands and bindings back and closes every tab (unsaved changes are lost: ask first).</summary>
     public void Dispose()
@@ -495,12 +571,25 @@ public sealed class ShellModel : IDisposable
             EditorCommands.Unregister(id);
         }
 
+        foreach (var (menu, command) in _menuItems)
+        {
+            EditorMenus.Unregister(menu, command);
+        }
+
+        foreach (var rail in _railItems)
+        {
+            EditorRailItems.Unregister(rail);
+        }
+
         _memoryWatch?.Dispose();
         Tabs.Dispose();
         Workspace?.Dispose();
     }
 
-    private static ITheme ThemeOf(CraftOptions options) => EditorThemes.Find(options.Theme) ?? EditorThemes.Get(EditorThemes.Dark);
+    private static ITheme ThemeOf(CraftOptions options) => Accented(EditorThemes.Find(options.Theme) ?? EditorThemes.Get(EditorThemes.Dark), options);
+
+    // CRAFT_ACCENT over the theme's own accent.
+    private static ITheme Accented(ITheme theme, CraftOptions options) => options.Accent is { } accent ? EditorThemes.WithAccent(theme, accent) : theme;
 
     private void SetTheme(ITheme theme)
     {
@@ -581,6 +670,71 @@ public sealed class ShellModel : IDisposable
         Command(ShellCommandIds.ToggleTree, "View: Show or hide the folder tree", (_, _) => { Layout.ToggleTree(); return Task.CompletedTask; }, _ => Workspace is not null, "Ctrl+B");
         Command(ShellCommandIds.RefreshTree, "View: Refresh the folder tree", (_, _) => { Tree?.Refresh(); return Task.CompletedTask; }, _ => Tree is not null, null);
         Command(ShellCommandIds.ToggleTheme, "View: Switch light and dark", (_, _) => { ToggleTheme(); return Task.CompletedTask; }, null, null);
+        Command(ShellCommandIds.QuickOpen, "Go: Open a file by name ('>' for a command)", (_, _) => View(ShellViewNames.QuickOpen), null, "Ctrl+P");
+        Command(ShellCommandIds.TogglePanel, "View: Show or hide the bottom panel", (_, _) => View(ShellViewNames.TogglePanel), null, "Ctrl+J");
+        Command(ShellCommandIds.ShowProblems, "View: Problems", (_, _) => View(ShellViewNames.Problems), null, null);
+        Command(ShellCommandIds.ShowTerminal, "View: Terminal", (_, _) => View(ShellViewNames.Terminal), null, null);
+        Command(ShellCommandIds.ShowOutput, "View: Output", (_, _) => View(ShellViewNames.Output), null, null);
+        Command(ShellCommandIds.ShowTelemetry, "View: Idrak telemetry", (_, _) => View(ShellViewNames.Telemetry), null, null);
+        Command(ShellCommandIds.Models, "Settings: Models and devices", (_, _) => View(ShellViewNames.Models), null, null);
+        Command(ShellCommandIds.PluginGuide, "Help: Writing a plug-in", (_, _) => _ui.ShowMessageAsync("Writing a Craft plug-in",
+            "The guide is docs/plugins.md in Craft's repository; the template is templates/craft-plugin (dotnet new craft-plugin). " +
+            "A plug-in adds commands, key bindings, menu items (EditorMenus), rail items (EditorRailItems), status items, panels, settings, languages and themes."), null, null);
+        Command(ShellCommandIds.About, "Help: About Craft", (_, _) => _ui.ShowMessageAsync("Craft",
+            $"A code editor on Idrak. Plug-in contracts {CraftContracts.Version}; .NET {Environment.Version}; {System.Runtime.InteropServices.RuntimeInformation.OSDescription}."), null, null);
+
+        // The title bar's menus (docs/design/Main.dc.html): every item runs a command, so a plug-in adds its own the same way.
+        Menu(EditorMenus.File, ShellCommandIds.NewFile, 0, 0);
+        Menu(EditorMenus.File, ShellCommandIds.OpenFile, 0, 1);
+        Menu(EditorMenus.File, ShellCommandIds.OpenFolder, 0, 2);
+        Menu(EditorMenus.File, ShellCommandIds.OpenRecent, 0, 3);
+        Menu(EditorMenus.File, ShellCommandIds.Save, 1, 0);
+        Menu(EditorMenus.File, ShellCommandIds.SaveAs, 1, 1);
+        Menu(EditorMenus.File, ShellCommandIds.CloseTab, 2, 0);
+        Menu(EditorMenus.File, ShellCommandIds.CloseFolder, 2, 1);
+        Menu(EditorMenus.File, ShellCommandIds.Settings, 3, 0);
+        Menu(EditorMenus.File, ShellCommandIds.Models, 3, 1);
+        Menu(EditorMenus.View, ShellCommandIds.QuickOpen, 0, 0);
+        Menu(EditorMenus.View, ShellCommandIds.CommandPalette, 0, 1);
+        Menu(EditorMenus.View, ShellCommandIds.ToggleTree, 1, 0);
+        Menu(EditorMenus.View, ShellCommandIds.RefreshTree, 1, 1);
+        Menu(EditorMenus.View, ShellCommandIds.TogglePanel, 2, 0);
+        Menu(EditorMenus.View, ShellCommandIds.ShowProblems, 2, 1);
+        Menu(EditorMenus.View, ShellCommandIds.ShowTerminal, 2, 2);
+        Menu(EditorMenus.View, ShellCommandIds.ShowOutput, 2, 3);
+        Menu(EditorMenus.View, ShellCommandIds.ShowTelemetry, 2, 4);
+        Menu(EditorMenus.View, ShellCommandIds.NextTab, 3, 0);
+        Menu(EditorMenus.View, ShellCommandIds.PreviousTab, 3, 1);
+        Menu(EditorMenus.View, ShellCommandIds.ToggleTheme, 4, 0);
+        Menu(EditorMenus.Plugins, ShellCommandIds.Plugins, 0, 0);
+        Menu(EditorMenus.Help, ShellCommandIds.CommandPalette, 0, 0, "Every command and its keys");
+        Menu(EditorMenus.Help, ShellCommandIds.PluginGuide, 0, 1);
+        Menu(EditorMenus.Help, ShellCommandIds.About, 1, 0);
+
+        // The activity rail: each item a command; one whose command is not registered (the agent before A2) does not show.
+        Rail(new RailItem("craft.explorer", "Explorer", ShellCommandIds.ToggleTree, RailIcons.Explorer, 0));
+        Rail(new RailItem("craft.search", "Search", ShellCommandIds.QuickOpen, RailIcons.Search, 10));
+        Rail(new RailItem("craft.agent", "Agent", ShellCommandIds.Agent, RailIcons.Agent, 30));
+        Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
+        Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
+    }
+
+    private Task View(string name)
+    {
+        ViewRequested?.Invoke(this, name);
+        return Task.CompletedTask;
+    }
+
+    private void Menu(string menu, string command, int group, int order, string? title = null)
+    {
+        EditorMenus.Register(new MenuItem(menu, command, title, order, group));
+        _menuItems.Add((menu, command));
+    }
+
+    private void Rail(RailItem item)
+    {
+        EditorRailItems.Register(item);
+        _railItems.Add(item.Id);
     }
 
     private void Command(string id, string title, Func<IEditorHost, CancellationToken, Task> execute, Func<IEditorHost, bool>? canExecute, string? chord)

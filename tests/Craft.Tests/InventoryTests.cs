@@ -75,6 +75,10 @@ public static class InventoryTests
             ["CRAFT_WORKSPACE_CONFIGURATION"] = "Release", ["CRAFT_COMPLETION_DELAY_MS"] = "0", ["CRAFT_COMPLETION_ROWS"] = "7",
             ["CRAFT_PROBLEMS_LIMIT"] = "20", ["CRAFT_HOVER_DELAY_MS"] = "100",
             ["CRAFT_SOURCE_GENERATORS"] = "false", ["CRAFT_SEMANTIC_COLORS_DELAY_MS"] = "-1", ["CRAFT_MEMORY_MONITOR"] = "none",
+            // Phase D: the approved design's shell.
+            ["CRAFT_FONT_FALLBACK"] = "Consolas", ["CRAFT_INTERFACE_FONT"] = "Segoe UI", ["CRAFT_INTERFACE_FONT_SIZE"] = "14", ["CRAFT_ACCENT"] = "#82AAFF",
+            ["CRAFT_BOTTOM_PANEL_HEIGHT"] = "200", ["CRAFT_QUICK_OPEN_FILES"] = "1000", ["CRAFT_QUICK_OPEN_ROWS"] = "8", ["CRAFT_TOUCH_TARGET"] = "48",
+            ["CRAFT_TITLE_BAR"] = "page",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -91,6 +95,8 @@ public static class InventoryTests
             DiagnosticsDelayMilliseconds = 250, SemanticMaxCharacters = 1000, WorkspaceReaders = options.WorkspaceReaders, WorkspaceConfiguration = "Release",
             CompletionDelayMilliseconds = 0, CompletionRows = 7, ProblemsListLimit = 20, HoverDelayMilliseconds = 100,
             SourceGenerators = false, SemanticColorsDelayMilliseconds = -1, MemoryMonitor = "none",
+            FontFallback = "Consolas", InterfaceFont = "Segoe UI", InterfaceFontSize = 14, Accent = AccentColors.Blue, BottomPanelHeight = 200,
+            QuickOpenFiles = 1000, QuickOpenRows = 8, TouchTarget = 48, TitleBar = "page",
         }, options, "options read from every variable");
         Check.SequenceEqual(["loose", "csproj"], options.WorkspaceReaders, "CRAFT_WORKSPACE_READERS split at ','");
         var settings = options.ToLanguageSettings();

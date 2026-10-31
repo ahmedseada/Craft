@@ -31,6 +31,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 ParseWaitMilliseconds { get; init; }
   System.Int32 ProblemsListLimit { get; init; }
   System.Int32 ProposalPreviewCharacters { get; init; }
+  System.Int32 QuickOpenFiles { get; init; }
+  System.Int32 QuickOpenRows { get; init; }
   System.Int32 RecentLimit { get; init; }
   System.Int32 ScrollMarginColumns { get; init; }
   System.Int32 ScrollMarginLines { get; init; }
@@ -38,24 +40,31 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 UndoGroupMilliseconds { get; init; }
+  System.Single BottomPanelHeight { get; init; }
   System.Single CaretWidth { get; init; }
   System.Single DoubleClickDistance { get; init; }
   System.Single FontSize { get; init; }
+  System.Single InterfaceFontSize { get; init; }
   System.Single LineSpacing { get; init; }
   System.Single NarrowWidth { get; init; }
   System.Single PanelWidth { get; init; }
+  System.Single TouchTarget { get; init; }
   System.Single TreeIndent { get; init; }
   System.Single TreeWidth { get; init; }
   System.String CrashFolder { get; init; }
   System.String DataFolder { get; init; }
+  System.String FontFallback { get; init; }
   System.String FontFamily { get; init; }
+  System.String InterfaceFont { get; init; }
   System.String MemoryMonitor { get; init; }
   System.String NewLine { get; init; }
   System.String RecoveryFolder { get; init; }
   System.String ResolveDataFolder()
   System.String Theme { get; init; }
+  System.String TitleBar { get; init; }
   System.String ToString()
   System.String WorkspaceConfiguration { get; init; }
+  System.UInt32? Accent { get; init; }
   ctor()
   static Craft.Core.CraftOptions FromEnvironment(Craft.Core.CraftOptions baseline = null)
   static Craft.Core.CraftOptions FromVariables(System.Func<System.String, System.String> read, Craft.Core.CraftOptions baseline = null)

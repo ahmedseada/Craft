@@ -9,16 +9,7 @@ using Craft.Maui;
 
 namespace Craft.App;
 
-/// <summary>What the app starts with: the settings and the options built from them, the plug-ins it loaded (or could not), the recent list and the platform's pieces.</summary>
-/// <param name="Options">The options (the environment over the user's settings.json over the defaults; a value that did not parse keeps its default).</param>
-/// <param name="Settings">The layered settings (a folder's .craft/settings.json joins them when it opens).</param>
-/// <param name="Plugins">Each installed plug-in's load result.</param>
-/// <param name="Recent">The recent files and folders.</param>
-/// <param name="Platform">The platform's file dialogs, key routing and close guard.</param>
-/// <param name="Problems">What did not parse in the settings (each naming its variable and where it came from).</param>
-public sealed record AppStartup(CraftOptions Options, CraftSettings Settings, IReadOnlyList<PluginLoadResult> Plugins, RecentList Recent, IShellPlatform Platform, IReadOnlyList<string> Problems);
-
-/// <summary>Builds the MAUI app: the settings (environment and the user's file), the installed plug-ins (C# among them), the recent list, the window.</summary>
+/// <summary>Builds the MAUI app: the settings (environment and the user's file), the installed plug-ins (C# among them), the recent list, the bundled fonts, the window.</summary>
 public static class MauiProgram
 {
     /// <summary>The MAUI app.</summary>
@@ -38,9 +29,18 @@ public static class MauiProgram
         // fails is reported on the page, never a crash.
         var plugins = CraftPlugins.LoadInstalled(options);
         var recent = RecentList.Load(options);
-        var startup = new AppStartup(options, settings, plugins, recent, ShellPlatforms.Create(), [.. problems, .. recent.Problems]);
+        var startup = new ShellStartup(options, settings, plugins, recent, ShellPlatforms.Create(), [.. problems, .. recent.Problems]);
         var builder = MauiApp.CreateBuilder();
         builder.UseMauiApp(_ => new App(startup));
+
+        // Inter (the interface) and JetBrains Mono (the code), both SIL OFL 1.1, from Resources/Fonts (the MauiFont items).
+        builder.ConfigureFonts(fonts =>
+        {
+            foreach (var (file, alias) in CraftFonts.Files)
+            {
+                fonts.AddFont(file, alias);
+            }
+        });
         return builder.Build();
     }
 }

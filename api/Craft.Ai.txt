@@ -80,6 +80,7 @@ sealed class Craft.Ai.FolderToolProvider : Idrak.Abstraction.Generation.IToolPro
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Tools { get; }
   ctor()
 sealed class Craft.Ai.LocalModelProvider : Craft.Abstractions.IModelProvider, Idrak.Abstraction.IKind, System.IDisposable
+  Craft.Abstractions.ModelProviderStatus Status { get; }
   Craft.Ai.AiSettings Settings { get; set; }
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Serving.LoadedModel> Loaded { get; }
   System.String Name { get; }
@@ -87,3 +88,4 @@ sealed class Craft.Ai.LocalModelProvider : Craft.Abstractions.IModelProvider, Id
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> AcquireAsync(Craft.Abstractions.ModelRequest request, System.IProgress<Craft.Abstractions.ModelLoadStatus> progress = null, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispose()
   ctor()
+  event System.EventHandler StatusChanged

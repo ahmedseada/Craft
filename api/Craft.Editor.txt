@@ -382,21 +382,124 @@ sealed class Craft.Editor.Shell.FolderTreeRow : System.IEquatable<Craft.Editor.S
   System.String ToString()
   System.Void Deconstruct(out Craft.Core.Workspaces.WorkspaceEntry Entry, out System.Int32 Depth, out System.Boolean IsExpanded)
   ctor(Craft.Core.Workspaces.WorkspaceEntry Entry, System.Int32 Depth, System.Boolean IsExpanded)
+static class Craft.Editor.Shell.FuzzyMatch
+  const System.Int32 None = -2147483648
+  static System.Int32 Score(System.ReadOnlySpan<System.Char> query, System.ReadOnlySpan<System.Char> text)
+static class Craft.Editor.Shell.GitBranch
+  static System.String FromHead(System.ReadOnlySpan<System.Byte> head)
+  static System.String Read(System.String folder)
+sealed class Craft.Editor.Shell.MenuRow : System.IEquatable<Craft.Editor.Shell.MenuRow>
+  Craft.Editor.Shell.MenuRow <Clone>$()
+  System.Boolean Enabled { get; init; }
+  System.Boolean Equals(Craft.Editor.Shell.MenuRow other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean StartsGroup { get; init; }
+  System.Int32 GetHashCode()
+  System.String Chord { get; init; }
+  System.String CommandId { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Title, out System.String Chord, out System.String CommandId, out System.Boolean StartsGroup, out System.Boolean Enabled)
+  ctor(System.String Title, System.String Chord, System.String CommandId, System.Boolean StartsGroup, System.Boolean Enabled)
+enum Craft.Editor.Shell.PluginFilter : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  All = 0
+  Overrides = 1
+  Problems = 2
+static class Craft.Editor.Shell.PluginList
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.PluginRow> Filter(System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.PluginRow> rows, Craft.Editor.Shell.PluginFilter filter, System.String text)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.PluginRow> Rows(System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> installed, System.Collections.Generic.IReadOnlyList<Craft.Editor.PluginActivation> activations)
+  static System.ValueTuple<System.Int32, System.Int32, System.Int32> Counts(System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.PluginRow> rows)
+sealed class Craft.Editor.Shell.PluginRow : System.IEquatable<Craft.Editor.Shell.PluginRow>
+  Craft.Editor.Shell.PluginRow <Clone>$()
+  Craft.Editor.Shell.PluginState State { get; init; }
+  System.Boolean Equals(Craft.Editor.Shell.PluginRow other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Capabilities { get; init; }
+  System.Int32 GetHashCode()
+  System.String Folder { get; init; }
+  System.String Name { get; init; }
+  System.String Problem { get; init; }
+  System.String Registries { get; init; }
+  System.String Source { get; init; }
+  System.String StateText { get; init; }
+  System.String Summary { get; init; }
+  System.String ToString()
+  System.String Version { get; init; }
+  System.Void Deconstruct(out System.String Name, out System.String Summary, out System.String Registries, out System.String Source, out Craft.Editor.Shell.PluginState State, out System.String StateText, out System.String Version, out System.String Folder, out System.Collections.Generic.IReadOnlyList<System.String> Capabilities, out System.String Problem)
+  ctor(System.String Name, System.String Summary, System.String Registries, System.String Source, Craft.Editor.Shell.PluginState State, System.String StateText, System.String Version, System.String Folder, System.Collections.Generic.IReadOnlyList<System.String> Capabilities, System.String Problem)
+enum Craft.Editor.Shell.PluginState : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Active = 0
+  Off = 3
+  Outdated = 1
+  Problem = 2
+sealed class Craft.Editor.Shell.QuickOpen
+  System.Boolean Capped { get; }
+  System.Boolean IsIndexing { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.QuickOpenItem> Query(System.String text)
+  System.Collections.Generic.IReadOnlyList<System.String> Files { get; }
+  System.Int32 CraftOptionsLimit { get; set; }
+  System.Int32 Rows { get; set; }
+  System.String Root { get; }
+  System.Threading.Tasks.Task IndexAsync(Craft.Core.Workspaces.Workspace workspace)
+  ctor(Craft.Editor.EditorHost host, System.Int32 rows)
+sealed class Craft.Editor.Shell.QuickOpenItem : System.IEquatable<Craft.Editor.Shell.QuickOpenItem>
+  Craft.Editor.Shell.QuickOpenItem <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.QuickOpenItem other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Score { get; init; }
+  System.String CommandId { get; init; }
+  System.String Detail { get; init; }
+  System.String Path { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Text, out System.String Detail, out System.String Path, out System.String CommandId, out System.Int32 Score)
+  ctor(System.String Text, System.String Detail, System.String Path, System.String CommandId, System.Int32 Score)
+sealed class Craft.Editor.Shell.SemanticCard : System.IEquatable<Craft.Editor.Shell.SemanticCard>
+  Craft.Editor.Shell.SemanticCard <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.SemanticCard other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsReady { get; init; }
+  System.Int32 GetHashCode()
+  System.String Engine { get; init; }
+  System.String Memory { get; init; }
+  System.String Projects { get; init; }
+  System.String State { get; init; }
+  System.String StatusText { get; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Engine, out System.String State, out System.String Projects, out System.String Memory, out System.Boolean IsReady)
+  ctor(System.String Engine, System.String State, System.String Projects, System.String Memory, System.Boolean IsReady)
 static class Craft.Editor.Shell.ShellCommandIds
+  const System.String About = craft.about
+  const System.String Agent = craft.agent
   const System.String CloseFolder = craft.closeFolder
   const System.String CloseTab = craft.closeTab
+  const System.String CommandPalette = craft.commandPalette
+  const System.String Models = craft.models
   const System.String NewFile = craft.newFile
   const System.String NextTab = craft.nextTab
   const System.String OpenFile = craft.openFile
   const System.String OpenFolder = craft.openFolder
   const System.String OpenRecent = craft.openRecent
+  const System.String PluginGuide = craft.pluginGuide
+  const System.String Plugins = craft.plugins
   const System.String PreviousTab = craft.previousTab
+  const System.String QuickOpen = craft.quickOpen
   const System.String RefreshTree = craft.refreshTree
   const System.String Save = craft.save
   const System.String SaveAs = craft.saveAs
   const System.String Settings = craft.settings
+  const System.String ShowOutput = craft.showOutput
+  const System.String ShowProblems = craft.showProblems
+  const System.String ShowTelemetry = craft.showTelemetry
+  const System.String ShowTerminal = craft.showTerminal
+  const System.String TogglePanel = craft.togglePanel
   const System.String ToggleTheme = craft.toggleTheme
   const System.String ToggleTree = craft.toggleTree
+sealed class Craft.Editor.Shell.ShellEditCommands : System.IDisposable
+  System.Void Dispose()
+  ctor(System.Func<Craft.Editor.EditorModel> active)
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String, Craft.Abstractions.EditorKey, Craft.Abstractions.KeyModifiers, System.String>> Keys { get; }
 sealed class Craft.Editor.Shell.ShellLayout
   Craft.Core.CraftOptions Options { get; set; }
   Craft.Editor.Shell.ShellLayoutKind Kind { get; }
@@ -415,12 +518,17 @@ sealed class Craft.Editor.Shell.ShellLayout
 enum Craft.Editor.Shell.ShellLayoutKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Narrow = 1
   Wide = 0
+static class Craft.Editor.Shell.ShellMenus
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.MenuRow> Rows(System.String menu, Craft.Abstractions.IEditorHost host)
+  static System.String ChordOf(System.String commandId)
+  static System.String MenuTitle(Craft.Abstractions.IEditorCommand command)
 sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Abstractions.ITheme Theme { get; }
   Craft.Core.CraftOptions Options { get; }
   Craft.Core.Settings.CraftSettings Settings { get; }
   Craft.Core.Workspaces.RecentList Recent { get; }
   Craft.Core.Workspaces.Workspace Workspace { get; }
+  Craft.Editor.Abstractions.IFileDialogs FileDialogs { get; }
   Craft.Editor.EditorHost Host { get; }
   Craft.Editor.Shell.DocumentTab NewFile()
   Craft.Editor.Shell.DocumentTabs Tabs { get; }
@@ -430,6 +538,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Collections.Generic.IReadOnlyList<System.String> OptionsProblems { get; }
   System.Int32 MemoryReleases { get; }
   System.String ApplySetting(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
+  System.String Branch { get; }
   System.Threading.Tasks.Task OpenRecentAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Shell.DocumentTab> OpenFileAsync(System.String path, System.Boolean fromTree = false, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> CloseTabAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
@@ -446,4 +555,46 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   event System.EventHandler OptionsChanged
   event System.EventHandler ThemeChanged
   event System.EventHandler WorkspaceChanged
+  event System.EventHandler<System.String> ViewRequested
   static System.Collections.Generic.IReadOnlySet<System.String> AppliedAtStart { get; }
+static class Craft.Editor.Shell.ShellText
+  static Craft.Editor.Shell.SemanticCard Semantic(Craft.Editor.EditorModel model)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> Breadcrumb(System.String filePath, System.String workspaceRoot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> scopes)
+  static System.String Bytes(System.Int64 bytes)
+  static System.String EncodingName(System.Text.Encoding encoding, System.Boolean hasBom)
+  static System.String Indentation(Craft.Core.CraftOptions options)
+  static System.String LineEnding(System.String lineEnding)
+  static System.String ModelChip(Craft.Abstractions.ModelProviderStatus status)
+  static System.String ModelUsage(Craft.Abstractions.ModelProviderStatus status)
+  static System.String Position(System.Int32 line, System.Int32 column)
+  static System.String Problems(System.Int32 errors, System.Int32 warnings)
+  static System.ValueTuple<Craft.Abstractions.IModelProvider, Craft.Abstractions.ModelProviderStatus>? ModelStatus()
+static class Craft.Editor.Shell.ShellViewNames
+  const System.String Models = models
+  const System.String Output = panel.output
+  const System.String Problems = panel.problems
+  const System.String QuickOpen = quickOpen
+  const System.String Telemetry = panel.telemetry
+  const System.String Terminal = panel.terminal
+  const System.String TogglePanel = panel
+sealed class Craft.Editor.Shell.TelemetryLog : System.IDisposable
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.TelemetryRow> Rows { get; }
+  System.Void Add(System.String source, System.String metric, System.Double value, System.String unit)
+  System.Void Dispose()
+  ctor(Craft.Editor.EditorHost host)
+  event System.EventHandler Changed
+sealed class Craft.Editor.Shell.TelemetryRow : System.IEquatable<Craft.Editor.Shell.TelemetryRow>
+  Craft.Editor.Shell.TelemetryRow <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.TelemetryRow other)
+  System.Boolean Equals(System.Object obj)
+  System.Double Last { get; init; }
+  System.Double Mean { get; init; }
+  System.Int32 Count { get; init; }
+  System.Int32 GetHashCode()
+  System.String Metric { get; init; }
+  System.String Source { get; init; }
+  System.String Text { get; }
+  System.String ToString()
+  System.String Unit { get; init; }
+  System.Void Deconstruct(out System.String Source, out System.String Metric, out System.Double Last, out System.String Unit, out System.Int32 Count, out System.Double Mean)
+  ctor(System.String Source, System.String Metric, System.Double Last, System.String Unit, System.Int32 Count, System.Double Mean)

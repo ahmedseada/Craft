@@ -28,11 +28,12 @@ public sealed class SettingsPage : ContentPage
     private Color _muted = Colors.Gray;
     private Color _error = Colors.IndianRed;
 
-    /// <summary>The page of <paramref name="shell"/>'s settings.</summary>
-    public SettingsPage(ShellModel shell)
+    /// <summary>The page of <paramref name="shell"/>'s settings, filtered by <paramref name="search"/> when given.</summary>
+    public SettingsPage(ShellModel shell, string? search = null)
     {
         ArgumentNullException.ThrowIfNull(shell);
         _shell = shell;
+        _search.Text = search ?? "";
         Title = "Settings";
         var close = new Button { Text = "Close" };
         close.Clicked += async (_, _) => await Navigation.PopModalAsync();

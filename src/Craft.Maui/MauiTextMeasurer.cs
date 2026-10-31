@@ -17,6 +17,7 @@ public sealed class MauiTextMeasurer : ITextMeasurer
 {
     private const int SampleLength = 64;
     private static readonly string Sample = new('M', SampleLength);
+    private static readonly string NarrowSample = new('i', SampleLength);
     private EditorFont? _measuredFont;
     private float _cellWidth;
     private float _textHeight;
@@ -55,8 +56,18 @@ public sealed class MauiTextMeasurer : ITextMeasurer
         _cellWidth = size.Width / SampleLength;
         _textHeight = size.Height;
         _measuredFont = font;
+        // A family the platform does not have is drawn in its default font, often proportional: a run of "i"s then
+        // measures narrower than the "M"s (more than half a percent off), and the editor's columns would not line up.
+        var narrow = canvas.GetStringSize(NarrowSample, platformFont, font.Size);
+        IsMonospaced = !(narrow.Width > 0) || Math.Abs(narrow.Width - size.Width) <= size.Width * 0.005;
         return true;
     }
+
+    /// <summary>Whether the last font measured draws monospaced (its "i" as wide as its "M").</summary>
+    public bool IsMonospaced { get; private set; } = true;
+
+    /// <summary>Forgets the measure, so the next draw measures again (the drawable changed the platform font).</summary>
+    public void Reset() => _measuredFont = null;
 
     /// <summary>A platform font for <paramref name="family"/>.</summary>
     public static IFont PlatformFont(string family) => new MauiFont(family);

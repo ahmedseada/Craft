@@ -71,6 +71,168 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
 
     /// <summary>A removed line's background in a diff.</summary>
     public uint DiffRemoved { get; init; } = 0xFF3A1F26;
+
+    // Phase D: the rest of the design's interface tokens. Each defaults from the constructor's colours, so a theme made
+    // before them (a plug-in's) still draws the shell in its own colours.
+
+    /// <summary>A raised control's fill (an input, the search box, a card).</summary>
+    public uint Raised { get; init; } = CurrentLine;
+
+    /// <summary>A higher control's fill (a button, the active rail item, a chip).</summary>
+    public uint RaisedHigh { get; init; } = CurrentLine;
+
+    /// <summary>The interface's selected row (the explorer's file, a list's pick, a segmented control's choice).</summary>
+    public uint InterfaceSelection { get; init; } = Selection;
+
+    /// <summary>A stronger border (a button's, an input's, a popup's).</summary>
+    public uint BorderStrong { get; init; } = GutterText;
+
+    /// <summary>The interface's text (labels, menus, tabs).</summary>
+    public uint Text { get; init; } = Foreground;
+
+    /// <summary>Text drawn on the accent (the primary button's label).</summary>
+    public uint AccentInk { get; init; } = Background;
+}
+
+/// <summary>
+/// Colour contrast as WCAG 2 measures it, for themes: the ratio of two colours' relative luminance, and a colour moved
+/// toward black or white until it reaches a ratio against every given background. A theme's text needs 4.5:1 on what it
+/// is drawn on, large text and lines (a caret, the accent line) 3:1.
+/// </summary>
+public static class ColorContrast
+{
+    /// <summary>The ratio normal text needs.</summary>
+    public const double Text = 4.5;
+
+    /// <summary>The ratio large text and lines need.</summary>
+    public const double Line = 3.0;
+
+    /// <summary>The relative luminance of <paramref name="argb"/> (0 black, 1 white; alpha ignored).</summary>
+    public static double Luminance(uint argb) =>
+        (0.2126 * Channel((argb >> 16) & 0xFF)) + (0.7152 * Channel((argb >> 8) & 0xFF)) + (0.0722 * Channel(argb & 0xFF));
+
+    /// <summary>The contrast ratio of <paramref name="a"/> and <paramref name="b"/>, from 1 to 21.</summary>
+    public static double Ratio(uint a, uint b)
+    {
+        double la = Luminance(a);
+        double lb = Luminance(b);
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+    }
+
+    /// <summary>The smallest ratio of <paramref name="color"/> against any of <paramref name="backgrounds"/>.</summary>
+    public static double MinRatio(uint color, ReadOnlySpan<uint> backgrounds)
+    {
+        double min = double.MaxValue;
+        foreach (var background in backgrounds)
+        {
+            min = Math.Min(min, Ratio(color, background));
+        }
+
+        return min;
+    }
+
+    /// <summary>
+    /// <paramref name="color"/> when it reads at <paramref name="ratio"/> or more on every one of
+    /// <paramref name="backgrounds"/>; else the colour mixed toward black (on light backgrounds) or white (on dark ones), in
+    /// steps of 1/64, until it does (black or white at the end).
+    /// </summary>
+    public static uint Ensure(uint color, double ratio, ReadOnlySpan<uint> backgrounds)
+    {
+        if (backgrounds.IsEmpty || MinRatio(color, backgrounds) >= ratio)
+        {
+            return color;
+        }
+
+        double average = 0;
+        foreach (var background in backgrounds)
+        {
+            average += Luminance(background);
+        }
+
+        uint target = average / backgrounds.Length > 0.18 ? 0xFF000000u : 0xFFFFFFFFu;
+        for (int step = 1; step <= 64; step++)
+        {
+            uint mixed = Mix(color, target, step / 64.0);
+            if (MinRatio(mixed, backgrounds) >= ratio)
+            {
+                return mixed;
+            }
+        }
+
+        return target;
+    }
+
+    /// <summary><paramref name="a"/> mixed with <paramref name="b"/> by <paramref name="amount"/> (0 all a, 1 all b), opaque.</summary>
+    public static uint Mix(uint a, uint b, double amount)
+    {
+        static uint Lerp(uint x, uint y, double t) => (uint)Math.Round(x + ((double)y - x) * t);
+        return 0xFF000000u
+            | (Lerp((a >> 16) & 0xFF, (b >> 16) & 0xFF, amount) << 16)
+            | (Lerp((a >> 8) & 0xFF, (b >> 8) & 0xFF, amount) << 8)
+            | Lerp(a & 0xFF, b & 0xFF, amount);
+    }
+
+    private static double Channel(uint value)
+    {
+        double c = value / 255.0;
+        return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+    }
+}
+
+/// <summary>
+/// The accent colours the design offers (<c>CRAFT_ACCENT</c>: one of these names or any <c>#RRGGBB</c>): amber (the
+/// default), teal, blue and rose.
+/// </summary>
+public static class AccentColors
+{
+    /// <summary>The design's default, #E5A54B.</summary>
+    public const uint Amber = 0xFFE5A54B;
+
+    /// <summary>#5FC9B4.</summary>
+    public const uint Teal = 0xFF5FC9B4;
+
+    /// <summary>#82AAFF.</summary>
+    public const uint Blue = 0xFF82AAFF;
+
+    /// <summary>#E58BA0.</summary>
+    public const uint Rose = 0xFFE58BA0;
+
+    /// <summary>The names, in the design's order.</summary>
+    public static IReadOnlyList<string> Names { get; } = ["amber", "teal", "blue", "rose"];
+
+    /// <summary>Reads a name (ignoring case) or <c>#RRGGBB</c>; false when it is neither.</summary>
+    public static bool TryParse(ReadOnlySpan<char> text, out uint argb)
+    {
+        text = text.Trim();
+        argb = 0;
+        if (text.Equals("amber", StringComparison.OrdinalIgnoreCase))
+        {
+            argb = Amber;
+        }
+        else if (text.Equals("teal", StringComparison.OrdinalIgnoreCase))
+        {
+            argb = Teal;
+        }
+        else if (text.Equals("blue", StringComparison.OrdinalIgnoreCase))
+        {
+            argb = Blue;
+        }
+        else if (text.Equals("rose", StringComparison.OrdinalIgnoreCase))
+        {
+            argb = Rose;
+        }
+        else if (text.Length == 7 && text[0] == '#'
+            && uint.TryParse(text[1..], System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture, out uint rgb))
+        {
+            argb = 0xFF000000u | rgb;
+        }
+        else
+        {
+            return false;
+        }
+
+        return true;
+    }
 }
 
 /// <summary>A theme, registered in <see cref="EditorThemes"/>: the surface's colours and a style per token class.</summary>
@@ -179,6 +341,36 @@ public static class EditorThemes
     /// <exception cref="NotRegisteredException">None is registered under it.</exception>
     public static ITheme Get(ReadOnlySpan<char> name) => Table.Get(name);
 
+    /// <summary>
+    /// <paramref name="theme"/> with <paramref name="accent"/> as its accent and caret (<c>CRAFT_ACCENT</c>): moved until it
+    /// reads at 4.5:1 on the theme's ground, surfaces and selected row (it marks text too), and its ink the theme's
+    /// background or text, whichever reads on it. The same name, styles and darkness.
+    /// </summary>
+    public static ITheme WithAccent(ITheme theme, uint accent)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        var colors = theme.Colors;
+        uint fitted = ColorContrast.Ensure(accent | 0xFF000000u, ColorContrast.Text,
+            [colors.Ground, colors.Surface, colors.Raised, colors.RaisedHigh, colors.InterfaceSelection]);
+        uint ink = ColorContrast.Ratio(colors.AccentInk, fitted) >= ColorContrast.Text ? colors.AccentInk
+            : ColorContrast.Ratio(colors.Text, fitted) >= ColorContrast.Text ? colors.Text
+            : ColorContrast.Ratio(0xFF000000u, fitted) >= ColorContrast.Ratio(0xFFFFFFFFu, fitted) ? 0xFF000000u : 0xFFFFFFFFu;
+        return new AccentTheme(theme, colors with { Accent = fitted, Caret = fitted, AccentInk = ink });
+    }
+
+    private sealed class AccentTheme(ITheme inner, EditorColors colors) : ITheme
+    {
+        public string Name => inner.Name;
+
+        public string Summary => inner.Summary;
+
+        public bool IsDark => inner.IsDark;
+
+        public EditorColors Colors { get; } = colors;
+
+        public TextStyle StyleOf(string tokenClass) => inner.StyleOf(tokenClass);
+    }
+
     private static TableTheme MakeDark() => new TableTheme(Dark, "Dark: a deep ground, amber accent", isDark: true,
         new EditorColors(Background: 0xFF16181D, Foreground: 0xFFD5D9E0, Selection: 0xFF2C3A55, CurrentLine: 0xFF1E222B, Caret: 0xFFE5A54B,
             Gutter: 0xFF16181D, GutterText: 0xFF7D8696, GutterCurrentText: 0xFFD5D9E0, BracketMatch: 0xFF34404F, FindMatch: 0xFF5A4520)
@@ -187,25 +379,42 @@ public static class EditorThemes
             PopupBackground = 0xFF22262E, PopupBorder = 0xFF4A5260, PopupSelection = 0xFF2C3A55, PopupText = 0xFFD5D9E0,
             Ground = 0xFF101217, Surface = 0xFF16181D, Border = 0xFF2A2E37, SecondaryText = 0xFF9AA2B1, Accent = 0xFFE5A54B, Success = 0xFF5FC9B4,
             DiffAdded = 0xFF15302C, DiffRemoved = 0xFF3A1F26,
+            Raised = 0xFF1A1D23, RaisedHigh = 0xFF1F232B, InterfaceSelection = 0xFF252A33, BorderStrong = 0xFF343944, Text = 0xFFD5D9E0,
+            AccentInk = 0xFF1A1206,
         },
+        // The design's code classes (docs/design/Main.dc.html): .k keyword, .t every type name (classes, interfaces, structs,
+        // enums, delegates), .s string, .c comment (italic), .m method, .v locals and parameters, .p plain text and
+        // punctuation. The classes the design does not show keep E5's hues.
         Styles(keyword: 0xFF82AAFF, type: 0xFF5FC9B4, @string: 0xFFE3B27A, comment: 0xFF8790A0, number: 0xFFD9A0E8, method: 0xFFE8D58A,
-            local: 0xFFB8C7DC, preprocessor: 0xFFB09EE0, excluded: 0xFF6B7382, punctuation: 0xFFAEB6C2,
-            new Semantic(Value: 0xFF8FD19E, Interface: 0xFFB8D7A3, TypeParameter: 0xFF7FD3E6, Member: 0xFF9CCBF0, Parameter: 0xFFC9B8E8,
+            local: 0xFFB8C7DC, preprocessor: 0xFFB09EE0, excluded: 0xFF6B7382, punctuation: 0xFFD5D9E0,
+            new Semantic(Value: 0xFF5FC9B4, Interface: 0xFF5FC9B4, TypeParameter: 0xFF7FD3E6, Member: 0xFF9CCBF0, Parameter: 0xFFB8C7DC,
                 Namespace: 0xFFC8CDD6, Constant: 0xFFE0A7C2)));
 
-    private static TableTheme MakeLight() => new TableTheme(Light, "Light: a paper ground, deep inks", isDark: false,
-        new EditorColors(Background: 0xFFFFFFFF, Foreground: 0xFF1F2328, Selection: 0xFFC8DAF8, CurrentLine: 0xFFF3F5F8, Caret: 0xFFB2650F,
-            Gutter: 0xFFFFFFFF, GutterText: 0xFF6E7781, GutterCurrentText: 0xFF1F2328, BracketMatch: 0xFFDDE6F0, FindMatch: 0xFFFFE3A3)
-        {
-            Error = 0xFFCF222E, Warning = 0xFF9A6700, Info = 0xFF0969DA,
-            PopupBackground = 0xFFF6F8FA, PopupBorder = 0xFF8C959F, PopupSelection = 0xFFC8DAF8, PopupText = 0xFF1F2328,
-            Ground = 0xFFF3F4F6, Surface = 0xFFFFFFFF, Border = 0xFFD0D7DE, SecondaryText = 0xFF57606A, Accent = 0xFFB2650F, Success = 0xFF0E7A6B,
-            DiffAdded = 0xFFDDF4EC, DiffRemoved = 0xFFFCE4E6,
-        },
-        Styles(keyword: 0xFF0B4FC6, type: 0xFF0E7A6B, @string: 0xFF9A4A06, comment: 0xFF5F6B78, number: 0xFF8A2BB8, method: 0xFF795E00,
-            local: 0xFF2A4A75, preprocessor: 0xFF6F42C1, excluded: 0xFF8C959F, punctuation: 0xFF404852,
-            new Semantic(Value: 0xFF2E7D32, Interface: 0xFF4D6B16, TypeParameter: 0xFF16697F, Member: 0xFF0B5C8E, Parameter: 0xFF6A3D9A,
-                Namespace: 0xFF404852, Constant: 0xFF9C2F6B)));
+    // The light theme is derived from the dark one's roles: a paper ground, deep inks, and every status colour and the
+    // accent moved (ColorContrast.Ensure) until it reads at 4.5:1 on the ground, the surfaces and the selected row.
+    private static TableTheme MakeLight()
+    {
+        const uint ground = 0xFFF3F4F6, surface = 0xFFFFFFFF, raised = 0xFFF6F8FA, raisedHigh = 0xFFEEF1F4, selection = 0xFFDDE4EC, caretLine = 0xFFF3F5F8;
+        uint[] grounds = [ground, surface, raised, raisedHigh, selection, caretLine];
+        uint Fit(uint color) => ColorContrast.Ensure(color, ColorContrast.Text, grounds);
+        uint accent = Fit(0xFFB2650F);
+        return new TableTheme(Light, "Light: a paper ground, deep inks", isDark: false,
+            new EditorColors(Background: surface, Foreground: 0xFF1F2328, Selection: 0xFFC8DAF8, CurrentLine: caretLine, Caret: accent,
+                Gutter: surface, GutterText: 0xFF6E7781, GutterCurrentText: 0xFF1F2328, BracketMatch: 0xFFDDE6F0, FindMatch: 0xFFFFE3A3)
+            {
+                Error = Fit(0xFFCF222E), Warning = Fit(0xFF9A6700), Info = Fit(0xFF0969DA),
+                PopupBackground = 0xFFF6F8FA, PopupBorder = 0xFF8C959F, PopupSelection = 0xFFC8DAF8, PopupText = 0xFF1F2328,
+                Ground = ground, Surface = surface, Border = 0xFFD0D7DE, SecondaryText = Fit(0xFF57606A), Accent = accent, Success = Fit(0xFF0E7A6B),
+                DiffAdded = 0xFFDDF4EC, DiffRemoved = 0xFFFCE4E6,
+                Raised = raised, RaisedHigh = raisedHigh, InterfaceSelection = selection, BorderStrong = 0xFF8C959F, Text = 0xFF1F2328,
+                AccentInk = 0xFFFFFFFF,
+            },
+            // The same class mapping as the dark theme's (every type name one hue, parameters as locals, punctuation plain).
+            Styles(keyword: 0xFF0B4FC6, type: 0xFF0E7A6B, @string: 0xFF9A4A06, comment: 0xFF5F6B78, number: 0xFF8A2BB8, method: 0xFF795E00,
+                local: 0xFF2A4A75, preprocessor: 0xFF6F42C1, excluded: 0xFF8C959F, punctuation: 0xFF1F2328,
+                new Semantic(Value: 0xFF0E7A6B, Interface: 0xFF0E7A6B, TypeParameter: 0xFF16697F, Member: 0xFF0B5C8E, Parameter: 0xFF2A4A75,
+                    Namespace: 0xFF404852, Constant: 0xFF9C2F6B)));
+    }
 
     /// <summary>
     /// The hues of the semantic classes beside the syntactic ones: value types (structs, enums), interfaces, type

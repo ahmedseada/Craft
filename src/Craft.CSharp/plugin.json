@@ -1,7 +1,7 @@
 {
   "name": "Craft.CSharp",
   "version": "0.1.0",
-  "summary": "C# on Roslyn: colours (syntactic and semantic), errors and warnings, completion, signature help, hover, go to definition and format for .cs files; colours for .csx",
+  "summary": "C# on Roslyn: colours (syntactic and semantic), errors and warnings, completion, signature help, hover, go to definition and format for .cs files; colours for .csx; colours of .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig and .json, and format for the XML ones and JSON",
   "contractVersion": "1.0",
   "capabilities": []
 }

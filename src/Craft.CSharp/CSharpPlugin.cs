@@ -12,14 +12,15 @@ using Microsoft.CodeAnalysis;
 namespace Craft.CSharp;
 
 /// <summary>
-/// C# as a plug-in: registers "csharp" (".cs") and "csharp-script" (".csx") in <see cref="EditorLanguages"/>. The app
+/// C# as a plug-in: registers "csharp" (".cs") and "csharp-script" (".csx") in <see cref="EditorLanguages"/>, and the
+/// languages of a C# project's other files (<see cref="ProjectLanguages"/>). The app
 /// ships it pre-installed in its <c>plugins/Craft.CSharp/</c> folder and loads it from there (Craft.Core's
 /// <c>CraftPlugins</c>); removing the folder (or disabling it) leaves C# files as plain text.
 /// </summary>
 public sealed class CSharpPlugin() : IdrakPlugin("csharp")
 {
     /// <summary>What it brings.</summary>
-    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers";
+    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig, .json";
 
     /// <inheritdoc />
     protected override void RegisterParts()
@@ -28,6 +29,12 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
         Part(() => EditorLanguages.Register(new CSharpLanguage(SourceCodeKind.Script)), () => EditorLanguages.Unregister(CSharpLanguage.ScriptName));
         Part(() => WorkspaceReaders.Register(new CsprojWorkspaceReader()), () => WorkspaceReaders.Unregister(CsprojWorkspaceReader.ReaderName));
         Part(() => WorkspaceReaders.Register(new LooseWorkspaceReader()), () => WorkspaceReaders.Unregister(LooseWorkspaceReader.ReaderName));
+        // The languages of a C# project's other files (owner's note 17): each comes with the plug-in and goes with it.
+        foreach (var language in ProjectLanguages.All)
+        {
+            Part(() => EditorLanguages.Register(language), () => EditorLanguages.Unregister(language.Name));
+        }
+
         // Dictation's C# words (phase V): what they type in a C# document, over the voice plug-in's every-language table.
         foreach (var symbol in SpokenSymbolsOfCSharp)
         {

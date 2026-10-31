@@ -132,6 +132,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _dialog.FallbackFocus = () => _shown;
         shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog));
         _shell = shell;
+        _shell.EditorOf = tab => (tab.View as EditorView)?.Model;     // format on save goes through the tab's editor
         _palette = new ShellPalette(_shell.Theme, _shell.Options);
         _editCommands = new ShellEditCommands(() => _shown?.Model, _shell);
         _quickOpen = new QuickOpen(_host, _shell.Options.QuickOpenRows) { CraftOptionsLimit = _shell.Options.QuickOpenFiles };

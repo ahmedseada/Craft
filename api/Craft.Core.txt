@@ -8,6 +8,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
   System.Boolean ExplorerOpen { get; init; }
+  System.Boolean FormatOnSave { get; init; }
   System.Boolean InsertSpaces { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }

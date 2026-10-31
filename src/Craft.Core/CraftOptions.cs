@@ -118,6 +118,12 @@ public sealed record CraftOptions
     /// <summary>Whether typing an opening bracket inserts its closing one too (<c>CRAFT_AUTO_CLOSE_BRACKETS</c>).</summary>
     public bool AutoCloseBrackets { get; init; }
 
+    /// <summary>
+    /// Whether Save formats the document first (its language's Format document, as Shift+Alt+F does: C#, XML, JSON), as
+    /// one undo step; a malformed file is saved unformatted and said so. Off by default (<c>CRAFT_FORMAT_ON_SAVE</c>).
+    /// </summary>
+    public bool FormatOnSave { get; init; }
+
     /// <summary>Find stops counting matches at this many (the count then shows as "at least") (<c>CRAFT_FIND_COUNT_LIMIT</c>).</summary>
     public int FindCountLimit { get; init; } = 100_000;
 
@@ -407,6 +413,7 @@ public sealed record CraftOptions
         new("CRAFT_BOTTOM_MARGIN_LINES", "3", "Empty lines the editor can scroll past the last line.") { Shape = SettingShape.Whole(SettingSections.Editor, "Scroll past the end", 0, 10_000, "lines", "Scrolling") },
         new("CRAFT_GUTTER_PADDING", "2", "Empty cells of the line-number gutter beside the widest number.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Line number padding", 0, 100, "cells", "Editor") },
         new("CRAFT_AUTO_CLOSE_BRACKETS", "false", "Whether typing an opening bracket inserts its closing one too.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Close brackets as you type", "Typing") },
+        new("CRAFT_FORMAT_ON_SAVE", "false", "Whether Save formats the document first (C#, XML, JSON), as one undo step; a malformed file is saved as it is.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Format on save", "Formatting") },
         new("CRAFT_FIND_COUNT_LIMIT", "100000", "Find stops counting matches at this many.") { Shape = SettingShape.Whole(SettingSections.Editor, "Find counts at most", 1, int.MaxValue, "matches", "Find", step: 1000) },
         new("CRAFT_PARSE_WAIT_MS", "8", "Milliseconds a frame waits for the language's parse of its text; longer parses paint the changed text plain, then repaint. 0 never waits.") { Shape = SettingShape.Whole(SettingSections.Editor, "A frame waits for the parse", 0, 10_000, "ms", "Advanced") },
         new("CRAFT_KEY_BINDINGS", "(none)", "The user's key bindings, 'Keys=command' separated by ';' (Ctrl+Shift+W=sample.wordCount;Ctrl+K Ctrl+C=craft.editor.comment); the keyboard section writes them; they run before the editor's keys; an empty command unbinds a plug-in's chord.") { Shape = new SettingShape(SettingKind.KeyBindings, SettingSections.Keyboard, "Your key bindings") },
@@ -594,6 +601,11 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_AUTO_CLOSE_BRACKETS") is { } autoClose)
         {
             options = options with { AutoCloseBrackets = Flag(autoClose, "CRAFT_AUTO_CLOSE_BRACKETS") };
+        }
+
+        if (Text(read, "CRAFT_FORMAT_ON_SAVE") is { } formatOnSave)
+        {
+            options = options with { FormatOnSave = Flag(formatOnSave, "CRAFT_FORMAT_ON_SAVE") };
         }
 
         if (Text(read, "CRAFT_FIND_COUNT_LIMIT") is { } findLimit)

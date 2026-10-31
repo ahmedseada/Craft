@@ -247,32 +247,90 @@ public sealed partial class EditorModel
         });
     }
 
+    /// <summary>The language's formatter (C#'s semantic session, or a language that only formats, such as XML or JSON), or null.</summary>
+    public IFormattingLanguageSession? FormattingSession => _session as IFormattingLanguageSession;
+
+    /// <summary>
+    /// Why the last format left the document unchanged (a malformed file: the language's message, with where), or null
+    /// when it formatted (or there was nothing to change). The activities show it too, with a toast.
+    /// </summary>
+    public string? LastFormatMessage { get; private set; }
+
     /// <summary>Shift+Alt+F (or Ctrl+K Ctrl+D): formats the document, applied as one undo step if the text is still the one formatted.</summary>
-    public void FormatDocument()
+    public void FormatDocument() => _ = FormatDocumentAsync();
+
+    /// <summary>
+    /// Formats the document off the UI thread and applies the edits on it as one undo step, when the text is still the one
+    /// formatted: true when edits were applied. A malformed document is left unchanged, and why is said
+    /// (<see cref="LastFormatMessage"/>, a failed activity); a language with no formatter changes nothing. Format on save
+    /// awaits it before it writes. The task never faults.
+    /// </summary>
+    public Task<bool> FormatDocumentAsync(CancellationToken cancellationToken = default)
     {
-        if (SemanticSession is not { } session)
+        if (FormattingSession is not { } session)
         {
-            return;
+            return Task.FromResult(false);
         }
 
         var snapshot = Snapshot;
-        Track(session.FormatAsync(snapshot, 0, -1, CancellationToken.None), edits =>
+        var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        string name = Path.GetFileName(_document.FilePath) is { Length: > 0 } file ? file : "the document";
+        var activity = _activities.Start($"Formatting {name}", ActivityKinds.General, cancellable: false, cancellationToken);
+        Track(FormatOrReasonAsync(session, snapshot, cancellationToken), result =>
         {
+            var (edits, reason, error) = result;
+            if (reason is not null)
+            {
+                LastFormatMessage = reason;
+                activity.Fail(reason, error);
+                done.TrySetResult(false);
+                return;
+            }
+
+            LastFormatMessage = null;
             if (Snapshot.Version != snapshot.Version)
             {
                 LateResultsDropped++;
+                activity.Complete("the text changed meanwhile: not applied");
+                done.TrySetResult(false);
                 return;
             }
 
             if (edits.Count == 0)
             {
+                activity.Complete("already formatted");
+                done.TrySetResult(false);
                 return;
             }
 
             int caret = MapThroughEdits(_selection.Caret, edits);
             ApplyEdits([.. edits], EditKind.Command, SelectionState.At(caret));
             EnsureCaretVisible();
+            activity.Complete(edits.Count == 1 ? "1 change" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{edits.Count} changes"));
+            done.TrySetResult(true);
+        }, () =>
+        {
+            activity.Dispose();
+            done.TrySetResult(false);
         });
+        return done.Task;
+    }
+
+    // The formatter's answer, or why there is none: a malformed text's message (FormatException), or the error it threw.
+    private static async Task<(IReadOnlyList<TextEdit> Edits, string? Reason, Exception? Error)> FormatOrReasonAsync(IFormattingLanguageSession session, ITextSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return (await session.FormatAsync(snapshot, 0, -1, cancellationToken).ConfigureAwait(false), null, null);
+        }
+        catch (FormatException malformed)
+        {
+            return ([], $"Not formatted: {malformed.Message}", null);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return ([], $"Not formatted: the formatter failed ({error.Message})", error);
+        }
     }
 
     /// <summary>Asks for the signature help of the call around the caret (on '(' and ',', and Ctrl+Shift+Space).</summary>
@@ -369,7 +427,7 @@ public sealed partial class EditorModel
     }
 
     /// <summary>Awaits a semantic request off the UI thread and hands its answer to <paramref name="apply"/> on the UI thread (a failure kept, a cancel dropped).</summary>
-    internal void Track<T>(Task<T> request, Action<T> apply)
+    internal void Track<T>(Task<T> request, Action<T> apply, Action? dropped = null)
     {
         Interlocked.Increment(ref _semanticRequests);
         request.ContinueWith(done => Post(() =>
@@ -378,6 +436,7 @@ public sealed partial class EditorModel
             {
                 if (_disposed)
                 {
+                    dropped?.Invoke();
                     return;
                 }
 
@@ -385,9 +444,14 @@ public sealed partial class EditorModel
                 {
                     apply(done.Result);
                 }
-                else if (done.IsFaulted)
+                else
                 {
-                    LastSemanticError = done.Exception?.GetBaseException();
+                    if (done.IsFaulted)
+                    {
+                        LastSemanticError = done.Exception?.GetBaseException();
+                    }
+
+                    dropped?.Invoke();
                 }
             }
             finally

@@ -19,7 +19,7 @@ sealed class Craft.CSharp.CSharpLanguage : Craft.Abstractions.ILanguage, Idrak.A
   static System.Void Register()
   static System.Void ReleaseWorkspaces()
   static System.Void Unregister()
-sealed class Craft.CSharp.CSharpLanguageSession : Craft.Abstractions.ILanguageSession, Craft.Abstractions.ISemanticLanguageSession, System.IDisposable
+sealed class Craft.CSharp.CSharpLanguageSession : Craft.Abstractions.IFormattingLanguageSession, Craft.Abstractions.ILanguageSession, Craft.Abstractions.ISemanticLanguageSession, System.IDisposable
   Craft.Abstractions.DiagnosticSet Diagnostics { get; }
   Craft.Abstractions.ITextSnapshot Snapshot { get; }
   Craft.Abstractions.LanguageOpenContext Context { get; }
@@ -69,6 +69,17 @@ static class Craft.CSharp.CSharpTokenClasses
   const System.String EventName = event name
   const System.String ExtensionMethodName = extension method name
   const System.String LabelName = label name
+static class Craft.CSharp.ProjectLanguages
+  const System.String EditorConfig = editorconfig
+  const System.String Json = json
+  const System.String MsBuild = msbuild
+  const System.String Razor = razor
+  const System.String Solution = sln
+  const System.String Xaml = xaml
+  const System.String Xml = xml
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register()
+  static System.Void Unregister()
 sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.SourceText
   Craft.Abstractions.ITextSnapshot Snapshot { get; }
   System.Char Item[System.Int32] { get; }

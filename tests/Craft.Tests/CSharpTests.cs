@@ -600,8 +600,20 @@ public static class PluginTests
             var list = semantic.GetCompletionsAsync(code.Current, dot, CompletionTrigger.Typed('.'), CancellationToken.None).GetAwaiter().GetResult();
             Check.True(list is not null && list.Items.Any(i => i.Label == "WriteLine"), "the plug-in's completion offers Console.WriteLine");
 
+            foreach (var (file, name) in ProjectLanguageTests.ProjectFiles)
+            {
+                var project = EditorLanguages.ForFile(file);
+                Check.True(project?.Name == name && AssemblyLoadContext.GetLoadContext(project.GetType().Assembly) != AssemblyLoadContext.Default,
+                    $"with the plug-in, {file} opens as {name}, from the plug-in's own context ({project?.Name})");
+            }
+
             Check.True(IdrakPlugins.Unregister("csharp"), "the plug-in unregisters");
             Check.True(EditorLanguages.ForFile("a.cs") is null, "removed, a .cs file is plain text again");
+            foreach (var (file, _) in ProjectLanguageTests.ProjectFiles)
+            {
+                Check.True(EditorLanguages.ForFile(file) is null, $"removed, {file} is plain text again");
+            }
+
             Check.True(CraftPlugins.LoadFolder(folder).Loaded && EditorLanguages.ForFile("a.cs") is not null, "loading the folder again registers it again");
             IdrakPlugins.Unregister("csharp");
 
@@ -614,7 +626,7 @@ public static class PluginTests
             var installed = CraftPlugins.LoadInstalled(options);
             var disabled = installed.Single(r => r.Name == "Craft.CSharp");
             Check.True(!disabled.Loaded && disabled.Error!.Contains("disabled", StringComparison.Ordinal), "a disabled plug-in is skipped and said so");
-            Check.True(EditorLanguages.ForFile("a.cs") is null, "a disabled plug-in registers nothing");
+            Check.True(EditorLanguages.ForFile("a.cs") is null && EditorLanguages.ForFile("App.csproj") is null, "a disabled plug-in registers nothing");
 
             var broken = Path.Combine(plugins, "Broken");
             Directory.CreateDirectory(broken);

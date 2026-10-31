@@ -377,6 +377,12 @@ public sealed class ShellModel : IDisposable
     /// <summary>The options in effect (the settings' layers over the defaults).</summary>
     public CraftOptions Options { get; private set; }
 
+    /// <summary>
+    /// The editor showing a tab, or null (the app sets it: its view's model): Save formats through it first when
+    /// <see cref="CraftOptions.FormatOnSave"/> is on, so the format is the editor's one undo step.
+    /// </summary>
+    public Func<DocumentTab, EditorModel?>? EditorOf { get; set; }
+
     /// <summary>What did not parse in the settings when the options were last built (each names its variable and source).</summary>
     public IReadOnlyList<string> OptionsProblems { get; private set; }
 
@@ -942,6 +948,12 @@ public sealed class ShellModel : IDisposable
 
     private async Task<bool> WriteAsync(DocumentTab tab, string? path, CancellationToken cancellationToken)
     {
+        if (Options.FormatOnSave && EditorOf?.Invoke(tab) is { FormattingSession: not null } editor)
+        {
+            // Off the UI thread, applied on it as one undo step; a malformed file is saved as it is (the format says why).
+            await editor.FormatDocumentAsync(cancellationToken);
+        }
+
         try
         {
             if (path is not null && Path.GetDirectoryName(path) is { Length: > 0 } folder)

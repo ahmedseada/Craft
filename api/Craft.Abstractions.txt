@@ -780,6 +780,8 @@ interface Craft.Abstractions.IEditorToolSet : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host)
 interface Craft.Abstractions.IFolderWatcher : Idrak.Abstraction.IKind
   System.IDisposable Watch(System.String folder, System.Action<Craft.Abstractions.FolderChange> changed)
+interface Craft.Abstractions.IFormattingLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.IInlineCompletionProvider : Idrak.Abstraction.IKind
   System.Boolean Accepts(Craft.Abstractions.InlineCompletionRequest request)
   System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.InlineCompletionPiece> CompleteAsync(Craft.Abstractions.InlineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
@@ -810,7 +812,7 @@ interface Craft.Abstractions.IModelProvider : Idrak.Abstraction.IKind
 interface Craft.Abstractions.IPluginSettings
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
   System.String Get(System.String plugin, System.String key)
-interface Craft.Abstractions.ISemanticLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
+interface Craft.Abstractions.ISemanticLanguageSession : Craft.Abstractions.IFormattingLanguageSession, Craft.Abstractions.ILanguageSession, System.IDisposable
   Craft.Abstractions.DiagnosticSet Diagnostics { get; }
   Craft.Abstractions.SemanticTelemetry Telemetry { get; }
   System.Boolean IsSemanticDeferred { get; }
@@ -821,7 +823,6 @@ interface Craft.Abstractions.ISemanticLanguageSession : Craft.Abstractions.ILang
   System.Threading.Tasks.Task<Craft.Abstractions.HoverInfo> GetHoverAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.SignatureHelp> GetSignatureHelpAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindSymbolsAsync(System.String query, System.Int32 maxResults, System.Threading.CancellationToken cancellationToken)
-  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
   System.Void EnableSemantics()
   System.Void Release()
   event System.EventHandler DiagnosticsChanged

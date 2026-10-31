@@ -353,7 +353,7 @@ public sealed record SemanticTelemetry(string? WorkspaceRoot, string? Reader, in
 /// by <see cref="DiagnosticsChanged"/> on that worker's thread (the subscriber marshals to its UI thread). Requests may be
 /// made from any thread with any snapshot of the session's buffer; the answer's positions are that snapshot's.
 /// </summary>
-public interface ISemanticLanguageSession : ILanguageSession
+public interface ISemanticLanguageSession : IFormattingLanguageSession
 {
     /// <summary>The last diagnostics computed, with the snapshot they are of (possibly older than the buffer's current one).</summary>
     DiagnosticSet Diagnostics { get; }
@@ -390,13 +390,6 @@ public interface ISemanticLanguageSession : ILanguageSession
 
     /// <summary>Where the symbol at <paramref name="position"/> is defined, or null when there is no symbol there.</summary>
     Task<DefinitionLocation?> GetDefinitionAsync(ITextSnapshot snapshot, int position, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// The edits that format <paramref name="snapshot"/> (the range of <paramref name="start"/> and <paramref name="length"/>
-    /// when <paramref name="length"/> is not negative, the whole document otherwise), in its positions, in order, not
-    /// overlapping: applied together as one change.
-    /// </summary>
-    Task<IReadOnlyList<TextEdit>> FormatAsync(ITextSnapshot snapshot, int start, int length, CancellationToken cancellationToken);
 
     /// <summary>
     /// Releases the memory the layer holds (its workspace: the compilations, trees and references), as the host does on

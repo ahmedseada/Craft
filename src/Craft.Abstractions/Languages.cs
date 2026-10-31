@@ -112,6 +112,26 @@ public interface ILanguageSession : IDisposable
     IReadOnlyList<ScopeName> ScopeAt(ITextSnapshot snapshot, int position) => [];
 }
 
+/// <summary>
+/// A language session that formats its document (Format document, Shift+Alt+F, and format on save), with or without a
+/// semantic layer: C#'s semantic session is one (<see cref="ISemanticLanguageSession"/>), and a language that only colours
+/// and formats (XML, JSON) implements this alone. The editor applies the edits as one undo step, only when the text is
+/// still the one formatted.
+/// </summary>
+public interface IFormattingLanguageSession : ILanguageSession
+{
+    /// <summary>
+    /// The edits that format <paramref name="snapshot"/> (the range of <paramref name="start"/> and <paramref name="length"/>
+    /// when <paramref name="length"/> is not negative, the whole document otherwise), in its positions, in order, not
+    /// overlapping: applied together as one change. Off the calling thread; none when the text is formatted already.
+    /// </summary>
+    /// <exception cref="FormatException">
+    /// The text cannot be formatted as it stands (a malformed document: an unclosed element, a missing comma); the message
+    /// says where and what, and the document is left unchanged (the editor shows the message).
+    /// </exception>
+    Task<IReadOnlyList<TextEdit>> FormatAsync(ITextSnapshot snapshot, int start, int length, CancellationToken cancellationToken);
+}
+
 /// <summary>A named scope of a document (the breadcrumb's part): its name and what it is.</summary>
 /// <param name="Name">The name ("EditorTools", "GetDiagnosticsAsync").</param>
 /// <param name="Kind">What it is.</param>

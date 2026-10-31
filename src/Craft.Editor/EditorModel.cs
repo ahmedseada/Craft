@@ -39,6 +39,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private int _bracketCaret = -1;
     private long _inputTimestamp;
     private bool _inputPending;
+    private readonly IEditorActivities _activities;
 
     /// <summary>An editor over <paramref name="document"/>.</summary>
     /// <param name="document">The document it edits (the caller keeps owning it).</param>
@@ -69,7 +70,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         Find = new EditorFind(this);
         WorkspaceRoot = workspaceRoot;
         InlineCompletion = new InlineCompletionController(this);
-        _session = language?.Open(document.Buffer, new LanguageOpenContext(document.FilePath, workspaceRoot, Options.ToLanguageSettings()) { Activities = activities ?? NoActivities.Instance });
+        _activities = activities ?? NoActivities.Instance;
+        _session = language?.Open(document.Buffer, new LanguageOpenContext(document.FilePath, workspaceRoot, Options.ToLanguageSettings()) { Activities = _activities });
         if (_session is not null)
         {
             _session.Reclassified += OnSessionReclassified;

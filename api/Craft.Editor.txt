@@ -301,6 +301,7 @@ sealed class Craft.Editor.EditorMeasureEventArgs : System.EventArgs
   ctor(System.String source, System.String metric, System.Double value, System.String unit)
 sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, System.IDisposable
   Craft.Abstractions.FontMetrics Metrics { get; }
+  Craft.Abstractions.IFormattingLanguageSession FormattingSession { get; }
   Craft.Abstractions.ILanguage Language { get; }
   Craft.Abstractions.ILanguageSession LanguageSession { get; }
   Craft.Abstractions.ISemanticLanguageSession SemanticSession { get; }
@@ -360,7 +361,9 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Single ViewportHeight { get; }
   System.Single ViewportWidth { get; }
   System.String LanguageName { get; }
+  System.String LastFormatMessage { get; }
   System.String WorkspaceRoot { get; }
+  System.Threading.Tasks.Task<System.Boolean> FormatDocumentAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Void ApplyDiagnostics()
   System.Void ApplyReclassification()
   System.Void CloseTooltips()
@@ -1031,6 +1034,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> SettingRows()
   System.Collections.Generic.IReadOnlyList<System.String> ClosedFiles { get; }
   System.Collections.Generic.IReadOnlyList<System.String> OptionsProblems { get; }
+  System.Func<Craft.Editor.Shell.DocumentTab, Craft.Editor.EditorModel> EditorOf { get; set; }
   System.Int32 MemoryReleases { get; }
   System.String ApplySetting(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
   System.String Branch { get; }

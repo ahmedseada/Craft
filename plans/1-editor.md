@@ -2025,6 +2025,45 @@ the owner's machine, not only headless.
     `.editorconfig`, `.json` (`appsettings.json`, `launchSettings.json`, `global.json`); each removable with the plug-in.
 18. **Format document for those files** (XML and JSON formatting beside C#'s), on Shift+Alt+F and on save as a setting.
 
+**Built (2026-10-31): 17 and 18**, in the C# plug-in, through the public contracts only (a third party can do the same).
+- **17, the C# project's languages: built.** `Craft.CSharp`'s `ProjectLanguages` registers seven languages through
+  `EditorLanguages`, one plug-in part each, so each comes with the plug-in and goes when it is removed or disabled:
+  `msbuild` (.csproj, .props, .targets: `$(Property)`, `@(Item)`, `%(Metadata)` coloured too), `xml` (.xml, .config,
+  .resx, .slnx), `xaml` (.xaml, namespace prefixes coloured), `razor` (.razor, .cshtml: HTML, with `@code { }`,
+  `@functions`, `@{ }`, `@if`/`@foreach`/... blocks and `} else {`, `@( )`, `@expr`, directives, `@*  *@` and directive
+  attributes coloured, the C# by a small lexer), `json` (comments and trailing commas, a property's name told from a
+  value, escapes), `editorconfig` (sections, keys, values, severities) and `sln`. Colours use the theme's existing
+  classes (no new kind). Brackets: `<>`, `()`, `[]`, `{}` for markup (matching skips strings and comments, as before),
+  `{}` `[]` for JSON. Hot path: a `LineStateSession` keeps one state number per line and classifies only the lines asked
+  for; after a change the states below it are kept, shifted, and trusted again as soon as a line ends as it did (typing
+  in a name of a 2,000-line project redoes that line only, test-checked); spans over the line's chars, keywords by span
+  in frozen sets, `SearchValues` for the markup's specials, no regex, nothing allocated per token. Proven unchanged:
+  after random edits, the spans equal a fresh session's (MSBuild, Razor, JSON). No contract was missing for the colours.
+- **18, Format document for XML and JSON: built.** New contract `IFormattingLanguageSession` (`Craft.Abstractions`):
+  a session that formats with or without a semantic layer; `ISemanticLanguageSession` now extends it (C# unchanged).
+  `EditorModel.FormatDocumentAsync` (Shift+Alt+F and Ctrl+K Ctrl+D, the same key path and the Edit menu's
+  `craft.formatDocument`) asks any formatting session, off the UI thread, and applies the edits as one undo step when
+  the text is still the one formatted; it shows as an activity, and a malformed file (the formatter's `FormatException`:
+  "line 3, column 9: expected ',' or '}'") is left unchanged with that message as a failed activity (a toast) and
+  `LastFormatMessage`. XML (MSBuild, XML, XAML): one element per line, the editor's tab size and spaces, text-only
+  elements on one line, mixed content and `xml:space="preserve"` untouched, empty elements joined, attribute lines one
+  step past their tag, a trailing comment kept, one blank line kept. JSON: members and elements one per line, `{}`/`[]`
+  kept, comments where they were, trailing commas kept, one blank line kept. Only white space between tokens changes, so
+  the caret keeps its place. **Format on save**: `CRAFT_FORMAT_ON_SAVE` (`CraftOptions.FormatOnSave`, `.craft/settings.json`,
+  listed in `CraftOptions.Variables` for the settings page), off by default (C# had no format on save before); Save
+  formats through the tab's editor first (`ShellModel.EditorOf`, set by the shell page), one undo step, and a malformed
+  file is saved as it is. Tests: group `ProjectLanguages` (each extension with and without the languages, colours of
+  each, a `.razor` with `@code { }` and `@expr`, incremental and fresh-equal spans, XML and JSON round trips idempotent
+  with comments kept and malformed left alone, one undo step, Shift+Alt+F, format on save on and off) and `Plugins`
+  (every extension from the plug-in's own folder and context, and gone when it is removed or disabled).
+- **Left**: folding (needs an editor contract for regions); Razor's markup inside a C# block is taken a line at a time
+  (a line that starts with a tag, or `@:`, is markup; a multi-line tag or plain text lines inside `@if { }` read as C#);
+  Razor's C# is lexed, not parsed by Roslyn (no semantic colours or diagnostics in .razor); no Razor, .sln or
+  .editorconfig formatting; XML attribute values and a multi-line tag's closing `>` line are kept as written; HTML's
+  `<script>`/`<style>` contents are not coloured as JS/CSS. Checked headless only; the owner's Windows check: open
+  `test-output\CarftTestPOC`'s `.csproj`, an `appsettings.json` with a comment, a `.razor` if there is one, and
+  Shift+Alt+F on each.
+
 **Second Windows run (2026-10-31, late), queued for the next free slot, broken first**
 19. **The Output panel's text cannot be copied**: selectable lines, Ctrl+C, a Copy all, as the chat's messages (note 4).
 20. **Copying in the terminal crashed the app with no crash report**: a native (WinUI/COM) fail-fast skips every managed

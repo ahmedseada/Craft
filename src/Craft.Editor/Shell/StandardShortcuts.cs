@@ -106,6 +106,9 @@ public static class StandardShortcuts
         Anywhere("Ctrl+F4", ShellCommandIds.CloseTab),
         Anywhere("Ctrl+PageDown", ShellCommandIds.NextTab),
         Anywhere("Ctrl+PageUp", ShellCommandIds.PreviousTab),
+        InComposer("Enter", ComposerCommandIds.Send),
+        InComposer("Shift+Enter", ComposerCommandIds.NewLine),
+        InComposer("Escape", ComposerCommandIds.Leave),
     ];
 
     /// <summary>
@@ -147,6 +150,13 @@ public static class StandardShortcuts
     {
         var (chord, then) = KeyBinding.ParseKeys(keys);
         return new KeyBinding(chord, commandId, Then: then, When: KeyContext.TextEditor);
+    }
+
+    /// <summary>A binding of <paramref name="keys"/> to <paramref name="commandId"/> in a composer (the chat's or the agent's message box) only.</summary>
+    public static KeyBinding InComposer(string keys, string commandId)
+    {
+        var (chord, then) = KeyBinding.ParseKeys(keys);
+        return new KeyBinding(chord, commandId, Then: then, When: KeyContext.Composer);
     }
 
     /// <summary>A binding of <paramref name="keys"/> to <paramref name="commandId"/> wherever the key arrives.</summary>

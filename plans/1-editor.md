@@ -2081,6 +2081,13 @@ The held phases (M Android, L more languages, A3 remote models) stay held for th
   parameter hints (Ctrl+Shift+Space). Already there and listed: the file commands, Ctrl+F/H, F12, Ctrl+J, Ctrl+`,
   Ctrl+Alt+I, Ctrl+Shift+P. Not registered (no command yet): rename F2, peek Alt+F12, find in files Ctrl+Shift+F (P6),
   go to symbol, multi-caret (X).
+- **The composer's keys** (the owner's run: the composer sent on focus loss, 04de0b7 took that away): `KeyContext.Composer`
+  and `Craft.Editor.Shell.ComposerInput` (the composer as the keys' target; `EditorHost.KeyTarget` tells a command where
+  the key came from): Enter sends (`craft.composer.send`), Shift+Enter a new line, Escape leaves (the editor takes the
+  keyboard), each remappable on the Keyboard page; a key no binding takes stays the box's; Enter in the editor or
+  anywhere else is never a send. `Craft.Maui.ComposerEditor.RouteKey`; on Windows `Platforms/Windows/ComposerKeys.cs`
+  (an EditorHandler mapping: the TextBox's PreviewKeyDown hands Enter, Escape and Ctrl or Alt chords to the route, and
+  a key it takes never reaches the box), configured in `WindowsShellPlatform`'s one constructor.
 - **The Keyboard section** (`KeyboardModel` headless, `Craft.Maui.KeyboardSection`): every command with its keys and
   where each comes from (yours, keymap, default, built in: the editor's own), search by words or by pressing the keys,
   conflicts marked (keys over another command's, a key that is the first of a two-key chord, the editor's key taken),
@@ -2089,13 +2096,14 @@ The held phases (M Android, L more languages, A3 remote models) stay held for th
   command, Reset all, the keymap drop-down; saved in `CRAFT_KEY_BINDINGS` (your settings file), applied at once.
 - **Tests**: groups `Settings` (5: every option's shape against its parser; the sections and controls from the
   metadata; a change live in the chosen file, refused outside its range or choices, resets; the environment read-only;
-  a plug-in's settings under it, checked and read live) and `Keys` (6: chords and lists round trip; the standard
+  a plug-in's settings under it, checked and read live) and `Keys` (7: chords and lists round trip; the composer's Enter, Shift+Enter, Escape and a remap to Ctrl+Enter; the standard
   shortcuts registered as declared with no conflict; two-key chords, the text-editor context, a terminal keeping its
   keys, the Visual Studio keymap live, an unregistered keymap said; recording, remapping, removing and resetting through
   the settings file and back; every line command; go to line, zoom, reopen, the Keyboard section opened), with
   `Shell`, `Design`, `Layout`, `Editor`, `PluginKit`, `ApiGuard`, `Inventory`.
 - **Not compiled here**: `src/Craft.Maui/Platforms/Windows/WindowsTextInputAdapter.cs` (the new keys' VirtualKey arms:
-  0xBE, 0xBF, 0xBD, Subtract, 0xBB, Add, 0xDB, 0xDD). Every other file compiled (Craft.Maui on net10.0 with the tests).
+  0xBE, 0xBF, 0xBD, Subtract, 0xBB, Add, 0xDB, 0xDD), `Platforms/Windows/ComposerKeys.cs` (new) and the one line added
+  to `WindowsShellPlatform`'s constructor. Every other file compiled (Craft.Maui on net10.0 with the tests).
 - **Not yet**: a platform's installed font families as a choice source (the font picker offers the bundled ones and
   takes any typed); a second chord without Ctrl or Alt (Ctrl+K S) is caught by the window only when the editor has the
   keyboard; the Keyboard section draws every command's row at once (about a hundred).

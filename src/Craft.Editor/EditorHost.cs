@@ -77,6 +77,12 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// </summary>
     public Func<KeyChord, bool>? KeyCapture { get; set; }
 
+    /// <summary>
+    /// What the last key came from (the text editor, a composer, a terminal; null for a key outside them): a command a
+    /// key ran reads it to act on the view that had the keyboard.
+    /// </summary>
+    public IEditorInputSink? KeyTarget { get; private set; }
+
     /// <summary>The keymap in effect (<see cref="CraftOptions.KeyMap"/>), or null when its name is not registered.</summary>
     public IKeyMap? KeyMap { get; private set; }
 
@@ -503,6 +509,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
             return true;
         }
 
+        KeyTarget = editor;
         bool textEditor = editor is EditorModel;
         if (_pendingChord is { } first)
         {
@@ -526,7 +533,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
                 return editor?.OnKey(key, modifiers) ?? false;
             }
 
-            if (textEditor || !IsTextEditorCommand(userCommand))
+            if (Answers(ContextOf(userCommand), editor))
             {
                 Run(userCommand);
                 return true;
@@ -540,7 +547,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         }
 
         var binding = _keyMapBindings.TryGetValue((chord, default), out var mapped) ? mapped : EditorKeyBindings.Find(chord);
-        if (binding is { CommandId.Length: > 0 } && (binding.OverridesEditor || (binding.When == KeyContext.TextEditor && textEditor)))
+        if (binding is { CommandId.Length: > 0 } && (binding.OverridesEditor || (binding.When != KeyContext.Anywhere && Answers(binding.When, editor))))
         {
             Run(binding.CommandId);
             return true;
@@ -588,27 +595,36 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         return EditorKeyBindings.Find(first, then)?.CommandId;
     }
 
-    // Whether a command's default binding answers in the text editor only (a user's binding of it then does too).
-    private bool IsTextEditorCommand(string commandId)
+    // Whether a binding of context `when` answers a key that came from `target`.
+    private static bool Answers(KeyContext when, IEditorInputSink? target) => when switch
+    {
+        KeyContext.TextEditor => target is EditorModel,
+        KeyContext.Composer => target is Shell.ComposerInput,
+        _ => true,
+    };
+
+    // The context of a command's default binding (a user's binding of it answers there too): the first registered or
+    // keymap binding of it that is not Anywhere, else Anywhere.
+    private KeyContext ContextOf(string commandId)
     {
         var all = EditorKeyBindings.All;
         for (int i = 0; i < all.Count; i++)
         {
-            if (all[i].When == KeyContext.TextEditor && string.Equals(all[i].CommandId, commandId, StringComparison.OrdinalIgnoreCase))
+            if (all[i].When != KeyContext.Anywhere && string.Equals(all[i].CommandId, commandId, StringComparison.OrdinalIgnoreCase))
             {
-                return true;
+                return all[i].When;
             }
         }
 
         foreach (var binding in _keyMapBindings.Values)
         {
-            if (binding.When == KeyContext.TextEditor && string.Equals(binding.CommandId, commandId, StringComparison.OrdinalIgnoreCase))
+            if (binding.When != KeyContext.Anywhere && string.Equals(binding.CommandId, commandId, StringComparison.OrdinalIgnoreCase))
             {
-                return true;
+                return binding.When;
             }
         }
 
-        return false;
+        return KeyContext.Anywhere;
     }
 
     private void SetPending(KeyChord? chord)

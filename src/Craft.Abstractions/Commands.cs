@@ -319,6 +319,12 @@ public enum KeyContext
     /// editor's text (toggle comment, move line). A terminal or another view never runs it; the key goes there.
     /// </summary>
     TextEditor,
+
+    /// <summary>
+    /// Only while a chat's or the agent's message box (the composer) has the keyboard, before the box's own keys: send,
+    /// a new line, leave. Anywhere else the key goes on as if unbound.
+    /// </summary>
+    Composer,
 }
 
 /// <summary>

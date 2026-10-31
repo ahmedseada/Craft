@@ -952,6 +952,7 @@ struct Craft.Abstractions.KeyChord : System.IEquatable<Craft.Abstractions.KeyCho
   static System.Boolean TryParse(System.ReadOnlySpan<System.Char> text, out Craft.Abstractions.KeyChord chord, out System.String error)
 enum Craft.Abstractions.KeyContext : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Anywhere = 0
+  Composer = 2
   TextEditor = 1
 sealed class Craft.Abstractions.KeyMap : Craft.Abstractions.IKeyMap, Idrak.Abstraction.IKind, System.IEquatable<Craft.Abstractions.KeyMap>
   Craft.Abstractions.KeyMap <Clone>$()

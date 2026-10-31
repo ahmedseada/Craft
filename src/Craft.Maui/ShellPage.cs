@@ -140,6 +140,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         // splitter and close button, phase U2), a sheet over the editor when narrow (PhoneChat.dc.html); craft.chat
         // (Ctrl+Alt+I) shows or hides it, a plug-in's IEditorHost.ShowPanel brings one forward.
         _conversations = new ConversationsView(_host, _shell.Options.FontFamily);
+        _conversations.LeaveRequested += (_, _) => _shown?.Focus();
         _chatSplit.Panel = _conversations;
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
         _conversations.CloseRequested += (_, _) => CloseChat();

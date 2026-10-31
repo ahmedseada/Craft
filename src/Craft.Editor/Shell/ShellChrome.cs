@@ -548,6 +548,12 @@ public sealed class ShellEditCommands : IDisposable
             }
         }
 
+        foreach (var command in ComposerInput.Commands)
+        {
+            EditorCommands.Register(command);
+            _registered.Add(command.Name);
+        }
+
         if (shell is not null)
         {
             EditorCommands.Register(new EditorCommand(StandardShortcuts.QuickFix, "Edit: Quick fix", (_, token) => QuickFixAsync(token), _ => _active() is not null && shell.Tabs.Active is not null,

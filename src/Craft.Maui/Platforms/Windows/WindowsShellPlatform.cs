@@ -25,6 +25,7 @@ public sealed class WindowsShellPlatform : IShellPlatform
     {
         SelectableText.Configure();
         WindowsControlStyles.Configure();                            // the owner's notes 10 and 12, before any control is made
+        ComposerKeys.Configure();                                    // Enter sends, Shift+Enter a line, Escape leaves the composer
     }
 
     /// <inheritdoc />

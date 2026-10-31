@@ -481,6 +481,43 @@ public static class KeysTests
         Check.True(shell.SettingsSection == SettingSections.Keyboard && shell.Pages.Active?.Id == ShellPageIds.Settings, "Ctrl+K Ctrl+S opens the settings at Keyboard");
     }
 
+    [Test]
+    public static async Task TheComposerSendsOnEnterOnlyThroughItsRemappableBindings()
+    {
+        using var folder = new TempFolder();
+        using var fixture = new SettingsFixture(folder);
+        using var edit = new ShellEditCommands(() => null, fixture.Shell);
+        var host = fixture.Host;
+        int sent = 0, lines = 0, left = 0;
+        var composer = new ComposerInput(() => sent++, () => lines++, () => left++);
+
+        Check.True(host.HandleKey(EditorKey.Enter, KeyModifiers.None, composer), "Enter in the composer is taken (the box adds no line)");
+        await Task.Yield();
+        Check.Equal(1, sent, "and sends");
+        Check.True(host.HandleKey(EditorKey.Enter, KeyModifiers.Shift, composer), "Shift+Enter is taken");
+        await Task.Yield();
+        Check.True(lines == 1 && sent == 1, "and makes a new line, without sending");
+        Check.True(host.HandleKey(EditorKey.Escape, KeyModifiers.None, composer), "Escape is taken");
+        await Task.Yield();
+        Check.Equal(1, left, "and leaves the composer");
+        Check.True(!host.HandleKey(EditorKey.A, KeyModifiers.Control, composer), "a key no binding takes stays the box's (select all)");
+
+        var (model, document, _) = Editors.MakeMarked("ab|");
+        Check.True(host.HandleKey(EditorKey.Enter, KeyModifiers.None, model) && document.Text == "ab\n" && sent == 1, "Enter in the text editor is the editor's (a line), never a send");
+        Check.True(!host.HandleKey(EditorKey.Enter, KeyModifiers.None, null) && sent == 1, "nor anywhere else");
+
+        var keys = new KeyboardModel(fixture.Shell);
+        Check.True(keys.Rows("Send the message").Single().Keys.Single() is { Text: "Enter", Source: ShortcutSource.Default }, "the Keyboard page lists Enter for Send");
+        Check.True(keys.Remove(ComposerCommandIds.Send, KeyChord.Parse("Enter")) is null && keys.Add(ComposerCommandIds.Send, KeyChord.Parse("Ctrl+Enter")) is null, "remapped to Ctrl+Enter");
+        Check.True(!host.HandleKey(EditorKey.Enter, KeyModifiers.None, composer) && sent == 1, "Enter now stays the box's (a new line)");
+        Check.True(host.HandleKey(EditorKey.Enter, KeyModifiers.Control, composer), "Ctrl+Enter is taken");
+        await Task.Yield();
+        Check.Equal(2, sent, "and sends");
+        Check.True(!host.HandleKey(EditorKey.Enter, KeyModifiers.Control, model) || sent == 2, "the user's Ctrl+Enter answers in the composer only");
+        await Task.Yield();
+        Check.Equal(2, sent, "not from the text editor");
+    }
+
     private sealed class DecliningSink : IEditorInputSink
     {
         public int Keys { get; private set; }

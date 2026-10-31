@@ -74,7 +74,7 @@ public sealed class KeyRecorder
         {
             bool plain = (chord.Modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == 0;
             bool function = chord.Key is EditorKey.F3 || (chord.Key >= EditorKey.F1 && chord.Key <= EditorKey.F12);
-            if (chord.Key == EditorKey.Escape || (plain && !function && chord.Key is not (EditorKey.Delete or EditorKey.Insert or EditorKey.PageUp or EditorKey.PageDown or EditorKey.Home or EditorKey.End)))
+            if (chord.Key == EditorKey.Escape || (plain && !function && chord.Key is not (EditorKey.Enter or EditorKey.Delete or EditorKey.Insert or EditorKey.PageUp or EditorKey.PageDown or EditorKey.Home or EditorKey.End)))
             {
                 return false;
             }

@@ -207,6 +207,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   Craft.Abstractions.IEditorActivities Activities { get; }
   Craft.Abstractions.IEditorDocument ActiveDocument { get; }
   Craft.Abstractions.IEditorDocument Open(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, System.String languageName = null)
+  Craft.Abstractions.IEditorInputSink KeyTarget { get; }
   Craft.Abstractions.IEditorNotification Notify(System.String source, System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions)
   Craft.Abstractions.IEditorNotification Notify(System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
   Craft.Abstractions.IEditorNotification ShowStatus(System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
@@ -550,6 +551,18 @@ static class Craft.Editor.Shell.CodeFonts
   static System.Boolean Accepts(System.Double wide, System.Double narrow, System.Int32 sample, System.Double size, System.Double? advanceEm)
   static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.CodeFontFaces> Candidates(System.String family, System.String fallback, System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.CodeFontFaces> bundled)
   static System.ValueTuple<System.String, System.String, System.String, System.String, System.String> Bundled { get; }
+static class Craft.Editor.Shell.ComposerCommandIds
+  const System.String Leave = craft.composer.leave
+  const System.String NewLine = craft.composer.newLine
+  const System.String Send = craft.composer.send
+sealed class Craft.Editor.Shell.ComposerInput : Craft.Abstractions.IEditorInputSink
+  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Void Leave()
+  System.Void NewLine()
+  System.Void OnText(System.String text)
+  System.Void Send()
+  ctor(System.Action send, System.Action newLine, System.Action leave)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
 sealed class Craft.Editor.Shell.DialogAction : System.IEquatable<Craft.Editor.Shell.DialogAction>
   Craft.Editor.Shell.DialogAction <Clone>$()
   Craft.Editor.Shell.DialogActionRole Role { get; init; }
@@ -1126,6 +1139,7 @@ static class Craft.Editor.Shell.StandardShortcuts
   const System.String VisualStudio = visualstudio
   static Craft.Abstractions.KeyBinding Anywhere(System.String keys, System.String commandId)
   static Craft.Abstractions.KeyBinding Editor(System.String keys, System.String commandId)
+  static Craft.Abstractions.KeyBinding InComposer(System.String keys, System.String commandId)
   static Craft.Abstractions.KeyMap VisualStudioKeyMap { get; }
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> Bindings { get; }
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String, System.Func<Craft.Editor.EditorModel, System.Boolean>, System.Boolean>> LineCommands { get; }

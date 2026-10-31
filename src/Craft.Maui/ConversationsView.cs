@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.Editor;
+using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
@@ -34,7 +35,7 @@ public sealed class ConversationsView : ContentView, IDisposable
     private readonly ScrollView _scroll;
     private readonly Label _status = new() { FontSize = 12, Padding = new Thickness(14, 0) };
     private readonly FlexLayout _chips = new() { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
-    private readonly Microsoft.Maui.Controls.Editor _input = new() { AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = 40, MaximumHeightRequest = 200 };
+    private readonly ComposerEditor _input = new() { AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = 40, MaximumHeightRequest = 200 };
     private readonly Button _send = new() { Text = "→", WidthRequest = 36, HeightRequest = 36, Padding = 0, CornerRadius = 8, BorderWidth = 0, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.End };
     private readonly CraftInput _inputBox;
     private readonly Button _close = new() { Text = "✕", WidthRequest = 32, HeightRequest = 32, Padding = 0, BackgroundColor = Colors.Transparent, BorderWidth = 0 };
@@ -57,6 +58,10 @@ public sealed class ConversationsView : ContentView, IDisposable
         _inputBox = new CraftInput(palette, _input, radius: 8, multiline: true);
         ModelChip = new ModelChip(palette);
         _send.Clicked += (_, _) => Send();
+        // Enter, Shift+Enter and Escape through the host's router (the composer's bindings, remappable on the Keyboard
+        // page): the platform hands the box's keys to RouteKey before the box takes them.
+        var keys = new ComposerInput(Send, InsertNewLine, () => LeaveRequested?.Invoke(this, EventArgs.Empty));
+        _input.RouteKey = (key, modifiers) => _host.HandleKey(key, modifiers, keys);
         // Not Editor.Completed: on Windows a multi-line Editor raises it when it loses focus, which sent half-written
         // messages (the owner's run, 2026-10-31). Send is the button, and Enter through the composer's key binding.
         SemanticProperties.SetDescription(_send, "Send");
@@ -143,6 +148,9 @@ public sealed class ConversationsView : ContentView, IDisposable
 
     /// <summary>Puts the keyboard's focus in the input.</summary>
     public void FocusInput() => _input.Focus();
+
+    /// <summary>Raised when the composer's leave key (Escape) asks to give the keyboard back to the editor.</summary>
+    public event EventHandler? LeaveRequested;
 
     /// <summary>Takes the theme's colours.</summary>
     public void ApplyTheme(ITheme theme)
@@ -511,6 +519,15 @@ public sealed class ConversationsView : ContentView, IDisposable
         _ = SubmitAsync(panel, text);
     }
 
+    // Shift+Enter's command: a line break at the box's caret (the box would not take the key itself once it is bound).
+    private void InsertNewLine()
+    {
+        string text = _input.Text ?? "";
+        int at = Math.Clamp(_input.CursorPosition, 0, text.Length);
+        _input.Text = text.Insert(at, "\n");
+        _input.CursorPosition = at + 1;
+    }
+
     private async Task SubmitAsync(IConversationPanel panel, string text)
     {
         try
@@ -582,3 +599,15 @@ public sealed class ConversationsView : ContentView, IDisposable
 /// selection (the mapping in Platforms/Windows); elsewhere a plain label until that platform maps it.
 /// </summary>
 internal sealed class SelectableLabel : Label;
+
+/// <summary>
+/// The composer's text box: a multi-line editor whose keys the platform hands to <see cref="RouteKey"/> before the box
+/// takes them (Windows: a PreviewKeyDown on its TextBox, <c>Platforms/Windows/ComposerKeys.cs</c>), so Enter sends and
+/// Shift+Enter makes a line through the composer's bindings; a key the route declines stays the box's. It never sends
+/// on focus loss.
+/// </summary>
+public sealed class ComposerEditor : Microsoft.Maui.Controls.Editor
+{
+    /// <summary>Takes a key with its modifiers: true when a binding took it (the box then ignores it).</summary>
+    public Func<EditorKey, KeyModifiers, bool>? RouteKey { get; set; }
+}

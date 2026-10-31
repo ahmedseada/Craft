@@ -12,13 +12,14 @@ Windows run (2026-11-01)" at the end.
 |---|---|---|
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
-| 3 | B1-B5: paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe | Next (planned below) |
+| 3 | B1-B6: paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
 | 4 | Note 27, X part 4, X part 5 | Lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
 | 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
-| 9 | M (Android), A3 (remote models) | Held for the owner's word |
+| 9 | M (Android) | Tested once the Windows version is done (the owner, 2026-11-01) |
+| 9b | A3 (remote models) | Held for the owner's word |
 | 10 | Does voice dictation go through the diff view? | The owner's call |
 
 ## The original status (2026-10-31)
@@ -2803,17 +2804,32 @@ first-chance `FileNotFoundException`s in the trail: Audio, Vision, Diffusion, Cl
 Fix in Idrak (on its `main`, by its rules, `IDRAK_DEVICES=cpu` and an `IDRAK_FILTER`): probe only the libraries present
 beside the program, once; the missing-family message names the package that holds the family asked for.
 
+**B6, the agent made the file but never wrote it to the workspace (the owner, 2026-11-01, several prompts, the agent
+over MCP).** Not yet traced. Likely the same root as the open item "the AI test that fails only on Windows (the agent's
+working copy goes missing)": the agent works on a copy of the folder, and what it wrote there must come back to the
+workspace as a diff the user accepts (no silent edit). The slot traces the whole path on the copy: tool write, the run's
+end, the proposal, the diff view, accept, the file on disk; and the same through the app's MCP tools. A headless test
+drives a scripted model that writes a new file and a changed file, accepts both, and finds them in the workspace, on a
+workspace path with spaces and a Windows-style drive path where the code allows.
+
 Also in the trail, for the slots: `WindowsShellPlatform.RouteKeys` threw "The window has no WinUI content yet" at start
 (hook the keys once the page appeared), a WinRT `InvalidOperationException` at start, and three 0.2-0.3 s "unlabelled UI
 work" stalls at start-up (the plug-ins' rail, menus and models; the window's resize) still to label and move off.
 
 ### The order and the slots
 
-1. B1-B5, three slots: B1 and B2 (the canvas), B3 and B4 (the plug-ins), B5 (Idrak, then Craft's use of it).
+1. B1-B6, three slots: B1 and B2 (the canvas), B3, B4 and B6 (the plug-ins and the agent), B5 (Idrak, then Craft's
+   use of it).
 2. The X restart: note 27, X part 4, X part 5, then the rest of X (planned below by its agent).
 3. W, the moment X is done (planned below by its agent).
 4. P batch 2, last: only once W is done (the owner, 2026-11-01: "make Idrak's plug-ins in the editor a later
    priority"); planned below by its agent.
+
+The target is Windows; Android (phase M) is tested once the Windows version is done (the owner, 2026-11-01), so M
+follows this list; until then no project carries the Android target, and the code stays Android-ready.
+
+The owner, going to sleep (2026-11-01): every decision takes the recommended option, written here in one line; a free
+slot starts the next ready work at once; the owner tests later.
 
 Every slot follows Craft's new build-and-test rule (`CLAUDE.md`): all the work, one build, all the tests, one run,
 fixes as a batch, the full filter once, then push.

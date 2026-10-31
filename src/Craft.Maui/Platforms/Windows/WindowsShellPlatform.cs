@@ -21,13 +21,14 @@ namespace Craft.Maui.WinUI;
 public sealed class WindowsShellPlatform : IShellPlatform
 {
     /// <summary>The Windows pieces; the messages' selectable text mapped once (<see cref="SelectableText"/>).</summary>
-    public WindowsShellPlatform() => SelectableText.Configure();
+    public WindowsShellPlatform()
+    {
+        SelectableText.Configure();
+        WindowsControlStyles.Configure();                            // the owner's notes 10 and 12, before any control is made
+    }
 
     /// <inheritdoc />
     public IFileDialogs FileDialogs { get; } = new WindowsFileDialogs();
-
-    /// <summary>The platform, with Craft's control styles mapped (the owner's notes 10 and 12) before any control is made.</summary>
-    public WindowsShellPlatform() => WindowsControlStyles.Configure();
 
     /// <inheritdoc />
     public ITerminalHost? TerminalHost { get; } = new ConPtyTerminalHost();

@@ -23,6 +23,13 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
 - **Speed and memory first.** A slow or memory-heavy path is fixed where it lives: in Craft when it is Craft's, in
   Idrak when it is the library's (on Idrak's `main`, by Idrak's rules), never worked around in the app. One copy of a
   document's text; only visible lines laid out, classified and drawn; nothing waits on the UI thread.
+- **The UI thread never blocks, and every running operation shows.** No code on the UI thread waits: no `.Result`,
+  `.Wait()`, `GetAwaiter().GetResult()`, lock held across work, file or network I/O, model load, parse of a whole
+  workspace or other work that can take longer than a frame; such work runs off the UI thread and comes back through
+  the dispatcher. Every operation that can outlast a moment (a model download or load, an agent run, a training round,
+  indexing, a workspace build, a save of a large file, a command in a terminal or sandbox) reports through the host's
+  activities contract, so the status bar shows it (what, how far, how fast, time left, a way to cancel). A UI-thread
+  stall is a bug found by the app's own watchdog and fixed where it lives, never accepted as "it was busy".
 - **The reference is not the ceiling.** Roslyn, Visual Studio, VS Code or any editor in hand fixes what the output must
   be (the spans, the diagnostics, the completion items), never how fast or how lean Craft may be. A candidate the
   benches show faster or leaner is taken, its results proven unchanged.

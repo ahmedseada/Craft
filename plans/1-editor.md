@@ -406,7 +406,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E4 | `Craft.App` shell on Windows: folder tree, tabs, settings page (every setting above), recent files, light and dark, the narrow layout chosen by width. | The owner opens a folder, switches files, changes settings, resizes to the phone layout. | E3 |
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
-| K | The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
+| K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
 | A2 | The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
@@ -451,6 +451,60 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
 | Keystroke to render (type or Backspace, then the frame) | 29 ms | 6.6 us | 23 us | 1.0 KB, 1 run string per keystroke |
 | Caret-blink frame | | 5.0 us | 13.5 us | 0 bytes |
 | Scroll frame, one line each | | 5.3 us | 33 us | 0.3 KB, 0.9 run strings per frame |
+
+## K as built (2026-10-31)
+
+- **Contracts** (`Craft.Abstractions`, namespace `Craft.Abstractions`, new files `Plugins.cs`, `Host.cs`, `Commands.cs`,
+  `Contributions.cs`): `IEditorPlugin : IKind` (`Settings`, `Activate(IEditorHost)` returning the deactivation) in
+  `EditorPlugins`; `IEditorHost` (documents as `IEditorDocument`, the active one and its selection, six events,
+  `ProposeEditsAsync`, `Commands`/`ExecuteCommandAsync`, `AddStatusItem`, `AddPanel`, `Settings`, `StartProgress`,
+  `ShowMessageAsync`, `Log`, `Record`, `Dispatch`); `IEditorCommand : IKind` (its `Name` is its id) and `EditorCommand` in
+  `EditorCommands`; `KeyChord`, `KeyBinding : IKind` (named by its chord's text) in `EditorKeyBindings`; `IStatusItem` /
+  `StatusItem`; `IEditorPanel` / `ListPanel` / `PanelItem` (a panel is a title and lines with optional commands, UI-free);
+  `PluginSetting` (variable `CRAFT_PLUGIN_<PLUGIN>_<KEY>`), `IPluginSettings`; `CraftContracts.Version` 1.0 and
+  `ContractFit`; `PluginCapabilities` (files, network, sandbox, model). `EditorKey` gained the other letters, `D0`-`D9` and
+  `F1`-`F12`, added at its end so the earlier values stay. A plug-in author needs `Craft.Abstractions` alone.
+- **Key precedence** (`EditorHost.HandleKey`, the one router; `EditorView.KeyHandler` sends keys to it): the user's
+  binding (`CRAFT_KEY_BINDINGS`) first; then a registered binding with `OverridesEditor`; then `EditorModel`'s own keys;
+  then a registered binding for a chord the editor declined. The built-ins keep working, plug-ins add chords, and only an
+  explicit override takes a built-in key. A user's empty command unbinds a plug-in's chord. The lookup writes the chord
+  into a stack buffer and reads `KindTable` by span: no string per keystroke.
+- **The host** (`Craft.Editor.EditorHost`, UI-free, tested headless): each plug-in is activated through a scope of its
+  own (`IEditorHost` forwarded under its name) that records every handler, status item, panel and progress it adds, so
+  deactivation (dispose, `Deactivate`, or `RefreshPlugins` after it was unregistered) takes back what it left. An
+  `Activate` that throws is reported in `Plugins` and the log, its partial contributions taken back. Events are raised
+  from copy-on-write handler arrays, each handler alone: one that throws is logged and the others (and the keystroke)
+  go on; `DocumentChanged` makes nothing when no one listens. The user is asked through
+  `Craft.Editor.Abstractions.IEditorPresenter`; without one every proposal is rejected. A proposal is validated
+  (in order, inside the text), summarised (edits, lines, characters removed and added, a preview cut at
+  `CRAFT_PROPOSAL_PREVIEW_CHARS`), applied as one `EditKind.Command` undo step, and dropped when the document changed or
+  closed while the user was asked. Log lines kept: `CRAFT_HOST_LOG_LINES`.
+- **Packaging** (`Craft.Core.Plugins`): `PluginManifest` read with a source-generated `JsonSerializerContext` (comments and
+  trailing commas allowed, a UTF-8 byte-order mark skipped: Windows editors write one), checked before any of the
+  plug-in's code loads, every problem named. A newer contract (major, or minor of the same major) is refused; an older
+  major is loaded and marked `Outdated`; no plugin.json loads with a `Note`. `CraftPlugins.Installed` keeps the latest
+  result per folder for the Plug-ins page. Craft.CSharp has `src/Craft.CSharp/plugin.json`, copied into its own output by
+  its `CraftCopyPluginManifest` target (a target, not content, so it does not flow into the tests' output); Craft.App's
+  existing copy of that folder carries it, and the app's target now fails the build if it is missing.
+- **MAUI** (`Craft.Maui/PluginViews.cs`, built here): `StatusItemsView`, `PanelsView`, `MauiEditorPresenter` (the
+  confirmation is `DisplayAlertAsync` with Apply/Reject until A1's diff view), `CommandPalette` (`DisplayActionSheetAsync`
+  of the commands that can run, with their chords). **Craft.App**: `EditorPage` holds one `EditorHost`, registers its own
+  `craft.commandPalette` (Ctrl+Shift+P) and `craft.plugins` on the same contracts, and adds the Commands and Plug-ins
+  buttons; the Windows adapter maps the new keys.
+- **Kit**: `samples/Craft.Plugins.Sample` (outside `Craft.slnx`, referencing `Craft.Abstractions` with `Private=false` and
+  `ExcludeAssets=runtime`): the word count follows each change from the lines it touched (the incremental count equals a
+  full count over 400 random edits in the test) and the status text is made only when a count changes;
+  `sample.wordCount` on Ctrl+Shift+W; the setting `showCharacters`. `templates/craft-plugin` (`dotnet new craft-plugin -n
+  NAME --craftPath CRAFT --pluginName SHORT`): checked by installing into a temporary hive and building a generated
+  project inside this repository and outside it. `dotnet new` evaluates MSBuild `Condition` attributes in a template's
+  project file, so the template removes the shared contracts with `WithMetadataValue` instead. Guide: `docs/plugins.md`.
+- **Tests**: group `PluginKit` (the sample loaded from a copied folder, activated, its status item, command and binding,
+  removed and loaded again, disabled; plugin.json refused for a newer contract or bad fields, an older major marked; a
+  throwing `Activate` and handler; proposals; key precedence; settings), with `Plugins`, `Editor`, `ApiGuard` and
+  `Inventory`: 35 passed on the CPU here.
+- **Minimal now**: capabilities are recorded and shown, not enforced; a panel is text lines; the confirmation is a
+  dialog with a summary (the diff is A1); plug-in settings come from the environment (the settings page and
+  `.craft/settings.json` are E4); one document at a time in the window (tabs are E4); a plug-in loads once per process.
 
 ## Commands for the owner (once a phase is built)
 

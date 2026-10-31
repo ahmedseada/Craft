@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Ahmed Seada",
+  "classifications": [ "Craft", "Plugin", "Library" ],
+  "identity": "Craft.Templates.Plugin",
+  "name": "Craft editor plug-in",
+  "description": "A plug-in for the Craft editor: a status item, a command with a key binding, a setting, and its plugin.json. Built against Craft.Abstractions alone.",
+  "shortName": "craft-plugin",
+  "sourceName": "Craft.Plugins.Template",
+  "preferNameDirectory": true,
+  "tags": { "language": "C#", "type": "project" },
+  "symbols": {
+    "craftPath": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "../Craft",
+      "replaces": "CRAFT_PATH_DEFAULT",
+      "description": "The Craft repository (absolute, or relative to the new project's folder): the project references its src/Craft.Abstractions. A build can still pass -p:CraftPath=FOLDER."
+    },
+    "pluginName": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "myplugin",
+      "replaces": "templateplugin",
+      "description": "The editor plug-in's short name: its commands' prefix (myplugin.hello) and its settings' variables (CRAFT_PLUGIN_MYPLUGIN_<KEY>)."
+    }
+  },
+  "sources": [ { "exclude": [ "**/[Bb]in/**", "**/[Oo]bj/**", ".template.config/**" ] } ]
+}

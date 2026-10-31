@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A Craft editor plug-in. Build it, then copy its output folder (bin/<Configuration>/net10.0/: Craft.Plugins.Template.dll,
+    its .deps.json, plugin.json) to a folder named Craft.Plugins.Template under a plug-in folder Craft loads: the app's own
+    plugins/ beside Craft.App.exe, or a folder named in CRAFT_PLUGIN_FOLDERS. See Craft's docs/plugins.md.
+      dotnet build -c Release
+      dotnet build -c Release -p:CraftPath=D:\Projects\Craft      (another Craft repository)
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Loaded at run time into its own load context: a .deps.json, and its dependencies beside it. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- The Craft repository whose Craft.Abstractions this plug-in is built against. -->
+    <CraftPath Condition="'$(CraftPath)' == ''">CRAFT_PATH_DEFAULT</CraftPath>
+    <CraftAbstractionsProject>$([System.IO.Path]::GetFullPath('$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(CraftPath)', 'src', 'Craft.Abstractions', 'Craft.Abstractions.csproj'))'))</CraftAbstractionsProject>
+  </PropertyGroup>
+
+  <Target Name="CraftPathCheck" BeforeTargets="CollectPackageReferences;PrepareForBuild">
+    <Error Condition="!Exists('$(CraftAbstractionsProject)')" Text="Craft.Abstractions was not found at '$(CraftAbstractionsProject)': pass the Craft repository with -p:CraftPath=FOLDER (or set CraftPath in this project)." />
+  </Target>
+
+  <ItemGroup>
+    <!-- The contracts come from the host: compiled against, never copied. -->
+    <ProjectReference Include="$(CraftAbstractionsProject)">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- Idrak.Abstraction comes through Craft.Abstractions; as a contract shared with the host it is not copied either. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <!-- Item functions, not a Condition: dotnet new evaluates Condition attributes of a template's project file. -->
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths->WithMetadataValue('Filename', 'Idrak.Abstraction'))" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths->WithMetadataValue('Filename', 'Craft.Abstractions'))" />
+    </ItemGroup>
+  </Target>
+
+  <!-- plugin.json beside the dll. -->
+  <Target Name="CraftCopyPluginManifest" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)plugin.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

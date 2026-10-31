@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Template",
+  "version": "0.1.0",
+  "summary": "templateplugin: a status item and the command templateplugin.hello (Ctrl+Alt+H)",
+  "contractVersion": "1.0",
+  "capabilities": []
+}

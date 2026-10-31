@@ -7,6 +7,11 @@ struct Craft.Abstractions.BracketPair : System.IEquatable<Craft.Abstractions.Bra
   System.String ToString()
   System.Void Deconstruct(out System.Char Open, out System.Char Close)
   ctor(System.Char Open, System.Char Close)
+enum Craft.Abstractions.EditKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Command = 3
+  Deleting = 1
+  Paste = 2
+  Typing = 0
 sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstractions.EditorColors>
   Craft.Abstractions.EditorColors <Clone>$()
   System.Boolean Equals(Craft.Abstractions.EditorColors other)
@@ -104,6 +109,17 @@ interface Craft.Abstractions.ITextBuffer
   Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
   Craft.Abstractions.ITextSnapshot Current { get; }
   event System.EventHandler<Craft.Abstractions.TextChangedEventArgs> Changed
+interface Craft.Abstractions.ITextDocument : System.IDisposable
+  Craft.Abstractions.ITextBuffer Buffer { get; }
+  Craft.Abstractions.ITextSnapshot Edit(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.EditKind kind, Craft.Abstractions.SelectionState before, Craft.Abstractions.SelectionState after)
+  Craft.Abstractions.SelectionState? Redo()
+  Craft.Abstractions.SelectionState? Undo()
+  System.Boolean CanRedo { get; }
+  System.Boolean CanUndo { get; }
+  System.Boolean IsDirty { get; }
+  System.String FilePath { get; }
+  System.Threading.Tasks.Task SaveAsync(System.String path = null, System.Threading.CancellationToken cancellationToken = null)
+  event System.EventHandler StateChanged
 interface Craft.Abstractions.ITextInputAdapter
   System.IDisposable Attach(System.Object platformView, Craft.Abstractions.IEditorInputSink sink)
 interface Craft.Abstractions.ITextMeasurer
@@ -140,6 +156,20 @@ sealed class Craft.Abstractions.LanguageRules : System.IEquatable<Craft.Abstract
   System.Void Deconstruct(out System.String LineComment, out System.String BlockCommentOpen, out System.String BlockCommentClose, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
   ctor(System.String LineComment, System.String BlockCommentOpen, System.String BlockCommentClose, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
   static Craft.Abstractions.LanguageRules Plain { get; }
+struct Craft.Abstractions.SelectionState : System.IEquatable<Craft.Abstractions.SelectionState>
+  System.Boolean Equals(Craft.Abstractions.SelectionState other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsEmpty { get; }
+  System.Int32 Anchor { get; init; }
+  System.Int32 Caret { get; init; }
+  System.Int32 End { get; }
+  System.Int32 GetHashCode()
+  System.Int32 Length { get; }
+  System.Int32 Start { get; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Anchor, out System.Int32 Caret)
+  ctor(System.Int32 Anchor, System.Int32 Caret)
+  static Craft.Abstractions.SelectionState At(System.Int32 position)
 sealed class Craft.Abstractions.TableTheme : Craft.Abstractions.ITheme, Idrak.Abstraction.IKind
   Craft.Abstractions.EditorColors Colors { get; }
   Craft.Abstractions.TextStyle StyleOf(System.String tokenClass)

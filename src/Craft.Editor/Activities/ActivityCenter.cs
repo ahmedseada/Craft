@@ -294,8 +294,16 @@ public sealed class ActivityCenter : IEditorActivities
                 return;
             }
 
-            End(ActivityState.Failed, null, string.IsNullOrWhiteSpace(reason) ? error?.Message ?? "failed" : reason, retry);
+            End(ActivityState.Failed, null, !string.IsNullOrWhiteSpace(reason) ? reason : Describe(error), retry);
         }
+
+        // A failure always says something: its message, else its type and code (a platform error may carry no text).
+        private static string Describe(Exception? error) => error switch
+        {
+            null => "failed (no reason given)",
+            { Message: { } message } when !string.IsNullOrWhiteSpace(message) => message.Trim(),
+            _ => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{error.GetType().FullName} (0x{error.HResult:X8}) with no message"),
+        };
 
         public void Dispose()
         {

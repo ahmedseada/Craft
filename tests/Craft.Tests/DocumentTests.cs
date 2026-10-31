@@ -276,6 +276,80 @@ public static class DocumentTests
     }
 
     [Test]
+    public static void ASaveRaisesItsStateChangeOnTheCallersContext()
+    {
+        // The owner's run (2026-11-01): on Windows the write finished on the thread pool and StateChanged followed it there,
+        // so the tab, the status bar and the tree were touched off the UI thread and every save failed. The save must come
+        // back to the caller's context (the UI thread's) before it raises StateChanged.
+        using var folder = new TempFolder();
+        var path = folder.File("ui.txt");
+        File.WriteAllText(path, "a");
+        var document = TextDocument.OpenAsync(path, Grouping).GetAwaiter().GetResult();
+        document.Edit([TextEdit.Insert(1, new string('b', 4 << 20))], EditKind.Command, SelectionState.At(1), SelectionState.At(1));
+        using var ui = new SingleThreadContext();
+        int raisedOn = -1;
+        document.StateChanged += (_, _) => raisedOn = Environment.CurrentManagedThreadId;
+        ui.Run(() => document.SaveAsync());
+        Check.Equal(ui.ThreadId, raisedOn, "StateChanged after a save is raised on the caller's context (the UI thread), not where the write finished");
+        Check.True(!document.IsDirty, "the save completed");
+    }
+
+    /// <summary>A UI thread's stand-in: one thread running its posts in order, its own SynchronizationContext.</summary>
+    private sealed class SingleThreadContext : SynchronizationContext, IDisposable
+    {
+        private readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = [];
+        private readonly Thread _thread;
+
+        public SingleThreadContext()
+        {
+            _thread = new Thread(() =>
+            {
+                SetSynchronizationContext(this);
+                foreach (var (callback, state) in _queue.GetConsumingEnumerable())
+                {
+                    callback(state);
+                }
+            }) { IsBackground = true, Name = "test UI thread" };
+            _thread.Start();
+        }
+
+        public int ThreadId => _thread.ManagedThreadId;
+
+        public override void Post(SendOrPostCallback d, object? state) => _queue.Add((d, state));
+
+        /// <summary>Starts <paramref name="work"/> on this thread and waits (from the test's thread) until it ends.</summary>
+        public void Run(Func<Task> work)
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(async _ =>
+            {
+                try
+                {
+                    await work();
+                    done.SetResult();
+                }
+                catch (Exception error)
+                {
+                    done.SetException(error);
+                }
+            }, null);
+            if (!done.Task.Wait(TimeSpan.FromSeconds(30)))
+            {
+                throw new TimeoutException("the save did not finish in 30 s");
+            }
+
+            done.Task.GetAwaiter().GetResult();
+        }
+
+        public void Dispose()
+        {
+            _queue.CompleteAdding();
+            _thread.Join(TimeSpan.FromSeconds(5));
+            _queue.Dispose();
+        }
+    }
+
+    [Test]
     public static void EncodingsRoundTripByteForByte()
     {
         using var folder = new TempFolder();

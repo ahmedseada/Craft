@@ -261,7 +261,10 @@ public sealed class TextDocument : ITextDocument
             _undo[^1].Open = false;
         }
 
-        await WriteAtomicallyAsync(snapshot, target, Encoding, HasBom, cancellationToken).ConfigureAwait(false);
+        // Back on the caller's context (no ConfigureAwait(false)): StateChanged reaches the tab, the status bar and the tree,
+        // which belong to the UI thread. On Windows the write completes on the thread pool, so a pool continuation raised
+        // it off the UI thread and the save failed with a platform error (the owner's run, 2026-11-01).
+        await WriteAtomicallyAsync(snapshot, target, Encoding, HasBom, cancellationToken);
         FilePath = target;
         _savedState = state;
         StateChanged?.Invoke(this, EventArgs.Empty);

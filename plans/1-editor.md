@@ -2863,6 +2863,33 @@ icons; `LineTokenizer`, `LineStateSession`, `ITextFormatter`, `FormatStyle` are 
 cannot publish diagnostics, and Problems holds open tabs only; toggle comment does nothing without a line comment;
 Idrak's "approve-each" words every question for "the agent"; no host event says the workspace changed.
 
+**Modern design, rich icons, format and syntax everywhere (the owner, 2026-11-01: "I need a modern design with rich file
+icons and format, syntax support").** A standing requirement for W and every later slot:
+- **Modern look**: every new surface (tree, tabs, quick open, breadcrumb, Problems, npm and lint views, settings) follows
+  the design's tokens (`docs/design/`) and what current editors do: no box inside a box, hover and focus states, motion,
+  icons beside every file and folder, nothing that looks like a list of checkboxes.
+- **Rich file icons**: today an icon is a 1-3 character text badge in one colour, by extension only (`FileIcon(Extension,
+  Badge, Argb, Language)`). It becomes a drawn vector icon: `FileIcon` gains an optional shape (SVG path data, one or
+  more layers each with its colour, drawn through MAUI Graphics' own path parser: rule 0, no package), kept beside the
+  badge as the fallback; folder icons by name with open and closed shapes (`src`, `test`/`tests`, `docs`, `.git`,
+  `.github`, `.vscode`, `.craft`, `node_modules`, `dist`, `bin`, `obj`, `assets`, `public`, `components`, `services`,
+  ...); icons by exact name, compound suffix, glob and extension (contract 5 below); an icon theme as a registry
+  (`FileIconThemes : IKind`, a built-in "craft" set, a plug-in can add another, a setting `CRAFT_ICON_THEME` picks
+  one); light and dark variants from the theme. The built-in set is Craft's own drawing (no copied icon set, no vendor
+  logo taken as-is), made for the design and checked by the owner on Windows. Shapes are parsed once and cached per
+  size (rule 75); drawing an icon allocates nothing on a warm frame (rule 63). The icons show in the tree, the tabs,
+  quick open, the breadcrumb, the welcome page, Problems and search results. The C# set (.cs, .csproj, .sln, .slnx,
+  .razor, .xaml, .json, ...) is redrawn the same way.
+- **Format support for every language**: Format Document (Shift+Alt+F) and Format Selection work for every language
+  W adds, not only where a project has Prettier: built-in formatters (only white space between tokens changes, as XML,
+  JSON and CSS do, so the caret keeps its place; a malformed file left unchanged with the reason) for JavaScript,
+  TypeScript, JSX/TSX, HTML and Angular templates, CSS/SCSS/LESS; Prettier (the project's own install) used instead
+  when the project has a Prettier config, said so; format on save per language (`CRAFT_FORMAT_ON_SAVE`); options for
+  the indent, the tab size from the editor, and the line length where a formatter breaks lines. This replaces the
+  earlier decision "CSS built in, Prettier elsewhere".
+- **Syntax**: the latest syntax of each language (above), with brackets, folding, toggle comment, auto-close and
+  indentation guides working in every one.
+
 **Contracts first** (`Craft.Abstractions`, additions only, one minor contract step; B3's rule: no constructor removed):
 1. The line-state kit public (`LineTokenizer`, `LineStateSession`, `ITextFormatter`, `FormatStyle`), the C# plug-in moved
    onto it; `LineStates` interns states over 64 bits, bounded (rule 77); a session can change dialect and raises
@@ -2942,10 +2969,12 @@ Lint use `Utf8JsonReader` only and say Unavailable on Android (no Node).
 
 **Slots** (at most 3; merge order W0, W-files, W-npm, then W-style and W-script, then W-tools, then W-markup):
 - W0: the kit (1), `RulesAt` and the comment fallback (2), JSON to `Craft.Plugins.Json`, the empty `src/Craft.Web`.
-- W-files: contracts 3, 4, 5; folder badges; `node_modules` shown dimmed.
+- W-files: contracts 3, 4, 5; the rich icon theme (vector shapes, folders by name, `FileIconThemes`, the C# set redrawn);
+  `node_modules` shown dimmed.
 - W-npm: Idrak's `Requester` (11) first, then contracts 9 and 10 and the npm plug-in.
 - W-script (after W0, W-files): JS, TS, JSX, TSX lexers and folding; the JavaScript and TypeScript plug-ins.
-- W-style (after W0): CSS, SCSS, LESS lexers, formatter, folding; the CSS plug-in.
+- W-style (after W0): CSS, SCSS, LESS lexers, formatter, folding; the CSS plug-in. Each lexer slot also writes its
+  language's built-in formatter (W-script for JS, TS, JSX, TSX; W-markup for HTML and Angular).
 - W-tools (after W-npm): contracts 6, 7, 8; the Lint plug-in; Prettier.
 - W-markup (after W-script, W-style): HTML and Angular lexers, the Angular dialect, inline templates; the Html and
   Angular plug-ins with the selector.

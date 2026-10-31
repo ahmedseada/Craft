@@ -2840,6 +2840,123 @@ where the text before the caret matches the primary's, the rest said.
 - Windows-only (not compiled here): the wheel inside a hover card (guess), `IInputTimestamps`, Ctrl+\ if the adapter
   lacks the key (guess), Ctrl+1/2/3 and Alt+F12 checked in the adapter.
 
+## Phase W: the web languages (planned 2026-11-01, starts when X is done)
+
+Planned by a read-only agent against Craft `main` c3cfaed and Idrak `main` 5b5854d. "(confirm)" marks a version fact to
+check against the release notes on day one; "(guess)" one for the slot to confirm.
+
+**Decisions (recommended, noted):** one pre-installed, removable plug-in per language (`Craft.Plugins.Html`, `.Css`,
+`.JavaScript`, `.TypeScript`, `.Angular`) plus `.Npm` and `.Lint`, the lexers in a plain shared library `src/Craft.Web`
+copied into each (so HTML's `<script>` still colours with the JavaScript plug-in removed); Angular templates chosen by
+project (`angular.json`) plus the `*.component.*` names; JSON moves out of the C# plug-in into its own pre-installed
+`Craft.Plugins.Json`; automatic runs (lint on save) asked once per workspace and program, remembered in the user's data
+folder (never the workspace), revocable on the settings page; the question's wording through Idrak's
+`CommandLimits.Requester`; CSS formatted built in, Prettier where the project has it, through `DocumentFormatters`; a
+project with no ESLint gets "Set up ESLint" through the sandbox; version precedence: the setting, then the project's
+files, then latest; `node_modules` shown dimmed and collapsed, never indexed or searched (`CRAFT_WORKSPACE_SHOW_IGNORED`);
+scripts that read input get the output tab plus "Open in terminal" after approval; the semantic layer is a later step
+W-semantic, held for the owner's word (Idrak's process contract, an LSP client, `tsgo` where TS 7 is installed, else
+`typescript-language-server`, then Angular's); npm now, yarn, pnpm and bun detected and said "not yet".
+
+**What the code lacks today (seen):** `EditorLanguages.ForFile` and `FileIcons` work by extension only; folders have no
+icons; `LineTokenizer`, `LineStateSession`, `ITextFormatter`, `FormatStyle` are internal to Craft.CSharp; a plug-in
+cannot publish diagnostics, and Problems holds open tabs only; toggle comment does nothing without a line comment;
+Idrak's "approve-each" words every question for "the agent"; no host event says the workspace changed.
+
+**Contracts first** (`Craft.Abstractions`, additions only, one minor contract step; B3's rule: no constructor removed):
+1. The line-state kit public (`LineTokenizer`, `LineStateSession`, `ITextFormatter`, `FormatStyle`), the C# plug-in moved
+   onto it; `LineStates` interns states over 64 bits, bounded (rule 77); a session can change dialect and raises
+   `Reclassified`.
+2. `ILanguageSession.RulesAt(snapshot, position)` (`<script>` toggles `//`, `<style>` `/* */`); toggle comment falls back
+   to the block comment.
+3. `ILanguage.FilePatterns` (exact names, `*` globs); `ForFile` ranks exact name, longest pattern, extension; span
+   matching with alternate lookups, no allocation (rules 15, 17).
+4. `ILanguageSelector : IKind` and `LanguageSelectors`, answering from a cache (no I/O on the call);
+   `ForFile(path, workspaceRoot)`.
+5. `FileIcons` by name, compound suffix, glob, extension, and `FileIcons.ForFolder(name)`; folder badges in the tree.
+6. `IEditorHost.PublishDiagnostics(path, source, snapshot or null, items)`, merged per source; Problems for closed files.
+7. `ILinter : IKind` and `Linters` (languages, `Unavailable` reason, detection off the UI thread, `LintAsync`); a fix is
+   only a diff the user accepts.
+8. `IDocumentFormatter : IKind` and `DocumentFormatters`, asked before the session's own.
+9. `PluginSetting.MachineOnly` (not settable by a workspace: node and npm paths, global tools).
+10. `IEditorHost.WorkspaceChanged`.
+11. Idrak, on its `main`: `CommandLimits.Requester` (default "the agent"), used in "approve-each"'s question.
+
+**The lexers** (`src/Craft.Web`: Script/, Style/, Markup/; nothing native, no regex, nothing allocated per token; one
+state per line; keywords in per-dialect `FrozenSet` alternate lookups, specials in `SearchValues`, no boxing; rules 15,
+17, 75, 88, 89):
+- **JavaScript (ES2025 and later)**: regex or division by the previous significant token carried in the state;
+  template literals with `${}` nested to any depth across lines; regex `v`, `d`, modifiers, duplicate named groups;
+  `using`/`await using`, `accessor`, `#x in obj`, hashbang, import attributes, standard decorators, numeric separators,
+  BigInt; `import defer`/`source` (confirm).
+- **JSX/TSX**: elements as frames; `<T,>` generics in .tsx; plain .ts never lexes JSX; JSX in .js by the `jsx` setting
+  (auto: react or preact in package.json).
+- **TypeScript**: all of JS plus `satisfies`, `accessor`, const and `in`/`out` type parameters, `declare`, `namespace`,
+  `abstract`, `override`, `keyof`, `infer`, `asserts`, `import type`, template literal types, .d.ts, .mts, .cts.
+- **CSS** (CSS Syntax 3 tokens, known names from data lists updated on day one): nesting, `@layer`, `@container`,
+  `@scope`, `@starting-style`, `@property`, `:has()`, `color-mix()`, `oklch()`, relative colours, anchor positioning,
+  `if()` and `@function` (confirm); SCSS (`$var`, `#{}`, `@use`, `@mixin`, ...) and LESS.
+- **HTML (living standard)**: raw text `<script>`/`<style>`, RCDATA; script types (module, importmap and JSON types as
+  JSON, templates as HTML); the embedded lexer's state rides in HTML's; `style="…"` as CSS and `on*="…"` as JS.
+- **Angular**: `{{ }}`, `[x]`, `(x)`, `[(x)]`, `#ref`, `*ngIf`/`*ngFor` microsyntax, `@if`/`@else`, `@for`/`@empty`,
+  `@switch`, `@defer` with its blocks, `@let`; expressions in an Angular JS dialect (pipes, `?.`, `!`); inline
+  `template:`/`styles:` in an Angular project's .ts as "angular-typescript".
+- Colours through the theme's existing classes (no new class); folding by braces, `#region` markers, comment and import
+  runs, JSX and HTML elements, Angular blocks.
+- **Proven** (rule 71): thousands of random edits per fixture equal a fresh session; embedded spans equal standalone;
+  the C# plug-in's ProjectLanguages tests pass unchanged on the public kit. **Measured** (rules 63, 76, 78): a warm
+  screen of 60 lines at 0 bytes, lines re-lexed per keystroke, a backtick at the top of a 100,000-line TS file, folding,
+  the paint through B1's cache; target (guess) a warm screen under 0.5 ms; results in `test-output/benches/web-*.txt`.
+
+**Versions**: per language `version` (latest) and `projectVersion` (true); read from `tsconfig.json`/`jsconfig.json`
+(`extends` followed, bounded), `node_modules/typescript/package.json` or `devDependencies`, `@angular/core`,
+`angular.json`; as UTF-8 bytes with `Utf8JsonReader` (rules 74, 49), off the UI thread, once per folder; a version
+changes colours only where an older one reads a newer word as plain. Day one confirms ES2026, TS 6/7, Angular 21+,
+ESLint 9/10, typescript-eslint 8, CSS Baseline 2026.
+
+**npm** (`Craft.Plugins.Npm`): Node from PATH or `CRAFT_PLUGIN_NPM_NODE` (MachineOnly), its version in a status item;
+npm run as `node …/npm-cli.js` (guess on the layout), never `npm.cmd`; scripts from every `package.json` become
+commands ("npm: run build (src/app)") in the palette and the tree's menu; every run through the sandbox (approve-each,
+`Requester` "npm"), the question showing the script's text, output streamed to a read-only terminal tab, an activity
+with Cancel that stops the process tree, `longRunning` scripts without a time limit; install (`install` or `ci`) as an
+activity; `.npmrc` never logged.
+
+**The linter** (`Craft.Plugins.Lint`): ESLint from the project's own install (flat config first, typescript-eslint and
+angular-eslint as configured; `.eslintrc*` only with `ESLINT_USE_FLAT_CONFIG=false`, said), `--format json
+--output-file` parsed as bytes; TSLint only with `tslint.json` and no ESLint config, said deprecated once; `linter` =
+auto|eslint|tslint|off, `runOn` = save|manual, `delayMs` 500; "Lint workspace"; fixes as one diff; lint as you type
+waits for W-semantic.
+
+**Options** (`PluginSetting`s, `.craft/settings.json` except MachineOnly): `CRAFT_PLUGIN_{HTML,CSS,JAVASCRIPT,TYPESCRIPT,ANGULAR}_VERSION`,
+`…_PROJECTVERSION`; `CRAFT_PLUGIN_HTML_EMBEDDED`, `…_ATTRIBUTESASCODE`; `CRAFT_PLUGIN_JAVASCRIPT_JSX`;
+`CRAFT_PLUGIN_ANGULAR_TEMPLATES`, `…_INLINETEMPLATES`; `CRAFT_PLUGIN_CSS_FORMAT`; `CRAFT_PLUGIN_NPM_NODE`, `…_NPM`,
+`…_SANDBOX`, `…_INSTALL`, `…_LONGRUNNING`, `…_TIMELIMITMINUTES`; `CRAFT_PLUGIN_LINT_LINTER`, `…_RUNON`, `…_DELAYMS`,
+`…_ALLOWGLOBAL`, `…_TIMELIMITSECONDS`, `…_SANDBOX`; `CRAFT_PLUGIN_PRETTIER_*`; `CRAFT_WORKSPACE_SHOW_IGNORED`.
+
+**Android and AOT**: `Craft.Web` and the language plug-ins are pure C# with no reflection (`IsAotCompatible`); Npm and
+Lint use `Utf8JsonReader` only and say Unavailable on Android (no Node).
+
+**Test groups** (all start "Web"): `WebKit`, `WebFiles`, `WebScript`, `WebStyle`, `WebMarkup`, `WebAngular`, `WebNpm`,
+`WebLint`, `WebPlugins`; with `ProjectLanguages`, `Plugins`, `Folding`, `Editor`, `Settings`, `Shell`, `Inline`,
+`ApiGuard`, `Inventory` as touched; Idrak's part with `IDRAK_DEVICES=cpu`.
+
+**Slots** (at most 3; merge order W0, W-files, W-npm, then W-style and W-script, then W-tools, then W-markup):
+- W0: the kit (1), `RulesAt` and the comment fallback (2), JSON to `Craft.Plugins.Json`, the empty `src/Craft.Web`.
+- W-files: contracts 3, 4, 5; folder badges; `node_modules` shown dimmed.
+- W-npm: Idrak's `Requester` (11) first, then contracts 9 and 10 and the npm plug-in.
+- W-script (after W0, W-files): JS, TS, JSX, TSX lexers and folding; the JavaScript and TypeScript plug-ins.
+- W-style (after W0): CSS, SCSS, LESS lexers, formatter, folding; the CSS plug-in.
+- W-tools (after W-npm): contracts 6, 7, 8; the Lint plug-in; Prettier.
+- W-markup (after W-script, W-style): HTML and Angular lexers, the Angular dialect, inline templates; the Html and
+  Angular plug-ins with the selector.
+
+**The owner's check** (Windows, Node installed): a new Angular project made under `test-output\WebTestPOC` (`npx -y
+@angular/cli@latest new WebTestPOC --defaults --skip-git --style=scss`), opened in the app: icons in the tree and quick
+open, colours of app.ts, app.html (with `@if`/`@for`), app.scss, index.html, main.ts, tsconfig.json, package.json;
+brackets, folding, toggle comment; "npm: run build" and "npm install"; "Set up ESLint", a squiggle and its fix as a
+diff, "Lint workspace"; Shift+Alt+F on the .scss; the Angular plug-in disabled turns .html to plain HTML; typing at the
+top of a long .ts with the paint and keystroke numbers written here.
+
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 
 Planned by a read-only agent from `wip/p-batch-2` (`74a5c21` on `e04652c`; `main` 47 commits ahead). The WIP holds P6

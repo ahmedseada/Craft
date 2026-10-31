@@ -98,6 +98,11 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   one pull of each repository that changed since the last list: Idrak's first (`cd D:\Projects\Idrak; git checkout
   main; git pull origin main`, because Craft builds against the clone), then Craft's; a repository with nothing new is
   not pulled. Then the one build and the runs, as above. A change in Idrak gets Idrak's list, in Idrak's shape.
+- **The app is tried on the owner's test project, never on a repository.** The owner's console project
+  `D:\Projects\Craft\test-output\CarftTestPOC` (git ignores it) is the folder every app run opens:
+  `src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC`,
+  with `$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"`; the editor, the AI and the agent never
+  open or change Craft's or Idrak's own files in a run the owner is given.
 - **Output files go under `test-output\`.** Every file a run writes for the owner (a failures file, a log, a trace, a
   bench's results, an app's output) goes under `test-output\` at the repository root (git ignores it); commands name
   paths there, never the repository root or a source folder.

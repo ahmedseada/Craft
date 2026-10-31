@@ -19,6 +19,8 @@
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <WindowsPackageType>None</WindowsPackageType>
+    <!-- Unpackaged, the taskbar takes the .exe's own icon (and the window's, set in Platforms/Windows/WindowIcon.cs). -->
+    <ApplicationIcon>Platforms\Windows\appicon.ico</ApplicationIcon>
     <!-- The crash dialog calls Win32's MessageBoxW through a generated LibraryImport. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WindowsAppSDKSelfContained Condition="'$(WindowsAppSDKSelfContained)' == ''">true</WindowsAppSDKSelfContained>
@@ -41,6 +43,8 @@
     <ProjectReference Include="..\Craft.Maui\Craft.Maui.csproj" />
     <!-- The app's icon: MAUI makes the .exe's and the window's icon from it (and Android's launcher icon in phase M). -->
     <MauiIcon Include="Resources\AppIcon\appicon.svg" Color="#101217" />
+    <!-- The same icon as an .ico beside the program, for the window (WindowIcon.cs); made from appicon.svg at 16 to 256 px. -->
+    <None Update="Platforms\Windows\appicon.ico" CopyToOutputDirectory="PreserveNewest" TargetPath="appicon.ico" />
     <!-- Phase D: Inter (the interface) and JetBrains Mono (the code), both SIL Open Font License 1.1 (their licences beside
          them, Resources\Fonts\*-OFL.txt), registered by MauiProgram under Craft.Maui's CraftFonts aliases. -->
     <MauiFont Include="Resources\Fonts\*.ttf" />

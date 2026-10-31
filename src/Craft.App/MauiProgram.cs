@@ -32,6 +32,9 @@ public static class MauiProgram
         var startup = new ShellStartup(options, settings, plugins, recent, ShellPlatforms.Create(), [.. problems, .. recent.Problems]);
         var builder = MauiApp.CreateBuilder();
         builder.UseMauiApp(_ => new App(startup));
+#if WINDOWS
+        WinUI.WindowIcon.Configure(builder);
+#endif
 
         // Inter (the interface) and JetBrains Mono (the code), both SIL OFL 1.1, from Resources/Fonts (the MauiFont items).
         builder.ConfigureFonts(fonts =>

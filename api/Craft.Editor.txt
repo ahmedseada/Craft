@@ -109,13 +109,16 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Collections.Generic.IReadOnlyList<Craft.Editor.PluginActivation> Plugins { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Editor.PluginActivation> RefreshPlugins()
   System.Func<System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task<Craft.Abstractions.IEditorDocument>> OpenFile { get; set; }
+  System.Func<System.String, System.Threading.Tasks.Task<System.Boolean>> OpenExternal { get; set; }
   System.IDisposable AddPanel(Craft.Abstractions.IEditorPanel panel)
   System.IDisposable AddStatusItem(Craft.Abstractions.IStatusItem item)
+  System.String DataFolder { get; }
   System.String WorkspaceFolder { get; set; }
   System.Threading.Tasks.Task SaveAsync(Craft.Abstractions.IEditorDocument document, System.String path = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
   System.Threading.Tasks.Task<Craft.Abstractions.IEditorDocument> OpenDocumentAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ExecuteCommandAsync(System.String commandId, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> OpenExternalAsync(System.String path)
   System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)

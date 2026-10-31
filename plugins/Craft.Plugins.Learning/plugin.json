@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Learning",
+  "version": "0.1.0",
+  "summary": "R · learning in the editor: with your consent, the AI's answers and what you did with them train your local model as an adapter, promoted only when it scores better [RewardFunctions \"editor-verdict\", AiEvents \"learning\", ModelAdapters \"learning\", ShareDestinations]",
+  "contractVersion": "1.0",
+  "capabilities": ["files", "network", "sandbox", "model"]
+}

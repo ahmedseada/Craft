@@ -79,6 +79,20 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <remarks>Set by the shell when a folder opens or closes (the full path, or null).</remarks>
     public string? WorkspaceFolder { get; set; }
 
+    /// <inheritdoc />
+    /// <remarks>The settings' data folder (<see cref="CraftOptions.ResolveDataFolder"/>: <c>CRAFT_DATA_FOLDER</c>, else the local application data's "Craft").</remarks>
+    public string? DataFolder => Options.ResolveDataFolder();
+
+    /// <summary>How <see cref="OpenExternalAsync"/> opens a folder or a file outside the editor (the page sets it); null: it cannot, and the call gives false.</summary>
+    public Func<string, Task<bool>>? OpenExternal { get; set; }
+
+    /// <inheritdoc />
+    public Task<bool> OpenExternalAsync(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return OpenExternal is { } open ? open(Path.GetFullPath(path)) : Task.FromResult(false);
+    }
+
     /// <summary>
     /// How <see cref="OpenDocumentAsync"/> opens a file in the editor (the shell sets it: a tab, a new document for a path
     /// with no file yet); null: the host opens nothing and the call gives null.

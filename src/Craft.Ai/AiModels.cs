@@ -19,7 +19,11 @@ public sealed class AiModels : IDisposable
     private bool _disposed;
 
     /// <summary>Models read through the settings <paramref name="settings"/> gives at each request.</summary>
-    public AiModels(Func<AiSettings> settings) => _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    public AiModels(Func<AiSettings> settings)
+    {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        ModelAdapters.Changed += OnAdaptersChanged;
+    }
 
     /// <summary>Reports a load's stages (set by the session: the status bar), or null.</summary>
     public IProgress<ModelLoadStatus>? Progress { get; set; }
@@ -72,8 +76,12 @@ public sealed class AiModels : IDisposable
     public void Dispose()
     {
         _disposed = true;
+        ModelAdapters.Changed -= OnAdaptersChanged;
         Release();
     }
+
+    // A promoted or rolled-back adapter (the learning plug-in): the next request leases the model with it.
+    private void OnAdaptersChanged(object? sender, EventArgs e) => Release();
 
     private async Task<ModelLease> LeaseAsync(string model, CancellationToken cancellationToken)
     {
@@ -84,7 +92,8 @@ public sealed class AiModels : IDisposable
         }
 
         var settings = _settings();
-        string key = settings.ModelProvider + "\n" + model;
+        string? adapter = ModelAdapters.For(model);
+        string key = settings.ModelProvider + "\n" + model + "\n" + adapter;
         Task<ModelLease> lease;
         lock (_gate)
         {
@@ -94,7 +103,7 @@ public sealed class AiModels : IDisposable
                 IdrakLibraries.EnsureIncluded();
                 var provider = ModelProviders.Get(settings.ModelProvider);
                 // Not tied to one request's cancellation: the lease is shared by the requests that follow.
-                lease = provider.AcquireAsync(new ModelRequest(model), Progress, CancellationToken.None);
+                lease = provider.AcquireAsync(new ModelRequest(model) { Adapter = adapter }, Progress, CancellationToken.None);
                 _leases[key] = lease;
             }
         }

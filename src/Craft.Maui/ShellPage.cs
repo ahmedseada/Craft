@@ -129,6 +129,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
         _host.PanelShowRequested += OnPanelShowRequested;
         _host.SelectionRequested += OnSelectionRequested;
+        // A plug-in's IEditorHost.OpenExternalAsync (the learning plug-in's folder): the system's own launcher, any platform.
+        _host.OpenExternal = path => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(new Uri(path));
         RegisterAppCommands();
 
         _titleWide = new TitleBarView(_palette);

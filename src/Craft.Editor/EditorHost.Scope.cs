@@ -29,6 +29,10 @@ public sealed partial class EditorHost
 
         public IEditorTerminals? Terminals => host.Terminals is { } terminals ? new ScopedTerminals(terminals, this) : null;
 
+        public string? DataFolder => host.DataFolder;
+
+        public Task<bool> OpenExternalAsync(string path) => _closed ? Task.FromResult(false) : host.OpenExternalAsync(path);
+
         public IReadOnlyList<IEditorCommand> Commands => host.Commands;
 
         public IPluginSettings Settings => host.Settings;

@@ -46,6 +46,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     private int _replyStart;
     private string? _loadedFolder;
     private string _modelName = "";
+    private string _lastPrompt = "";
     private bool _disposed;
 
     /// <summary>A chat panel in <paramref name="host"/>.</summary>
@@ -136,6 +137,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         var messages = new List<ChatMessage>(_history.Count + 2) { new("system", SystemPrompt) };
         messages.AddRange(_history);
         var user = new ChatMessage("user", withContext);
+        _lastPrompt = withContext;
         messages.Add(user);
         _removed.Clear();
         _extra.Clear();
@@ -225,7 +227,18 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             }
 
             var proposal = new ProposedEdits([placed.Edit], "Apply the chat's code") { Placement = placed.How, Origin = $"Chat · {_modelName}" };
+            var answer = AiEvents.Listening ? AnswerOf(AiAnswerKinds.Chat, _lastPrompt, _modelName, document, snapshot, placed.Edit, Host.WorkspaceFolder) : null;
+            if (answer is not null)
+            {
+                AiEvents.Answered(answer);
+            }
+
             bool applied = await Host.ProposeAsync(document, proposal, cancellationToken).ConfigureAwait(true);
+            if (answer is not null)
+            {
+                AiEvents.Judged(VerdictOf(answer, applied, document, placed.Edit));
+            }
+
             string name = document.FilePath is { } path ? Path.GetFileName(path) : "the document";
             Add(new ConversationEntry(ConversationRole.Note, applied ? $"Applied to {name} (one undo step)." : $"Not applied to {name}."));
             return applied;
@@ -234,6 +247,25 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         Add(new ConversationEntry(ConversationRole.Error, "The document kept changing; apply it again."));
         return false;
     }
+
+    /// <summary>The AI events' answer for an edit the plug-in proposes (<see cref="AiEvents"/>: the learning plug-in records it under the user's consent).</summary>
+    internal static AiAnswer AnswerOf(string kind, string prompt, string model, IEditorDocument document, ITextSnapshot snapshot, TextEdit edit, string? workspace) =>
+        new(AiEvents.NewId(), kind, prompt, edit.Text)
+        {
+            Plugin = AiSettings.PluginName,
+            Model = model.Length == 0 ? null : model,
+            Snapshot = snapshot,
+            Position = edit.Start,
+            Before = snapshot.GetText(edit.Start, edit.Length),
+            FilePath = document.FilePath,
+            LanguageName = document.LanguageName,
+            WorkspaceFolder = workspace,
+        };
+
+    /// <summary>What the user did with a proposed edit: accepted (where it now lies) or rejected (the text kept instead).</summary>
+    internal static AiVerdict VerdictOf(AiAnswer answer, bool accepted, IEditorDocument document, TextEdit edit) => accepted
+        ? new AiVerdict(answer.Id, AiVerdicts.Accepted) { Document = document, Start = edit.Start, Length = edit.Text.Length }
+        : new AiVerdict(answer.Id, AiVerdicts.Rejected) { Document = document, Kept = answer.Before is { Length: > 0 } before ? before : null };
 
     private async Task StreamAsync(List<ChatMessage> messages, ChatMessage user, AiSettings settings, int generation, CancellationToken token, TaskCompletionSource done)
     {

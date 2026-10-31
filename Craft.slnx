@@ -15,6 +15,7 @@
     <Project Path="plugins/Craft.Plugins.Sandbox/Craft.Plugins.Sandbox.csproj" />
     <Project Path="plugins/Craft.Plugins.Placement/Craft.Plugins.Placement.csproj" />
     <Project Path="plugins/Craft.Voice/Craft.Voice.csproj" />
+    <Project Path="plugins/Craft.Plugins.Learning/Craft.Plugins.Learning.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />

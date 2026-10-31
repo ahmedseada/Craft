@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plan 1, phase R: learning in the editor on Idrak's reinforcement learning, a pre-installed, removable plug-in
+    ("learning"; delete plugins\Craft.Plugins.Learning\ or CRAFT_PLUGINS_DISABLED=Craft.Plugins.Learning). Nothing is
+    recorded until the user says yes to the first consent, nothing leaves the machine until the second (to a destination the
+    user names, after a preview). It records the AI plug-ins' answers and the user's verdicts (Craft.Abstractions' AiEvents)
+    as episodes, rewards them with "editor-verdict" (registered in Idrak's RewardFunctions) and the C# environment's
+    csharp-build and csharp-tests, makes coding tasks from the workspace's failing tests (task.json, so the idrak tool reads
+    them), trains the user's local model as an adapter (preference rounds over Idrak's PreferencePairSources and
+    PreferenceLosses, or Idrak's ReinforcementTrainer on the tasks), and promotes an adapter only when it scores better on a
+    held-out set, with one-step rollback.
+
+    Built on Craft.Abstractions and Idrak alone. Idrak.Reinforcement, Idrak.Reinforcement.Plugins (the coding and C#
+    environments), Idrak.Text and Idrak.Text.Plugins (the C# coding language) are Idrak libraries Craft's loader shares
+    between plug-ins (one copy each, so the registries are the ones the other plug-ins read); the plug-in hands them to
+    IdrakPlugins.Load at activation so their built-ins register. Android (phase M): no reflection of its own (JSON written
+    and read by hand); Idrak's AOT notes apply; the C# environment needs the .NET SDK, which a phone has not.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Learning</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Idrak.Reinforcement" Version="$(IdrakVersion)" />
+    <PackageReference Include="Idrak.Reinforcement.Plugins" Version="$(IdrakVersion)" />
+    <PackageReference Include="Idrak.Text" Version="$(IdrakVersion)" />
+    <PackageReference Include="Idrak.Text.Plugins" Version="$(IdrakVersion)" />
+    <!-- Idrak.Data adds the Hugging Face model source: the model to train is named as the AI plug-in names it. -->
+    <PackageReference Include="Idrak.Data" Version="$(IdrakVersion)" />
+    <!-- Idrak.Gpu adds the GPU devices (CUDA, Vulkan, HIP; the system's drivers, loaded at run time): training is the
+         heaviest device user, and without it the "auto" device finds only the CPU. Registered at activation (LearningLibraries). -->
+    <PackageReference Include="Idrak.Gpu" Version="$(IdrakVersion)" />
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

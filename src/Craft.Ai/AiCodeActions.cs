@@ -198,7 +198,18 @@ public sealed class AiCodeActions : ICodeActionProvider
             Placement = string.Create(CultureInfo.InvariantCulture, $"lines {lineStart + 1}-{snapshot.GetLineIndex(end) + 1}, rewritten whole"),
             Origin = $"Code action · {model}",
         };
+        var edit = proposal.Edits[0];
+        var answer = AiEvents.Listening ? AiChatPanel.AnswerOf(AiAnswerKinds.CodeAction, instruction + "\n\n" + around, model, document, snapshot, edit, _host.WorkspaceFolder) : null;
+        if (answer is not null)
+        {
+            AiEvents.Answered(answer);
+        }
+
         LastAccepted = await _host.ProposeAsync(document, proposal, token).ConfigureAwait(true);
+        if (answer is not null)
+        {
+            AiEvents.Judged(AiChatPanel.VerdictOf(answer, LastAccepted == true, document, edit));
+        }
     }
 
     /// <summary>The first fenced block's code in <paramref name="reply"/>, or the whole reply when it has none.</summary>

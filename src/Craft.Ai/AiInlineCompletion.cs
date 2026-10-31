@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Craft.Abstractions;
 using Idrak.Abstraction.Generation;
 
@@ -94,42 +95,65 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
 
         int lines = 0;
         int generated = 0;
-        await foreach (var chunk in model.StreamAsync(prompt, options, cancellationToken).ConfigureAwait(false))
+        // What the ghost showed, for the AI events' sinks (the learning plug-in); gathered only while one listens.
+        var shown = AiEvents.Listening ? new StringBuilder() : null;
+        try
         {
-            if (chunk.Done && chunk.Stats is { } stats)
+            await foreach (var chunk in model.StreamAsync(prompt, options, cancellationToken).ConfigureAwait(false))
             {
-                Completed?.Invoke(this, stats);
-            }
-
-            string text = chunk.Text;
-            int tokens = chunk.Generated > generated ? chunk.Generated - generated : text.Length > 0 ? 1 : 0;
-            generated = Math.Max(generated, chunk.Generated);
-            if (text.Length == 0 && tokens == 0)
-            {
-                continue;
-            }
-
-            // The line limit: the piece up to the line break that would start one line too many, then the request ends.
-            int cut = -1;
-            for (int i = 0; i < text.Length; i++)
-            {
-                if (text[i] == '\n' && ++lines >= settings.CompletionMaxLines)
+                if (chunk.Done && chunk.Stats is { } stats)
                 {
-                    cut = i;
-                    break;
+                    Completed?.Invoke(this, stats);
+                }
+
+                string text = chunk.Text;
+                int tokens = chunk.Generated > generated ? chunk.Generated - generated : text.Length > 0 ? 1 : 0;
+                generated = Math.Max(generated, chunk.Generated);
+                if (text.Length == 0 && tokens == 0)
+                {
+                    continue;
+                }
+
+                // The line limit: the piece up to the line break that would start one line too many, then the request ends.
+                int cut = -1;
+                for (int i = 0; i < text.Length; i++)
+                {
+                    if (text[i] == '\n' && ++lines >= settings.CompletionMaxLines)
+                    {
+                        cut = i;
+                        break;
+                    }
+                }
+
+                if (cut >= 0)
+                {
+                    shown?.Append(text, 0, cut);
+                    yield return new InlineCompletionPiece(text[..cut], tokens);
+                    yield break;
+                }
+
+                shown?.Append(text);
+                yield return new InlineCompletionPiece(text, tokens);
+                if (chunk.Done)
+                {
+                    yield break;
                 }
             }
-
-            if (cut >= 0)
+        }
+        finally
+        {
+            if (shown is { Length: > 0 })
             {
-                yield return new InlineCompletionPiece(text[..cut], tokens);
-                yield break;
-            }
-
-            yield return new InlineCompletionPiece(text, tokens);
-            if (chunk.Done)
-            {
-                yield break;
+                AiEvents.Answered(new AiAnswer(AiEvents.NewId(), AiAnswerKinds.Completion, prompt, shown.ToString())
+                {
+                    Plugin = AiSettings.PluginName,
+                    Model = lease.Model,
+                    Snapshot = request.Snapshot,
+                    Position = request.Position,
+                    FilePath = request.FilePath,
+                    LanguageName = request.LanguageName,
+                    WorkspaceFolder = request.WorkspaceFolder,
+                });
             }
         }
     }

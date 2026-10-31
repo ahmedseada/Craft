@@ -1,0 +1,343 @@
+interface Craft.Plugins.Learning.Abstractions.IShareDestination : Idrak.Abstraction.IKind
+  System.Threading.Tasks.Task SendAsync(System.String target, System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.Abstractions.ShareItem> items, System.Threading.CancellationToken cancellationToken)
+static class Craft.Plugins.Learning.Abstractions.ShareDestinations
+  const System.String Folder = folder
+  const System.String Https = https
+  static Craft.Plugins.Learning.Abstractions.IShareDestination Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Plugins.Learning.Abstractions.IShareDestination Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.ValueTuple<System.String, System.String> Parse(System.String shareTo)
+  static System.Void Register(Craft.Plugins.Learning.Abstractions.IShareDestination destination)
+sealed class Craft.Plugins.Learning.Abstractions.ShareItem : System.IEquatable<Craft.Plugins.Learning.Abstractions.ShareItem>
+  Craft.Plugins.Learning.Abstractions.ShareItem <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.Abstractions.ShareItem other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Paths { get; init; }
+  System.Int32 GetHashCode()
+  System.Int64 Size { get; }
+  System.ReadOnlyMemory<System.Byte> Content { get; init; }
+  System.String Kind { get; init; }
+  System.String Name { get; init; }
+  System.String Preview { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Kind, out System.ReadOnlyMemory<System.Byte> Content, out System.String Preview, out System.Collections.Generic.IReadOnlyList<System.String> Paths)
+  ctor(System.String Name, System.String Kind, System.ReadOnlyMemory<System.Byte> Content, System.String Preview, System.Collections.Generic.IReadOnlyList<System.String> Paths)
+sealed class Craft.Plugins.Learning.AdapterVersion : System.IEquatable<Craft.Plugins.Learning.AdapterVersion>
+  Craft.Plugins.Learning.AdapterVersion <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.AdapterVersion other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Promoted { get; init; }
+  System.DateTimeOffset Time { get; init; }
+  System.Double ScoreAfter { get; init; }
+  System.Double ScoreBefore { get; init; }
+  System.Int32 Episodes { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 HeldOut { get; init; }
+  System.Int32 Number { get; init; }
+  System.Int32 Pairs { get; init; }
+  System.Int32 Steps { get; init; }
+  System.Single FirstLoss { get; init; }
+  System.Single LastLoss { get; init; }
+  System.String BaseModel { get; init; }
+  System.String Folder { get; init; }
+  System.String Note { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Number, out System.String Folder, out System.DateTimeOffset Time, out System.String BaseModel, out System.Int32 Episodes, out System.Int32 Pairs, out System.Int32 HeldOut, out System.Int32 Steps, out System.Single FirstLoss, out System.Single LastLoss, out System.Double ScoreBefore, out System.Double ScoreAfter, out System.Boolean Promoted, out System.String Note)
+  ctor(System.Int32 Number, System.String Folder, System.DateTimeOffset Time, System.String BaseModel, System.Int32 Episodes, System.Int32 Pairs, System.Int32 HeldOut, System.Int32 Steps, System.Single FirstLoss, System.Single LastLoss, System.Double ScoreBefore, System.Double ScoreAfter, System.Boolean Promoted, System.String Note)
+sealed class Craft.Plugins.Learning.AdapterVersions
+  Craft.Plugins.Learning.AdapterVersion Current { get; }
+  Craft.Plugins.Learning.AdapterVersion Rollback()
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.AdapterVersion> All { get; }
+  System.Collections.Generic.IReadOnlyList<System.Int32> Promotions { get; }
+  System.Int64 Delete(System.Int32 number)
+  System.String Folder { get; }
+  System.ValueTuple<System.Int32, System.String> Next()
+  System.Void Promote(System.Int32 number)
+  System.Void Save(Craft.Plugins.Learning.AdapterVersion version)
+  ctor(System.String workspaceFolder)
+  static System.Int64 FolderBytes(System.String folder)
+static class Craft.Plugins.Learning.ConsentKinds
+  const System.String Learn = learn
+  const System.String Share = share
+sealed class Craft.Plugins.Learning.ConsentRecord : System.IEquatable<Craft.Plugins.Learning.ConsentRecord>
+  Craft.Plugins.Learning.ConsentRecord <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.ConsentRecord other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Granted { get; init; }
+  System.DateTimeOffset Time { get; init; }
+  System.Int32 GetHashCode()
+  System.String Kind { get; init; }
+  System.String Scope { get; init; }
+  System.String ToString()
+  System.String Version { get; init; }
+  System.Void Deconstruct(out System.String Kind, out System.String Scope, out System.Boolean Granted, out System.DateTimeOffset Time, out System.String Version)
+  ctor(System.String Kind, System.String Scope, System.Boolean Granted, System.DateTimeOffset Time, System.String Version)
+enum Craft.Plugins.Learning.ConsentState : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Changed = 3
+  Granted = 1
+  Refused = 2
+  Undecided = 0
+sealed class Craft.Plugins.Learning.ConsentStore
+  Craft.Plugins.Learning.ConsentRecord Find(System.String kind, System.String workspace)
+  Craft.Plugins.Learning.ConsentRecord Set(System.String kind, System.String scope, System.Boolean granted, Craft.Plugins.Learning.ConsentText text, System.DateTimeOffset? time = null)
+  Craft.Plugins.Learning.ConsentState State(System.String kind, System.String workspace, Craft.Plugins.Learning.ConsentText text)
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.ConsentRecord> Records { get; }
+  System.String FilePath { get; }
+  System.Void Withdraw(System.String kind, Craft.Plugins.Learning.ConsentText text)
+  const System.String AllWorkspaces = all
+  ctor(System.String folder)
+sealed class Craft.Plugins.Learning.ConsentText : System.IEquatable<Craft.Plugins.Learning.ConsentText>
+  Craft.Plugins.Learning.ConsentText <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.ConsentText other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Details { get; init; }
+  System.Int32 GetHashCode()
+  System.String Kind { get; init; }
+  System.String Message { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.String Version { get; }
+  System.Void Deconstruct(out System.String Kind, out System.String Title, out System.String Message, out System.Collections.Generic.IReadOnlyList<System.String> Details)
+  ctor(System.String Kind, System.String Title, System.String Message, System.Collections.Generic.IReadOnlyList<System.String> Details)
+  static Craft.Plugins.Learning.ConsentText Learn(Craft.Plugins.Learning.LearningSettings settings, System.String folder, System.String model)
+  static Craft.Plugins.Learning.ConsentText Share(Craft.Plugins.Learning.LearningSettings settings)
+sealed class Craft.Plugins.Learning.EditorEpisode : System.IEquatable<Craft.Plugins.Learning.EditorEpisode>
+  Craft.Plugins.Learning.EditorEpisode <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.EditorEpisode other)
+  System.Boolean Equals(System.Object obj)
+  System.Byte[] ToJson()
+  System.Collections.Generic.IReadOnlyList<System.Int32> AnswerIds { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.Int32> PromptIds { get; init; }
+  System.DateTimeOffset Time { get; init; }
+  System.Double Edited { get; init; }
+  System.Int32 GetHashCode()
+  System.String Answer { get; init; }
+  System.String File { get; init; }
+  System.String Id { get; init; }
+  System.String Kept { get; init; }
+  System.String Kind { get; init; }
+  System.String Language { get; init; }
+  System.String Model { get; init; }
+  System.String Plugin { get; init; }
+  System.String Prompt { get; init; }
+  System.String ToString()
+  System.String Verdict { get; init; }
+  System.Void Deconstruct(out System.String Id, out System.DateTimeOffset Time, out System.String Kind, out System.String Prompt, out System.String Answer, out System.String Verdict)
+  ctor(System.String Id, System.DateTimeOffset Time, System.String Kind, System.String Prompt, System.String Answer, System.String Verdict)
+  static Craft.Plugins.Learning.EditorEpisode FromJson(System.ReadOnlySpan<System.Byte> line)
+sealed class Craft.Plugins.Learning.EditorVerdictReward : Idrak.Abstraction.IConfigurableKind, Idrak.Abstraction.IKind, Idrak.Abstraction.IOptionSchema, Idrak.Abstraction.Reinforcement.IRewardFunction
+  Idrak.Abstraction.OptionSchema Options { get; }
+  System.Collections.Generic.IReadOnlySet<System.String> Keys { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.ValueTask<System.Single[]> ScoreAsync(System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Reinforcement.RewardInput> inputs, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> options = null, System.Threading.CancellationToken cancellationToken = null)
+  const System.String RewardName = editor-verdict
+  ctor()
+  static Idrak.Abstraction.Reinforcement.EpisodeInfoKey<System.Double> EditedKey { get; }
+sealed class Craft.Plugins.Learning.EpisodeStore
+  System.Collections.Generic.List<Craft.Plugins.Learning.EditorEpisode> All()
+  System.Int64 Bytes { get; }
+  System.Int64 Delete(System.String id)
+  System.Int64 DeleteAll()
+  System.String Export(System.String path)
+  System.String FilePath { get; }
+  System.String Folder { get; }
+  System.String Workspace { get; }
+  System.Void Append(Craft.Plugins.Learning.EditorEpisode episode)
+  ctor(System.String root, System.String workspace, Craft.Plugins.Learning.LearningSettings settings)
+  static System.String WorkspaceFolder(System.String root, System.String workspace)
+sealed class Craft.Plugins.Learning.LearningPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  const System.String PackageName = Craft.Plugins.Learning
+  ctor()
+sealed class Craft.Plugins.Learning.LearningPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String ConsentCommand = learning.consent
+  const System.String DeleteAllCommand = learning.deleteAll
+  const System.String DeleteVersionCommand = learning.deleteVersion
+  const System.String ExportCommand = learning.export
+  const System.String MarkTestCommand = learning.markTest
+  const System.String OpenFolderCommand = learning.openFolder
+  const System.String RollbackCommand = learning.rollback
+  const System.String ShareCommand = learning.share
+  const System.String ShowCommand = learning.show
+  const System.String StopCommand = learning.stop
+  const System.String StopSharingCommand = learning.stopSharing
+  const System.String TasksCommand = learning.tasksFromTests
+  const System.String TrainCommand = learning.train
+  const System.String WithdrawCommand = learning.withdraw
+  static Craft.Plugins.Learning.LearningPlugin Instance { get; }
+  static Craft.Plugins.Learning.LearningSession Session { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+sealed class Craft.Plugins.Learning.LearningRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+sealed class Craft.Plugins.Learning.LearningSession : System.IDisposable
+  Craft.Plugins.Learning.AdapterVersions Versions { get; }
+  Craft.Plugins.Learning.ConsentStore Consents { get; }
+  Craft.Plugins.Learning.ConsentText LearnText { get; }
+  Craft.Plugins.Learning.ConsentText ShareText { get; }
+  Craft.Plugins.Learning.EpisodeStore Store { get; }
+  Craft.Plugins.Learning.LearningSettings Settings()
+  Craft.Plugins.Learning.SharePlan LastShare { get; }
+  Craft.Plugins.Learning.TrainingResult LastTraining { get; }
+  System.Boolean Recording { get; }
+  System.Int32 PendingCount { get; }
+  System.String AdapterFor(System.String model)
+  System.String Folder { get; }
+  System.String Status { get; }
+  System.Threading.Tasks.Task Background { get; }
+  System.Threading.Tasks.Task DeleteEpisodesAsync()
+  System.Threading.Tasks.Task DeleteVersionAsync()
+  System.Threading.Tasks.Task ExportAsync()
+  System.Threading.Tasks.Task MakeTasksAsync()
+  System.Threading.Tasks.Task MarkTestAsync()
+  System.Threading.Tasks.Task OpenFolderAsync()
+  System.Threading.Tasks.Task RollbackAsync()
+  System.Threading.Tasks.Task ShareAsync()
+  System.Threading.Tasks.Task StopSharingAsync()
+  System.Threading.Tasks.Task TrainAsync(System.Boolean manual)
+  System.Threading.Tasks.Task Training { get; }
+  System.Threading.Tasks.Task WithdrawAsync()
+  System.Threading.Tasks.Task<System.Boolean> AskLearnAsync(System.Boolean again = false)
+  System.Threading.Tasks.Task<System.Boolean> AskShareAsync()
+  System.Void Dispose()
+  System.Void Refresh()
+  System.Void SettleAll()
+  System.Void Show()
+  System.Void StopTraining()
+  const System.String PanelId = learning.panel
+  ctor(Craft.Abstractions.IEditorHost host)
+sealed class Craft.Plugins.Learning.LearningSettings : System.IEquatable<Craft.Plugins.Learning.LearningSettings>
+  Craft.Plugins.Learning.LearningSettings <Clone>$()
+  System.Boolean ConsentOff { get; init; }
+  System.Boolean Equals(Craft.Plugins.Learning.LearningSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean SharingOff { get; init; }
+  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> LossOptions { get; init; }
+  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> VerdictWeights { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Record { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> SecretPatterns { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> ShareWhat { get; init; }
+  System.Double HeldOutShare { get; init; }
+  System.Double PromotionMargin { get; init; }
+  System.Int32 BatchTokens { get; init; }
+  System.Int32 CapMegabytes { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 IdleMinutes { get; init; }
+  System.Int32 KeepDays { get; init; }
+  System.Int32 MinEpisodes { get; init; }
+  System.Int32 Rank { get; init; }
+  System.Int32 SettleSeconds { get; init; }
+  System.Int32 Steps { get; init; }
+  System.Int32 Threads { get; init; }
+  System.Int64 CpuMemoryMegabytes { get; init; }
+  System.Int64 GpuMemoryMegabytes { get; init; }
+  System.Single LearningRate { get; init; }
+  System.String Algorithm { get; init; }
+  System.String Device { get; init; }
+  System.String Estimator { get; init; }
+  System.String Folder { get; init; }
+  System.String Loss { get; init; }
+  System.String Model { get; init; }
+  System.String Pairs { get; init; }
+  System.String Reference { get; init; }
+  System.String Sandbox { get; init; }
+  System.String Schedule { get; init; }
+  System.String ShareTo { get; init; }
+  System.String TaskReward { get; init; }
+  System.String ToString()
+  System.String Trainer { get; init; }
+  const System.String PluginName = learning
+  ctor()
+  static Craft.Plugins.Learning.LearningSettings From(Craft.Abstractions.IPluginSettings settings)
+  static Craft.Plugins.Learning.LearningSettings From(System.Func<System.String, System.String> read)
+  static System.Collections.Generic.Dictionary<System.String, System.String> ParsePairs(System.String text, System.String variable)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+static class Craft.Plugins.Learning.LearningTrainer
+  const System.String TaskEnvironment = csharp
+  static Craft.Plugins.Learning.TrainingResult TrainPreferences(Idrak.Models.PretrainedModel model, System.String baseModel, System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.EditorEpisode> episodes, Craft.Plugins.Learning.AdapterVersions versions, Craft.Plugins.Learning.LearningSettings settings, System.IProgress<Craft.Plugins.Learning.TrainingProgress> progress = null, System.Threading.CancellationToken cancellationToken = null)
+  static Craft.Plugins.Learning.TrainingResult TrainTasks(Idrak.Models.PretrainedModel model, System.String baseModel, System.String suite, System.String heldOutSuite, Craft.Plugins.Learning.AdapterVersions versions, Craft.Plugins.Learning.LearningSettings settings, System.IProgress<Craft.Plugins.Learning.TrainingProgress> progress = null, System.Threading.CancellationToken cancellationToken = null)
+  static Idrak.Abstraction.Reinforcement.EpisodeInfo Info(Craft.Plugins.Learning.EditorEpisode episode)
+  static Idrak.Models.PretrainedModel LoadModel(Craft.Plugins.Learning.LearningSettings settings, System.String name)
+  static Idrak.Text.ChatTranscriptEncoder Encoder(Idrak.Models.PretrainedModel model)
+  static System.Boolean IsHeldOut(System.String id, System.Double share)
+  static System.Collections.Generic.Dictionary<System.String, System.String> TaskOptions(System.String suite, Craft.Plugins.Learning.LearningSettings settings, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> extra = null)
+  static System.Collections.Generic.List<Idrak.Abstraction.Reinforcement.Trajectory<Idrak.Abstraction.Generation.ChatObservation, Idrak.Abstraction.Generation.ChatMessage>> Trajectories(System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.EditorEpisode> episodes, Idrak.Models.PretrainedModel model, System.Collections.Generic.IReadOnlyList<System.Single> rewards)
+  static System.Double Margin(Idrak.Text.FineTuningSession session, System.Collections.Generic.IReadOnlyList<Idrak.Text.PreferencePair> pairs, System.Boolean adapters)
+  static System.Single[] Rewards(System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.EditorEpisode> episodes, Craft.Plugins.Learning.LearningSettings settings)
+  static System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Reinforcement.Trajectory<Idrak.Abstraction.Generation.ChatObservation, Idrak.Abstraction.Generation.ChatMessage>>> PlayTasksAsync(Idrak.Abstraction.Reinforcement.IPolicy<Idrak.Abstraction.Generation.ChatObservation, Idrak.Abstraction.Generation.ChatMessage> policy, System.String suite, Craft.Plugins.Learning.LearningSettings settings, System.Int32 episodes, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> extra = null, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Plugins.Learning.ShareFilter
+  System.String IgnoredBy(System.String relative)
+  System.String Secret(System.String text)
+  ctor(System.String workspace, System.Collections.Generic.IReadOnlyList<System.String> extraSecrets)
+static class Craft.Plugins.Learning.ShareKinds
+  const System.String Adapter = adapter
+  const System.String Episodes = episodes
+  const System.String Scores = scores
+  static System.Collections.Generic.IReadOnlyList<System.String> All { get; }
+sealed class Craft.Plugins.Learning.SharePlan : System.IEquatable<Craft.Plugins.Learning.SharePlan>
+  Craft.Plugins.Learning.SharePlan <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.SharePlan other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.Abstractions.ShareItem> Items { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> LeftOut { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> PreviewLines()
+  System.Int32 GetHashCode()
+  System.Int64 Size { get; }
+  System.String Destination { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Destination, out System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.Abstractions.ShareItem> Items, out System.Collections.Generic.IReadOnlyList<System.String> LeftOut)
+  ctor(System.String Destination, System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.Abstractions.ShareItem> Items, System.Collections.Generic.IReadOnlyList<System.String> LeftOut)
+  static System.String Bytes(System.Int64 bytes)
+sealed class Craft.Plugins.Learning.TrainingProgress : System.IEquatable<Craft.Plugins.Learning.TrainingProgress>
+  Craft.Plugins.Learning.TrainingProgress <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.TrainingProgress other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Step { get; init; }
+  System.Int32 Steps { get; init; }
+  System.Int64 DeviceBytes { get; init; }
+  System.Int64 ManagedBytes { get; init; }
+  System.Single Loss { get; init; }
+  System.String Device { get; init; }
+  System.String Line { get; }
+  System.String Stage { get; init; }
+  System.String ToString()
+  System.TimeSpan Elapsed { get; init; }
+  System.TimeSpan? Left { get; init; }
+  System.Void Deconstruct(out System.String Stage, out System.Int32 Step, out System.Int32 Steps, out System.Single Loss, out System.TimeSpan Elapsed, out System.TimeSpan? Left, out System.String Device, out System.Int64 DeviceBytes, out System.Int64 ManagedBytes)
+  ctor(System.String Stage, System.Int32 Step, System.Int32 Steps, System.Single Loss, System.TimeSpan Elapsed, System.TimeSpan? Left, System.String Device, System.Int64 DeviceBytes, System.Int64 ManagedBytes)
+sealed class Craft.Plugins.Learning.TrainingResult : System.IEquatable<Craft.Plugins.Learning.TrainingResult>
+  Craft.Plugins.Learning.AdapterVersion Version { get; init; }
+  Craft.Plugins.Learning.TrainingResult <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.TrainingResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Promoted { get; }
+  System.Collections.Generic.IReadOnlyList<System.Int64> DeviceMemory { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.Int64> ManagedMemory { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.Single> Losses { get; init; }
+  System.Int32 GetHashCode()
+  System.String Message { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Plugins.Learning.AdapterVersion Version, out System.String Message, out System.Collections.Generic.IReadOnlyList<System.Single> Losses, out System.Collections.Generic.IReadOnlyList<System.Int64> DeviceMemory, out System.Collections.Generic.IReadOnlyList<System.Int64> ManagedMemory)
+  ctor(Craft.Plugins.Learning.AdapterVersion Version, System.String Message, System.Collections.Generic.IReadOnlyList<System.Single> Losses, System.Collections.Generic.IReadOnlyList<System.Int64> DeviceMemory, System.Collections.Generic.IReadOnlyList<System.Int64> ManagedMemory)
+static class Craft.Plugins.Learning.WorkspaceTasks
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.WorkspaceTest> Failed(System.String folder)
+  static System.Collections.Generic.IReadOnlyList<System.String> Write(System.String suite, System.String workspace, System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.WorkspaceTest> tests)
+  static System.Threading.Tasks.Task<System.ValueTuple<System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.WorkspaceTest>, Idrak.Abstraction.CommandResult>> FindFailingAsync(System.String workspace, System.String sandbox, System.String results, System.TimeSpan time, System.Threading.CancellationToken cancellationToken)
+sealed class Craft.Plugins.Learning.WorkspaceTest : System.IEquatable<Craft.Plugins.Learning.WorkspaceTest>
+  Craft.Plugins.Learning.WorkspaceTest <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Learning.WorkspaceTest other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Message { get; init; }
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Message)
+  ctor(System.String Name, System.String Message)

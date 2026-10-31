@@ -99,7 +99,8 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Model);
         var settings = Settings;
-        var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights);
+        var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
+            request.Adapter is { Length: > 0 } adapter ? Path.GetFullPath(adapter) : "");
         return Task.Run(() => Acquire(key, settings, progress, cancellationToken), cancellationToken);
     }
 
@@ -163,6 +164,11 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         });
         try
         {
+            if (key.Adapter.Length > 0)
+            {
+                model.LoadAdapter(key.Adapter);                           // the promoted adapter (ModelRequest.Adapter), never the base weights changed
+            }
+
             int context = key.Context > 0 ? Math.Min(key.Context, model.MaxPositions) : model.MaxPositions;
             var layout = KeyValueLayouts.Get("float32");
             IChatModel? chat = model.ChatTemplate is null ? null : model.CreateChat(layout, context);
@@ -216,15 +222,15 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         }
     }
 
-    /// <summary>What one loaded model is kept under: its name, device, context and weights.</summary>
-    private readonly record struct LoadKey(string Model, string Device, int Context, string Weights)
+    /// <summary>What one loaded model is kept under: its name, device, context, weights and adapter ("" for none).</summary>
+    private readonly record struct LoadKey(string Model, string Device, int Context, string Weights, string Adapter)
     {
-        public string Text => string.Join('\n', Model, Device, Context.ToString(CultureInfo.InvariantCulture), Weights);
+        public string Text => string.Join('\n', Model, Device, Context.ToString(CultureInfo.InvariantCulture), Weights, Adapter);
 
         public static LoadKey Parse(string text)
         {
             var parts = text.Split('\n');
-            return new LoadKey(parts[0], parts[1], int.Parse(parts[2], CultureInfo.InvariantCulture), parts[3]);
+            return new LoadKey(parts[0], parts[1], int.Parse(parts[2], CultureInfo.InvariantCulture), parts[3], parts.Length > 4 ? parts[4] : "");
         }
     }
 

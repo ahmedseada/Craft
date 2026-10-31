@@ -30,6 +30,8 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private readonly AiModels _models;
     private readonly List<ConversationEntry> _log = [];
     private readonly Dictionary<string, AgentChange> _changes = new(StringComparer.Ordinal);
+    private AiAnswer? _answer;                       // the run's answer for the AI events (raised at its first review), or null
+    private bool _judged;
     private readonly Stopwatch _elapsed = new();
     private CancellationTokenSource? _running;
     private CodingAgent? _agent;
@@ -138,6 +140,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             return true;
         }
 
+        RaiseAnswered();
         var proposal = new ProposedEdits(edits, change.IsNew ? $"Agent: new file {change.Relative}" : $"Agent: {change.Relative}")
         {
             Placement = change.IsNew ? $"a new file: save it as {change.Relative}" : "the agent's copy of the file against the editor's text, line by line",
@@ -147,6 +150,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         var now = document.Document.Buffer.Current;
         if (accepted)
         {
+            Judge(AiVerdicts.Accepted);
             copy.Settle(change.Path, now.GetText(0, now.Length));
             if (copy.ChangeOf(change.Relative) is { } rest)
             {
@@ -172,11 +176,46 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             Stop();
         }
 
+        if (_changes.Count > 0)
+        {
+            RaiseAnswered();
+            Judge(AiVerdicts.Rejected);
+        }
+
         _changes.Clear();
         _copy?.Discard();
         _copy = null;
         Log(new ConversationEntry(ConversationRole.Note, "Discarded every change of the run."));
         ShowChanges();
+    }
+
+    // The run's answer for the AI events (the task and the files it changed), raised once, before its first review.
+    private void RaiseAnswered()
+    {
+        if (_answer is not null || !AiEvents.Listening)
+        {
+            return;
+        }
+
+        var files = string.Join("\n", _changes.Values.Select(c => c.IsNew ? $"{c.Relative} (new)" : c.Relative));
+        _answer = new AiAnswer(AiEvents.NewId(), AiAnswerKinds.Agent, Title, files)
+        {
+            Plugin = AiSettings.PluginName,
+            Model = Subtitle,
+            WorkspaceFolder = Host.WorkspaceFolder,
+        };
+        _judged = false;
+        AiEvents.Answered(_answer);
+    }
+
+    // What the user did with the run (the first verdict counts: a file accepted, or every change discarded).
+    private void Judge(string verdict)
+    {
+        if (_answer is { } answer && !_judged)
+        {
+            _judged = true;
+            AiEvents.Judged(new AiVerdict(answer.Id, verdict));
+        }
     }
 
     /// <inheritdoc />
@@ -205,6 +244,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         _copy?.Discard();
         _copy = null;
         _changes.Clear();
+        _answer = null;
         _log.Clear();
         _assistant = -1;
         _text.Clear();

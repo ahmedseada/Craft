@@ -17,6 +17,12 @@ public sealed record ModelRequest(string Model)
 
     /// <summary>The projections' format once loaded ("int8", "int4", "bfloat16"); null for the provider's setting.</summary>
     public string? Weights { get; init; }
+
+    /// <summary>
+    /// An adapter folder (PEFT layout: adapter_config.json, adapter_model.safetensors) attached to the model once loaded, or
+    /// null for none: what <see cref="ModelAdapters.For"/> names for the model (the learning plug-in's promoted adapter).
+    /// </summary>
+    public string? Adapter { get; init; }
 }
 
 /// <summary>How far a model's load is: what it does now, and how far (0 to 1) when that is known.</summary>

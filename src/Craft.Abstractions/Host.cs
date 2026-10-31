@@ -116,6 +116,18 @@ public interface IEditorHost
     /// </summary>
     IEditorTerminals? Terminals => null;
 
+    /// <summary>
+    /// The app's data folder (its full path: settings, recovery copies, what plug-ins keep for the user), or null when the
+    /// host has none; a plug-in keeps its own files in a folder of its name under it.
+    /// </summary>
+    string? DataFolder => null;
+
+    /// <summary>
+    /// Opens <paramref name="path"/> (a folder or a file) outside the editor, in the system's own way (a folder in the file
+    /// manager); false when the host cannot (a plug-in then shows the path instead).
+    /// </summary>
+    Task<bool> OpenExternalAsync(string path) => Task.FromResult(false);
+
     /// <summary>A document opened.</summary>
     event EventHandler<EditorDocumentEventArgs>? DocumentOpened;
 

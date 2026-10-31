@@ -702,7 +702,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. **First batch built (2026-10-31, "P as built (first batch)" below): P1, P2, P3, P5 and P4. Left: P6, P9, P10, P8, P11.** | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
 | V | **Built (2026-10-31, "V as built" below); left: the owner codes by voice on Windows (a real recognizer and microphone).** Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
 | R0 | **Built (2026-10-31, Idrak f419399).** Idrak: preference learning from episodes ("Idrak library gaps", R0): `PreferencePairSources` ("group", "verdict"), the preference losses by name ("dpo", "orpo", "simpo") over the existing `FineTuningLosses`, iterative preference training usable by `idrak reinforce`, the suite and the bench. | Pairs from a scored rollout train a tiny model with the DPO loss falling and the margin rising; memory flat over many rounds; `idrak reinforce --pairs group --loss dpo` runs. | A0 (a slot in Idrak); before R |
-| R | Learning in the editor on Idrak's reinforcement learning ("Learning in the editor" above): episodes from the editor, the editor-verdict reward with `csharp-build`/`csharp-tests`, tasks from the workspace's tests, background adapter training, promotion and rollback, the Learning panel; and the plug-in as the test of Idrak's reinforcement stack through its C# environment. | A fixture workspace's failing test becomes a task the "csharp" environment rewards; recorded episodes replay; an adapter trains with flat memory and is promoted only when better; the same assembly runs under `idrak reinforce`; the owner trains on a real model on Windows. | A2 (the episodes come from its plug-ins), P5 (the sandbox), R0 |
+| R | **Built (2026-10-31, "R as built" below); left: the owner's training on a real model on Windows, and the plug-in under `idrak reinforce`.** Learning in the editor on Idrak's reinforcement learning ("Learning in the editor" above): episodes from the editor, the editor-verdict reward with `csharp-build`/`csharp-tests`, tasks from the workspace's tests, background adapter training, promotion and rollback, the Learning panel; and the plug-in as the test of Idrak's reinforcement stack through its C# environment. | A fixture workspace's failing test becomes a task the "csharp" environment rewards; recorded episodes replay; an adapter trains with flat memory and is promoted only when better; the same assembly runs under `idrak reinforce`; the owner trains on a real model on Windows. | A2 (the episodes come from its plug-ins), P5 (the sandbox), R0 |
 | M | Android, when the owner says "compile Android": the `net10.0-android` target added to every project in one step; `IEditorCanvas` and `ITextInputAdapter` for the soft keyboard, IME and touch selection; the file picker; Roslyn on Android (APK size, cold start, memory, full and profiled AOT); plug-in loading under AOT, or compiled in. | Every project builds for Android; the owner edits a file on a phone; the numbers are written here. | the owner's word, after a good Windows version |
 | L | Held, far later: more languages, each its own pre-installed, removable plug-in like C# (an `ILanguage` in `EditorLanguages`, loaded from `plugins/`): TypeScript, JavaScript, HTML, CSS. The parser for each is chosen when the phase starts, measured against the keystroke budget; nothing native (no tree-sitter binaries), so a C# incremental parser or lexer per language. | Each opens, colours and matches brackets like C#; removing its folder turns its files to plain text. | the owner's word, after a good Windows version |
 | A3 | Held: the "remote" model provider, the `kestrel` MCP transport in Idrak.AspNetCore, screen-reader access to the drawn editor, iOS and macOS. | the owner's call | the owner |
@@ -1536,6 +1536,125 @@ its own load context, and check it only through the registry its consumer reads.
   bar, not ghost text (A2 has no push seam); the casing of dictated words is the recognizer's ("Var"), no setting yet;
   the hover read needs a language with a semantic layer; P7's conformance suite (`SpeechRecognizerSuite`) is for a real
   recognizer and runs in Idrak, not on Craft's fake.
+## R as built (2026-10-31)
+
+No Idrak gap was met: R0's `PreferencePairSources`, `PreferencePairs.Build`, `PreferenceLosses`, `LanguageModelPolicy.UpdatePreferences`,
+`ReinforcementTrainer`, `RolloutCollector` and Idrak.Reinforcement.Plugins' "csharp" environment (`CodingSuite`, `csharp-tests`,
+`csharp-build`) are used as they are. Idrak is unchanged.
+
+- **The plug-in** (`plugins/Craft.Plugins.Learning`, plug-in "learning", pre-installed by Craft.App's generic plug-in copy
+  target, removable: delete the folder or `CRAFT_PLUGINS_DISABLED=Craft.Plugins.Learning`), on `Craft.Abstractions` and Idrak
+  alone. It carries Idrak.Reinforcement, Idrak.Reinforcement.Plugins, Idrak.Text, Idrak.Text.Plugins, Idrak.Data and
+  **Idrak.Gpu** (training is the heaviest device user: the "auto" device finds the GPU only with it), and hands every Idrak
+  library of its folder to `IdrakPlugins.Load` when it registers (`LearningLibraries`, the pattern of Craft.Ai's
+  `IdrakLibraries`; Craft's loader shares one copy of each library between plug-ins), then registers the "csharp" coding
+  family (`CSharpCodingPlugin`, with "coding" and the C# coding language it requires), taken back on unregistering. Android
+  (phase M): no reflection of its own (JSON written and read by hand); the C# environment needs the .NET SDK, which a phone
+  lacks.
+- **Contracts added** (Craft.Abstractions, additive, contracts still 1.0): `AiEvents` (a registry of `IAiEventSink`;
+  `AiAnswer`, `AiAnswerKinds`, `AiVerdict`, `AiVerdicts`, `Listening`, `NewId`), `ModelAdapters` (a registry of
+  `IModelAdapterSource`, `For(model)`, `Changed`), `ModelRequest.Adapter`, `IEditorHost.DataFolder` (the options' data
+  folder) and `IEditorHost.OpenExternalAsync` (`EditorHost.OpenExternal`, set by `ShellPage` to MAUI's `Launcher`). Craft.Ai
+  raises the events only while a sink listens: inline completion (`Answered` with the laid-out prompt, the shown ghost,
+  the snapshot and caret, at the stream's end), chat's Apply as diff and the code actions' rewrites (`Answered` before the
+  diff, `Judged` after it: accepted with where the edit lies, rejected with the original text as kept), the agent (one answer
+  per run at its first review; accepted at the first accepted file, rejected on Discard all). `AiModels` asks
+  `ModelAdapters.For` per lease (the adapter is part of the lease's key) and releases its leases on `Changed`; the "local"
+  provider attaches `ModelRequest.Adapter` with `PretrainedModel.LoadAdapter` after the load (the base weights untouched).
+- **Consent**, exactly as the plan's section. Two questions through `IEditorHost.AskAsync`, never bundled: the first
+  ("Learn on this machine?") the first time an AI plug-in answers (the answer that asked is not recorded), with what is
+  recorded, where (the folder; "Open the folder first" opens it through the host and asks again), how much (`capMb`), how
+  long (`keepDays`), what training runs and when (idle or on demand, the compute limits), that a learned model only
+  proposes, how to withdraw; answers Yes in all workspaces (the default scope offered first) / Yes in this workspace only /
+  No / Open the folder first; a dismissed question decides nothing. The second ("Share what was learned?") only after a yes
+  and only once `shareTo` names a destination (no default), naming exactly what would leave (`shareWhat`: scores, episodes,
+  adapter), to where, the preview before each share, what is always left out, how to withdraw. Each answer is stored in
+  `consent.json` (the learning folder) with its time, scope ("all" or the workspace) and the text's version (`learn-1-` or
+  `share-1-` and a hash of every word shown): a changed text (folder, cap, what is recorded, destination, …) reads as
+  "changed", records nothing and asks again on the next answer. `CRAFT_PLUGIN_LEARNING_CONSENT` and `_SHARING` take ask or off
+  only ("on" is refused naming the variable: a setting can only turn consent off). Withdrawal is one command (the panel's
+  first line, `learning.withdraw`, the Plug-ins menu): recording stops at once (the answers waiting are dropped), sharing too,
+  and the user chooses Keep or Delete (the workspace's episodes, tasks and adapters; the bytes freed are said). The status
+  bar shows "● Learning" while recording, "↑ Sharing" while a share runs, the training line while one runs.
+- **Episodes** (`LearningSession`, `EpisodeStore`): only while the first consent holds and the kind is in `record`. A
+  completion's verdict is read from the document: the ghost's text inserted at the caret (all, or a word at a time, or
+  taken while it still streamed) is accepted, then followed through every change (edits inside it: edited, with the text
+  after and how far, a normalized edit distance; an undo inside it: undone); text typed there instead is rejected, the typed
+  text kept; a new completion in the same text passes over the old one. Chat, code actions and the agent are told. A verdict
+  settles `settleSeconds` (30) after its last edit, or when its document closes; then one JSON line is appended to the
+  workspace's `episodes.jsonl` under `<data folder>/learning/workspaces/<name>-<hash>/` (or `folder`), at most `capMb` (the
+  oldest go first), `keepDays`; the file's path relative to the workspace, the context, the answer, the ids when given, the
+  verdict, the kept text (`PreferenceInfoKeys` verdict, kept, kept_step 0 when replayed). The Learning panel (`learning.panel`,
+  `learning.show`) lists the two switches with their scope, time and text version, the folder (opens it), the episodes'
+  count, size and verdicts and the last ten, Export (JSON lines under `exports/`), Delete (asked first, bytes said), Train now
+  or Stop, Make tasks from the failing tests, Mark the test at the caret, the adapter versions with their held-out scores,
+  Roll back, Delete an adapter version. Every file read, write, delete, plan and training runs off the UI thread (the rule of
+  e04652c) and comes back through `Dispatch`; the consents are read off it at activation (nothing is asked before).
+- **Rewards**: "editor-verdict" registered in Idrak's `RewardFunctions` (options accepted 1, edited 0.5 scaled by how far,
+  rejected −1, undone −1, none 0; `verdictWeights`), Idrak's reward suite passes; the tasks' reward is `taskReward`
+  ("csharp-tests:1,csharp-build:0.5"), their builds and tests in the sandbox `sandbox` ("approve-each", P5's, by default).
+- **Tasks from the workspace's tests** (`WorkspaceTasks`): `dotnet test --logger trx` through the sandbox, its TRX read
+  (failed `UnitTestResult`s and their messages), plus the tests marked at the caret; each a `task.json` (prompt naming the
+  test and why it fails, language csharp, `base` the workspace, no commands: the C# variant's restore, build and test, the
+  test projects protected) under the workspace's `tasks/` and `tasks-held/` (the held-out share, by a hash of the name), so
+  `idrak reinforce MODEL --env csharp --env-option suite=FOLDER` reads them too (the command shown in the panel's message).
+- **Training** (`LearningTrainer`): on demand (`learning.train`) or idle (`schedule` idle, `idleMinutes` without typing or an
+  answer, `minEpisodes` new ones), off the UI thread, the model `model` (else the AI plug-in's) loaded by Idrak's model sources
+  on `device` under `threads`/`cpuMemoryMb`/`gpuMemoryMb` (Idrak's ComputeResources), the current adapter loaded first so
+  training goes on from it. "preference": the episodes as one-step trajectories (a completion's prompt as the raw text the
+  model saw, the others in the chat template; the answer's ids with the template's end of turn, as Idrak's pairs end a kept
+  text; the editor-verdict reward), the held-out share set aside, pairs by `pairs` ("verdict"), `steps` updates of `loss`
+  ("dpo", `lossOptions`, `reference`) through `LanguageModelPolicy.UpdatePreferences`, LoRA rank `rank`, `learningRate`,
+  `batchTokens`. "tasks": Idrak's `ReinforcementTrainer` on "csharp" over the tasks (`algorithm` grpo, `estimator`; "both"
+  adds the trainer's "group" preference rounds, then the verdict rounds). Live progress (stage, step of steps, loss, the
+  device, time left) in the status bar and the host's progress; Stop ends it at the next step, nothing written.
+- **Promotion** (`AdapterVersions`): every training writes `adapters/vN` (PEFT layout and `version.json`: base model, episodes,
+  pairs, held-out pairs, steps, first and last loss, the held-out score before and after, promoted, why). The score is the mean
+  log p(chosen) − log p(rejected) over the held-out pairs, measured before the first step (the current adapter, or the base
+  model) and after the last; promoted only when after > before + `promotionMargin` (tasks: the held-out suite's mean return).
+  `promotions.txt` holds the promotions in order: Roll back goes one step back (to the previous, then the base model);
+  versions stay until deleted. A promotion or rollback raises `ModelAdapters.Changed`, so chat, completion and the agent load
+  the model with the new adapter on their next request.
+- **Sharing** (`ShareDestinations` in `Craft.Plugins.Learning.Abstractions`: "folder", "https", or a plug-in's; `shareTo`
+  "kind:target" or an https address): both consents needed; the plan (`SharePlan`: every item's name, size, a preview, the
+  workspace paths it touches; what was left out and why) is the confirming question's details; `.gitignore` and
+  `.craft/learn-ignore` (git's rules: comments, negation, anchors, folders, `*`, `?`, `**`) and a secrets scanner (private
+  keys, AWS, GitHub, Slack, OpenAI-style and Google keys, passwords and keys assigned in code, plus `secretPatterns`) leave
+  items out; exactly the confirmed items are sent.
+- **Settings** (plug-in "learning", `CRAFT_PLUGIN_LEARNING_*`, the K naming every plug-in uses; the plan's `CRAFT_LEARN_*`
+  became these): consent, sharing, record, folder, capMb (64), keepDays (90), settleSeconds (30), verdictWeights, taskReward,
+  sandbox (approve-each), schedule (idle), idleMinutes (10), minEpisodes (20), trainer (preference), model, device (auto),
+  threads, cpuMemoryMb, gpuMemoryMb, pairs (verdict), loss (dpo), lossOptions, reference (previous), algorithm (grpo),
+  estimator, steps (40), rank (8), learningRate (1e-4), batchTokens (4096), heldOutShare (0.2), promotionMargin (0), shareTo
+  (none), shareWhat (scores), secretPatterns.
+- **Tests** (group `Learning`, 10, headless): nothing written and no request made before the consent, the first question's
+  facts, a dismissed one deciding nothing and not asked twice, the second asked apart and only after a yes, both stored with
+  time, scope and version, the recording mark; the four verdicts from document edits (accepted, edited with the text and how
+  far, rejected with the text typed instead, undone); no share without the sharing consent; a changed text asks again and
+  records nothing, a variable cannot say yes; withdrawal stops recording on the next answer and deletes on request, saying
+  what was freed; a share sends exactly the previewed items byte for byte, the `.gitignore`, learn-ignore and secret ones left
+  out and listed, to a fake destination, a cancelled preview sending nothing; the git patterns and the destination parse;
+  editor-verdict against Idrak's reward suite; 24 recorded completions replayed into 24 verdict pairs and a tiny random Qwen3
+  adapter trained; promotion refuses a worse adapter, keeps every version, rolls back twice to the base model, deletes one;
+  a failing test of a fixture solution (xunit, restored here) found from dotnet test's TRX, written as a task Idrak's
+  `CodingSuite` reads, and a scripted policy's episodes in the "csharp" environment rewarded by csharp-tests (1 with the fix,
+  0.5 without); the plug-in loaded from a copied folder sees "csharp" and "coding", csharp-tests, csharp-build, tests-passed,
+  editor-verdict (its origin), the pair sources, the process sandbox, the preference losses through its own Idrak.Text, and
+  leaves nothing when unregistered. With `Ai`, `AiPlugins`, `PhaseP`, `PluginKit`, `Plugins`, `ApiGuard`, `Inventory`: 58
+  passed (two failed on the first run: the reward did not honour a cancelled token; a changed text was not asked again in
+  the same session; fixed). `api/Craft.Plugins.Learning.txt` added, `api/Craft.Abstractions.txt`, `api/Craft.Editor.txt` and
+  `plans/inventory.md` regenerated (`AiEvents`, `ModelAdapters`, `ShareDestinations`).
+- **Measured** (CPU, 4 threads, the tests' tiny decoder: 2 layers of width 32, rank 4): 12 DPO steps on 18 recorded pairs,
+  the loss 0.693 → 0.514, device memory 191,872 B after step 2 and after the last, managed 20.61 MB → 20.62 MB; held-out
+  margin −5.66 (base) → −1.68, promoted. The "csharp" environment on the fixture: an episode 9.0 s with its setup (restore,
+  the measured verification), 8.4 s for the next. The owner's real-model numbers (episodes per minute, reward before and
+  after, the held-out score) are to be written here.
+- **Not compiled here**: nothing; `ShellPage`'s one line compiled on Craft.Maui's net10.0 target (`Launcher` opening the
+  folder is the owner's to see on Windows). **Not yet**: the plug-in under `idrak reinforce -P` (its output leaves out the
+  host's Craft.Abstractions, so the idrak tool cannot load it alone; the tasks it writes are read by `idrak reinforce` as
+  they are); the consent screens are the host's question card (a page of their own when phase U brings the activities
+  contract); the agent's episodes carry the changed files, not their diffs; the panel's progress is the status line until
+  phase U; training loads its own copy of the model beside the AI plug-in's.
 
 ## Commands for the owner (once a phase is built)
 

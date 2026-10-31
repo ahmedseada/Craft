@@ -476,6 +476,9 @@ public static class UiTests
         ("plugins/Craft.Plugins.Learning/LearningTrainer.cs", "PlayTasksAsync(policy, heldOutSuite, settings, 2, null, cancellationToken).GetAwaiter().GetResult()", "the training's own thread (the session runs every round in Task.Run), never the UI's"),
         ("src/Craft.Editor/Activities/UiWatchdog.cs", "if (_stop.Wait(_tick))", "the watchdog's own thread sleeps on its stop signal"),
         ("src/Craft.Editor/Activities/UiWatchdog.cs", "_stop.Wait(rest)", "the watchdog's own thread sleeps on its stop signal"),
+        ("src/Craft.Maui/Platforms/Windows/ConPtyTerminalHost.cs", "_ = unregistered.WaitOne(TimeSpan.FromSeconds(5));", "Release runs in Task.Run (Dispose hands it off), never on the UI thread: it waits for a running exit callback before the handles close"),
+        ("src/Craft.App/Platforms/Windows/CrashDialog.cs", "_ = trail.FlushAsync().Wait(TimeSpan.FromMilliseconds(500));", "the crash path only, the app already closing: the trail's last lines are flushed, bounded to 500 ms, before the message box"),
+        ("src/Craft.Editor/DispatchedClipboard.cs", "done.TrySetResult(task.Result);", "a continuation of the completed clipboard call (neither faulted nor cancelled)"),
     ];
 
     private static readonly Regex SynchronousWait = new(@"\.Result\b(?!s)|\.Wait\(|\.WaitOne\(|\.WaitAll\(|GetAwaiter\(\)\.GetResult\(\)|Monitor\.Wait\(|Thread\.Sleep\(|SpinWait\.SpinUntil\(",

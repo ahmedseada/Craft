@@ -51,4 +51,38 @@ public interface IShellUi
 
     /// <summary>Shows a message; completes when the user dismissed it.</summary>
     Task ShowMessageAsync(string title, string message);
+
+    /// <summary>
+    /// Asks for a text (a new file's name, a rename) under <paramref name="title"/>, the field starting with
+    /// <paramref name="initial"/>; the text, or null when it was cancelled. A UI that cannot ask answers null (nothing is done).
+    /// </summary>
+    Task<string?> PromptAsync(string title, string text, string placeholder, string initial = "", string ok = "OK", CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
+    /// <summary>
+    /// Asks the user to confirm <paramref name="action"/> (a delete: <paramref name="danger"/> draws it in the error's
+    /// colour) with Cancel beside it; true only when the action was chosen. A UI that cannot ask answers false (nothing is done).
+    /// </summary>
+    Task<bool> ConfirmAsync(string title, string text, string action, bool danger = false, CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
+}
+
+/// <summary>
+/// The system's file manager and trash, each platform's under its <c>Platforms/</c> folder (Windows: File Explorer and the
+/// Recycle Bin); the shell's Reveal and Delete use it, off the UI thread. A platform without one passes null: Reveal is
+/// then not offered and Delete removes the file for good (and the confirmation says so).
+/// </summary>
+public interface IShellFiles
+{
+    /// <summary>The name of the system's file manager as its menu item says it ("Reveal in File Explorer").</summary>
+    string RevealTitle { get; }
+
+    /// <summary>Shows <paramref name="path"/> (a file or folder) selected in the system's file manager.</summary>
+    Task RevealAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>The trash's name as the confirmation says it ("the Recycle Bin"), or null when there is none.</summary>
+    string? TrashName { get; }
+
+    /// <summary>Moves <paramref name="path"/> (a file or folder) to the trash; false when this system has none (the caller deletes it).</summary>
+    Task<bool> TrashAsync(string path, CancellationToken cancellationToken = default);
 }

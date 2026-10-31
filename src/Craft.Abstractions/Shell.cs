@@ -92,13 +92,16 @@ public static class EditorMenus
     /// <exception cref="NotRegisteredException">None is registered under it.</exception>
     public static MenuItem Get(ReadOnlySpan<char> name) => Table.Get(name);
 
-    /// <summary>The menus that have items: the standard ones first (each even when empty), then others by first registration.</summary>
+    /// <summary>
+    /// The title bar's menus that have items: the standard ones first (each even when empty), then others by first
+    /// registration; the context menus (<see cref="EditorContextMenus"/>) are not the title bar's.
+    /// </summary>
     public static IReadOnlyList<string> Menus()
     {
         var menus = new List<string>(Standard);
         foreach (var item in Table.Kinds)
         {
-            if (!menus.Contains(item.Menu, StringComparer.OrdinalIgnoreCase))
+            if (!EditorContextMenus.IsContextMenu(item.Menu) && !menus.Contains(item.Menu, StringComparer.OrdinalIgnoreCase))
             {
                 menus.Add(item.Menu);
             }
@@ -126,6 +129,50 @@ public static class EditorMenus
         return items;
     }
 }
+
+/// <summary>
+/// The context menus (phase X): the menus a right-click (or the menu key) opens on the editor, a row of the folder tree
+/// and a tab. Their items are <see cref="MenuItem"/>s of these menu names in <see cref="EditorMenus"/>, each running a
+/// command, so a plug-in adds its own the same way it adds a title-bar item. While a picked item's command starts, the
+/// host sets <see cref="Target"/> to what the menu was opened on; a command reads it before its first <c>await</c>.
+/// </summary>
+public static class EditorContextMenus
+{
+    /// <summary>The prefix of every context menu's name (such a menu is never a title-bar menu).</summary>
+    public const string Prefix = "context:";
+
+    /// <summary>The text editor's menu (the selection's commands: cut, copy, paste, go to definition, the AI actions).</summary>
+    public const string Editor = "context:editor";
+
+    /// <summary>The folder tree's menu (a file's or a folder's row, or the tree's empty space).</summary>
+    public const string Tree = "context:tree";
+
+    /// <summary>A document tab's menu.</summary>
+    public const string Tab = "context:tab";
+
+    private static ContextMenuTarget? _target;
+
+    /// <summary>What the context menu whose item is starting was opened on, or null (the command acts on the active document).</summary>
+    public static ContextMenuTarget? Target
+    {
+        get => Volatile.Read(ref _target);
+        set => Volatile.Write(ref _target, value);
+    }
+
+    /// <summary>Whether <paramref name="menu"/> names a context menu (<see cref="Prefix"/>).</summary>
+    public static bool IsContextMenu(string menu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        return menu.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+/// <summary>What a context menu was opened on (<see cref="EditorContextMenus.Target"/>).</summary>
+/// <param name="Menu">The menu (<see cref="EditorContextMenus.Editor"/>, <see cref="EditorContextMenus.Tree"/>, <see cref="EditorContextMenus.Tab"/>).</param>
+/// <param name="Path">The file or folder it is about (a tree row's, a tab's file), or null.</param>
+/// <param name="IsFolder">Whether <paramref name="Path"/> is a folder.</param>
+/// <param name="Item">The host's own object it was opened on (a tab), or null.</param>
+public sealed record ContextMenuTarget(string Menu, string? Path = null, bool IsFolder = false, object? Item = null);
 
 /// <summary>
 /// An item of the activity rail (<see cref="EditorRailItems"/>): an icon button that runs a command. It shows only while

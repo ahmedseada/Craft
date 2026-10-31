@@ -135,6 +135,27 @@ public sealed partial class EditorModel
         AfterTyped(text);
     }
 
+    private SelectionState _selectionBeforePress;
+
+    /// <summary>
+    /// The context menu opened (a right-click) at the press that just happened: a press inside the selection keeps it (so
+    /// Cut, Copy and the AI actions act on it), as it was before the press; a press outside it keeps the caret where it
+    /// went. True when the selection was kept.
+    /// </summary>
+    public bool KeepSelectionForContextMenu()
+    {
+        _pointerDown = false;
+        var before = _selectionBeforePress;
+        int caret = _selection.Caret;
+        if (before.Anchor == before.Caret || caret < Math.Min(before.Anchor, before.Caret) || caret > Math.Max(before.Anchor, before.Caret))
+        {
+            return false;
+        }
+
+        SetSelection(before);
+        return true;
+    }
+
     /// <summary>
     /// A press of the primary button at a point of the view (from its top-left; the scroll offsets are added here). Shift
     /// extends the selection; a second and third press close in time and place select the word and the line.
@@ -151,6 +172,7 @@ public sealed partial class EditorModel
         _lastClickX = viewX;
         _lastClickY = viewY;
         _pointerDown = true;
+        _selectionBeforePress = _selection;
         InlineCompletion.Dismiss();
 
         if (PopupRowAt(viewX, viewY) is { } row)

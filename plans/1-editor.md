@@ -2012,6 +2012,9 @@ the owner's machine, not only headless.
     names a fallback when one is taken).
 15. **More interactive and friendly** overall: hover states, focus rings, tooltips, empty states that say what to do,
     smooth scrolling, context menus in the editor and the tree.
+    **Built (2026-10-31)** with phase X's first slice: states on every control, tooltips with the keys in effect, empty
+    states, context menus (editor, tree, tabs) on the command registry, motion and smooth scrolling. See "Note 15 and
+    phase X's first slice as built".
 
 **Missing**
 16. **Keyboard shortcuts**: every shortcut a C# developer expects (Visual Studio's and VS Code's common ones: go to
@@ -2317,6 +2320,72 @@ The held phases (M Android, L more languages, A3 remote models) stay held for th
   takes any typed); a second chord without Ctrl or Alt (Ctrl+K S) is caught by the window only when the editor has the
   keyboard; the Keyboard section draws every command's row at once (about a hundred).
 
+## Note 15 and phase X's first slice as built (2026-10-31)
+
+- **States on every control** (one mechanism): `Craft.Editor.Shell.InteractionStyle` makes each kind's look (flat,
+  secondary and primary buttons, rows, menu items, rail items, tabs, chips) in each state (rest, hover, pressed, keyboard
+  focus with the accent's ring, disabled) from the theme's tokens only; `Craft.Maui.InteractiveStates` applies it (pointer
+  enter, exit, press and release, focus, `IsEnabled`), a focus the pointer gave shows no ring. Every button
+  `ShellPalette.Flat`/`SecondaryButton`/`Primary` makes has it; the rail, the editor tabs, the bottom panel's tabs, the
+  tree rows, quick open's rows, the dialog's list rows, the menus' rows, the bell and the status bar's position use it
+  too; `CraftInput` adds hover (the secondary text's border) and disabled; a theme change re-applies every control's
+  states in one walk. A losing action keeps the error's colour in every state.
+- **Tooltips from the bindings**: `EditorHost.KeysOf(command)` is the keys in effect (the user's, else the keymap's,
+  else the registered binding's, else the editor's own key, each only while no layer above took those keys), and
+  `EditorHost.KeyBindingsChanged` says when they change; `ShellTooltips.For` writes "Explorer (Ctrl+B)". The rail, the
+  narrow title bar's buttons, the search box's hint, the tabs' close, the bottom panel's collapse, the chat's close, the
+  notification centre's close, the bell and every status bar item have one; menus show the same keys
+  (`ShellMenus.Rows`). A remap on the Keyboard page shows at once.
+- **Empty states** (`ShellEmptyStates`, drawn by `Craft.Maui.EmptyStateView`): the explorer with no folder (Open
+  folder, Open a file, the recent folders), Problems with none (no file, a file no language checks, not checked yet,
+  checking, none found), the chat and the agent before the first message (`IConversationPanel.EmptyText`, the AI
+  plug-in's words for each, and which model answers, or Models and devices when none is set), the notification centre,
+  and quick open with no match (a line, a command, no folder, listing, none).
+- **Context menus** on `EditorMenus` under `EditorContextMenus.Editor`, `.Tree` and `.Tab` (never title-bar menus); a
+  plug-in adds items the same way. `MenuModel` (headless) holds the open menu, the title bar's too: rows with the keys in
+  effect and whether each can run on the target, Up and Down (and Home, End, a letter) over the rows that can run,
+  Enter runs, Escape closes, a chord closes and goes on; a picked row runs its command with `EditorContextMenus.Target`
+  set while it starts; nothing runs until a row is picked. Drawn by `MenuView` (the raised card, the groups' lines, the
+  keyboard's row on the selection) in the popup layer, kept inside the window. The editor's: Cut, Copy, Paste, Go to
+  definition, Find references (new: `ISemanticLanguageSession.FindReferencesAsync`, Roslyn's in the C# plug-in, Shift+F12,
+  `CRAFT_REFERENCES_LIMIT`, as an activity, then a list), Format document, Quick fix, and the AI plug-in's selection and
+  problem actions (registered by the plug-in, run only when picked); a right-click inside the selection keeps it;
+  Shift+F10 opens it at the caret with the first row focused. The tree's: New file, New folder, Reveal in File Explorer,
+  Open in terminal, Copy path, Copy relative path, Rename, Delete (confirmed through `CraftDialog`, to the Recycle Bin on
+  Windows, said "for good" where there is no trash; a dirty tab stays open). The tab's: Close, Close others, Close to
+  the right, Copy path, Copy relative path, Reveal in the explorer, Reveal in File Explorer. New commands:
+  `craft.explorer.newFile`, `.newFolder`, `.rename`, `.delete`, `craft.revealInFileManager` (Shift+Alt+R),
+  `craft.openInTerminal`, `craft.copyPath` (Shift+Alt+C), `craft.copyRelativePath`, `craft.closeOtherTabs`,
+  `craft.closeTabsToTheRight`, `craft.revealInTree`, `craft.findReferences`, `craft.contextMenu`; the disk's work runs off
+  the UI thread. New contracts: `IShellFiles` (the system's file manager and trash; `WindowsShellFiles`),
+  `IShellUi.PromptAsync`/`ConfirmAsync` (Craft's dialog), `DialogRequest.Confirm`.
+- **Motion**: `Motion.Duration` (`CRAFT_MOTION_MS`, 160) and `CRAFT_REDUCED_MOTION` (off; on, every transition is a
+  jump), both declared in `CraftOptions.Variables` (Appearance, Motion). The side view, the chat column and the bottom
+  panel grow open and shrink closed (`SplitPanel.SetVisible`); the notification centre, toasts and menus fade and slide
+  in and out (`ShellMotion`); the completion list unfolds from its first row (`EditorModel.CompletionShownHeight`, the
+  hit test keeps the whole box).
+- **Smooth scrolling**: `SmoothScroll` (pixel offsets eased to a target, a wheel turn adding to it, clamped, nothing
+  allocated per frame: test-checked) over `CRAFT_SCROLL_MS` (120; 0 or reduced motion jumps), `CRAFT_SCROLL_WHEEL_LINES`
+  (3). The editor draws the moving offsets (only the visible lines laid out, as before) and the scroll view follows at
+  the end; jumps of more than a line (Page Down, Go to line, a search hit) glide, the line typing pushes in view does
+  not. The mouse wheel reaches it through `IEditorScrollSink` (Windows' adapter); a precision touchpad keeps WinUI's own
+  panning.
+- **Tests**: group `Experience` (9: every kind's states differ by state on both themes; tooltips and menu keys follow a
+  user remap, a keymap and an unbinding; the menus' keys and that only the picked command runs, on its target; the
+  tree's and tabs' commands on disk and on the tabs; the empty states; motion off when reduced and the options
+  declared; the completion list unfolding; the smooth scroll's offsets and no allocation; a right-click keeping the
+  selection), `Semantic.FindReferencesListsTheDeclarationAndEveryUseAcrossFiles`, with `Editor`, `Shell`, `Keys`,
+  `Settings`, `LookAndFeel`, `Layout`, `Design`, `AiPlugins`, `ApiGuard`, `Inventory`.
+- **Not compiled here** (Windows only): `Platforms/Windows/WindowsTextInputAdapter.cs` (the wheel handler: one field,
+  its add and remove, `OnWheel`) and `Platforms/Windows/WindowsShellPlatform.cs` (the `ShellFiles` property and the
+  new `WindowsShellFiles` class; the one constructor untouched).
+- **Left of X**: following the system's own reduced-motion setting (only `CRAFT_REDUCED_MOTION` now); tabs moving and
+  the menus' motion when they close; direct manipulation (drag tabs, files, drops); rename in place and delete with Undo
+  (a dialog now); context menus in Problems, the chat and agent messages, the terminal and Output (the other slots');
+  pin a tab; run the selection in the terminal from the editor's menu; the inline overlays (find, palette with fuzzy
+  highlights); the living editor (minimap, sticky scroll, folding, guides, multi-caret, column selection); the welcome
+  page; plain-word errors; the conversation items; and the measured input-to-response numbers.
+
 ## Usability before features (the owner's order, 2026-10-31)
 
 The owner: the editor must be dynamic, friendly, usable and interactive before any more features. So the order from
@@ -2331,8 +2400,10 @@ Each item is checked by the owner on Windows, against the design (`docs/design/`
 - **Every action answers at once.** A click, a key or a drag shows its effect within one frame (or a pressed state
   and a spinner when the work takes longer, through the activities); nothing looks dead. Hover, pressed, focus and
   disabled states on every control, from the design's tokens; a visible focus ring for the keyboard.
+  **States and focus ring: built (2026-10-31)**; the measured frame for each interaction is still owed.
 - **Motion that explains.** Short transitions (panels opening and closing, tabs moving, the notification centre, the
   completion list, toasts), 120-200 ms, off when the system asks for reduced motion (`CRAFT_REDUCED_MOTION`).
+  **Built (2026-10-31)** but tabs moving and the system's own setting.
 - **Direct manipulation.** Drag tabs to reorder and to split the editor; drag files in the tree to move them and onto
   the editor to open; drag the panels' splitters; drop a file or an image onto the chat; double-click a tab strip's empty
   space for a new file.
@@ -2340,10 +2411,12 @@ Each item is checked by the owner on Windows, against the design (`docs/design/`
   actions on the selection, run selection in terminal), the tree (new file, new folder, rename inline, delete with undo,
   reveal in Explorer, open in terminal, copy path), the tabs (close, close others, close to the right, pin, reveal),
   the problems, the chat and agent messages (copy, apply, retry).
+  **Editor, tree and tabs: built (2026-10-31)** but rename in place, delete with Undo, pin and run selection in terminal;
+  the problems', the messages' (and the terminal's, Output's) come with the other slots' copy work.
 - **Inline, not modal.** Rename in place (tree and symbols), find and replace as an overlay in the editor, the command
   palette and quick-open as one overlay with fuzzy highlights, recent items and keyboard navigation (arrows, Enter,
   Escape), confirmations as an inline bar with Undo rather than a dialog where possible.
-- **The editor itself feels alive**: smooth scrolling, a minimap or an overview ruler with errors and search hits,
+- **The editor itself feels alive**: smooth scrolling (built 2026-10-31), a minimap or an overview ruler with errors and search hits,
   sticky scroll of the current type and member, code folding, indentation guides, matching-bracket and current-word
   highlights, multi-caret (Alt+click, Ctrl+D), column selection, line and selection moves (Alt+Up/Down), auto-indent
   and auto-close that never fight the user, hover cards that stay while the pointer moves into them.

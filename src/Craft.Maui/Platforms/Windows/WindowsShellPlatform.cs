@@ -42,6 +42,9 @@ public sealed class WindowsShellPlatform : IShellPlatform
     public Craft.Core.Abstractions.ICrashRecordSource? CrashRecords { get; } = new WindowsEventLogCrashRecords();
 
     /// <inheritdoc />
+    public IShellFiles? ShellFiles { get; } = new WindowsShellFiles();
+
+    /// <inheritdoc />
     public IDisposable RouteKeys(MauiWindow window, IEditorKeyHandler handler)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -232,6 +235,51 @@ public sealed class WindowsFileDialogs : IFileDialogs
 
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         return Directory.Exists(documents) ? documents : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
+}
+/// <summary>
+/// File Explorer and the Recycle Bin for the shell's Reveal and Delete (phase X), each off the UI thread: Reveal starts
+/// explorer.exe with the item selected; Delete moves the item to the Recycle Bin (Microsoft.VisualBasic's FileSystem, the
+/// shell's own recycle, no dialog but an error's).
+/// </summary>
+public sealed class WindowsShellFiles : IShellFiles
+{
+    /// <inheritdoc />
+    public string RevealTitle => "Reveal in File Explorer";
+
+    /// <inheritdoc />
+    public string? TrashName => "the Recycle Bin";
+
+    /// <inheritdoc />
+    public Task RevealAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = System.IO.Path.GetFullPath(path);
+        return Task.Run(() =>
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + full + "\"") { UseShellExecute = false };
+            using var process = System.Diagnostics.Process.Start(start);
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> TrashAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = System.IO.Path.GetFullPath(path);
+        return Task.Run(() =>
+        {
+            if (System.IO.Directory.Exists(full))
+            {
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(full, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            }
+            else
+            {
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(full, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            }
+
+            return true;
+        }, cancellationToken);
     }
 }
 #endif

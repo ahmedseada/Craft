@@ -144,6 +144,7 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
         private readonly UIElement _element;
         private readonly IEditorInputSink _sink;
         private readonly PointerEventHandler _pointerPressed;
+        private readonly PointerEventHandler _wheel;
         private char _highSurrogate;
         private bool _attached;
 
@@ -160,6 +161,8 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
             element.PreviewKeyDown += OnPreviewKeyDown;
             element.CharacterReceived += OnCharacterReceived;
             element.AddHandler(UIElement.PointerPressedEvent, _pointerPressed, true);
+            _wheel = OnWheel;
+            element.AddHandler(UIElement.PointerWheelChangedEvent, _wheel, true);
             _attached = true;
         }
 
@@ -176,6 +179,7 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
             _element.PreviewKeyDown -= OnPreviewKeyDown;
             _element.CharacterReceived -= OnCharacterReceived;
             _element.RemoveHandler(UIElement.PointerPressedEvent, _pointerPressed);
+            _element.RemoveHandler(UIElement.PointerWheelChangedEvent, _wheel);
         }
 
         // Each handler below is a WinUI callback: what its body throws is caught and reported (CallbackGuard), because an
@@ -194,6 +198,31 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
 #pragma warning restore CA1031
             {
                 CallbackGuard.Report("the keyboard adapter: a pointer press", error);
+            }
+        }
+
+        // Phase X: the mouse wheel over the editor goes to its smooth scroll (the scroll viewer would jump); Ctrl+wheel and
+        // a sink that does not scroll are left to the platform.
+        private void OnWheel(object sender, PointerRoutedEventArgs e)
+        {
+            if (_sink is not IEditorScrollSink scroll || (Modifiers() & KeyModifiers.Control) != 0)
+            {
+                return;
+            }
+
+            var properties = e.GetCurrentPoint(_element).Properties;
+            int delta = properties.MouseWheelDelta;
+            if (delta == 0)
+            {
+                return;
+            }
+
+            bool horizontal = properties.IsHorizontalMouseWheel || (Modifiers() & KeyModifiers.Shift) != 0;
+            double x = horizontal ? (properties.IsHorizontalMouseWheel ? delta : -delta) : 0;
+            double y = horizontal ? 0 : delta;
+            if (scroll.OnWheel(x, y, delta % 120 != 0))
+            {
+                e.Handled = true;
             }
         }
 

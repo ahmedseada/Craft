@@ -22,9 +22,10 @@ public static class ThemeColors
 /// <param name="Indent">The row's indent.</param>
 /// <param name="Color">The text's colour.</param>
 /// <param name="Path">The entry's full path (a row is found by it, so rows after an inserted one stay the same items).</param>
-/// <param name="Background">The row's fill (the active file's is the selection's).</param>
+/// <param name="Active">Whether it is the active file's row (on the selection's fill).</param>
 /// <param name="FontFamily">The interface's font.</param>
-public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, Color Background, string? FontFamily);
+/// <param name="IsFolder">Whether it is a folder's row.</param>
+public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, bool Active, string? FontFamily, bool IsFolder = false);
 
 /// <summary>
 /// The folder tree (<see cref="FolderTree"/>) as a virtualized list (only the rows on screen are made): a folder's row
@@ -140,32 +141,54 @@ public sealed class FolderTreeView : ContentView
     /// <summary>Raised with a file's full path when its row is picked.</summary>
     public event EventHandler<string>? FileActivated;
 
-    /// <summary>Raised with a folder's full path (a file's row gives its folder) when "Open in terminal" is chosen on its row.</summary>
-    public event EventHandler<string>? OpenInTerminalRequested;
+    /// <summary>
+    /// Raised when a row is right-clicked (its item, null for the tree's empty space) with where: the page opens the tree's
+    /// context menu (<see cref="EditorContextMenus.Tree"/>) on it.
+    /// </summary>
+    public event EventHandler<(FolderTreeItem? Item, TappedEventArgs Where)>? ContextRequested;
+
+    /// <summary>The palette the rows' hover, pressed and active looks come from (phase X), or null before the explorer sets it.</summary>
+    public ShellPalette? Palette { get; set; }
+
+    /// <summary>Scrolls <paramref name="path"/>'s row into view (a command revealed it; its folders are open).</summary>
+    public void ScrollTo(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        Refresh();
+        foreach (var item in _items)
+        {
+            if (string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                _list.ScrollTo(item, position: ScrollToPosition.MakeVisible, animate: false);
+                return;
+            }
+        }
+    }
 
     private ContentView MakeRow()
     {
         var label = new Label { FontSize = 13, LineBreakMode = LineBreakMode.TailTruncation, Padding = new Thickness(0, 4) };
         label.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Text);
         label.SetBinding(MarginProperty, static (FolderTreeItem item) => item.Indent);
-        label.SetBinding(Label.TextColorProperty, static (FolderTreeItem item) => item.Color);
         label.SetBinding(Label.FontFamilyProperty, static (FolderTreeItem item) => item.FontFamily);
         var row = new ContentView { Content = label };
-        row.SetBinding(BackgroundColorProperty, static (FolderTreeItem item) => item.Background);
-        var openInTerminal = new MenuFlyoutItem { Text = "Open in terminal" };
-        openInTerminal.Clicked += (_, _) =>
+        // Phase X: the row's hover, pressed and active looks from the theme (one mechanism); its text follows them.
+        InteractiveStates? states = null;
+        row.BindingContextChanged += (_, _) =>
         {
-            if (row.BindingContext is FolderTreeItem item && _tree is { } tree && tree.IndexOf(item.Path) is >= 0 and var index)
+            if (Palette is not { } palette || row.BindingContext is not FolderTreeItem item)
             {
-                var entry = tree.Rows[index].Entry;
-                var folder = entry.IsFolder ? entry.FullPath : System.IO.Path.GetDirectoryName(entry.FullPath);
-                if (!string.IsNullOrEmpty(folder))
-                {
-                    OpenInTerminalRequested?.Invoke(this, folder);
-                }
+                return;
             }
+
+            states ??= InteractiveStates.Attach(row, palette, InteractionKind.Row);
+            states.Label = label;
+            states.Apply(palette);
+            states.Selected = item.Active;
         };
-        FlyoutBase.SetContextFlyout(row, new MenuFlyout { openInTerminal });
+        var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
+        context.Tapped += (_, e) => ContextRequested?.Invoke(this, (row.BindingContext as FolderTreeItem, e));
+        row.GestureRecognizers.Add(context);
         return row;
     }
 
@@ -181,7 +204,7 @@ public sealed class FolderTreeView : ContentView
             var marker = row.Entry.IsFolder ? row.IsExpanded ? "▾ " : "▸ " : "   ";
             bool active = !row.Entry.IsFolder && string.Equals(row.Entry.FullPath, _activePath, StringComparison.OrdinalIgnoreCase);
             items[i] = new FolderTreeItem(marker + row.Entry.Name, new Thickness(14 + (row.Depth * _indent), 0, 14, 0), _textColor, row.Entry.FullPath,
-                active ? _selected : Colors.Transparent, _fontFamily);
+                active, _fontFamily, row.Entry.IsFolder);
         }
 
         // Only the run that differs is replaced; the rows before and after it stay the same items on screen.
@@ -316,6 +339,15 @@ public sealed class TabStripView : ContentView, IDisposable
     /// <summary>Raised when the compact switcher's title is clicked (the page lists the tabs).</summary>
     public event EventHandler? ListRequested;
 
+    /// <summary>Raised when a document's tab is right-clicked, with where: the page opens the tab's context menu (<see cref="EditorContextMenus.Tab"/>).</summary>
+    public event EventHandler<(DocumentTab Tab, TappedEventArgs Where)>? ContextRequested;
+
+    /// <summary>The tooltip of an action and its command (the keys in effect: <see cref="ShellTooltips.For"/>); null shows the action alone.</summary>
+    public Func<string, string, string>? Tooltip { get; set; }
+
+    /// <summary>Draws the tabs again (the keys in the tooltips changed).</summary>
+    public void Refresh() => Rebuild();
+
     /// <summary>Takes <paramref name="palette"/>'s colours and fonts.</summary>
     public void Apply(ShellPalette palette)
     {
@@ -426,7 +458,7 @@ public sealed class TabStripView : ContentView, IDisposable
             var close = palette.Flat("×", palette.Secondary, 24, palette.SmallSize);
             close.WidthRequest = 24;
             close.Padding = new Thickness(0);
-            ToolTipProperties.SetText(close, "Close (Ctrl+W)");
+            ToolTipProperties.SetText(close, CloseTip());
             close.Clicked += (_, _) => CloseRequested?.Invoke(this, tab);
             var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, dot, close } };
             var tap = new TapGestureRecognizer();
@@ -436,7 +468,11 @@ public sealed class TabStripView : ContentView, IDisposable
                 _tabs.Activate(tab);
             };
             _titles[tab] = (title, dot);
-            _strip.Children.Add(Cell(palette, row, isActive, tab.FilePath ?? tab.Title, tap));
+            var cell = Cell(palette, row, title, isActive, tab.FilePath ?? tab.Title, tap);
+            var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
+            context.Tapped += (_, e) => ContextRequested?.Invoke(this, (tab, e));
+            cell.GestureRecognizers.Add(context);
+            _strip.Children.Add(cell);
         }
 
         foreach (var open in _pages?.Tabs ?? [])
@@ -446,26 +482,31 @@ public sealed class TabStripView : ContentView, IDisposable
             var close = palette.Flat("×", palette.Secondary, 24, palette.SmallSize);
             close.WidthRequest = 24;
             close.Padding = new Thickness(0);
-            ToolTipProperties.SetText(close, "Close (Ctrl+W)");
+            ToolTipProperties.SetText(close, CloseTip());
             var shown = open;
             close.Clicked += (_, _) => _pages!.Close(shown.Id);
             var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, close } };
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) => _pages!.Activate(shown);
-            _strip.Children.Add(Cell(palette, row, isActive, open.Title, tap));
+            _strip.Children.Add(Cell(palette, row, title, isActive, open.Title, tap));
         }
     }
 
-    // A tab's cell: the accent's line over the active one, on the surface; a border between the others.
-    private static Grid Cell(ShellPalette palette, View row, bool isActive, string tooltip, TapGestureRecognizer tap)
+    private string CloseTip() => Tooltip?.Invoke("Close", ShellCommandIds.CloseTab) ?? "Close";
+
+    // A tab's cell: the accent's line over the active one, on the surface; a border between the others; its hover and
+    // pressed looks (phase X) from the theme, its title following them.
+    private static Grid Cell(ShellPalette palette, View row, Label title, bool isActive, string tooltip, TapGestureRecognizer tap)
     {
         var cell = new Grid
         {
             RowDefinitions = [new RowDefinition(new GridLength(2)), new RowDefinition(GridLength.Star)],
             ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(new GridLength(1))],
-            BackgroundColor = isActive ? palette.Surface : Colors.Transparent,
             HeightRequest = 36,
         };
+        var states = palette.States(cell, InteractionKind.Tab);
+        states.Label = title;
+        states.Selected = isActive;
         var accentLine = new BoxView { Color = isActive ? palette.Accent : Colors.Transparent };
         cell.Add(accentLine, 0, 0);
         Grid.SetColumnSpan(accentLine, 2);
@@ -490,6 +531,14 @@ public sealed class MauiShellUi(CraftDialog dialog) : IShellUi
 
     /// <inheritdoc />
     public Task ShowMessageAsync(string title, string message) => _dialog.ShowMessageAsync(title, message);
+
+    /// <inheritdoc />
+    public Task<string?> PromptAsync(string title, string text, string placeholder, string initial = "", string ok = "OK", CancellationToken cancellationToken = default) =>
+        _dialog.PromptAsync(title, text, placeholder, ok, cancellationToken, initial);
+
+    /// <inheritdoc />
+    public Task<bool> ConfirmAsync(string title, string text, string action, bool danger = false, CancellationToken cancellationToken = default) =>
+        _dialog.ConfirmAsync(title, text, action, danger, cancellationToken);
 }
 
 /// <summary>
@@ -527,4 +576,7 @@ public interface IShellPlatform
     /// <see cref="Craft.Core.Abstractions.CrashRecordSources"/> while the shell runs; null when it has none.
     /// </summary>
     Craft.Core.Abstractions.ICrashRecordSource? CrashRecords => null;
+
+    /// <summary>The system's file manager and trash (phase X's Reveal and Delete: File Explorer and the Recycle Bin on Windows), or null.</summary>
+    IShellFiles? ShellFiles => null;
 }

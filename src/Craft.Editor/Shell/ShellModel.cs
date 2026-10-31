@@ -17,6 +17,42 @@ public static class ShellCommandIds
     /// <summary>A new, untitled document (Ctrl+N).</summary>
     public const string NewFile = "craft.newFile";
 
+    /// <summary>A new file on disk in the explorer's folder (the row's, else the workspace's), named by the user, opened.</summary>
+    public const string NewFileInFolder = "craft.explorer.newFile";
+
+    /// <summary>A new folder on disk in the explorer's folder, named by the user.</summary>
+    public const string NewFolder = "craft.explorer.newFolder";
+
+    /// <summary>Renames the file or folder of the explorer's row (its clean tabs follow it).</summary>
+    public const string Rename = "craft.explorer.rename";
+
+    /// <summary>Deletes the file or folder of the explorer's row, confirmed first (to the trash where the system has one).</summary>
+    public const string Delete = "craft.explorer.delete";
+
+    /// <summary>Shows the file or folder in the system's file manager (File Explorer on Windows).</summary>
+    public const string RevealInFileManager = "craft.revealInFileManager";
+
+    /// <summary>Opens a terminal in the row's folder (a file's: its folder).</summary>
+    public const string OpenInTerminal = "craft.openInTerminal";
+
+    /// <summary>Copies the file's full path.</summary>
+    public const string CopyPath = "craft.copyPath";
+
+    /// <summary>Copies the file's path from the workspace's folder.</summary>
+    public const string CopyRelativePath = "craft.copyRelativePath";
+
+    /// <summary>Closes every tab but the one (asking about unsaved changes).</summary>
+    public const string CloseOtherTabs = "craft.closeOtherTabs";
+
+    /// <summary>Closes the tabs to the right of the one.</summary>
+    public const string CloseTabsToTheRight = "craft.closeTabsToTheRight";
+
+    /// <summary>Shows the file's row in the explorer (its folders opened).</summary>
+    public const string RevealInTree = "craft.revealInTree";
+
+    /// <summary>The places that refer to the symbol at the caret (Shift+F12).</summary>
+    public const string FindReferences = "craft.findReferences";
+
     /// <summary>Opens a file (Ctrl+O).</summary>
     public const string OpenFile = "craft.openFile";
 
@@ -153,7 +189,7 @@ public static class ShellViewNames
 /// <see cref="IShellUi"/> (the prompts); its pages (settings, Models, Plug-ins) open as tabs of the editor area (<see cref="Pages"/>). Disposing it takes its commands and bindings back and closes the tabs.
 /// Used on the UI thread.
 /// </summary>
-public sealed class ShellModel : IDisposable
+public sealed partial class ShellModel : IDisposable
 {
     /// <summary>The settings that take effect at the next start (the plug-ins load, the host reads its bindings, at start).</summary>
     public static IReadOnlySet<string> AppliedAtStart { get; } = new HashSet<string>(StringComparer.Ordinal)
@@ -184,9 +220,13 @@ public sealed class ShellModel : IDisposable
     /// <param name="dialogs">The platform's file dialogs.</param>
     /// <param name="ui">The prompts and pages.</param>
     /// <param name="openDocument">Reads a file into a document (<see cref="TextDocument.OpenAsync"/> when null).</param>
+    /// <param name="files">The system's file manager and trash (Reveal, Delete), or null when the platform has none.</param>
+    /// <param name="clipboard">The clipboard (Copy path), or null when there is none.</param>
     public ShellModel(EditorHost host, CraftSettings settings, RecentList recent, IFileDialogs dialogs, IShellUi ui,
-        Func<string, CraftOptions, CancellationToken, Task<ITextDocument>>? openDocument = null)
+        Func<string, CraftOptions, CancellationToken, Task<ITextDocument>>? openDocument = null, IShellFiles? files = null, IEditorClipboard? clipboard = null)
     {
+        _files = files;
+        _clipboard = clipboard;
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(recent);
@@ -1018,7 +1058,7 @@ public sealed class ShellModel : IDisposable
         Command(ShellCommandIds.CloseFolder, "File: Close the folder", (_, _) => { CloseFolder(); return Task.CompletedTask; }, _ => Workspace is not null, null);
         Command(ShellCommandIds.Save, "File: Save", (_, token) => SaveAsync(null, token), _ => Tabs.Active is not null, "Ctrl+S");
         Command(ShellCommandIds.SaveAs, "File: Save as", (_, token) => SaveAsAsync(null, token), _ => Tabs.Active is not null, "Ctrl+Shift+S");
-        Command(ShellCommandIds.CloseTab, "Tab: Close", (_, token) => CloseTabAsync(null, token), _ => Tabs.Active is not null || Pages.Active is not null, "Ctrl+W");
+        Command(ShellCommandIds.CloseTab, "Tab: Close", (_, token) => CloseTabAsync(EditorContextMenus.Target is { Item: DocumentTab target } ? target : null, token), _ => Tabs.Active is not null || Pages.Active is not null, "Ctrl+W");
         Command(ShellCommandIds.NextTab, "Tab: Next", (_, _) => { Tabs.Next(); return Task.CompletedTask; }, _ => Tabs.Tabs.Count > 1, "Ctrl+Tab");
         Command(ShellCommandIds.PreviousTab, "Tab: Previous", (_, _) => { Tabs.Previous(); return Task.CompletedTask; }, _ => Tabs.Tabs.Count > 1, "Ctrl+Shift+Tab");
         Command(ShellCommandIds.Settings, "Settings: Open", (_, _) => { ShowSettings(); return Task.CompletedTask; }, null, "Ctrl+Comma");
@@ -1084,6 +1124,7 @@ public sealed class ShellModel : IDisposable
         Rail(new RailItem("craft.agent", "Agent", ShellCommandIds.Agent, RailIcons.Agent, 30));
         Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
+        RegisterContextCommands();
     }
 
     // Ctrl+B and the rail's Explorer: the narrow layout's tree in the editor's place; the wide layout's side view (the

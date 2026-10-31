@@ -97,6 +97,8 @@ public static class InventoryTests
             // The owner's note 21: the crash watch and its report; note 20: Ctrl+C in a terminal.
             ["CRAFT_CRASH_TRAIL"] = "false", ["CRAFT_CRASH_TRAIL_KB"] = "64", ["CRAFT_CRASH_TRAIL_EXCEPTIONS"] = "3", ["CRAFT_CRASH_TICKET_TRAIL_LINES"] = "50",
             ["CRAFT_CRASH_TICKET_OFFER"] = "false", ["CRAFT_CRASH_RUNS_KEPT"] = "2", ["CRAFT_CRASH_RECORDS"] = "none", ["CRAFT_TERMINAL_CTRL_C_COPIES"] = "false",
+            // Phase X: motion, smooth scrolling, Find references.
+            ["CRAFT_REDUCED_MOTION"] = "true", ["CRAFT_MOTION_MS"] = "120", ["CRAFT_SCROLL_MS"] = "0", ["CRAFT_SCROLL_WHEEL_LINES"] = "4", ["CRAFT_REFERENCES_LIMIT"] = "77",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -124,6 +126,7 @@ public static class InventoryTests
             KeyMap = "visualstudio", ZoomStep = 2,
             CrashTrail = false, CrashTrailKilobytes = 64, CrashTrailExceptionsPerSecond = 3, CrashTicketTrailLines = 50, CrashTicketOffer = false, CrashRunsKept = 2,
             CrashRecords = "none", TerminalCtrlCCopies = false,
+            ReducedMotion = true, MotionMilliseconds = 120, ScrollMilliseconds = 0, ScrollWheelLines = 4, ReferencesLimit = 77,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

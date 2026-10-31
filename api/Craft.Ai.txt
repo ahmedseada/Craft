@@ -31,6 +31,7 @@ sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstracti
   System.Boolean Continues { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Ai.AgentChange> Changes { get; }
+  System.String EmptyText { get; }
   System.String Placeholder { get; }
   System.Threading.Tasks.Task Run { get; }
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
@@ -46,6 +47,7 @@ sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractio
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ChatMessage> History { get; }
   System.Func<System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Boolean>> RunAction { get; set; }
+  System.String EmptyText { get; }
   System.String Placeholder { get; }
   System.Threading.Tasks.Task AskAsync(System.String message, System.Threading.CancellationToken cancellationToken = null, System.String context = null)
   System.Threading.Tasks.Task Kept { get; }
@@ -225,6 +227,7 @@ abstract class Craft.Ai.ConversationPanel : Craft.Abstractions.IConversationPane
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationEntry> Entries { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+  System.String EmptyText { get; }
   System.String Id { get; }
   System.String Placeholder { get; }
   System.String Status { get; set; }

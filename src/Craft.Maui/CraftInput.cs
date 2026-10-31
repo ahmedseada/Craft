@@ -13,12 +13,14 @@ namespace Craft.Maui;
 /// ring while the field has the focus, around a platform text field drawn without a border or a fill of its own (on
 /// Windows the TextBox's own border, fill and focus underline are taken away by
 /// <c>Craft.Maui.WinUI.WindowsControlStyles</c>), so no input shows a box inside a box. Every text input of the shell
-/// (the search box, the find bar, the composer, the settings and the pages' fields, the dialogs' prompt) is one.
+/// (the search box, the find bar, the composer, the settings and the pages' fields, the dialogs' prompt) is one. Phase X:
+/// its hover (the secondary text's border) and disabled (faded) states too.
 /// </summary>
 public sealed class CraftInput : Border
 {
     private readonly RoundRectangle _shape;
     private ShellPalette _palette;
+    private bool _hovered;
 
     /// <summary>The style around <paramref name="input"/> (an Entry, or an Editor when <paramref name="multiline"/>), <paramref name="radius"/> round.</summary>
     public CraftInput(ShellPalette palette, InputView input, double radius = 6, bool multiline = false)
@@ -36,6 +38,26 @@ public sealed class CraftInput : Border
         input.VerticalOptions = LayoutOptions.Center;
         input.Focused += (_, _) => ShowFocus(true);
         input.Unfocused += (_, _) => ShowFocus(false);
+        // Phase X: the field answers the pointer too (the secondary text's border under it) and fades when it cannot be used.
+        var pointer = new PointerGestureRecognizer();
+        pointer.PointerEntered += (_, _) =>
+        {
+            _hovered = true;
+            ShowFocus(Input.IsFocused);
+        };
+        pointer.PointerExited += (_, _) =>
+        {
+            _hovered = false;
+            ShowFocus(Input.IsFocused);
+        };
+        GestureRecognizers.Add(pointer);
+        input.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == IsEnabledProperty.PropertyName)
+            {
+                ShowFocus(Input.IsFocused);
+            }
+        };
         Apply(palette);
     }
 
@@ -56,7 +78,9 @@ public sealed class CraftInput : Border
 
     private void ShowFocus(bool focused)
     {
-        // The focus ring: the accent instead of the strong border, the same width (nothing moves when it changes).
-        Stroke = focused ? _palette.Accent : _palette.BorderStrong;
+        // The focus ring: the accent instead of the strong border, the same width (nothing moves when it changes); the
+        // pointer over it: the secondary text's colour; disabled: the plain border, the field faded.
+        Stroke = !Input.IsEnabled ? _palette.Border : focused ? _palette.Accent : _hovered ? _palette.Secondary : _palette.BorderStrong;
+        Opacity = Input.IsEnabled ? 1 : 0.55;
     }
 }

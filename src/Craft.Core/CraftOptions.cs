@@ -231,6 +231,24 @@ public sealed record CraftOptions
     /// <summary>What zooming in or out adds to or takes from the code font's size (<c>CRAFT_ZOOM_STEP</c>).</summary>
     public float ZoomStep { get; init; } = 1;
 
+    /// <summary>
+    /// Whether the interface moves without transitions: panels, the notification centre, toasts, menus and the completion
+    /// list appear at once and the editor scrolls in jumps (<c>CRAFT_REDUCED_MOTION</c>, phase X); off by default.
+    /// </summary>
+    public bool ReducedMotion { get; init; }
+
+    /// <summary>How long a transition lasts (a panel opening, the notification centre, a toast, a menu, the completion list), in milliseconds; 0 turns them off (<c>CRAFT_MOTION_MS</c>).</summary>
+    public int MotionMilliseconds { get; init; } = 160;
+
+    /// <summary>How long the editor's smooth scroll takes to reach where a wheel turn or a jump asked, in milliseconds; 0 scrolls at once (<c>CRAFT_SCROLL_MS</c>).</summary>
+    public int ScrollMilliseconds { get; init; } = 120;
+
+    /// <summary>The lines one notch of the mouse wheel scrolls the editor (<c>CRAFT_SCROLL_WHEEL_LINES</c>).</summary>
+    public int ScrollWheelLines { get; init; } = 3;
+
+    /// <summary>The most places Find references lists (<c>CRAFT_REFERENCES_LIMIT</c>).</summary>
+    public int ReferencesLimit { get; init; } = 1000;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -505,6 +523,11 @@ public sealed record CraftOptions
         new("CRAFT_CRASH_RUNS_KEPT", "5", "The runs that did not close cleanly kept with their trails for a report; older ones are removed.") { Shape = SettingShape.Whole(SettingSections.Files, "Crashed runs kept", 0, 1000, null, "Crash reports") },
         new("CRAFT_CRASH_RECORDS", "auto", "What reads the platform's own record of a crash for the report: auto (Windows' Application event log on Windows), none, or a registered source.") { Shape = SettingShape.Text(SettingSections.Files, "Read the platform's crash record with", "Crash reports") },
         new("CRAFT_TERMINAL_CTRL_C_COPIES", "true", "Whether Ctrl+C in a terminal copies the selection when there is one (with none it is the shell's interrupt, ^C).") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Ctrl+C copies the selection", "Keys") },
+        new("CRAFT_REDUCED_MOTION", "false", "Whether the interface moves without transitions (panels, the notification centre, toasts, menus, the completion list) and the editor scrolls in jumps.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Reduce motion", "Motion") },
+        new("CRAFT_MOTION_MS", "160", "How long a transition lasts (a panel opening, the notification centre, a toast, a menu, the completion list); 0 turns them off.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Transitions last", 0, 1000, "ms", "Motion", step: 10) },
+        new("CRAFT_SCROLL_MS", "120", "How long the editor's smooth scroll takes to reach where a wheel turn or a jump asked; 0 scrolls at once.") { Shape = SettingShape.Whole(SettingSections.Editor, "Smooth scrolling takes", 0, 1000, "ms", "Scrolling", step: 10) },
+        new("CRAFT_SCROLL_WHEEL_LINES", "3", "The lines one notch of the mouse wheel scrolls the editor.") { Shape = SettingShape.Whole(SettingSections.Editor, "Lines per wheel notch", 1, 100, "lines", "Scrolling") },
+        new("CRAFT_REFERENCES_LIMIT", "1000", "The most places Find references (Shift+F12) lists.") { Shape = SettingShape.Whole(SettingSections.Editor, "Find references lists at most", 1, 1_000_000, "places", "Navigation") },
     ];
 
     /// <summary>
@@ -676,6 +699,31 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_ZOOM_STEP") is { } zoomStep)
         {
             options = options with { ZoomStep = Positive(zoomStep, "CRAFT_ZOOM_STEP", 0.5f, 10) };
+        }
+
+        if (Text(read, "CRAFT_REDUCED_MOTION") is { } reducedMotion)
+        {
+            options = options with { ReducedMotion = Flag(reducedMotion, "CRAFT_REDUCED_MOTION") };
+        }
+
+        if (Text(read, "CRAFT_MOTION_MS") is { } motion)
+        {
+            options = options with { MotionMilliseconds = Whole(motion, "CRAFT_MOTION_MS", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_SCROLL_MS") is { } scroll)
+        {
+            options = options with { ScrollMilliseconds = Whole(scroll, "CRAFT_SCROLL_MS", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_REFERENCES_LIMIT") is { } references)
+        {
+            options = options with { ReferencesLimit = Whole(references, "CRAFT_REFERENCES_LIMIT", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_SCROLL_WHEEL_LINES") is { } wheelLines)
+        {
+            options = options with { ScrollWheelLines = Whole(wheelLines, "CRAFT_SCROLL_WHEEL_LINES", 1, 100) };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)

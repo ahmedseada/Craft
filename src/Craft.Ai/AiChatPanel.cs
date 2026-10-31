@@ -81,6 +81,10 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     public override string Placeholder => "Ask about this file. @ adds context, / runs a code action.";
 
     /// <inheritdoc />
+    public override string? EmptyText =>
+        "Ask about the open file or the selection: explain it, find a bug, write a test. @ adds a file to the context; /explain, /fix, /doc, /refactor and /tests run a code action, and every edit comes as a diff you accept.";
+
+    /// <inheritdoc />
     public override IReadOnlyList<PanelAction> HeaderActions => IsBusy
         ? [new PanelAction("Stop", _ => { Stop(); return Task.CompletedTask; })]
         : [new PanelAction("New chat", _ => { NewChat(); return Task.CompletedTask; })];

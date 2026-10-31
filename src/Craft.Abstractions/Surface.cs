@@ -296,6 +296,21 @@ public interface IEditorInputSink
 }
 
 /// <summary>
+/// An <see cref="IEditorInputSink"/> that also takes the pointer's wheel (phase X's smooth scrolling): a platform's
+/// <see cref="ITextInputAdapter"/> sends a sink that is one the wheel's turns over the editor, and leaves the wheel to the
+/// platform's own scrolling when the sink answers false.
+/// </summary>
+public interface IEditorScrollSink
+{
+    /// <summary>
+    /// The wheel turned by <paramref name="deltaX"/> and <paramref name="deltaY"/> in the wheel's units (120 a notch;
+    /// positive Y scrolls toward the start, positive X toward the end of a line); <paramref name="precise"/> when the
+    /// deltas are not whole notches (a touchpad's). True when the editor scrolled.
+    /// </summary>
+    bool OnWheel(double deltaX, double deltaY, bool precise);
+}
+
+/// <summary>
 /// Connects a platform view's keyboard and input-method events to an <see cref="IEditorInputSink"/>. One per platform,
 /// under the UI project's <c>Platforms/</c> folder. Dispose the result to disconnect.
 /// </summary>

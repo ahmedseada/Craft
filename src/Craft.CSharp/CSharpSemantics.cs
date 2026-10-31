@@ -534,6 +534,58 @@ internal static class CSharpSemantics
         return new DefinitionLocation(same ? document.FilePath : tree.FilePath, span.Start, span.Length, same, description);
     }
 
+    // ---- references ----
+
+    /// <summary>
+    /// The places that refer to the symbol at <paramref name="position"/> (its source declarations and every reference in
+    /// the solution), by file and place, each with its line's text, at most <paramref name="max"/>.
+    /// </summary>
+    public static async Task<IReadOnlyList<SymbolLocation>> ReferencesAsync(Document document, int position, int max, CancellationToken cancellationToken)
+    {
+        var (symbol, _) = await SymbolAtAsync(document, position, cancellationToken).ConfigureAwait(false);
+        if (symbol is null)
+        {
+            return [];
+        }
+
+        symbol = symbol is IMethodSymbol { ReducedFrom: { } reduced } ? reduced : symbol;
+        var solution = document.Project.Solution;
+        var found = await SymbolFinder.FindReferencesAsync(symbol.OriginalDefinition, solution, cancellationToken).ConfigureAwait(false);
+        var places = new List<Location>();
+        foreach (var reference in found)
+        {
+            places.AddRange(reference.Definition.Locations.Where(l => l.IsInSource));
+            foreach (var location in reference.Locations)
+            {
+                places.Add(location.Location);
+            }
+        }
+
+        var seen = new HashSet<(string?, int)>();
+        var result = new List<SymbolLocation>();
+        string kind = KindName(symbol);
+        string? container = symbol.ContainingType?.ToDisplayString();
+        foreach (var location in places.OrderBy(l => l.SourceTree?.FilePath, StringComparer.Ordinal).ThenBy(l => l.SourceSpan.Start))
+        {
+            if (location.SourceTree is not { } tree || !seen.Add((tree.FilePath, location.SourceSpan.Start)))
+            {
+                continue;
+            }
+
+            var text = await tree.GetTextAsync(cancellationToken).ConfigureAwait(false);
+            var line = text.Lines.GetLineFromPosition(location.SourceSpan.Start);
+            string path = tree.FilePath;
+            result.Add(new SymbolLocation(symbol.Name, kind, container, string.IsNullOrEmpty(path) ? null : path, line.LineNumber + 1,
+                location.SourceSpan.Start - line.Start + 1, text.ToString(line.Span).Trim()));
+            if (result.Count >= max)
+            {
+                break;
+            }
+        }
+
+        return result;
+    }
+
     // ---- format ----
 
     /// <summary>The edits that format the document (or its span), in its positions.</summary>

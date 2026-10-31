@@ -37,6 +37,8 @@ public sealed class EditorView : ContentView, IDisposable
     private CraftOptions _options = new();
     private string? _workspaceRoot;
     private UiWorkLabels? _labels;
+    private readonly SmoothScroll _smooth = new();
+    private IDispatcherTimer? _scrollTimer;
     private bool _caretOn = true;
     private bool _reclassifying;
     private bool _disposed;
@@ -76,6 +78,10 @@ public sealed class EditorView : ContentView, IDisposable
         _graphics.MoveHoverInteraction += OnMoveHoverInteraction;
         _graphics.EndHoverInteraction += OnEndHoverInteraction;
         _graphics.HandlerChanged += OnGraphicsHandlerChanged;
+        // Phase X: a right-click opens the editor's context menu (the selection kept when the click was inside it).
+        var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
+        context.Tapped += OnContextTapped;
+        _graphics.GestureRecognizers.Add(context);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -181,6 +187,9 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>Raised on the UI thread when the model's diagnostics changed (the problems list and the counts follow).</summary>
     public event EventHandler? DiagnosticsChanged;
 
+    /// <summary>Raised on a right-click, with where: the page opens the editor's context menu (<see cref="EditorContextMenus.Editor"/>).</summary>
+    public event EventHandler<TappedEventArgs>? ContextRequested;
+
     /// <summary>Raised on F12 when the definition is in another file (the app opens it) or only in metadata.</summary>
     public event EventHandler<DefinitionRequestedEventArgs>? DefinitionRequested;
 
@@ -208,6 +217,7 @@ public sealed class EditorView : ContentView, IDisposable
 
         _disposed = true;
         _blink?.Stop();
+        _scrollTimer?.Stop();
         _inputConnection?.Dispose();
         _inputConnection = null;
         DetachModel();
@@ -283,8 +293,116 @@ public sealed class EditorView : ContentView, IDisposable
         _drawable.ViewportHeight = (float)viewportHeight;
     }
 
+    private void OnContextTapped(object? sender, TappedEventArgs e)
+    {
+        _model?.KeepSelectionForContextMenu();
+        ContextRequested?.Invoke(this, e);
+    }
+
+    // The wheel (phase X's smooth scrolling): the turn adds to where the scroll is going, and the offsets move there on
+    // the ease-out curve over CRAFT_SCROLL_MS; with reduced motion, or 0, at once. CRAFT_SCROLL_WHEEL_LINES a notch.
+    private bool OnWheel(double deltaX, double deltaY, bool precise)
+    {
+        if (_model is not { } model)
+        {
+            return false;
+        }
+
+        double line = model.Metrics.LineHeight;
+        int lines = _options.ScrollWheelLines;
+        double dy = SmoothScroll.WheelPixels(deltaY, lines, line);
+        double dx = -SmoothScroll.WheelPixels(deltaX, lines, model.Metrics.CellWidth * 2);
+        ScrollSmoothlyBy(dx, dy);
+        return true;
+    }
+
+    private void ScrollSmoothlyBy(double dx, double dy)
+    {
+        if (!_smooth.IsMoving)
+        {
+            _smooth.Jump(_scroll.ScrollX, _scroll.ScrollY);
+        }
+
+        var (maxX, maxY) = MaxScroll();
+        _smooth.ScrollBy(dx, dy, maxX, maxY, TimeProvider.System.GetTimestamp());
+        StartSmoothScroll();
+    }
+
+    private void ScrollSmoothlyTo(double x, double y)
+    {
+        if (!_smooth.IsMoving)
+        {
+            _smooth.Jump(_scroll.ScrollX, _scroll.ScrollY);
+        }
+
+        var (maxX, maxY) = MaxScroll();
+        _smooth.ScrollTo(x, y, maxX, maxY, TimeProvider.System.GetTimestamp());
+        StartSmoothScroll();
+    }
+
+    private (double X, double Y) MaxScroll() => _model is { } model
+        ? (Math.Max(0, Math.Max(_scroll.Width, model.ContentWidth) - _scroll.Width), Math.Max(0, Math.Max(_scroll.Height, model.ContentHeight) - _scroll.Height))
+        : (0, 0);
+
+    private void StartSmoothScroll()
+    {
+        if (Motion.ScrollDuration(_options) <= 0)
+        {
+            _smooth.Step(TimeProvider.System.GetTimestamp(), 0, TimeProvider.System);
+            EndSmoothScroll();
+            return;
+        }
+
+        if (_scrollTimer is null)
+        {
+            _scrollTimer = Dispatcher.CreateTimer();
+            _scrollTimer.Interval = TimeSpan.FromMilliseconds(16);
+            _scrollTimer.Tick += OnScrollTick;
+        }
+
+        if (!_scrollTimer.IsRunning)
+        {
+            _scrollTimer.Start();
+        }
+    }
+
+    // A frame of the smooth scroll: the drawn offsets move (only the lines they show are laid out and drawn); the scroll
+    // view's own offset (its bars) follows once the move ends. Nothing is allocated per frame.
+    private void OnScrollTick(object? sender, EventArgs e)
+    {
+        using var label = _labels?.Enter("editor: smooth scroll");
+        bool moving = _smooth.Step(TimeProvider.System.GetTimestamp(), Motion.ScrollDuration(_options), TimeProvider.System);
+        ShowOffsets((float)_smooth.X, (float)_smooth.Y);
+        if (!moving)
+        {
+            EndSmoothScroll();
+        }
+    }
+
+    private void EndSmoothScroll()
+    {
+        _scrollTimer?.Stop();
+        ShowOffsets((float)_smooth.X, (float)_smooth.Y);
+        _ = _scroll.ScrollToAsync(_smooth.X, _smooth.Y, false);
+    }
+
+    private void ShowOffsets(float x, float y)
+    {
+        _drawable.ScrollX = x;
+        _drawable.ScrollY = y;
+        _model?.UpdateViewport(x, y, (float)_scroll.Width, (float)_scroll.Height);
+        Invalidate();
+    }
+
     private void OnScrolled(object? sender, ScrolledEventArgs e)
     {
+        if (_smooth.IsMoving && _scrollTimer?.IsRunning == true)
+        {
+            // The scroll bar moved while a smooth scroll ran: the user's drag wins.
+            _scrollTimer.Stop();
+        }
+
+        _smooth.Jump(e.ScrollX, e.ScrollY);
         _graphics.TranslationX = e.ScrollX;
         _graphics.TranslationY = e.ScrollY;
         _drawable.ScrollX = (float)e.ScrollX;
@@ -344,7 +462,15 @@ public sealed class EditorView : ContentView, IDisposable
 
     private void OnDrawn(object? sender, EventArgs e) => Dispatcher.DispatchLabelled("editor: painted", RaisePainted);
 
-    private void RaisePainted() => Painted?.Invoke(this, EventArgs.Empty);
+    private void RaisePainted()
+    {
+        if (_model?.IsAnimating == true)
+        {
+            Invalidate();                                // the completion list unfolding: one more frame
+        }
+
+        Painted?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnModelCaretMoved(object? sender, EventArgs e)
     {
@@ -379,7 +505,24 @@ public sealed class EditorView : ContentView, IDisposable
         UpdateContentSize();
         double x = e.X;
         double y = e.Y;
-        Dispatcher.DispatchLabelled("editor: scroll", () => _ = _scroll.ScrollToAsync(x, y, false));
+        // A jump of more than a line (Page Down, Go to line, a search hit) scrolls smoothly; the line typing pushes in
+        // view stays at once, so typing at the edge never lags.
+        double line = _model?.Metrics.LineHeight ?? 0;
+        double from = _smooth.IsMoving ? _smooth.TargetY : _scroll.ScrollY;
+        bool smooth = Motion.ScrollDuration(_options) > 0 && (Math.Abs(y - from) > line * 1.5 || Math.Abs(x - (_smooth.IsMoving ? _smooth.TargetX : _scroll.ScrollX)) > line * 8);
+        Dispatcher.DispatchLabelled("editor: scroll", () =>
+        {
+            if (smooth)
+            {
+                ScrollSmoothlyTo(x, y);
+            }
+            else
+            {
+                _scrollTimer?.Stop();
+                _smooth.Jump(x, y);
+                _ = _scroll.ScrollToAsync(x, y, false);
+            }
+        });
     }
 
     private void OnStartInteraction(object? sender, TouchEventArgs e)
@@ -485,8 +628,14 @@ public sealed class EditorView : ContentView, IDisposable
     }
 
     /// <summary>The keyboard's sink: the current model, whichever it is when the key arrives.</summary>
-    private sealed class InputForwarder(EditorView view) : IEditorInputSink
+    private sealed class InputForwarder(EditorView view) : IEditorInputSink, IEditorScrollSink
     {
+        public bool OnWheel(double deltaX, double deltaY, bool precise)
+        {
+            using var label = view._labels?.Enter("editor: wheel");
+            return view.OnWheel(deltaX, deltaY, precise);
+        }
+
         private static readonly Dictionary<EditorKey, string> KeyLabels = Enum.GetValues<EditorKey>().Distinct().ToDictionary(k => k, k => "editor: key " + k.ToString());
 
         public bool OnKey(EditorKey key, KeyModifiers modifiers)

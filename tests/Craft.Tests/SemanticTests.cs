@@ -219,6 +219,22 @@ public static class SemanticTests
     }
 
     [Test]
+    public static async Task FindReferencesListsTheDeclarationAndEveryUseAcrossFiles()
+    {
+        using var project = new Project();
+        var snapshot = project.Buffer.Current;
+        var found = await project.Session.FindReferencesAsync(snapshot, project.At("Make(1"), 100, CancellationToken.None);
+        Check.Equal(2, found.Count, $"Make: its declaration and its call ({string.Join(" | ", found.Select(f => $"{f.FilePath}:{f.Line}:{f.Column} {f.Description}"))})");
+        var declaration = found.Single(f => f.FilePath == project.ShapesPath);
+        Check.True(declaration is { Name: "Make", Line: 12 } && declaration.Description.StartsWith("public static Circle Make", StringComparison.Ordinal), $"the declaration in Shapes.cs, with its line's text ({declaration.Line}: {declaration.Description})");
+        var call = found.Single(f => f.FilePath == project.ProgramPath);
+        Check.True(call.Line == 7 && call.Description == "var circle = Circle.Make(1, \"a\");", $"the call in Program.cs ({call.Line}: {call.Description})");
+        Check.Equal(project.Text.Split('\n')[6].IndexOf("Make", StringComparison.Ordinal) + 1, call.Column, "at the name's column");
+        Check.Equal(1, (await project.Session.FindReferencesAsync(snapshot, project.At("Make(1"), 1, CancellationToken.None)).Count, "at most the limit");
+        Check.Equal(0, (await project.Session.FindReferencesAsync(snapshot, project.At(", \"a\""), 100, CancellationToken.None)).Count, "no symbol there (a comma): none");
+    }
+
+    [Test]
     public static async Task FormatDocumentProducesTheExpectedEdits()
     {
         CSharpLanguage.Register();

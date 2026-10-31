@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.Core;
+using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
@@ -170,8 +171,8 @@ public sealed class ShellPalette
         LineBreakMode = LineBreakMode.TailTruncation,
     };
 
-    /// <summary>A flat button (no fill, no border), at least <paramref name="height"/> tall.</summary>
-    public Button Flat(string text, Color? color = null, double height = 28, double? size = null) => new()
+    /// <summary>A flat button (no fill, no border), at least <paramref name="height"/> tall, with its hover, pressed, focus and disabled states.</summary>
+    public Button Flat(string text, Color? color = null, double height = 28, double? size = null) => WithStates(new Button
     {
         Text = text,
         TextColor = color ?? Secondary,
@@ -183,10 +184,10 @@ public sealed class ShellPalette
         FontSize = size ?? FontSize,
         MinimumHeightRequest = height,
         HeightRequest = height,
-    };
+    }, InteractionKind.Flat, color);
 
-    /// <summary>A bordered button on the raised fill (the design's secondary action).</summary>
-    public Button SecondaryButton(string text, double height = 28) => new()
+    /// <summary>A bordered button on the raised fill (the design's secondary action), with its states.</summary>
+    public Button SecondaryButton(string text, double height = 28) => WithStates(new Button
     {
         Text = text,
         TextColor = Text,
@@ -199,10 +200,10 @@ public sealed class ShellPalette
         FontSize = SmallSize,
         HeightRequest = height,
         MinimumHeightRequest = height,
-    };
+    }, InteractionKind.Secondary, null);
 
-    /// <summary>The accent button (the design's primary action), its label in the accent's ink.</summary>
-    public Button Primary(string text, double height = 32) => new()
+    /// <summary>The accent button (the design's primary action), its label in the accent's ink, with its states.</summary>
+    public Button Primary(string text, double height = 32) => WithStates(new Button
     {
         Text = text,
         TextColor = AccentInk,
@@ -214,7 +215,27 @@ public sealed class ShellPalette
         FontSize = FontSize,
         HeightRequest = height,
         MinimumHeightRequest = height,
-    };
+    }, InteractionKind.Primary, null);
+
+    /// <summary>
+    /// A control's colours in a state (phase X), from the theme's tokens (<see cref="InteractionStyle"/>): its fill, its
+    /// border (the accent while the focus ring shows) and its text.
+    /// </summary>
+    public (Color Fill, Color Stroke, Color Text, bool Ring) Look(InteractionKind kind, InteractionState state, bool selected = false, uint? text = null)
+    {
+        var look = InteractionStyle.Of(Theme.Colors, kind, state, selected, text);
+        return (ThemeColors.Of(look.Fill), ThemeColors.Of(look.Stroke), ThemeColors.Of(look.Text), look.Ring);
+    }
+
+    /// <summary>Attaches the hover, pressed, focus and disabled states of a <paramref name="kind"/> control to <paramref name="view"/> (<see cref="InteractiveStates"/>).</summary>
+    public InteractiveStates States(VisualElement view, InteractionKind kind, Color? text = null) => InteractiveStates.Attach(view, this, kind, text);
+
+    private T WithStates<T>(T view, InteractionKind kind, Color? text)
+        where T : VisualElement
+    {
+        InteractiveStates.Attach(view, this, kind, text);
+        return view;
+    }
 
     /// <summary>
     /// A text field in the interface's (or the code's) font, drawn without a box of its own: shown inside a

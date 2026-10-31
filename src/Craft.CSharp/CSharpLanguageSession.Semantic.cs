@@ -137,6 +137,16 @@ public sealed partial class CSharpLanguageSession
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<SymbolLocation>> FindReferencesAsync(ITextSnapshot snapshot, int position, int maxResults, CancellationToken cancellationToken)
+    {
+        Validate(snapshot, position);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
+        return Task.Run(async () => await DocumentForAsync(snapshot, cancellationToken).ConfigureAwait(false) is { } document
+            ? await CSharpSemantics.ReferencesAsync(document, position, maxResults, cancellationToken).ConfigureAwait(false)
+            : (IReadOnlyList<SymbolLocation>)[], cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<TextEdit>> FormatAsync(ITextSnapshot snapshot, int start, int length, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);

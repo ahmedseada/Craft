@@ -125,6 +125,10 @@ public sealed record DialogRequest(string Title, string Text, IReadOnlyList<Dial
     public static DialogRequest Unsaved(string title) => new($"Save the changes to {title}?", "Your changes are lost if you don't save them.",
         [new DialogAction("Save", DialogActionRole.Primary), new DialogAction("Don't save", DialogActionRole.Danger), new DialogAction("Cancel", DialogActionRole.Cancel)]);
 
+    /// <summary>A confirmation: <paramref name="action"/> (in the error's colour when <paramref name="danger"/>, the default either way) and Cancel.</summary>
+    public static DialogRequest Confirm(string title, string text, string action, bool danger = false) =>
+        new(title, text, [new DialogAction(action, danger ? DialogActionRole.Danger : DialogActionRole.Primary), new DialogAction("Cancel", DialogActionRole.Cancel)]);
+
     /// <summary>What <see cref="Unsaved"/>'s answer means.</summary>
     public static UnsavedChoice UnsavedAnswer(DialogResult result)
     {

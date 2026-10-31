@@ -413,4 +413,13 @@ public interface ISemanticLanguageSession : IFormattingLanguageSession
     /// </summary>
     Task<IReadOnlyList<SymbolLocation>> FindSymbolsAsync(string query, int maxResults, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<SymbolLocation>>([]);
+
+    /// <summary>
+    /// The places that refer to the symbol at <paramref name="position"/> of <paramref name="snapshot"/>, its declarations
+    /// among them, across the session's workspace, by file and place, at most <paramref name="maxResults"/>: each a
+    /// <see cref="SymbolLocation"/> whose <see cref="SymbolLocation.Description"/> is the line's text (Find references,
+    /// Shift+F12). Empty when there is no symbol there or the layer cannot search (the default). Off the UI thread.
+    /// </summary>
+    Task<IReadOnlyList<SymbolLocation>> FindReferencesAsync(ITextSnapshot snapshot, int position, int maxResults, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<SymbolLocation>>([]);
 }

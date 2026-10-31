@@ -67,6 +67,10 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     public AgentWorkspace? WorkingCopy => _copy;
 
     /// <inheritdoc />
+    public override string? EmptyText =>
+        "Describe a task (\"add a --verbose option and test it\"): the agent works on a copy of the folder, reads and edits files and runs commands you approve, then shows every change as a diff you accept or discard. Your files change only when you accept.";
+
+    /// <inheritdoc />
     public override string Placeholder => IsBusy
         ? "Add a note for the next turn (it reads it before its next step)"
         : _conversation is not null

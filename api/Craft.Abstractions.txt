@@ -242,6 +242,18 @@ sealed class Craft.Abstractions.ContextChip : System.IEquatable<Craft.Abstractio
   System.String ToString()
   System.Void Deconstruct(out System.String Id, out System.String Text)
   ctor(System.String Id, System.String Text)
+sealed class Craft.Abstractions.ContextMenuTarget : System.IEquatable<Craft.Abstractions.ContextMenuTarget>
+  Craft.Abstractions.ContextMenuTarget <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.ContextMenuTarget other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsFolder { get; init; }
+  System.Int32 GetHashCode()
+  System.Object Item { get; init; }
+  System.String Menu { get; init; }
+  System.String Path { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Menu, out System.String Path, out System.Boolean IsFolder, out System.Object Item)
+  ctor(System.String Menu, System.String Path = null, System.Boolean IsFolder = false, System.Object Item = null)
 enum Craft.Abstractions.ContractFit : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Current = 0
   Newer = 2
@@ -400,6 +412,13 @@ static class Craft.Abstractions.EditorCommands
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> All { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.IEditorCommand command)
+static class Craft.Abstractions.EditorContextMenus
+  const System.String Editor = context:editor
+  const System.String Prefix = context:
+  const System.String Tab = context:tab
+  const System.String Tree = context:tree
+  static Craft.Abstractions.ContextMenuTarget Target { get; set; }
+  static System.Boolean IsContextMenu(System.String menu)
 struct Craft.Abstractions.EditorDiagnostic : System.IEquatable<Craft.Abstractions.EditorDiagnostic>
   Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
   System.Boolean Equals(Craft.Abstractions.EditorDiagnostic other)
@@ -675,6 +694,7 @@ interface Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPane
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ContextChip> Chips { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationEntry> Entries { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
+  System.String EmptyText { get; }
   System.String Placeholder { get; }
   System.String Status { get; }
   System.String Subtitle { get; }
@@ -759,6 +779,8 @@ interface Craft.Abstractions.IEditorPlugin : Idrak.Abstraction.IKind
 interface Craft.Abstractions.IEditorProgress : System.IDisposable
   System.String Title { get; }
   System.Void Report(System.Double? fraction, System.String message = null)
+interface Craft.Abstractions.IEditorScrollSink
+  System.Boolean OnWheel(System.Double deltaX, System.Double deltaY, System.Boolean precise)
 interface Craft.Abstractions.IEditorTerminal
   System.Boolean Write(System.String text)
   System.String Title { get; }
@@ -822,6 +844,7 @@ interface Craft.Abstractions.ISemanticLanguageSession : Craft.Abstractions.IForm
   System.Threading.Tasks.Task<Craft.Abstractions.DiagnosticSet> DiagnoseEditsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.HoverInfo> GetHoverAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.SignatureHelp> GetSignatureHelpAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindReferencesAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxResults, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindSymbolsAsync(System.String query, System.Int32 maxResults, System.Threading.CancellationToken cancellationToken)
   System.Void EnableSemantics()
   System.Void Release()

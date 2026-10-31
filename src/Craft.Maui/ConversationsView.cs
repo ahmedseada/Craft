@@ -40,6 +40,7 @@ public sealed class ConversationsView : ContentView, IDisposable
     private readonly CraftInput _inputBox;
     private readonly Button _close = new() { Text = "✕", WidthRequest = 32, HeightRequest = 32, Padding = 0, BackgroundColor = Colors.Transparent, BorderWidth = 0 };
     private bool _follow = true;
+    private ShellPalette _palette;
     private IConversationPanel? _shown;
     private EditorColors _colors = EditorThemes.Get(EditorThemes.Dark).Colors;
     private bool _disposed;
@@ -55,6 +56,7 @@ public sealed class ConversationsView : ContentView, IDisposable
         // note 12) with Send beside it, and under it the model chip (the owner's note 11: the model, its device and state,
         // picked here; the shell feeds it and opens the picker on a tap).
         var palette = new ShellPalette(EditorThemes.Get(EditorThemes.Dark), new Craft.Core.CraftOptions());
+        _palette = palette;
         _inputBox = new CraftInput(palette, _input, radius: 8, multiline: true);
         ModelChip = new ModelChip(palette);
         _send.Clicked += (_, _) => Send();
@@ -114,6 +116,7 @@ public sealed class ConversationsView : ContentView, IDisposable
     public void ApplyPalette(ShellPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
+        _palette = palette;
         _inputBox.Apply(palette);
         _input.FontFamily = palette.Font();
         _input.FontSize = palette.FontSize;
@@ -145,6 +148,18 @@ public sealed class ConversationsView : ContentView, IDisposable
         Select(panel);
         return true;
     }
+
+    /// <summary>The model's state changed: the empty panel says the model again.</summary>
+    public void ModelChanged()
+    {
+        if (_shown is { Entries.Count: 0 })
+        {
+            RebuildAll();
+        }
+    }
+
+    /// <summary>The close button's tooltip (the keys in effect for showing or hiding the chat).</summary>
+    public void SetCloseTooltip(string text) => ToolTipProperties.SetText(_close, text);
 
     /// <summary>Puts the keyboard's focus in the input.</summary>
     public void FocusInput() => _input.Focus();
@@ -315,6 +330,21 @@ public sealed class ConversationsView : ContentView, IDisposable
         foreach (var entry in panel.Entries)
         {
             _entries.Children.Add(EntryView(entry));
+        }
+
+        if (panel.Entries.Count == 0)
+        {
+            // Phase X: before the first message, what the panel does and which model answers (the first entry replaces it).
+            var empty = new EmptyStateView(_palette);
+            empty.Show(ShellEmptyStates.Conversation(panel, ShellText.ModelStatus()?.Status));
+            empty.ActionChosen += (_, action) =>
+            {
+                if (action.CommandId is { } command)
+                {
+                    _ = _host.ExecuteCommandAsync(command);
+                }
+            };
+            _entries.Children.Add(empty);
         }
 
         foreach (var chip in panel.Chips)

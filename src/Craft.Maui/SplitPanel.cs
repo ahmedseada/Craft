@@ -34,7 +34,10 @@ public sealed class SplitPanel : Grid
     private readonly ContentView _host = new();
     private readonly Grid _grip = new() { BackgroundColor = Colors.Transparent };
     private readonly BoxView _line = new();
+    private const string AnimationName = "craft-split";
     private double _size;
+    private bool? _target;
+    private bool _animating;
     private double _dragStart;
     private bool _fill;
     private bool _resizable = true;
@@ -152,8 +155,75 @@ public sealed class SplitPanel : Grid
         _line.Color = hovered ? _hoverColor : _lineColor;
     }
 
+    /// <summary>Whether it is shown or opening (false while it closes).</summary>
+    public bool IsShown => _target ?? IsVisible;
+
+    /// <summary>
+    /// Shows or hides the panel, its size growing from nothing or shrinking to nothing over <paramref name="milliseconds"/>
+    /// (phase X's motion; 0, the first call, or a panel that fills its place: at once). The same state again does nothing.
+    /// </summary>
+    public void SetVisible(bool visible, int milliseconds)
+    {
+        if (_target == visible)
+        {
+            return;
+        }
+
+        bool first = _target is null;
+        _target = visible;
+        this.AbortAnimation(AnimationName);
+        _animating = false;
+        if (first || milliseconds <= 0 || _fill || _size <= 0 || (visible == IsVisible && !visible))
+        {
+            IsVisible = visible;
+            ApplySize();
+            return;
+        }
+
+        double full = Math.Max(0, _size);
+        double from = visible ? 0 : CurrentSize();
+        if (visible)
+        {
+            SetHostSize(0);
+            IsVisible = true;
+        }
+
+        _animating = true;
+        var animation = new Animation(SetHostSize, from, visible ? full : 0, visible ? Easing.CubicOut : Easing.CubicIn);
+        animation.Commit(this, AnimationName, 16, (uint)milliseconds, finished: (_, cancelled) =>
+        {
+            if (cancelled)
+            {
+                return;
+            }
+
+            _animating = false;
+            IsVisible = visible;
+            ApplySize();
+        });
+    }
+
+    private double CurrentSize() => _edge == SplitEdge.Top ? _host.Height : _host.Width;
+
+    private void SetHostSize(double size)
+    {
+        if (_edge == SplitEdge.Top)
+        {
+            _host.HeightRequest = size;
+        }
+        else
+        {
+            _host.WidthRequest = size;
+        }
+    }
+
     private void ApplySize()
     {
+        if (_animating)
+        {
+            return;                                      // the open or close animation sets the size until it ends
+        }
+
         double size = _fill ? -1 : Math.Max(0, _size);
         if (_edge == SplitEdge.Top)
         {

@@ -35,6 +35,15 @@ public sealed class AiRegistration() : IdrakPlugin(AiSettings.PluginName)
         }
 
         Part(() => ModelProviders.Register(AiPlugin.Local), () => ModelProviders.Unregister(ModelProviders.Local));
+
+        // The editor's context menu (phase X): the actions on the selection and the problem at the caret, each run only
+        // when picked (opening the menu asks only whether each can run, which loads nothing).
+        int order = 0;
+        foreach (var id in (ReadOnlySpan<string>)[AiPlugin.ExplainCommand, AiPlugin.DocumentCommand, AiPlugin.RefactorCommand, AiPlugin.TestsCommand, AiPlugin.FixCommand, AiPlugin.ExplainProblemCommand])
+        {
+            var item = new MenuItem(EditorContextMenus.Editor, id, Order: order++, Group: 50);
+            Part(() => EditorMenus.Register(item), () => EditorMenus.Unregister(EditorContextMenus.Editor, item.CommandId));
+        }
     }
 }
 

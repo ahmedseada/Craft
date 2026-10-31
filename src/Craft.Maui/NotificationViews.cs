@@ -96,6 +96,11 @@ public sealed class BellView : ContentView
     private readonly StrokeIcon _icon = new(BellIcon, 14, 1.6);
     private readonly Label _count;
     private readonly Border _badge;
+    private int _unseen;
+    private int _running;
+
+    /// <summary>Shows the tooltip again (the keys changed).</summary>
+    public void Refresh() => Show(_unseen, _running);
 
     /// <summary>The bell in <paramref name="palette"/>'s colours.</summary>
     public BellView(ShellPalette palette)
@@ -122,7 +127,11 @@ public sealed class BellView : ContentView
         tap.Tapped += (_, _) => Tapped?.Invoke(this, EventArgs.Empty);
         GestureRecognizers.Add(tap);
         Apply(palette);
+        palette.States(this, Craft.Editor.Shell.InteractionKind.Flat).Icon = _icon;   // phase X: hover and pressed
     }
+
+    /// <summary>The keys that open the centre (" (Ctrl+…)", or "") for the tooltip; the page sets it from the bindings.</summary>
+    public string Keys { get; set; } = "";
 
     /// <summary>Raised when the bell is tapped.</summary>
     public event EventHandler? Tapped;
@@ -132,7 +141,9 @@ public sealed class BellView : ContentView
     {
         _badge.IsVisible = unseen > 0;
         _count.Text = unseen > 99 ? "99+" : unseen.ToString(CultureInfo.InvariantCulture);
-        ToolTipProperties.SetText(this, string.Create(CultureInfo.InvariantCulture, $"Notifications: {unseen} new, {running} running"));
+        _unseen = unseen;
+        _running = running;
+        ToolTipProperties.SetText(this, string.Create(CultureInfo.InvariantCulture, $"Notifications{Keys}: {unseen} new, {running} running"));
     }
 
     /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
@@ -140,6 +151,7 @@ public sealed class BellView : ContentView
     {
         ArgumentNullException.ThrowIfNull(palette);
         _icon.Color = palette.Secondary;
+        InteractiveStates.Of(this)?.Apply(palette);
         _badge.BackgroundColor = palette.Accent;
         _count.TextColor = palette.AccentInk;
     }
@@ -159,7 +171,7 @@ public sealed class NotificationCenterView : ContentView, IDisposable
     private readonly ActivityCenter _activities;
     private readonly VerticalStackLayout _list = new() { Spacing = 2 };
     private readonly Label _title;
-    private readonly Label _empty;
+    private readonly EmptyStateView _empty;
     private readonly Button _clear;
     private readonly Button _close;
     private readonly Border _frame;
@@ -178,9 +190,8 @@ public sealed class NotificationCenterView : ContentView, IDisposable
         _activities = activities;
         _palette = palette;
         _title = palette.Label("Notifications", palette.Text, palette.FontSize, FontWeight.SemiBold);
-        _empty = palette.Label("Nothing yet: running operations, how they ended, and the plug-ins' messages show here.", palette.Secondary, palette.SmallSize);
-        _empty.LineBreakMode = LineBreakMode.WordWrap;
-        _empty.Margin = new Thickness(4, 8);
+        _empty = new EmptyStateView(palette);               // phase X: says what shows here
+        _empty.Show(Craft.Editor.Shell.ShellEmptyStates.Notifications());
         _clear = palette.Flat("Clear all", palette.Secondary, 26, palette.SmallSize);
         _clear.Clicked += (_, _) => _center.DismissAll();
         _close = palette.Flat("✕", palette.Secondary, 26, palette.SmallSize);
@@ -217,14 +228,30 @@ public sealed class NotificationCenterView : ContentView, IDisposable
     /// <summary>Raised when its close button is pressed.</summary>
     public event EventHandler? CloseRequested;
 
-    /// <summary>Opens it (its entries become seen) or closes it.</summary>
+    /// <summary>Whether it is open (or opening).</summary>
+    public bool IsOpen { get; private set; }
+
+    /// <summary>The tooltips of its close and clear buttons (the keys in effect for the close).</summary>
+    public void SetTooltips(string close, string clear)
+    {
+        ToolTipProperties.SetText(_close, close);
+        ToolTipProperties.SetText(_clear, clear);
+    }
+
+    /// <summary>Opens it (its entries become seen) or closes it, sliding in and out over CRAFT_MOTION_MS (phase X).</summary>
     public void Toggle(bool? open = null)
     {
-        IsVisible = open ?? !IsVisible;
-        if (IsVisible)
+        IsOpen = open ?? !IsOpen;
+        if (IsOpen)
         {
+            IsVisible = true;
             _center.MarkSeen();
             Refresh();
+            _ = ShellMotion.ShowAsync(this, 12);
+        }
+        else
+        {
+            _ = ShellMotion.HideAsync(this, 12);
         }
     }
 
@@ -236,7 +263,7 @@ public sealed class NotificationCenterView : ContentView, IDisposable
         _frame.BackgroundColor = palette.Raised;
         _frame.Stroke = palette.BorderStrong;
         _title.TextColor = palette.Text;
-        _empty.TextColor = palette.Secondary;
+        _empty.Apply(palette);
         _rows.Clear();
         _headers.Clear();
         _order.Clear();
@@ -562,7 +589,7 @@ public sealed class ToastView : ContentView
         close.Clicked += (_, _) => Hide();
         _buttons.Children.Add(show);
         _buttons.Children.Add(close);
-        IsVisible = true;
+        _ = ShellMotion.ShowAsync(this, 16);                 // phase X: slides up into the corner
         _timer?.Stop();
         _timer = Dispatcher.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(milliseconds);
@@ -575,6 +602,6 @@ public sealed class ToastView : ContentView
     public void Hide()
     {
         _timer?.Stop();
-        IsVisible = false;
+        _ = ShellMotion.HideAsync(this, 16);
     }
 }

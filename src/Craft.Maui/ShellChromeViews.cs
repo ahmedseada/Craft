@@ -40,6 +40,9 @@ public sealed class PopupLayer : AbsoluteLayout
     /// <summary>Whether a popup is shown.</summary>
     public bool IsOpen => _shown is not null;
 
+    /// <summary>The popup shown, or null.</summary>
+    public View? Shown => _shown;
+
     /// <summary>Raised after the popup closed (tapped outside, or <see cref="Hide"/>).</summary>
     public event EventHandler? Closed;
 
@@ -49,6 +52,7 @@ public sealed class PopupLayer : AbsoluteLayout
         ArgumentNullException.ThrowIfNull(popup);
         if (_shown is not null)
         {
+            _shown.SizeChanged -= OnShownSizeChanged;
             Children.Remove(_shown);
         }
 
@@ -56,9 +60,33 @@ public sealed class PopupLayer : AbsoluteLayout
         double x = Width > 0 ? Math.Clamp(at.X, 0, Math.Max(0, Width - width)) : at.X;
         SetLayoutBounds((BindableObject)popup, new Rect(x, Math.Max(0, at.Y), width, AbsoluteLayout.AutoSize));
         SetLayoutFlags((BindableObject)popup, AbsoluteLayoutFlags.None);
+        // A popup that would run past the window's bottom (a context menu low in the editor) moves up once it is measured.
+        popup.SizeChanged += OnShownSizeChanged;
         Children.Add(popup);
         IsVisible = true;
         InputTransparent = false;
+    }
+
+    private void OnShownSizeChanged(object? sender, EventArgs e)
+    {
+        if (_shown is { } popup && Height > 0 && popup.Height > 0)
+        {
+            KeepInside(popup);
+        }
+    }
+
+    private void KeepInside(View popup)
+    {
+        if (Height <= 0 || popup.Height <= 0)
+        {
+            return;
+        }
+
+        var bounds = GetLayoutBounds((BindableObject)popup);
+        if (bounds.Y + popup.Height > Height)
+        {
+            SetLayoutBounds((BindableObject)popup, bounds with { Y = Math.Max(0, Height - popup.Height - 4) });
+        }
     }
 
     /// <summary>Closes the popup.</summary>
@@ -69,6 +97,7 @@ public sealed class PopupLayer : AbsoluteLayout
             return;
         }
 
+        _shown.SizeChanged -= OnShownSizeChanged;
         Children.Remove(_shown);
         _shown = null;
         IsVisible = false;
@@ -127,6 +156,7 @@ public sealed class TitleBarView : ContentView
     private readonly Label _narrowTitle;
     private readonly Label _narrowPlace;
     private readonly List<Button> _narrowButtons = [];
+    private readonly List<(Button Button, string Name, string Command)> _narrowTips = [];
     private ShellPalette _palette;
 
     /// <summary>The bar in <paramref name="palette"/>'s colours.</summary>
@@ -154,10 +184,10 @@ public sealed class TitleBarView : ContentView
         _narrowTitle = palette.Label("", weight: FontWeight.SemiBold);
         _narrowPlace = palette.Label("", palette.Secondary, palette.SmallSize);
         _narrow.ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)];
-        _narrow.Add(NarrowButton("☰", "Files", () => NarrowFilesTapped?.Invoke(this, EventArgs.Empty)), 0, 0);
+        _narrow.Add(NarrowButton("☰", "Files", ShellCommandIds.ToggleTree, () => NarrowFilesTapped?.Invoke(this, EventArgs.Empty)), 0, 0);
         _narrow.Add(new VerticalStackLayout { VerticalOptions = LayoutOptions.Center, Children = { _narrowTitle, _narrowPlace } }, 1, 0);
-        _narrow.Add(NarrowButton("↶", "Undo", () => NarrowUndoTapped?.Invoke(this, EventArgs.Empty)), 2, 0);
-        _narrow.Add(NarrowButton("⋯", "Commands", () => NarrowCommandsTapped?.Invoke(this, EventArgs.Empty)), 3, 0);
+        _narrow.Add(NarrowButton("↶", "Undo", "craft.undo", () => NarrowUndoTapped?.Invoke(this, EventArgs.Empty)), 2, 0);
+        _narrow.Add(NarrowButton("⋯", "Commands", ShellCommandIds.CommandPalette, () => NarrowCommandsTapped?.Invoke(this, EventArgs.Empty)), 3, 0);
         Content = _wide;
         HeightRequest = 40;
         RebuildMenus();
@@ -241,7 +271,21 @@ public sealed class TitleBarView : ContentView
         RebuildMenus();
     }
 
-    private Button NarrowButton(string text, string name, Action tapped)
+    /// <summary>
+    /// The tooltips of the bar's icon-only buttons and the search box's hint, each the action and its keys in effect
+    /// (<paramref name="tip"/>: <see cref="ShellTooltips.For"/>); called again when the bindings change.
+    /// </summary>
+    public void SetTooltips(Func<string, string, string> tip)
+    {
+        ArgumentNullException.ThrowIfNull(tip);
+        Search.Placeholder = tip("Search files, symbols and commands", ShellCommandIds.QuickOpen);
+        foreach (var (button, name, command) in _narrowTips)
+        {
+            ToolTipProperties.SetText(button, tip(name, command));
+        }
+    }
+
+    private Button NarrowButton(string text, string name, string command, Action tapped)
     {
         double size = Math.Max(44, _palette.Options.TouchTarget + 4);
         var button = _palette.Flat(text, _palette.Text, size, _palette.FontSize + 7);
@@ -251,6 +295,7 @@ public sealed class TitleBarView : ContentView
         ToolTipProperties.SetText(button, name);
         button.Clicked += (_, _) => tapped();
         _narrowButtons.Add(button);
+        _narrowTips.Add((button, name, command));
         return button;
     }
 }
@@ -382,6 +427,7 @@ public sealed class RailView : ContentView
         grid.Add(_bottom, 0, 1);
         Content = grid;
         EditorRailItems.Changed += OnItemsChanged;
+        host.KeyBindingsChanged += OnItemsChanged;               // a remap shows in the tooltips at once
         Rebuild();
     }
 
@@ -430,14 +476,18 @@ public sealed class RailView : ContentView
         // The icon (a stroked Path) and the accent line are input-transparent, so a click anywhere on the button reaches the
         // cell's tap, never a child shape that swallows it (the owner's note 7: the explorer button did nothing).
         var icon = new StrokeIcon(item.Icon) { Color = active ? _palette.Text : _palette.Secondary, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center, InputTransparent = true };
-        var cell = new Grid { WidthRequest = 44, HeightRequest = 44, HorizontalOptions = LayoutOptions.Center, BackgroundColor = active ? _palette.RaisedHigh : Colors.Transparent };
+        var cell = new Grid { WidthRequest = 44, HeightRequest = 44, HorizontalOptions = LayoutOptions.Center };
         cell.Add(icon);
         if (active)
         {
             cell.Add(new BoxView { Color = _palette.Accent, WidthRequest = 2, HorizontalOptions = LayoutOptions.Start, InputTransparent = true });
         }
 
-        ToolTipProperties.SetText(cell, item.Title);
+        // Phase X: hover and pressed from the theme (the icon follows), and the tooltip names the action and its keys in effect.
+        var states = _palette.States(cell, InteractionKind.Rail);
+        states.Icon = icon;
+        states.Selected = active;
+        ToolTipProperties.SetText(cell, ShellTooltips.For(_host, item.Title, item.CommandId));
         SemanticProperties.SetDescription(cell, item.Title);
         var tap = new TapGestureRecognizer();
         string command = item.CommandId;
@@ -501,9 +551,11 @@ public sealed class ExplorerView : ContentView
         _card = palette.Box(new VerticalStackLayout { Spacing = 6, Children = { _engine, rowState, rowSize } }, 8, new Thickness(10));
         _card.Margin = new Thickness(10, 6, 10, 10);
         _card.IsVisible = false;
+        Empty = new EmptyStateView(palette) { IsVisible = false };
         var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto)] };
         grid.Add(_header, 0, 0);
         grid.Add(tree, 0, 1);
+        grid.Add(new ScrollView { Content = Empty, IsVisible = false }, 0, 1);
         grid.Add(_card, 0, 2);
         Content = grid;
         Apply(palette);
@@ -511,6 +563,26 @@ public sealed class ExplorerView : ContentView
 
     /// <summary>The tree.</summary>
     public FolderTreeView Tree { get; }
+
+    /// <summary>What the explorer says with no folder open (phase X: Open folder, the recent folders); the page handles its actions.</summary>
+    public EmptyStateView Empty { get; }
+
+    /// <summary>Shows <paramref name="state"/> in the tree's place, or the tree when null.</summary>
+    public void SetEmpty(EmptyState? state)
+    {
+        if (state is not null)
+        {
+            Empty.Show(state);
+        }
+
+        Empty.IsVisible = state is not null;
+        if (Empty.Parent is View scroll)
+        {
+            scroll.IsVisible = state is not null;
+        }
+
+        Tree.IsVisible = state is null;
+    }
 
     /// <summary>The folder's name (shown in capitals), or null.</summary>
     public void SetFolder(string? root)
@@ -552,8 +624,10 @@ public sealed class ExplorerView : ContentView
         _projects.TextColor = palette.Secondary;
         _memory.TextColor = palette.Secondary;
         _card.Stroke = palette.Border;
+        Tree.Palette = palette;
         Tree.TextColor = palette.Text;
         Tree.SelectedColor = palette.Selection;
+        Empty.Apply(palette);
         Tree.FontFamily = palette.Font();
         var shown = _shown;
         _shown = null;
@@ -669,6 +743,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly ContentView _body = new();
     private readonly Button _collapse;
     private readonly Button _copyAll;
+    private readonly EmptyStateView _problemsEmpty;
     private readonly CollectionView _problems;
     private readonly CollectionView _output;
     private readonly CollectionView _measures;
@@ -716,7 +791,19 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _collapse = palette.Flat("⌄", palette.Secondary, 28, palette.FontSize + 2);
         _collapse.WidthRequest = 32;
         _collapse.Padding = new Thickness(0);
-        ToolTipProperties.SetText(_collapse, "Hide the panel (Ctrl+J)");
+        ToolTipProperties.SetText(_collapse, ShellTooltips.For(host, "Hide the panel", ShellCommandIds.TogglePanel));
+        host.KeyBindingsChanged += OnKeyBindingsChanged;
+        // Phase X: Problems with none says why there are none and what to do.
+        _problemsEmpty = new EmptyStateView(palette);
+        _problemsEmpty.ActionChosen += (_, action) =>
+        {
+            if (action.CommandId is { } command)
+            {
+                _ = _host.ExecuteCommandAsync(command);
+            }
+        };
+        _problems.EmptyView = _problemsEmpty;
+        _problemsEmpty.Show(ShellEmptyStates.Problems(null, null));
         SemanticProperties.SetDescription(_collapse, "Hide the bottom panel");
         _collapse.Clicked += (_, _) => CollapseRequested?.Invoke(this, EventArgs.Empty);
         _copyAll = palette.Flat("Copy all", palette.Secondary, 28, palette.SmallSize);
@@ -839,6 +926,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
     /// <summary>Shows <paramref name="model"/>'s problems (errors first, then by place), at most <c>CRAFT_PROBLEMS_LIMIT</c> rows.</summary>
     public void ShowProblems(EditorModel? model, string? fileName)
     {
+        _problemsEmpty.Show(ShellEmptyStates.Problems(model, fileName));
         if (model is null)
         {
             _problems.ItemsSource = null;
@@ -929,6 +1017,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         BackgroundColor = palette.Surface;
         _terminal.TextColor = palette.Secondary;
         _noMeasures.TextColor = palette.Secondary;
+        _problemsEmpty?.Apply(palette);
         _collapse.TextColor = palette.Secondary;
         _copyAll.TextColor = palette.Secondary;
         RebuildTabs();
@@ -937,10 +1026,14 @@ public sealed class BottomPanelView : ContentView, IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.Logged -= OnLogged;
         _telemetry.Changed -= OnMeasured;
         _telemetry.Dispose();
     }
+
+    private void OnKeyBindingsChanged(object? sender, EventArgs e) =>
+        Dispatcher.DispatchLabelled("bottom panel: the keys in the tooltip", () => ToolTipProperties.SetText(_collapse, ShellTooltips.For(_host, "Hide the panel", ShellCommandIds.TogglePanel)));
 
     private static string LineOf(EditorLogEntry entry) =>
         string.Create(CultureInfo.InvariantCulture, $"{entry.Time.ToLocalTime():HH:mm:ss}  {entry.Level,-11}  {entry.Source}: {entry.Message}{(entry.Error is null ? "" : "  (" + entry.Error.Message + ")")}");
@@ -962,6 +1055,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
             var cell = new Grid { RowDefinitions = [new RowDefinition(GridLength.Star), new RowDefinition(new GridLength(1))], MinimumHeightRequest = 32 };
             cell.Add(label, 0, 0);
             cell.Add(new BoxView { Color = active ? _palette.Accent : Colors.Transparent, HeightRequest = 1 }, 0, 1);
+            var states = _palette.States(cell, InteractionKind.Tab);     // phase X: hover and pressed from the theme
+            states.Label = label;
+            states.Selected = active;
             var tap = new TapGestureRecognizer();
             var chosen = tab;
             // A click only selects; the active tab clicked again does nothing (the owner: a click must not hide the panel).

@@ -33,7 +33,15 @@ public sealed partial class EditorModel
     {
         if (_completion is not { IsOpen: true } completion || completion.List is not { } list)
         {
+            _completionShown = false;
             return null;
+        }
+
+        if (!_completionShown)
+        {
+            // Phase X's motion: the list unfolds from its first row over CRAFT_MOTION_MS when it opens (not while it filters).
+            _completionShown = true;
+            _completionShownAt = _time.GetTimestamp();
         }
 
         var metrics = Metrics;
@@ -55,6 +63,20 @@ public sealed partial class EditorModel
         x = Math.Clamp(x, TextLeft, Math.Max(TextLeft, ViewportWidth - width));
         return new PopupBox(x, y, width, height, rows);
     }
+
+    /// <summary>The height of the completion list drawn now: its box's while it unfolds over the transition (at least a row), then the whole box; 0 while closed.</summary>
+    public float CompletionShownHeight() => CompletionBox() is { } box
+        ? Math.Min(box.Height, Math.Max(Metrics.LineHeight, box.Height * (float)CompletionReveal))
+        : 0;
+
+    private bool _completionShown;
+    private long _completionShownAt;
+
+    /// <summary>How far the completion list has unfolded since it opened (0 to 1, eased; 1 at once with reduced motion or no list).</summary>
+    public double CompletionReveal => _completionShown ? Motion.Progress(_time.GetElapsedTime(_completionShownAt), Motion.Duration(Options)) : 1;
+
+    /// <summary>Whether a transition is drawing (the completion list unfolding): the view draws another frame after this one.</summary>
+    public bool IsAnimating => _completionShown && CompletionReveal < 1;
 
     /// <summary>The completion row under a view point, or null when the point is not on the list.</summary>
     public int? PopupRowAt(float viewX, float viewY)
@@ -93,7 +115,8 @@ internal sealed class EditorPopupRenderer
 
         if (completionBox is { } box)
         {
-            DrawCompletion(canvas, model, box, colors, metrics);
+            // Phase X's motion: the list unfolds from its first row (the hit test keeps the whole box).
+            DrawCompletion(canvas, model, box with { Height = model.CompletionShownHeight() }, colors, metrics);
         }
     }
 
@@ -117,6 +140,11 @@ internal sealed class EditorPopupRenderer
 
             var item = items[index];
             float top = box.Y + (row * metrics.LineHeight);
+            if (top + metrics.LineHeight > box.Y + box.Height + 0.5f)
+            {
+                break;                                           // the rows the unfolding list does not show yet
+            }
+
             if (index == completion.SelectedIndex)
             {
                 canvas.FillRect(box.X, top, box.Width, metrics.LineHeight, colors.PopupSelection);

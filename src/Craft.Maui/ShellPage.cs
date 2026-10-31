@@ -57,6 +57,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private const int PlatformHookRetryMilliseconds = 100;
     private const double MenuWidth = 300;
     private const double QuickOpenWidth = 460;
+    private const string ContextMenuCommand = "craft.contextMenu";
     private readonly ShellStartup _startup;
     private readonly string? _initialPath;
     private readonly EditorHost _host;
@@ -88,6 +89,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly CraftDialog _dialog;
     private readonly IEditorKeyHandler _keys;
     private readonly ProblemReport _report;
+    private readonly MenuModel _menu;
+    private readonly MenuView _menuView;
     private readonly RailView _rail;
     private readonly BottomPanelView _bottom;
     private readonly TerminalManager _terminals;
@@ -139,16 +142,27 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, _dialog, () => shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
         UiDispatch.Labels = _host.Labels;                    // the views' dispatches run labelled (the watchdog names them)
         // The owner's note 19: Ctrl+C that no control took copies the bottom panel's chosen rows, before the key bindings.
-        _keys = new PanelCopyKeys(_dialog.Queue.Before(_host), () => _bottom?.CopyChosen() ?? false);
+        // Phase X: the open menu (a title-bar menu or a context menu) takes its keys first, then the dialogs, then the bindings.
+        _menu = new MenuModel(_host);
+        _keys = _menu.Before(new PanelCopyKeys(_dialog.Queue.Before(_host), () => _bottom?.CopyChosen() ?? false));
         // The owner's note 21: the keys' names, the commands, the UI work and the log lines go to the run's trail.
         _host.Trail = startup.Crashes?.Trail;
         CallbackGuard.Options = startup.Options;
         CallbackGuard.Failed += OnCallbackFailed;
         _dialog.FallbackFocus = () => _shown;
-        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog));
+        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog), null, startup.Platform.ShellFiles, new MauiEditorClipboard());
         _shell = shell;
         _shell.EditorOf = tab => (tab.View as EditorView)?.Model;     // format on save goes through the tab's editor
         _palette = new ShellPalette(_shell.Theme, _shell.Options);
+        ShellMotion.Milliseconds = Motion.Duration(_shell.Options);
+        _menuView = new MenuView(_menu, _palette);
+        _menu.Changed += (_, _) =>
+        {
+            if (!_menu.IsOpen && ReferenceEquals(_popup.Shown, _menuView))
+            {
+                _popup.Hide();
+            }
+        };
         _editCommands = new ShellEditCommands(() => _shown?.Model, _shell);
         _quickOpen = new QuickOpen(_host, _shell.Options.QuickOpenRows) { CraftOptionsLimit = _shell.Options.QuickOpenFiles };
         _pluginStatus = new StatusItemsView(_host);
@@ -191,17 +205,26 @@ public sealed class ShellPage : ContentPage, IDisposable
         _titleWide.SearchChanged += (_, text) => ShowQuickOpen(text);
         _titleWide.SearchFocused += (_, _) => ShowQuickOpen(_titleWide.Search.Text ?? "");
         _titleWide.SearchSubmitted += (_, _) => _ = PickQuickOpenAsync(0);
-        _popup.Closed += (_, _) => _lastQuery = "";
+        _popup.Closed += (_, _) =>
+        {
+            _lastQuery = "";
+            _menu.Close();
+        };
 
         _rail = new RailView(_host, _palette);
         _tree.Indent = _shell.Options.TreeIndent;
         _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
         _explorer = new ExplorerView(_tree, _palette);
         _explorer.SetFolder(null);
+        _explorer.Empty.ActionChosen += (_, action) => RunEmptyAction(action);
+        _tree.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tree,
+            e.Item is { } item ? new ContextMenuTarget(EditorContextMenus.Tree, item.Path, item.IsFolder) : new ContextMenuTarget(EditorContextMenus.Tree), e.Where);
         _sideSplit.Panel = _explorer;
         _tabStrip = new TabStripView(_shell.Tabs, _shell.Pages);
         _tabStrip.CloseRequested += (_, tab) => _ = _shell.CloseTabAsync(tab);
         _tabStrip.ListRequested += (_, _) => _ = PickTabAsync();
+        _tabStrip.Tooltip = (title, command) => ShellTooltips.For(_host, title, command);
+        _tabStrip.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, e.Tab.FilePath, false, e.Tab), e.Where);
         _breadcrumb = new BreadcrumbView(_palette);
         _empty = _palette.Label("No file is open.\nCtrl+O opens a file, Ctrl+Shift+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.", _palette.Secondary);
         _empty.HorizontalTextAlignment = TextAlignment.Center;
@@ -257,8 +280,8 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         // Each panel's splitter: a drag kept within what the panel and the editor share, written to the workspace's
         // settings when it ends (not on every move).
-        Wire(_sideSplit, ShellPanel.Explorer, () => Width - _rail.Width - (_chatSplit.IsVisible ? _chatSplit.Width : 0));
-        Wire(_chatSplit, ShellPanel.Chat, () => Width - _rail.Width - (_sideSplit.IsVisible ? _sideSplit.Width : 0));
+        Wire(_sideSplit, ShellPanel.Explorer, () => Width - _rail.Width - (_chatSplit.IsShown ? _chatSplit.Width : 0));
+        Wire(_chatSplit, ShellPanel.Chat, () => Width - _rail.Width - (_sideSplit.IsShown ? _sideSplit.Width : 0));
         Wire(_bottomSplit, ShellPanel.Bottom, () => (_center?.Height ?? 0) - _tabStrip.Height - _breadcrumb.Height);
 
         // Phase T: the terminals in the Terminal tab, on the platform's host (ConPTY on Windows) when it has one.
@@ -272,7 +295,6 @@ public sealed class ShellPage : ContentPage, IDisposable
         _terminalPanel = new TerminalPanelView(_terminals, _palette);
         _bottom.TerminalContent = _terminalPanel;
         _terminals.ViewRequested += (_, request) => OnTerminalView(request);
-        _tree.OpenInTerminalRequested += (_, folder) => _terminals.OpenInFolder(folder);
         // Phase U: the running operations in the status bar, the bell, the notification centre and its toasts.
         _activity = new ActivityStatusView(_host.ActivityCenter, _palette);
         _bell = new BellView(_palette);
@@ -288,6 +310,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.Notifications.Toast += OnToast;
         _status = new StatusBarView(_palette, _pluginStatus, _activity, _bell);
         _status.ProblemsTapped += (_, _) => ShowBottom(BottomTab.Problems);
+        var goToLine = new TapGestureRecognizer();
+        goToLine.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.GoToLine);
+        _status.Position.GestureRecognizers.Add(goToLine);
+        _palette.States(_status.Position, InteractionKind.Flat).Label = _status.Position;
 
         _railLine = _palette.Line(vertical: true);
         _statusLine = _palette.Line();
@@ -351,6 +377,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         _shell.OptionsChanged += (_, _) => OnOptionsChanged();
         _shell.ThemeChanged += (_, _) => ApplyTheme();
         _shell.ViewRequested += (_, view) => OnViewRequested(view);
+        _shell.RevealRequested += (_, path) => _tree.ScrollTo(path);
+        _shell.Recent.Changed += OnRecentChanged;
+        _host.KeyBindingsChanged += OnKeyBindingsChanged;
         _shell.Layout.Changed += (_, _) => ApplyLayout();
         _shell.Panels.Changed += (_, _) => ApplyLayout();
         _shell.Pages.Changed += (_, _) => ShowActive();
@@ -366,6 +395,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _appliedOptions = _shell.Options;
         _appliedTheme = _shell.Theme;
         ApplyLayout();
+        UpdateExplorerEmpty();
+        ApplyTooltips();
     }
 
     /// <summary>The window the page is in: its title shows the file, the dirty marker and the folder; with <c>CRAFT_TITLE_BAR=window</c> the title bar's row goes into its caption.</summary>
@@ -404,6 +435,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _activity.Dispose();
         _centre.Dispose();
         EditorMenus.Changed -= OnMenusChanged;
+        _shell.Recent.Changed -= OnRecentChanged;
+        _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
         _host.PanelsChanged -= OnHostPanelsChanged;
         _host.PendingChordChanged -= OnPendingChordChanged;
@@ -607,7 +640,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private void ToggleCentre(bool? open = null)
     {
         _centre.Toggle(open);
-        if (_centre.IsVisible)
+        if (_centre.IsOpen)
         {
             _toast.Hide();
         }
@@ -619,7 +652,7 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private void OnToast(object? sender, NotificationEntry entry)
     {
-        if (!_centre.IsVisible)
+        if (!_centre.IsOpen)
         {
             _toast.Show(entry, _shell.Options.ToastMilliseconds);
         }
@@ -728,6 +761,12 @@ public sealed class ShellPage : ContentPage, IDisposable
             return Task.CompletedTask;
         }, _ => _conversations.HasPanels, "The plug-ins' chat column (a sheet in the narrow layout)"));
         EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.I, KeyModifiers.Control | KeyModifiers.Alt), "craft.chat"));
+        EditorCommands.Register(new EditorCommand(ContextMenuCommand, "Edit: Show the context menu", (_, _) =>
+        {
+            OpenEditorMenuAtCaret();
+            return Task.CompletedTask;
+        }, _ => _shown?.Model is not null, "The editor's context menu at the caret, its first row focused (the arrows, Enter, Escape)"));
+        EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.F10, KeyModifiers.Shift), ContextMenuCommand, When: KeyContext.TextEditor));
         EditorCommands.Register(new EditorCommand("craft.notifications", "View: Show or hide the notifications", (_, _) =>
         {
             ToggleCentre();
@@ -747,7 +786,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             _ = _shell.Panels.ToggleAsync(ShellPanel.Chat);   // kept per workspace; Changed lays the page out
         }
 
-        if (_chatSplit.IsVisible)
+        if (_chatSplit.IsShown)
         {
             _conversations.FocusInput();
         }
@@ -912,52 +951,89 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
-    // A menu: its rows (the registered items whose command is registered) under its button; a click runs the command.
+    // A title-bar menu under its button (phase X: the menu model's rows, keys and states).
     private void ShowMenu(string menu, View anchor)
     {
-        var rows = ShellMenus.Rows(menu, _host);
-        var stack = new VerticalStackLayout { Spacing = 0, Padding = new Thickness(0, 4) };
-        if (rows.Count == 0)
+        _menu.Open(menu);
+        ShowMenuAt(_popup.Below(anchor));
+    }
+
+    // A context menu (phase X) at the right-click, on what it was opened on; each row runs a registered command.
+    private void OpenContextMenu(string menu, ContextMenuTarget target, TappedEventArgs where)
+    {
+        var at = where.GetPosition(_popup) ?? new Point(0, 0);
+        _menu.Open(menu, target);
+        ShowMenuAt(at);
+    }
+
+    // Shift+F10: the editor's menu at the caret, its first row focused.
+    private void OpenEditorMenuAtCaret()
+    {
+        if (_shown is not { Model: { } model } view || _shell.Tabs.Active is not { } tab)
         {
-            var none = _palette.Label("Nothing here yet: plug-ins add items to this menu.", _palette.Secondary, _palette.SmallSize);
-            none.Margin = new Thickness(12, 6);
-            none.LineBreakMode = LineBreakMode.WordWrap;
-            stack.Children.Add(none);
+            return;
         }
 
-        foreach (var row in rows)
+        var caret = model.PointFromPosition(model.Selection.Caret);
+        var below = _popup.Below(view);
+        var at = new Point(below.X + caret.X - model.ScrollX, below.Y - view.Height + caret.Y - model.ScrollY + model.Metrics.LineHeight);
+        _menu.Open(EditorContextMenus.Editor, new ContextMenuTarget(EditorContextMenus.Editor, tab.FilePath, false, tab), focusFirst: true);
+        ShowMenuAt(at);
+    }
+
+    private void ShowMenuAt(Point at)
+    {
+        _menuView.Build(_palette);
+        _popup.Show(_menuView, at, MenuWidth);
+        _ = ShellMotion.ShowAsync(_menuView, -4);
+    }
+
+    // An empty state's action: its command, or its folder opened.
+    private void RunEmptyAction(EmptyAction action)
+    {
+        if (action.Path is { } folder)
         {
-            if (row.StartsGroup)
-            {
-                var line = _palette.Line();
-                line.Margin = new Thickness(0, 4);
-                stack.Children.Add(line);
-            }
-
-            var cell = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], Padding = new Thickness(12, 0), MinimumHeightRequest = 28 };
-            cell.Add(_palette.Label(row.Title, row.Enabled ? _palette.Text : _palette.Secondary), 0, 0);
-            if (row.Chord is { } chord)
-            {
-                cell.Add(_palette.Label(chord, _palette.Secondary, _palette.SmallSize), 1, 0);
-            }
-
-            if (row.Enabled)
-            {
-                var tap = new TapGestureRecognizer();
-                string command = row.CommandId;
-                tap.Tapped += (_, _) =>
-                {
-                    _popup.Hide();
-                    _ = _host.ExecuteCommandAsync(command);
-                };
-                cell.GestureRecognizers.Add(tap);
-            }
-
-            stack.Children.Add(cell);
+            _ = _shell.OpenFolderAsync(folder);
         }
+        else if (action.CommandId is { } command)
+        {
+            _ = _host.ExecuteCommandAsync(command);
+        }
+    }
 
-        var box = _palette.Box(stack, 6, new Thickness(0), _palette.Raised, _palette.BorderStrong);
-        _popup.Show(box, _popup.Below(anchor), MenuWidth);
+    // The explorer with no folder says what to do (phase X).
+    private void UpdateExplorerEmpty() =>
+        _explorer.SetEmpty(_shell.Workspace is null ? ShellEmptyStates.Explorer(_host, _shell.Recent) : null);
+
+    private void OnRecentChanged(object? sender, EventArgs e) => _host.Dispatch("shell: the recent folders", UpdateExplorerEmpty);
+
+    private void OnKeyBindingsChanged(object? sender, EventArgs e) => _host.Dispatch("shell: the keys in the tooltips", () =>
+    {
+        ApplyTooltips();
+        UpdateExplorerEmpty();
+    });
+
+    // Phase X: every icon-only control's tooltip names its action and the keys in effect (a remap shows at once).
+    private void ApplyTooltips()
+    {
+        string Tip(string title, string command) => ShellTooltips.For(_host, title, command);
+        _titleWide.SetTooltips(Tip);
+        _titleNarrow.SetTooltips(Tip);
+        _tabStrip.Refresh();
+        _conversations.SetCloseTooltip(Tip("Close the chat", "craft.chat"));
+        _centre.SetTooltips(Tip("Close the notifications", "craft.notifications"), "Dismiss every notification that has ended");
+        _bell.Keys = _host.KeysOf("craft.notifications") is { } keys ? $" ({keys})" : "";
+        _bell.Refresh();
+        ToolTipProperties.SetText(_status.Problems, Tip("Show the problems", ShellCommandIds.ShowProblems));
+        ToolTipProperties.SetText(_status.Position, Tip("Go to line", ShellCommandIds.GoToLine));
+        ToolTipProperties.SetText(_status.Branch, "The folder's git branch");
+        ToolTipProperties.SetText(_status.Semantic, "The language's semantic layer: its state, projects and memory (the explorer's card)");
+        ToolTipProperties.SetText(_status.Indentation, "Indentation: CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES (Settings, Editor)");
+        ToolTipProperties.SetText(_status.Encoding, "The file's encoding (kept when it is saved)");
+        ToolTipProperties.SetText(_status.LineEnding, "The file's line breaks (kept when it is saved; CRAFT_LINE_ENDING for new files)");
+        ToolTipProperties.SetText(_status.Language, "The file's language and the plug-in that brings it");
+        ToolTipProperties.SetText(_status.Paint, "The last frame's paint time");
+        ToolTipProperties.SetText(_status.Model, "The model in use: pick another with the model chip under the chat's input");
     }
 
     // Quick open's list under the search box; the files are listed when a folder opens.
@@ -969,16 +1045,19 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         _lastQuery = text;
+        _menu.Close();
         var items = _quickOpen.Query(text);
         var stack = new VerticalStackLayout { Spacing = 0, Padding = new Thickness(0, 4) };
         if (items.Count == 0)
         {
-            string why = QuickOpen.IsLineQuery(text) ? (_shown is null ? "Open a file to go to one of its lines." : "Type a line number (:42, or :42:7 for a column).")
-                : text.TrimStart().StartsWith('>') ? "No command matches."
-                : _shell.Workspace is null ? "Open a folder (Ctrl+Shift+O) to find its files by name; type '>' for a command."
-                : _quickOpen.IsIndexing ? "Listing the folder's files…" : "No file matches; type '>' for a command.";
-            var none = _palette.Label(why, _palette.Secondary, _palette.SmallSize);
-            none.Margin = new Thickness(12, 6);
+            // Phase X: a search with no results says what to type, or what to open first.
+            var none = new EmptyStateView(_palette);
+            none.Show(ShellEmptyStates.Search(_host, text, _shell.Workspace is not null, _shown is not null, _quickOpen.IsIndexing));
+            none.ActionChosen += (_, action) =>
+            {
+                _popup.Hide();
+                RunEmptyAction(action);
+            };
             stack.Children.Add(none);
         }
 
@@ -986,11 +1065,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             var item = items[i];
             var cell = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)], ColumnSpacing = 10, Padding = new Thickness(12, 0), MinimumHeightRequest = 28 };
-            if (i == 0)
-            {
-                cell.BackgroundColor = _palette.Selection;
-            }
-
+            var states = _palette.States(cell, InteractionKind.MenuItem);     // phase X: hover and pressed; Enter's row selected
+            states.Selected = i == 0;
             cell.Add(_palette.Label(item.Text), 0, 0);
             if (item.Detail is { } detail)
             {
@@ -1184,6 +1260,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             : ModelChipState.Ready;
         // The owner's note 11: the model chip is the composer's (the chat's and the agent's), with its device (note 6).
         _conversations.ModelChip.Set(chip, state, tooltip);
+        _conversations.ModelChanged();                           // an empty chat says which model answers
         _status.Model.Text = ShellText.ModelUsage(status);
     }
 
@@ -1299,6 +1376,13 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         view.DefinitionRequested += OnDefinitionRequested;
+        view.ContextRequested += (_, e) =>
+        {
+            if (_shell.Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } owner)
+            {
+                OpenContextMenu(EditorContextMenus.Editor, new ContextMenuTarget(EditorContextMenus.Editor, owner.FilePath, false, owner), e);
+            }
+        };
         view.SaveRequested += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.Save);
         view.FindRequested += (_, e) => ShowFind(e.Replace, e.InitialQuery);
         view.CaretMoved += (_, _) =>
@@ -1429,6 +1513,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         using var label = UiDispatch.Enter("shell: the workspace opened (tree, explorer, layout)");
         _tree.Tree = _shell.Tree;
         _explorer.SetFolder(_shell.Workspace?.Root);
+        UpdateExplorerEmpty();
         _status.Branch.Text = _shell.Branch ?? "";
         _ = _quickOpen.IndexAsync(_shell.Workspace);
         UpdateTitle();
@@ -1464,6 +1549,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         }
 
+        ShellMotion.Milliseconds = Motion.Duration(options);
         _quickOpen.Rows = options.QuickOpenRows;
         _quickOpen.CraftOptionsLimit = options.QuickOpenFiles;
         _tree.Indent = options.TreeIndent;
@@ -1500,14 +1586,13 @@ public sealed class ShellPage : ContentPage, IDisposable
             _sideSplit.Panel = side;
         }
 
-        _sideSplit.IsVisible = sideVisible;
         _sideSplit.Fill = narrow;
         _sideSplit.Resizable = !narrow;
         _sideSplit.Size = panels.SizeOf(ShellPanel.Explorer);
+        _sideSplit.SetVisible(sideVisible, narrow ? 0 : ShellMotion.Milliseconds);   // phase X: the panel grows open and shrinks closed
         _rail.Active = !narrow && sideVisible ? (ReferenceEquals(side, _explorer) ? "craft.explorer" : panels.SideView) : null;
         _center.IsVisible = layout.EditorVisible;
 
-        _chatSplit.IsVisible = _conversations.HasPanels && (narrow ? _chatSheetOpen : panels.IsOpen(ShellPanel.Chat));
         if (narrow)
         {
             // The sheet: over the body's lower part, the width of the window, no splitter.
@@ -1529,8 +1614,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             _chatSplit.HeightRequest = -1;
         }
 
-        _bottomSplit.IsVisible = panels.IsOpen(ShellPanel.Bottom) && !narrow;
+        _chatSplit.SetVisible(_conversations.HasPanels && (narrow ? _chatSheetOpen : panels.IsOpen(ShellPanel.Chat)), narrow ? 0 : ShellMotion.Milliseconds);
         _bottomSplit.Size = panels.SizeOf(ShellPanel.Bottom);
+        _bottomSplit.SetVisible(panels.IsOpen(ShellPanel.Bottom) && !narrow, narrow ? 0 : ShellMotion.Milliseconds);
         _breadcrumb.IsVisible = !narrow && _shell.Pages.Active is null;
         _body.ColumnDefinitions[2].Width = narrow && layout.TreeVisible ? GridLength.Star : GridLength.Auto;
         _body.ColumnDefinitions[3].Width = layout.EditorVisible ? GridLength.Star : new GridLength(0);
@@ -1583,6 +1669,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         _toast.Apply(p);
         _center.BackgroundColor = p.Surface;
         _editorArea.BackgroundColor = p.Surface;
+        // Phase X: every control's states take the new theme's tokens (one walk, at a theme change only).
+        foreach (var element in ((IVisualTreeElement)this).GetVisualTreeDescendants())
+        {
+            if (element is VisualElement visual && InteractiveStates.Of(visual) is { } states)
+            {
+                states.Apply(p);
+            }
+        }
         _empty.TextColor = p.Secondary;
         _findBar.BackgroundColor = p.Raised;
         foreach (var label in _findLabels)

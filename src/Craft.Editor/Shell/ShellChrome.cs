@@ -45,7 +45,8 @@ public static class ShellMenus
 
     /// <summary>
     /// The rows of <paramref name="menu"/>: its items whose command is registered, by group and order, each with its
-    /// chord (a binding's, else the item's <see cref="MenuItem.Shortcut"/>) and whether it can run in <paramref name="host"/>.
+    /// chord (the keys in effect, <see cref="EditorHost.KeysOf"/>, so a remap shows; else the item's <see cref="MenuItem.Shortcut"/>)
+    /// and whether it can run in <paramref name="host"/>.
     /// </summary>
     public static IReadOnlyList<MenuRow> Rows(string menu, IEditorHost host)
     {
@@ -71,7 +72,8 @@ public static class ShellMenus
                 enabled = false;
             }
 
-            rows.Add(new MenuRow(item.Title ?? MenuTitle(command), ChordOf(command.Name) ?? item.Shortcut, command.Name, group is not null && group != item.Group, enabled));
+            string? chord = host is EditorHost editorHost ? editorHost.KeysOf(command.Name) : ChordOf(command.Name);
+            rows.Add(new MenuRow(item.Title ?? MenuTitle(command), chord ?? item.Shortcut, command.Name, group is not null && group != item.Group, enabled));
             group = item.Group;
         }
 
@@ -533,6 +535,14 @@ public sealed class ShellEditCommands : IDisposable
         ("craft.parameterHints", "Edit: Parameter hints", EditorKey.Space, KeyModifiers.Control | KeyModifiers.Shift),
     ];
 
+    /// <summary>The editor's context menu items these commands give: the command, its group and its order.</summary>
+    public static IReadOnlyList<(string Id, int Group, int Order)> EditorContextItems { get; } =
+    [
+        ("craft.cut", 0, 0), ("craft.copy", 0, 1), ("craft.paste", 0, 2),
+        ("craft.goToDefinition", 1, 0),
+        ("craft.formatDocument", 2, 0), (StandardShortcuts.QuickFix, 2, 1),
+    ];
+
     private readonly List<string> _registered = [];
     private readonly List<(string Menu, string Id)> _menus = [];
     private readonly List<KeyBinding> _bindings = [];
@@ -590,6 +600,19 @@ public sealed class ShellEditCommands : IDisposable
         {
             EditorKeyBindings.Register(binding);
             _bindings.Add(binding);
+        }
+
+        // The editor's context menu (phase X): the edits, the navigation and the code's own commands; Find references is
+        // the shell's, the AI actions their plug-in's (each runs only when picked).
+        foreach (var (id, group, place) in EditorContextItems)
+        {
+            if (id == StandardShortcuts.QuickFix && shell is null)
+            {
+                continue;
+            }
+
+            EditorMenus.Register(new MenuItem(EditorContextMenus.Editor, id, Order: place, Group: group));
+            _menus.Add((EditorContextMenus.Editor, id));
         }
 
         if (EditorKeyMaps.Find(StandardShortcuts.VisualStudio) is null)

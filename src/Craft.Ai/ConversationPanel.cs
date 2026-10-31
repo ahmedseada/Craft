@@ -76,6 +76,9 @@ public abstract class ConversationPanel : IConversationPanel
     public abstract string Placeholder { get; }
 
     /// <inheritdoc />
+    public virtual string? EmptyText => null;
+
+    /// <inheritdoc />
     public bool IsBusy
     {
         get => _busy;

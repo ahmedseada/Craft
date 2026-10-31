@@ -150,12 +150,16 @@ public sealed class CraftDialog : Grid
         return items.Count == 0 ? -1 : (await Queue.ShowAsync(DialogRequest.Pick(title, items, text), cancellationToken)).Index;
     }
 
-    /// <summary>A text to type: the text, or null when it was cancelled.</summary>
-    public async Task<string?> PromptAsync(string title, string text, string placeholder, string ok = "OK", CancellationToken cancellationToken = default)
+    /// <summary>A text to type (the field starting with <paramref name="initial"/>): the text, or null when it was cancelled.</summary>
+    public async Task<string?> PromptAsync(string title, string text, string placeholder, string ok = "OK", CancellationToken cancellationToken = default, string initial = "")
     {
-        var result = await Queue.ShowAsync(DialogRequest.Prompt(title, text, placeholder, ok), cancellationToken);
+        var result = await Queue.ShowAsync(DialogRequest.Prompt(title, text, placeholder, ok, initial), cancellationToken);
         return result.Index == 0 ? result.Text ?? "" : null;
     }
+
+    /// <summary>A confirmation of <paramref name="action"/> with Cancel (in the error's colour when <paramref name="danger"/>): true only when it was chosen.</summary>
+    public async Task<bool> ConfirmAsync(string title, string text, string action, bool danger = false, CancellationToken cancellationToken = default) =>
+        (await Queue.ShowAsync(DialogRequest.Confirm(title, text, action, danger), cancellationToken)).Index == 0;
 
     private void Show()
     {
@@ -222,6 +226,7 @@ public sealed class CraftDialog : Grid
             if (request.IsList && action.Role != DialogActionRole.Cancel)
             {
                 button = p.Flat(action.Label, p.Text, 32);
+                p.States(button, Craft.Editor.Shell.InteractionKind.Row);
                 button.ClassId = RowClassId;
                 button.HorizontalOptions = LayoutOptions.Fill;
                 button.Padding = new Thickness(10, 0);
@@ -237,7 +242,7 @@ public sealed class CraftDialog : Grid
                 };
                 if (action.Role == DialogActionRole.Danger)
                 {
-                    button.TextColor = p.Error;
+                    InteractiveStates.Of(button)?.SetText(p.Error);   // a losing action in the error's colour, in every state
                 }
 
                 button.Margin = new Thickness(8, 0, 0, 0);
@@ -300,9 +305,9 @@ public sealed class CraftDialog : Grid
 
         for (int i = 0; i < _actions.Count; i++)
         {
-            if (_actions[i].ClassId == RowClassId)
+            if (_actions[i].ClassId == RowClassId && InteractiveStates.Of(_actions[i]) is { } states)
             {
-                _actions[i].BackgroundColor = i == index ? _palette.Selection : Colors.Transparent;
+                states.Selected = i == index;
             }
         }
     }

@@ -112,6 +112,75 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         _keyMapPrefixes.Clear();
         KeyMap = null;
         KeyMapProblem = null;
+        try
+        {
+            ReadKeyMap(keyMap);
+        }
+        finally
+        {
+            KeyBindingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised after <see cref="SetKeyBindings"/> took new bindings or a keymap (the tooltips and menus show the keys again).</summary>
+    public event EventHandler? KeyBindingsChanged;
+
+    /// <summary>
+    /// The keys that run <paramref name="commandId"/> now, as the menus and tooltips write them ("Ctrl+B", "Ctrl+K Ctrl+S"):
+    /// the user's binding first, else the keymap's, else the registered one, else the key the editor answers itself
+    /// (<see cref="Shell.StandardShortcuts.EditorKeys"/>), each only while no layer above gave those keys to another
+    /// command or took them away; null when no key runs it. A remap shows at once.
+    /// </summary>
+    public string? KeysOf(string commandId)
+    {
+        ArgumentNullException.ThrowIfNull(commandId);
+        foreach (var (keys, command) in _userBindings)
+        {
+            if (command.Equals(commandId, StringComparison.OrdinalIgnoreCase))
+            {
+                return KeysText(keys.Chord, keys.Then);
+            }
+        }
+
+        foreach (var (keys, binding) in _keyMapBindings)
+        {
+            if (binding.CommandId.Equals(commandId, StringComparison.OrdinalIgnoreCase) && !_userBindings.ContainsKey(keys))
+            {
+                return KeysText(keys.Chord, keys.Then);
+            }
+        }
+
+        var registered = EditorKeyBindings.All;
+        for (int i = 0; i < registered.Count; i++)
+        {
+            var binding = registered[i];
+            var keys = (binding.Chord, binding.Then ?? default);
+            if (binding.CommandId.Equals(commandId, StringComparison.OrdinalIgnoreCase) && !_userBindings.ContainsKey(keys) && !_keyMapBindings.ContainsKey(keys))
+            {
+                return binding.DisplayText;
+            }
+        }
+
+        foreach (var (text, command) in Shell.StandardShortcuts.EditorKeys)
+        {
+            if (command.Equals(commandId, StringComparison.OrdinalIgnoreCase))
+            {
+                var (first, then) = KeyBinding.ParseKeys(text);
+                if (!_userBindings.ContainsKey((first, then ?? default)))
+                {
+                    return KeysText(first, then ?? default);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string KeysText(KeyChord chord, KeyChord then) =>
+        then == default ? chord.DisplayText : string.Concat(chord.DisplayText, " ", then.DisplayText);
+
+    private void ReadKeyMap(string? keyMap)
+    {
         if (string.IsNullOrWhiteSpace(keyMap))
         {
             return;

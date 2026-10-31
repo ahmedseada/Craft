@@ -114,6 +114,12 @@ public interface IConversationPanel : IEditorPanel
     /// <summary>The input's placeholder ("Ask about this file. @ adds context, / runs a code action.").</summary>
     string Placeholder { get; }
 
+    /// <summary>
+    /// What the panel says before its first entry: what it can do and how to start (phase X's empty states); null lets the
+    /// host say it from <see cref="IEditorPanel.Title"/> and <see cref="Placeholder"/>. The host adds which model answers.
+    /// </summary>
+    string? EmptyText => null;
+
     /// <summary>Whether it is working (a reply streams, a run goes on): the host shows the header's Stop.</summary>
     bool IsBusy { get; }
 

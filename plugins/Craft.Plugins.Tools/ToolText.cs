@@ -6,12 +6,39 @@ using System.Globalization;
 using System.Text;
 using Craft.Abstractions;
 
-namespace Craft.Ai;
+namespace Craft.Plugins.Tools;
 
 /// <summary>What both backings of the editor's tools share: paths under a folder, its files, reading lines and searching.</summary>
 internal static class ToolText
 {
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
+
+    /// <summary>
+    /// Symbols as find_symbol answers: "path:line:column: kind name — description (in container)" one a line, the
+    /// closest first (an exact name, then a name that starts with the query, then the rest), at most <paramref name="limit"/>.
+    /// </summary>
+    public static string Symbols(string? root, string query, List<SymbolLocation> found, int limit)
+    {
+        if (found.Count == 0)
+        {
+            return $"No symbol's name matches \"{query}\".";
+        }
+
+        int Rank(SymbolLocation s) => s.Name.Equals(query, StringComparison.OrdinalIgnoreCase) ? 0 : s.Name.StartsWith(query, StringComparison.OrdinalIgnoreCase) ? 1 : 2;
+        var lines = new List<string>(Math.Min(limit, found.Count) + 1);
+        foreach (var symbol in found.Select((s, i) => (s, i)).OrderBy(p => Rank(p.s)).ThenBy(p => p.i).Select(p => p.s).Take(limit))
+        {
+            string where = symbol.FilePath is { } file ? Display(root, file) : "(no file)";
+            lines.Add(string.Create(Culture, $"{where}:{symbol.Line}:{symbol.Column}: {symbol.Kind} {symbol.Name} — {symbol.Description}{(symbol.Container is { } c ? $" (in {c})" : "")}"));
+        }
+
+        if (found.Count > limit)
+        {
+            lines.Add(string.Create(Culture, $"(stopped at {limit} symbols)"));
+        }
+
+        return string.Join('\n', lines);
+    }
 
     /// <summary>The full path of <paramref name="path"/> (relative to <paramref name="root"/>) when it lies inside it, else null.</summary>
     public static string? Inside(string root, string path)

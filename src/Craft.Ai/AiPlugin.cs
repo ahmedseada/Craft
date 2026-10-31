@@ -9,7 +9,6 @@ using Idrak.Abstraction.Generation;
 using Idrak.Abstraction.Plugins;
 
 [assembly: IdrakPluginPackage(typeof(AiPackage))]
-[assembly: ToolProvider(typeof(FolderToolProvider))]
 
 namespace Craft.Ai;
 

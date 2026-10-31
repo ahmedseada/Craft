@@ -13,7 +13,7 @@ namespace Craft.Ai;
 /// <summary>
 /// The chat panel (plan 1 phase A2, the approved design's chat column; a sheet in the narrow layout): the chat model of the
 /// AI plug-in's provider (<see cref="AiModels.ChatAsync"/>) with the editor's live tools offered (Idrak's
-/// <see cref="ChatTools.WithTools"/> over <see cref="EditorTools.Live"/>), the reply streamed into one entry at a time,
+/// <see cref="ChatTools.WithTools"/> over <see cref="EditorToolSets.Live"/>), the reply streamed into one entry at a time,
 /// each tool call a row ("Called get_diagnostics → 1 warning"), each fenced code block an entry with "Apply as diff"
 /// (placed by <see cref="SnippetPlacement"/>, proposed through <see cref="IEditorHost.ProposeAsync"/>: the diff view) and
 /// Copy, then the tokens and the rate. Context chips: the active file, the selection, its problems (each removable for the
@@ -54,7 +54,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _models = models ?? throw new ArgumentNullException(nameof(models));
-        _tools = ToolRegistry.Create().Add(EditorTools.Live(host, settings())).Build();
+        _tools = ToolRegistry.Create().Add(EditorToolSets.Live(host)).Build();   // every registered tool set (the tools plug-in's "editor", and any plug-in's)
         host.ActiveDocumentChanged += OnContextChanged;
         host.SelectionChanged += OnContextChanged;
         LoadIfNeeded();
@@ -444,7 +444,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             if (content is not null)
             {
                 var lines = content.Split('\n');
-                text.Append(CultureInfo.InvariantCulture, $"The file {chip.Text}:\n```\n").AppendJoin('\n', lines.Take(settings.ReadLines)).Append("\n```\n");
+                text.Append(CultureInfo.InvariantCulture, $"The file {chip.Text}:\n```\n").AppendJoin('\n', lines.Take(settings.ChatFileLines)).Append("\n```\n");
             }
         }
 

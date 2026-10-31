@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Sampler",
+  "version": "0.1.0",
+  "summary": "P3 · bracket-balanced completion: masks tokens that would close a brace, parenthesis or bracket the prefix never opened (over Idrak's default sampler) [TokenSamplers \"default\", shadowing the library's]",
+  "contractVersion": "1.0",
+  "capabilities": ["model"]
+}

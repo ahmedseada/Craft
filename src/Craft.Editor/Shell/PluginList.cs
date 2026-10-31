@@ -77,6 +77,7 @@ public static class PluginList
                 { Loaded: false } => (PluginState.Problem, "Not loaded", plugin.Error),
                 _ when startError is not null => (PluginState.Problem, "Did not start", startError),
                 { Outdated: true } => (PluginState.Outdated, "Outdated contract · loaded", plugin.Note),
+                _ when registries.Shadows is { } shadowed => (PluginState.Outdated, $"Active · shadows the library's default ({shadowed})", (string?)null),
                 _ => (PluginState.Active, "Active", (string?)null),
             };
             rows.Add(new PluginRow(plugin.Name, manifest?.Summary is { Length: > 0 } summary ? summary : plugin.Note ?? "", registries.Text,
@@ -129,8 +130,10 @@ public static class PluginList
     }
 
     // What the assembly named after the plug-in's folder registered in Craft's public registries (by the registered
-    // object's type), and the commands under its editor plug-ins' names.
-    private static (string Text, List<string> Plugins) RegistriesOf(string assembly)
+    // object's type), the commands under its editor plug-ins' names, and every other registry (Craft's or Idrak's: token
+    // samplers, fill-in-the-middle formats, sandboxes, model families) whose entries name it as their origin; the library
+    // defaults it shadows, if any.
+    private static (string Text, List<string> Plugins, string? Shadows) RegistriesOf(string assembly)
     {
         bool Of(object item) => string.Equals(item.GetType().Assembly.GetName().Name, assembly, StringComparison.OrdinalIgnoreCase);
         var found = new List<string>();
@@ -165,6 +168,17 @@ public static class PluginList
             found.Add(nameof(EditorCommands));
         }
 
-        return (string.Join(" · ", found), plugins);
+        var shadows = new List<string>();
+        foreach (var entries in Overrides.Report().Where(e => string.Equals(e.Origin, assembly, StringComparison.OrdinalIgnoreCase)).GroupBy(e => e.Registry))
+        {
+            if (!found.Contains(entries.Key))
+            {
+                found.Add($"{entries.Key} {string.Join(", ", entries.Select(e => "\"" + e.Name + "\""))}");
+            }
+
+            shadows.AddRange(entries.Where(e => e.ReplacesDefault).Select(e => $"{e.Registry} \"{e.Name}\""));
+        }
+
+        return (string.Join(" · ", found), plugins, shadows.Count == 0 ? null : string.Join(", ", shadows));
     }
 }

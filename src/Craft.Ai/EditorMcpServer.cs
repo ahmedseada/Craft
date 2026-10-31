@@ -32,14 +32,25 @@ public sealed class EditorMcpServer : IAsyncDisposable
     public int ToolCount => _host.ToolCount;
 
     /// <summary>
-    /// Serves <paramref name="host"/>'s live tools at <see cref="AiSettings.McpAddress"/> with <see cref="AiSettings.McpToken"/>
-    /// (empty: a random one; "none": no token).
+    /// Serves the live tools of every registered tool set (<see cref="EditorToolSets.Live"/>: the editor's own from the tools
+    /// plug-in, and any plug-in's) over <paramref name="host"/> at <see cref="AiSettings.McpAddress"/> with
+    /// <see cref="AiSettings.McpToken"/> (empty: a random one; "none": no token). With no set registered it refuses, naming
+    /// the registry.
     /// </summary>
+    /// <exception cref="NotRegisteredException">No tool set is registered (the tools plug-in is removed or disabled).</exception>
     public static Task<EditorMcpServer> StartAsync(IEditorHost host, AiSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(settings);
-        return StartAsync(ToolRegistry.Create().Add(EditorTools.Live(host, settings)).Build(), settings, cancellationToken);
+        var tools = EditorToolSets.Live(host);
+        if (tools.Count == 0)
+        {
+            throw new NotRegisteredException(nameof(EditorToolSets), EditorToolSets.Editor, EditorToolSets.Names,
+                $"No editor tool set is registered, so there are no tools to serve: '{EditorToolSets.Editor}' comes with the tools plug-in (plugins\\Craft.Plugins.Tools); "
+                + "check it is installed and not in CRAFT_PLUGINS_DISABLED.");
+        }
+
+        return StartAsync(ToolRegistry.Create().Add(tools).Build(), settings, cancellationToken);
     }
 
     /// <summary>Serves <paramref name="registry"/> as the editor's MCP server.</summary>

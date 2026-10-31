@@ -2,18 +2,16 @@
 
   <!--
     Craft.Ai (plan 1, phase A1): the AI host the AI plug-ins sit on, built only on Craft's public plug-in contracts
-    (Craft.Abstractions) and Idrak. The editor's tools as Idrak ITools (a live backing over IEditorHost inside the app, a
-    folder backing for any other process through [assembly: ToolProvider]: idrak tools test, idrak mcp serve, idrak chat
-    tools), the live tools served to MCP clients through Idrak.Mcp's McpHost over "http", and the "local" model provider
-    (names through Idrak's ModelSources, loaded once and kept by ModelHost).
+    (Craft.Abstractions) and Idrak. The editor's tools are a plug-in of their own since phase P1 (plugins\Craft.Plugins.Tools,
+    read here only through Craft.Abstractions' EditorToolSets); this host serves every registered set's live tools to MCP
+    clients through Idrak.Mcp's McpHost over "http", and holds the "local" model provider (names through Idrak's
+    ModelSources, loaded once and kept by ModelHost).
 
     A pre-installed, removable plug-in, as Craft.CSharp is: Craft.App copies this project's output folder to
     plugins\Craft.Ai\ (without the host's Craft.Abstractions and Idrak.Abstraction, which come from the host);
-    CRAFT_PLUGINS_DISABLED=Craft.Ai turns it off. Its own output keeps Craft.Abstractions beside it so the idrak tool can
-    load the assembly on its own (idrak tools test src\Craft.Ai\bin\Release\net10.0\Craft.Ai.dll).
+    CRAFT_PLUGINS_DISABLED=Craft.Ai turns it off.
 
-    Android (phase M): Idrak.Mcp is AOT-compatible; Idrak and Idrak.Text are the library's (their own AOT notes apply);
-    the folder backing's ToolProvider is made by reflection (Activator), which the idrak tool's loader needs anyway.
+    Android (phase M): Idrak.Mcp is AOT-compatible; Idrak and Idrak.Text are the library's (their own AOT notes apply).
   -->
   <PropertyGroup>
     <RootNamespace>Craft.Ai</RootNamespace>

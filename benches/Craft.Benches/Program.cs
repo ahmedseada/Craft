@@ -8,6 +8,7 @@ using Craft.Benches;
 //   dotnet run -c Release --project benches/Craft.Benches -- csharp     (E2: the incremental parse and classification)
 //   dotnet run -c Release --project benches/Craft.Benches -- editor     (E3: keystroke to render, blink and scroll frames)
 //   dotnet run -c Release --project benches/Craft.Benches -- semantic   (E5: the workspace, generators, diagnostics, completion, colours, memory)
+//   dotnet run -c Release --project benches/Craft.Benches -- sampler    (P3: the bracket-balanced sampler's tokens per second against the library's)
 // No argument runs them all. CRAFT_BENCH_LINES sets the generated file's lines (100,000 by default).
 var which = args.Length > 0 ? args[0] : "all";
 int lines = int.TryParse(Environment.GetEnvironmentVariable("CRAFT_BENCH_LINES"), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : 100_000;
@@ -25,14 +26,18 @@ switch (which)
     case "semantic":
         await SemanticBench.RunAsync().ConfigureAwait(false);
         break;
+    case "sampler":
+        SamplerBench.Run();
+        break;
     case "all":
         await BufferBench.RunAsync(lines).ConfigureAwait(false);
         CSharpBench.Run(lines);
         EditorBench.Run(lines);
         await SemanticBench.RunAsync().ConfigureAwait(false);
+        SamplerBench.Run();
         break;
     default:
-        await Console.Error.WriteLineAsync($"Unknown bench '{which}'. Benches: buffer, csharp, editor, semantic (none for all).");
+        await Console.Error.WriteLineAsync($"Unknown bench '{which}'. Benches: buffer, csharp, editor, semantic, sampler (none for all).");
         return 2;
 }
 

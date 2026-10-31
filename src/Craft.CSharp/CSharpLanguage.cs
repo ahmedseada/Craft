@@ -91,6 +91,39 @@ public sealed class CSharpLanguage : ILanguage
     public void ReleaseMemory() => CSharpWorkspace.RequestReleaseAll();
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The folder's workspace (shared with any session open on it, else built for this search and released after it: a
+    /// cold search pays for reading the projects), Roslyn's declaration search over it. Empty for C# script.
+    /// </remarks>
+    public Task<IReadOnlyList<SymbolLocation>> FindSymbolsAsync(string workspaceRoot, string query, int maxResults, LanguageSettings settings, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceRoot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
+        ArgumentNullException.ThrowIfNull(settings);
+        if (Kind == SourceCodeKind.Script)
+        {
+            return Task.FromResult<IReadOnlyList<SymbolLocation>>([]);
+        }
+
+        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(workspaceRoot));
+        return Task.Run(async () =>
+        {
+            var owner = new object();
+            var workspace = CSharpWorkspace.Enter(root, settings);
+            try
+            {
+                var solution = await workspace.BuildAsync(null, cancellationToken).ConfigureAwait(false);
+                return await CSharpSemantics.FindSymbolsAsync(solution, query.Trim(), maxResults, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                workspace.Leave(owner);
+            }
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     ILanguageSession ILanguage.Open(ITextBuffer buffer) => Open(buffer);
 
     /// <inheritdoc />

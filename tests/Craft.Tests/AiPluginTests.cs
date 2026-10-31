@@ -11,6 +11,7 @@ using Craft.Core;
 using Craft.Core.Documents;
 using Craft.Editor;
 using Craft.Editor.Abstractions;
+using Craft.Plugins.Tools;
 using Craft.Tests.Editor;
 using Craft.Tests.Runner;
 using Idrak.Abstraction.Generation;
@@ -459,6 +460,7 @@ public static class AiPluginTests
         public ChatFixture(IChatModel chat, string agentSandbox = "a2-approve", string agentFolder = "")
         {
             ModelProviders.Register(new FakeProvider(chat, null, null));
+            EditorToolSets.Register(EditorToolSet.Instance);                     // the tools plug-in's set, which chat offers the model
             Settings = new AiSettings { ModelProvider = ProviderName, Model = "fake", AgentSandbox = agentSandbox, AgentFolder = agentFolder, AgentMaxTurns = 8 };
             Models = new AiModels(() => Settings);
         }
@@ -471,6 +473,7 @@ public static class AiPluginTests
         {
             Models.Dispose();
             ModelProviders.Unregister(ProviderName);
+            EditorToolSets.Unregister(EditorToolSets.Editor);
         }
     }
 

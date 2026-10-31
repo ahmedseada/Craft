@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.StarCoder2",
+  "version": "0.1.0",
+  "summary": "P2 · the StarCoder2 coder family (BigCode): its architecture for the local model provider and its fill-in-the-middle format for inline completion [PretrainedArchitectures \"Starcoder2ForCausalLM\", FillInMiddleFormats \"starcoder2\"]",
+  "contractVersion": "1.0",
+  "capabilities": ["model"]
+}

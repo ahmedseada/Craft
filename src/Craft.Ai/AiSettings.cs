@@ -8,7 +8,7 @@ namespace Craft.Ai;
 
 /// <summary>
 /// The AI plug-in's settings (plug-in "ai"; each a variable <c>CRAFT_PLUGIN_AI_&lt;KEY&gt;</c> on the settings page): the
-/// tools' limits, the MCP server's address and token, the local model and its limits. Inside the app they come from the
+/// MCP server's address and token, the local model and its limits (the editor tools' own are Craft.Plugins.Tools'). Inside the app they come from the
 /// host's settings (environment, the workspace's and the user's settings.json); in another process (the folder backing
 /// under the idrak tool) from the environment.
 /// </summary>
@@ -16,24 +16,6 @@ public sealed record AiSettings
 {
     /// <summary>The plug-in's name, the prefix of its settings' variables.</summary>
     public const string PluginName = "ai";
-
-    /// <summary>The most lines one read_document call returns (<c>readLines</c>).</summary>
-    public int ReadLines { get; init; } = 2000;
-
-    /// <summary>The most matches one search_workspace call returns (<c>searchResults</c>).</summary>
-    public int SearchResults { get; init; } = 100;
-
-    /// <summary>Files larger than this many KiB are not searched (<c>searchFileKb</c>).</summary>
-    public int SearchFileKilobytes { get; init; } = 2048;
-
-    /// <summary>The folder names the tools skip, ignoring case (<c>ignore</c>, separated by ';' or ',').</summary>
-    public IReadOnlyList<string> Ignore { get; init; } = ["bin", "obj", ".git", ".vs", "node_modules", "test-output"];
-
-    /// <summary>Where the folder backing writes a proposed edit as a patch, relative to its folder (<c>patchFolder</c>).</summary>
-    public string PatchFolder { get; init; } = Path.Combine(".craft", "patches");
-
-    /// <summary>The folder the folder backing serves (<c>toolsFolder</c>); empty for the current folder.</summary>
-    public string ToolsFolder { get; init; } = "";
 
     /// <summary>Where the MCP server listens, host:port (<c>mcpAddress</c>); port 0 lets the system pick one.</summary>
     public string McpAddress { get; init; } = "127.0.0.1:0";
@@ -123,6 +105,9 @@ public sealed record AiSettings
     /// <summary>The most messages kept and sent back to the model (<c>chatHistory</c>); older ones are dropped first.</summary>
     public int ChatHistory { get; init; } = 40;
 
+    /// <summary>The most lines of a file a chat context chip sends to the model (<c>chatFileLines</c>).</summary>
+    public int ChatFileLines { get; init; } = 2000;
+
     /// <summary>The Idrak text matcher that places a model's snippet in a document (<c>placement</c>; Idrak's TextMatchers).</summary>
     public string Placement { get; init; } = "semi-global";
 
@@ -150,12 +135,6 @@ public sealed record AiSettings
     /// <summary>The settings the plug-in declares, with their defaults and meanings (the settings page lists them).</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
-        new("readLines", "2000", "The most lines one read_document call of the editor's tools returns."),
-        new("searchResults", "100", "The most matches one search_workspace call returns."),
-        new("searchFileKb", "2048", "Files larger than this many KiB are not searched."),
-        new("ignore", "bin;obj;.git;.vs;node_modules;test-output", "Folder names the editor's tools skip (';' or ',' between them)."),
-        new("patchFolder", Path.Combine(".craft", "patches"), "Where the folder backing (outside the app) writes a proposed edit as a patch, relative to its folder."),
-        new("toolsFolder", "", "The folder the editor's tools serve outside the app (idrak tools test, idrak mcp serve); empty: the current folder."),
         new("mcpAddress", "127.0.0.1:0", "Where the MCP server of the live tools listens (host:port; port 0 picks one); loopback only."),
         new("mcpToken", "", "The bearer token MCP clients send; empty: a new random one each start; 'none': no token."),
         new("mcpOnStart", "false", "Whether the MCP server starts with the editor (else the command 'AI: Serve the editor's tools over MCP')."),
@@ -183,6 +162,7 @@ public sealed record AiSettings
         new("chatKeep", "true", "Whether the chat is kept per workspace (in chatFile)."),
         new("chatFile", Path.Combine(".craft", "chat.json"), "Where the chat is kept, relative to the workspace."),
         new("chatHistory", "40", "The most chat messages kept and sent back to the model."),
+        new("chatFileLines", "2000", "The most lines of a file a chat context chip sends to the model."),
         new("placement", "semi-global", "The Idrak text matcher that places a model's snippet in a document."),
         new("placementMaxError", "0.35", "The largest share of a snippet's characters its placed span may differ in; more: it goes at the selection or caret."),
         new("agentSandbox", "approve-each", "The command sandbox the agent's commands run in; none registered under it: the agent runs no command."),
@@ -250,12 +230,6 @@ public sealed record AiSettings
 
         return new AiSettings
         {
-            ReadLines = Whole("readLines", defaults.ReadLines, 1, 1_000_000),
-            SearchResults = Whole("searchResults", defaults.SearchResults, 1, 1_000_000),
-            SearchFileKilobytes = Whole("searchFileKb", defaults.SearchFileKilobytes, 1, 1_048_576),
-            Ignore = List("ignore", defaults.Ignore),
-            PatchFolder = Text("patchFolder") ?? defaults.PatchFolder,
-            ToolsFolder = Text("toolsFolder") ?? "",
             McpAddress = Text("mcpAddress") ?? defaults.McpAddress,
             McpToken = Text("mcpToken") ?? "",
             McpOnStart = Flag("mcpOnStart", false),
@@ -283,6 +257,7 @@ public sealed record AiSettings
             ChatKeep = Flag("chatKeep", defaults.ChatKeep),
             ChatFile = Text("chatFile") ?? defaults.ChatFile,
             ChatHistory = Whole("chatHistory", defaults.ChatHistory, 2, 100_000),
+            ChatFileLines = Whole("chatFileLines", defaults.ChatFileLines, 1, 1_000_000),
             Placement = Text("placement") ?? defaults.Placement,
             PlacementMaxError = Real("placementMaxError", defaults.PlacementMaxError, 0, 1),
             AgentSandbox = Text("agentSandbox") ?? defaults.AgentSandbox,

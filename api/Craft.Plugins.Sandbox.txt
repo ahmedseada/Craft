@@ -1,0 +1,40 @@
+sealed class Craft.Plugins.Sandbox.ApproveEachSandbox : Idrak.Abstraction.ICommandSandbox
+  System.String Check(Idrak.Abstraction.CommandLimits limits)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.ValueTask<Idrak.Abstraction.CommandResult> RunAsync(System.Collections.Generic.IReadOnlyList<System.String> command, System.String directory, Idrak.Abstraction.CommandLimits limits, System.Threading.CancellationToken cancellationToken = null)
+  const System.String SandboxName = approve-each
+  static Craft.Plugins.Sandbox.ApproveEachSandbox Instance { get; }
+enum Craft.Plugins.Sandbox.CommandApproval : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  AllowOnce = 0
+  AllowProgramForRun = 1
+  Deny = 2
+sealed class Craft.Plugins.Sandbox.SandboxPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+sealed class Craft.Plugins.Sandbox.SandboxPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String ClearCommand = sandbox.clear
+  const System.String EndRunCommand = sandbox.endRun
+  static Craft.Plugins.Sandbox.SandboxPlugin Instance { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+sealed class Craft.Plugins.Sandbox.SandboxRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+sealed class Craft.Plugins.Sandbox.SandboxSettings : System.IEquatable<Craft.Plugins.Sandbox.SandboxSettings>
+  Craft.Plugins.Sandbox.SandboxSettings <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Sandbox.SandboxSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 PanelLines { get; init; }
+  System.Int32 RunGapMinutes { get; init; }
+  System.String Inner { get; init; }
+  System.String ToString()
+  const System.String PluginName = sandbox
+  ctor()
+  static Craft.Plugins.Sandbox.SandboxSettings From(Craft.Abstractions.IPluginSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }

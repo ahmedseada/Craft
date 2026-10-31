@@ -8,6 +8,13 @@
     <Project Path="src/Craft.Maui/Craft.Maui.csproj" />
     <Project Path="src/Craft.App/Craft.App.csproj" />
   </Folder>
+  <Folder Name="/plugins/">
+    <Project Path="plugins/Craft.Plugins.Tools/Craft.Plugins.Tools.csproj" />
+    <Project Path="plugins/Craft.Plugins.StarCoder2/Craft.Plugins.StarCoder2.csproj" />
+    <Project Path="plugins/Craft.Plugins.Sampler/Craft.Plugins.Sampler.csproj" />
+    <Project Path="plugins/Craft.Plugins.Sandbox/Craft.Plugins.Sandbox.csproj" />
+    <Project Path="plugins/Craft.Plugins.Placement/Craft.Plugins.Placement.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />
   </Folder>

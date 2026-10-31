@@ -9,6 +9,7 @@ using Craft.Core;
 using Craft.Core.Documents;
 using Craft.Editor;
 using Craft.Editor.Abstractions;
+using Craft.Plugins.Tools;
 using Craft.Tests.Runner;
 using Idrak.Abstraction.Generation;
 using Idrak.Abstraction.Plugins;
@@ -123,7 +124,7 @@ public static class AiTests
         using var host = new EditorHost(presenter: presenter);
         using var document = TextDocument.Create("class A\n{\n    int x;\n}\n");
         var open = host.Open(document, null);
-        var tools = ToolRegistry.Create().Add(EditorTools.Live(host, new AiSettings())).Build();
+        var tools = ToolRegistry.Create().Add(EditorTools.Live(host, new ToolSettings())).Build();
         var model = FakeChatModel.Script(
             FakeChatModel.ToolCall(EditorToolNames.ReadDocument, new JsonObject { ["path"] = "untitled-1" }),
             FakeChatModel.ToolCall(EditorToolNames.ProposeEdit, new JsonObject
@@ -171,12 +172,28 @@ public static class AiTests
         using var host = new EditorHost(presenter: new DiffPresenter());
         using var document = TextDocument.Create("namespace Demo;\n\npublic sealed class Served;\n");
         host.Open(document, null);
+        var none = Check.Throws<NotRegisteredException>(() => _ = EditorMcpServer.StartAsync(host, new AiSettings()), "no tool set registered");
+        Check.True(none.Message.Contains("Craft.Plugins.Tools", StringComparison.Ordinal), $"the refusal names the tools plug-in ({none.Message})");
+        EditorToolSets.Register(EditorToolSet.Instance);
+        try
+        {
+            await ServeAsync(host);
+        }
+        finally
+        {
+            EditorToolSets.Unregister(EditorToolSets.Editor);
+        }
+    }
+
+    private static async Task ServeAsync(EditorHost host)
+    {
         await using var server = await EditorMcpServer.StartAsync(host, new AiSettings());
         Check.True(server.Address.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) && server.Token is { Length: > 0 }, $"a loopback address and a token ({server.Address})");
         await using var client = await McpTools.ConnectHttpAsync(new Uri(server.Address), server.Token);
         var tools = await client.ListToolsAsync();
         Check.SequenceEqual(
-            [EditorToolNames.GetDiagnostics, EditorToolNames.GetSelection, EditorToolNames.OpenDocuments, EditorToolNames.ProposeEdit, EditorToolNames.ReadDocument, EditorToolNames.SearchWorkspace],
+            [EditorToolNames.FindSymbol, EditorToolNames.GetDiagnostics, EditorToolNames.GetSelection, EditorToolNames.OpenDocuments, EditorToolNames.ProposeEdit, EditorToolNames.ReadDocument,
+                EditorToolNames.SearchWorkspace],
             [.. tools.Select(t => t.Definition.Name).Order(StringComparer.Ordinal)], "the live tools are served (the server lists them in its own order)");
         var listed = await client.CallAsync(EditorToolNames.OpenDocuments, []);
         Check.True(listed.Contains("untitled-1", StringComparison.Ordinal), $"open_documents names it ({listed})");
@@ -197,8 +214,8 @@ public static class AiTests
             Directory.CreateDirectory(Path.Combine(folder, "bin"));
             await File.WriteAllTextAsync(Path.Combine(folder, "src", "A.cs"), "class A\n{\n}\n");
             await File.WriteAllTextAsync(Path.Combine(folder, "bin", "A.cs"), "class Skipped\n");
-            var tools = ToolRegistry.Create().Add(EditorTools.Folder(folder, new AiSettings())).Build();
-            Check.SequenceEqual([EditorToolNames.ListFiles, EditorToolNames.ReadDocument, EditorToolNames.SearchWorkspace, EditorToolNames.ProposeEdit],
+            var tools = ToolRegistry.Create().Add(EditorTools.Folder(folder, new ToolSettings())).Build();
+            Check.SequenceEqual([EditorToolNames.ListFiles, EditorToolNames.ReadDocument, EditorToolNames.SearchWorkspace, EditorToolNames.FindSymbol, EditorToolNames.ProposeEdit],
                 [.. tools.Definitions.Select(d => d.Name)], "the folder tools");
             var listed = await Call(tools, EditorToolNames.ListFiles, []);
             Check.Equal("src/A.cs\n", listed, "list_files skips bin/");
@@ -239,10 +256,11 @@ public static class AiTests
         {
             Check.True(EditorPlugins.Find("ai") is not null && ModelProviders.Find(ModelProviders.Local) is LocalModelProvider, "the plug-in and the local provider are registered");
             Check.True(EditorCommands.Find(AiPlugin.McpStartCommand) is not null, "its commands are registered");
-            Check.True(ToolProviders.Of(typeof(AiPlugin).Assembly).Count == 4, "the assembly declares the folder tools for the idrak tool");
+            Check.True(ToolProviders.Of(typeof(AiPlugin).Assembly).Count == 0, "the tools are the tools plug-in's (Craft.Plugins.Tools), not the AI host's");
             var missing = Check.Throws<NotRegisteredException>(() => ModelProviders.Get("remote"), "a provider that is not registered");
             Check.True(missing.Message.Contains("local", StringComparison.Ordinal), $"the message names those that are ({missing.Message})");
 
+            EditorToolSets.Register(EditorToolSet.Instance);                  // the tools plug-in's set, which the MCP server serves
             var variables = new Dictionary<string, string> { [PluginSetting.VariableName("ai", "mcpToken")] = "secret-token" };
             using var host = new EditorHost(presenter: new DiffPresenter(), readVariable: name => variables.GetValueOrDefault(name));
             host.RefreshPlugins();
@@ -268,6 +286,7 @@ public static class AiTests
         finally
         {
             IdrakPlugins.UnregisterAll(IdrakPlugins.PackageOf(typeof(AiPlugin).Assembly)!);
+            EditorToolSets.Unregister(EditorToolSets.Editor);
         }
 
         Check.True(EditorPlugins.Find("ai") is null && ModelProviders.Find(ModelProviders.Local) is null && EditorCommands.Find(AiPlugin.McpStartCommand) is null,
@@ -279,13 +298,12 @@ public static class AiTests
     {
         var values = new Dictionary<string, string>
         {
-            ["readLines"] = "10", ["searchResults"] = "5", ["searchFileKb"] = "64", ["ignore"] = "out; dist", ["patchFolder"] = "patches", ["toolsFolder"] = "/work",
             ["mcpAddress"] = "127.0.0.1:7777", ["mcpToken"] = "none", ["mcpOnStart"] = "true", ["model"] = "store:coder", ["device"] = "cpu", ["context"] = "4096",
             ["weights"] = "int8", ["keepAliveMinutes"] = "0", ["threads"] = "2", ["cpuMemoryMb"] = "512", ["gpuMemoryMb"] = "1024", ["idrakPlugins"] = "",
             // Phase A2: completion, chat, placement, agent.
             ["modelProvider"] = "remote", ["completion"] = "false", ["completionModel"] = "store:fim", ["completionDelayMs"] = "150", ["completionMaxTokens"] = "40",
             ["completionMaxLines"] = "3", ["completionSuffixChars"] = "128", ["completionPrefixChars"] = "4000", ["completionChunk"] = "2", ["completionTemperature"] = "0.2",
-            ["chatMaxTokens"] = "300", ["chatToolRounds"] = "2", ["chatKeep"] = "false", ["chatFile"] = "c.json", ["chatHistory"] = "10", ["placement"] = "csharp-tokens",
+            ["chatMaxTokens"] = "300", ["chatToolRounds"] = "2", ["chatKeep"] = "false", ["chatFile"] = "c.json", ["chatHistory"] = "10", ["chatFileLines"] = "50", ["placement"] = "csharp-tokens",
             ["placementMaxError"] = "0.1", ["agentSandbox"] = "container", ["agentMaxTurns"] = "5", ["agentMinutes"] = "3", ["agentMaxTokens"] = "500",
             ["agentFolder"] = "/copies", ["agentCopyIgnore"] = "bin",
         };
@@ -293,17 +311,17 @@ public static class AiTests
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
         Check.True(settings is
         {
-            ReadLines: 10, SearchResults: 5, SearchFileKilobytes: 64, PatchFolder: "patches", ToolsFolder: "/work", McpAddress: "127.0.0.1:7777", McpToken: "none",
+            McpAddress: "127.0.0.1:7777", McpToken: "none",
             McpOnStart: true, Model: "store:coder", Device: "cpu", Context: 4096, Weights: "int8", KeepAliveMinutes: 0, Threads: 2, CpuMemoryMegabytes: 512,
             GpuMemoryMegabytes: 1024, IdrakPlugins.Count: 0,
             ModelProvider: "remote", Completion: false, CompletionModel: "store:fim", CompletionDelayMilliseconds: 150, CompletionMaxTokens: 40, CompletionMaxLines: 3,
             CompletionSuffixCharacters: 128, CompletionPrefixCharacters: 4000, CompletionChunk: 2, ChatMaxTokens: 300, ChatToolRounds: 2, ChatKeep: false,
-            ChatFile: "c.json", ChatHistory: 10, Placement: "csharp-tokens", PlacementMaxError: 0.1, AgentSandbox: "container", AgentMaxTurns: 5, AgentMinutes: 3,
+            ChatFile: "c.json", ChatHistory: 10, ChatFileLines: 50, Placement: "csharp-tokens", PlacementMaxError: 0.1, AgentSandbox: "container", AgentMaxTurns: 5, AgentMinutes: 3,
             AgentMaxTokens: 500, AgentFolder: "/copies",
-        } && settings.Ignore.SequenceEqual(["out", "dist"]) && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
+        } && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
             "each value is read");
-        var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "readLines" ? "many" : null), "a bad value");
-        Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_READLINES", StringComparison.Ordinal), "the error names the variable");
+        var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "threads" ? "many" : null), "a bad value");
+        Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_THREADS", StringComparison.Ordinal), "the error names the variable");
     }
 
     private static async Task ThrowsAsync(Func<Task> action, string what)

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plug-in P2 of plan phase P, a coder model family Idrak.Text.Plugins does not have: StarCoder2 (BigCode), its
+    architecture "Starcoder2ForCausalLM" in Idrak's PretrainedArchitectures (layer norms with biases, a GELU feed-forward
+    without a gate, biases on every projection, grouped-query attention, a sliding window) and its fill-in-the-middle
+    format "starcoder2" in FillInMiddleFormats. An Idrak plug-in package (IIdrakPlugin), so the same assembly loads through
+    the idrak tool's -P and through Craft's plug-in folder; no family is named anywhere in Craft's own projects.
+
+    It references Idrak (PretrainedArchitectures and PretrainedFamilies live there); Craft's loader shares one copy of each
+    Idrak library between plug-ins (CraftPlugins), so the family registers into the registries Craft.Ai's "local" model
+    provider reads. Android (phase M): no reflection of its own; Idrak's AOT notes apply.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.StarCoder2</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Idrak" Version="$(IdrakVersion)" />
+  </ItemGroup>
+
+  <!-- Idrak.Abstraction is the host's (the contracts every plug-in shares): not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

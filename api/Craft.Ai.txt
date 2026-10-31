@@ -145,11 +145,11 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Boolean McpOnStart { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentCopyIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> IdrakPlugins { get; init; }
-  System.Collections.Generic.IReadOnlyList<System.String> Ignore { get; init; }
   System.Double PlacementMaxError { get; init; }
   System.Int32 AgentMaxTokens { get; init; }
   System.Int32 AgentMaxTurns { get; init; }
   System.Int32 AgentMinutes { get; init; }
+  System.Int32 ChatFileLines { get; init; }
   System.Int32 ChatHistory { get; init; }
   System.Int32 ChatMaxTokens { get; init; }
   System.Int32 ChatToolRounds { get; init; }
@@ -162,9 +162,6 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Int32 Context { get; init; }
   System.Int32 GetHashCode()
   System.Int32 KeepAliveMinutes { get; init; }
-  System.Int32 ReadLines { get; init; }
-  System.Int32 SearchFileKilobytes { get; init; }
-  System.Int32 SearchResults { get; init; }
   System.Int32 Threads { get; init; }
   System.Int64 CpuMemoryMegabytes { get; init; }
   System.Int64 GpuMemoryMegabytes { get; init; }
@@ -178,10 +175,8 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.String McpToken { get; init; }
   System.String Model { get; init; }
   System.String ModelProvider { get; init; }
-  System.String PatchFolder { get; init; }
   System.String Placement { get; init; }
   System.String ToString()
-  System.String ToolsFolder { get; init; }
   System.String Weights { get; init; }
   const System.String PluginName = ai
   ctor()
@@ -237,20 +232,6 @@ sealed class Craft.Ai.EditorMcpServer : System.IAsyncDisposable
   const System.String Transport = http
   static System.Threading.Tasks.Task<Craft.Ai.EditorMcpServer> StartAsync(Craft.Abstractions.IEditorHost host, Craft.Ai.AiSettings settings, System.Threading.CancellationToken cancellationToken = null)
   static System.Threading.Tasks.Task<Craft.Ai.EditorMcpServer> StartAsync(Idrak.Abstraction.Generation.IToolRegistry registry, Craft.Ai.AiSettings settings, System.Threading.CancellationToken cancellationToken = null)
-static class Craft.Ai.EditorToolNames
-  const System.String GetDiagnostics = get_diagnostics
-  const System.String GetSelection = get_selection
-  const System.String ListFiles = list_files
-  const System.String OpenDocuments = open_documents
-  const System.String ProposeEdit = propose_edit
-  const System.String ReadDocument = read_document
-  const System.String SearchWorkspace = search_workspace
-static class Craft.Ai.EditorTools
-  static System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder, Craft.Ai.AiSettings settings)
-  static System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host, Craft.Ai.AiSettings settings)
-sealed class Craft.Ai.FolderToolProvider : Idrak.Abstraction.Generation.IToolProvider
-  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Tools { get; }
-  ctor()
 sealed class Craft.Ai.LocalModelProvider : Craft.Abstractions.IModelProvider, Idrak.Abstraction.IKind, System.IDisposable
   Craft.Abstractions.ModelProviderStatus Status { get; }
   Craft.Ai.AiSettings Settings { get; set; }

@@ -18,6 +18,15 @@
     <ProjectReference Include="..\..\src\Craft.Editor\Craft.Editor.csproj" />
     <ProjectReference Include="..\..\src\Craft.CSharp\Craft.CSharp.csproj" />
     <ProjectReference Include="..\..\src\Craft.Ai\Craft.Ai.csproj" />
+    <!-- The plug-ins of phase P (plugins/): referenced for their API dumps and their own tests; the Plugins group also loads
+         each from a copy of its own output folder through CraftPlugins.LoadFolder, as the app does. -->
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Tools\Craft.Plugins.Tools.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.StarCoder2\Craft.Plugins.StarCoder2.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Sampler\Craft.Plugins.Sampler.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Sandbox\Craft.Plugins.Sandbox.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Placement\Craft.Plugins.Placement.csproj" />
+    <!-- Idrak's conformance suites (FillInMiddleFormatSuite, TokenSamplerSuite, TextMatcherSuite) for the plug-ins of phase P. -->
+    <PackageReference Include="Idrak.Abstraction.Testing" Version="$(IdrakVersion)" />
     <!-- The sample plug-in (PluginKit group): built first, never referenced; the tests copy its output folder into a
          temporary plugins/ folder and load it from there, as the app would. -->
     <ProjectReference Include="..\..\samples\Craft.Plugins.Sample\Craft.Plugins.Sample.csproj" ReferenceOutputAssembly="false" Private="false" />

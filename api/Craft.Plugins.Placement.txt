@@ -1,0 +1,31 @@
+sealed class Craft.Plugins.Placement.CSharpTokenMatcher : Idrak.Text.Abstractions.ITextMatcher
+  Idrak.Text.Abstractions.TextMatch? Best(System.String draft, System.String text, System.Int32 from, Idrak.Text.Abstractions.TextMatchOptions options)
+  System.String Name { get; }
+  const System.String MatcherName = csharp-tokens
+  static Craft.Plugins.Placement.CSharpTokenMatcher Instance { get; }
+  static Craft.Plugins.Placement.CSharpTokenMatcher OverSemiGlobal { get; }
+  static Craft.Plugins.Placement.Placement Place(System.String draft, System.String text, System.Int32 from = 0, Idrak.Text.Abstractions.TextMatchOptions options = null)
+sealed class Craft.Plugins.Placement.Placement : System.IEquatable<Craft.Plugins.Placement.Placement>
+  Craft.Plugins.Placement.Placement <Clone>$()
+  Idrak.Text.Abstractions.TextMatch? Match { get; init; }
+  System.Boolean Equals(Craft.Plugins.Placement.Placement other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String How { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out Idrak.Text.Abstractions.TextMatch? Match, out System.String How)
+  ctor(Idrak.Text.Abstractions.TextMatch? Match, System.String How)
+sealed class Craft.Plugins.Placement.PlacementPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+sealed class Craft.Plugins.Placement.PlacementPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String PluginName = placement
+  static Craft.Plugins.Placement.PlacementPlugin Instance { get; }
+sealed class Craft.Plugins.Placement.PlacementRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()

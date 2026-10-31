@@ -1,0 +1,10 @@
+sealed class Craft.Plugins.StarCoder2.StarCoder2Package : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+static class Craft.Plugins.StarCoder2.StarCoder2Plugin
+  const System.String FillInMiddleFormat = starcoder2
+  const System.String Starcoder2ForCausalLM = Starcoder2ForCausalLM
+  static Idrak.Abstraction.Generation.FillInMiddleLayout FillInMiddle { get; }
+  static Idrak.Abstraction.Plugins.IIdrakPlugin Plugin { get; }
+  static Idrak.Models.Abstractions.IConfigWritingArchitecture Architecture { get; }

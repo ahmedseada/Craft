@@ -240,6 +240,27 @@ public sealed class MauiEditorPresenter(Page page, Func<ITheme>? theme = null) :
 
     /// <inheritdoc />
     public Task ShowMessageAsync(string title, string message) => _page.DisplayAlertAsync(title, message, "OK");
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// An action sheet whose title holds the question, its message and its facts, one a line, and one button per answer;
+    /// dismissing it gives the question's <see cref="EditorQuestion.Dismissed"/>. (The Agent page's own card is phase A2's.)
+    /// </remarks>
+    public async Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        if (question.Choices.Count == 0)
+        {
+            return question.Dismissed;
+        }
+
+        var shown = question.Choices.ToArray();
+        string title = string.Join('\n', [question.Title, question.Message, .. question.Details]);
+        string? picked = await _page.DisplayActionSheetAsync(title, "Cancel", null, shown);
+        cancellationToken.ThrowIfCancellationRequested();
+        int index = picked is null ? -1 : Array.IndexOf(shown, picked);
+        return index >= 0 ? index : question.Dismissed;
+    }
 }
 
 /// <summary>The command palette: the commands that can run now, by title, in a list; the one picked runs.</summary>

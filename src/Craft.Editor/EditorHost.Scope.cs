@@ -107,6 +107,9 @@ public sealed partial class EditorHost
 
         public Task ShowMessageAsync(string title, string message) => _closed ? Task.CompletedTask : host.ShowMessageAsync(title, message);
 
+        public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult(-1) : host.AskAsync(question, name, cancellationToken);
+
         public void Log(EditorLogLevel level, string message, Exception? error = null) => host.Log(name, level, message, error);
 
         public void Record(string metric, double value, string unit) => host.Record(name, metric, value, unit);

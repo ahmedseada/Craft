@@ -24,6 +24,11 @@ public static class ApiGuardTests
         Assembly.Load(new AssemblyName("Craft.Editor")),
         Assembly.Load(new AssemblyName("Craft.CSharp")),
         Assembly.Load(new AssemblyName("Craft.Ai")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Tools")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.StarCoder2")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Sampler")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Sandbox")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Placement")),
     ];
 
     [Test]

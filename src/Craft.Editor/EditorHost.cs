@@ -393,6 +393,23 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     }
 
     /// <inheritdoc />
+    public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) => AskAsync(question, HostSource, cancellationToken);
+
+    /// <summary>Asks <paramref name="question"/> for <paramref name="source"/> through the presenter; without one, -1 (logged: nobody could answer).</summary>
+    internal async Task<int> AskAsync(EditorQuestion question, string source, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        if (Presenter is not { } presenter)
+        {
+            Log(source, EditorLogLevel.Warning, $"{question.Title}: nobody could be asked (the host has no presenter), so it counts as no.", null);
+            return -1;
+        }
+
+        int answer = await presenter.AskAsync(question, cancellationToken);
+        return answer >= 0 && answer < question.Choices.Count ? answer : question.Dismissed;
+    }
+
+    /// <inheritdoc />
     public void Log(EditorLogLevel level, string message, Exception? error = null) => Log(HostSource, level, message, error);
 
     /// <inheritdoc />

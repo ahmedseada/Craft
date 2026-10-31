@@ -119,6 +119,41 @@
     <Copy SourceFiles="@(_CraftAiPluginFile)" DestinationFiles="@(_CraftAiPluginFile->'$(PublishDir)plugins\Craft.Ai\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
+  <!--
+    The plug-ins of plan phase P (plugins\<Name>\<Name>.csproj, each its own folder: P1 the editor's tools, P2 a coder model
+    family, P3 the bracket-balanced sampler, P4 the C#-aware edit placement, P5 the approve-each sandbox), pre-installed as
+    Craft.CSharp and Craft.Ai are: each built as a plain library, never referenced, its output folder (its dll, its own
+    dependencies, its .deps.json and the plugin.json its build copies there) copied to plugins\<Name>\ after Build and
+    Publish, never the host's Craft.Abstractions, Craft.Core or Idrak.Abstraction. Deleting a folder (or naming it in
+    CRAFT_PLUGINS_DISABLED) removes that plug-in; the app still starts.
+  -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <CraftPreinstalledPlugin Include="$(MSBuildThisFileDirectory)..\..\plugins\*\*.csproj" />
+  </ItemGroup>
+
+  <Target Name="CraftPreinstalledPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <MSBuild Projects="@(CraftPreinstalledPlugin)" Targets="Build"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;Platform;PlatformTarget;OutDir;OutputPath;PublishDir;WindowsPackageType;WindowsAppSDKSelfContained">
+      <Output TaskParameter="TargetOutputs" ItemName="_CraftPreinstalledAssembly" />
+    </MSBuild>
+    <Error Condition="!Exists('%(_CraftPreinstalledAssembly.RootDir)%(_CraftPreinstalledAssembly.Directory)plugin.json')"
+           Text="The plug-in %(_CraftPreinstalledAssembly.Filename)'s plugin.json was not found in its build output: plugins\Directory.Build.targets copies it there." />
+    <ItemGroup>
+      <_CraftPreinstalledFile Include="%(_CraftPreinstalledAssembly.RootDir)%(_CraftPreinstalledAssembly.Directory)**\*"
+                              Exclude="%(_CraftPreinstalledAssembly.RootDir)%(_CraftPreinstalledAssembly.Directory)Craft.Abstractions.*;%(_CraftPreinstalledAssembly.RootDir)%(_CraftPreinstalledAssembly.Directory)Idrak.Abstraction.*;%(_CraftPreinstalledAssembly.RootDir)%(_CraftPreinstalledAssembly.Directory)Craft.Core.*"
+                              Plugin="%(_CraftPreinstalledAssembly.Filename)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CraftCopyPreinstalledPlugins" AfterTargets="Build" DependsOnTargets="CraftPreinstalledPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftPreinstalledFile)" DestinationFiles="@(_CraftPreinstalledFile->'$(OutDir)plugins\%(Plugin)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CraftPublishPreinstalledPlugins" AfterTargets="Publish" DependsOnTargets="CraftPreinstalledPluginFiles" Condition="$([MSBuild]::IsOSPlatform('windows'))">
+    <Copy SourceFiles="@(_CraftPreinstalledFile)" DestinationFiles="@(_CraftPreinstalledFile->'$(PublishDir)plugins\%(Plugin)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('windows'))">
     <Compile Remove="**/*.cs" />
   </ItemGroup>

@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Tools",
+  "version": "0.1.0",
+  "summary": "P1 · the editor's tools for models (read, search, find symbols, diagnostics, edits as a diff), live in the editor and over a folder in the idrak tool [EditorToolSets \"editor\"; ToolProvider for idrak tools test and mcp serve]",
+  "contractVersion": "1.0",
+  "capabilities": ["files"]
+}

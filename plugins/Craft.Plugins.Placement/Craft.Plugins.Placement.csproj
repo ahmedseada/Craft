@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plug-in P4 of plan phase P, C#-aware edit placement: an Idrak.Text text matcher "csharp-tokens" in TextMatchers (a new
+    kind) that places a model's snippet by Roslyn's tokens, ignoring whitespace and comments, and says how ("exact",
+    "whitespace differed"); a snippet whose tokens are nowhere in the text goes to the library's "semi-global". With the
+    setting replaceSemiGlobal it also registers over "semi-global" (the slot shadows the library's, which it falls back to,
+    and Unregister brings it back).
+
+    It references Idrak.Text (TextMatchers lives there; Craft's loader shares one copy of each Idrak library between the
+    plug-ins) and Roslyn's C# parser (Microsoft.CodeAnalysis.CSharp, its own copy in its folder: Roslyn is not a shared
+    contract). Android (phase M): Roslyn is the known exception, rooted for the trimmer.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Placement</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Idrak.Text" Version="$(IdrakVersion)" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(RoslynVersion)" />
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

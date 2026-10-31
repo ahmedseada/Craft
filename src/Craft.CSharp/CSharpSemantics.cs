@@ -395,6 +395,49 @@ internal static class CSharpSemantics
         return new HoverInfo(text.ToString(), span.Start, span.Length);
     }
 
+    // ---- symbols ----
+
+    /// <summary>
+    /// The source declarations of <paramref name="solution"/> whose names match <paramref name="query"/> (Roslyn's pattern
+    /// matcher: ignoring case, a name's capitals too), ranked exact name, then name start, then the rest, then by name and
+    /// file; one per declaration (a partial type's parts each), at most <paramref name="max"/>.
+    /// </summary>
+    public static async Task<IReadOnlyList<SymbolLocation>> FindSymbolsAsync(Solution solution, string query, int max, CancellationToken cancellationToken)
+    {
+        var found = await SymbolFinder.FindSourceDeclarationsWithPatternAsync(solution, query, SymbolFilter.TypeAndMember, cancellationToken).ConfigureAwait(false);
+        var ranked = new List<(int Rank, SymbolLocation Location)>();
+        var seen = new HashSet<(string?, int, int)>();
+        foreach (var symbol in found)
+        {
+            int rank = symbol.Name.Equals(query, StringComparison.OrdinalIgnoreCase) ? 0 : symbol.Name.StartsWith(query, StringComparison.OrdinalIgnoreCase) ? 1 : 2;
+            foreach (var location in symbol.Locations)
+            {
+                if (!location.IsInSource)
+                {
+                    continue;
+                }
+
+                var span = location.GetLineSpan();
+                string? path = string.IsNullOrEmpty(span.Path) ? null : span.Path;
+                int line = span.StartLinePosition.Line + 1, column = span.StartLinePosition.Character + 1;
+                if (seen.Add((path, line, column)))
+                {
+                    var container = symbol.ContainingType ?? (ISymbol?)(symbol.ContainingNamespace is { IsGlobalNamespace: false } ns ? ns : null);
+                    ranked.Add((rank, new SymbolLocation(symbol.Name, KindName(symbol), container?.ToDisplayString(), path, line, column, symbol.ToDisplayString(HoverFormat))));
+                }
+            }
+        }
+
+        ranked.Sort((a, b) =>
+        {
+            int order = a.Rank.CompareTo(b.Rank);
+            order = order != 0 ? order : string.CompareOrdinal(a.Location.Name, b.Location.Name);
+            order = order != 0 ? order : string.CompareOrdinal(a.Location.FilePath, b.Location.FilePath);
+            return order != 0 ? order : a.Location.Line.CompareTo(b.Location.Line);
+        });
+        return [.. ranked.Take(max).Select(r => r.Location)];
+    }
+
     private static string KindName(ISymbol symbol) => symbol switch
     {
         IMethodSymbol { MethodKind: MethodKind.Constructor } => "constructor",

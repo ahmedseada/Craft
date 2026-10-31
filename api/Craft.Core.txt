@@ -133,6 +133,7 @@ sealed class Craft.Core.Documents.TextDocument : Craft.Abstractions.ITextDocumen
   static System.Threading.Tasks.Task<Craft.Core.Documents.TextDocument> OpenAsync(System.String path, Craft.Core.CraftOptions options = null, System.Threading.CancellationToken cancellationToken = null)
 static class Craft.Core.Plugins.CraftPlugins
   static Craft.Core.Plugins.PluginLoadResult LoadFolder(System.String pluginFolder)
+  static System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> SharedIdrakLibraries { get; }
   static System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> Installed { get; }
   static System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> LoadInstalled(Craft.Core.CraftOptions options)
   static System.String InstalledFolder { get; }

@@ -250,7 +250,30 @@ public static class CraftPlugins
         return new PluginLoadResult(name, folder, false, $"{inner.GetType().Name}: {inner.Message}");
     }
 
-    /// <summary>A plug-in's own load context: the host's assemblies shared, the plug-in's dependencies from its folder.</summary>
+    /// <summary>
+    /// The Idrak libraries the plug-ins carry (Idrak, Idrak.Text, Idrak.Data, …), each loaded once per process by the first
+    /// plug-in that needs it and handed to every other: a library's registries are statics, so two copies would be two
+    /// registries, and a model family one plug-in registers (P2) would be invisible to the provider of another (Craft.Ai).
+    /// </summary>
+    private static readonly Dictionary<string, Assembly> IdrakLibraries = new(StringComparer.Ordinal);
+    private static readonly Lock IdrakLibrariesGate = new();
+
+    /// <summary>Whether <paramref name="name"/> is one of Idrak's libraries (shared between the plug-ins, one copy each).</summary>
+    internal static bool IsIdrakLibrary(string? name) => name is not null && (name == "Idrak" || name.StartsWith("Idrak.", StringComparison.Ordinal));
+
+    /// <summary>The Idrak libraries loaded for the plug-ins so far, by name, and the load context each lives in (the Plug-ins page and the tests).</summary>
+    public static IReadOnlyDictionary<string, string> SharedIdrakLibraries
+    {
+        get
+        {
+            lock (IdrakLibrariesGate)
+            {
+                return IdrakLibraries.ToDictionary(p => p.Key, p => AssemblyLoadContext.GetLoadContext(p.Value)?.Name ?? "", StringComparer.Ordinal);
+            }
+        }
+    }
+
+    /// <summary>A plug-in's own load context: the host's assemblies shared, Idrak's libraries shared between plug-ins, the plug-in's other dependencies from its folder.</summary>
     private sealed class PluginLoadContext(string dll) : AssemblyLoadContext(Path.GetFileNameWithoutExtension(dll), isCollectible: false)
     {
         private readonly AssemblyDependencyResolver _resolver = new(dll);
@@ -264,6 +287,26 @@ public static class CraftPlugins
             }
 
             var path = _resolver.ResolveAssemblyToPath(assemblyName);
+            if (IsIdrakLibrary(assemblyName.Name))
+            {
+                lock (IdrakLibrariesGate)
+                {
+                    if (IdrakLibraries.TryGetValue(assemblyName.Name!, out var loaded))
+                    {
+                        return loaded;
+                    }
+
+                    if (path is null || !File.Exists(path))
+                    {
+                        return null;
+                    }
+
+                    var library = LoadFromAssemblyPath(path);
+                    IdrakLibraries[assemblyName.Name!] = library;
+                    return library;
+                }
+            }
+
             return path is not null && File.Exists(path) ? LoadFromAssemblyPath(path) : null;
         }
 

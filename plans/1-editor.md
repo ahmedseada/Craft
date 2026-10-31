@@ -68,7 +68,7 @@ Every Idrak capability this plan leans on, checked in the source. A claim that d
 | `Craft.Core` | Text buffer, documents, undo, autosave and recovery, workspace, the classification layers, themes, the plug-in host. No UI, `net10.0`, AOT-compatible, tested on any machine. |
 | `Craft.CSharp` | C# on Roslyn (`Microsoft.CodeAnalysis.CSharp.Workspaces` and `.Features`): syntactic and semantic classification, diagnostics, completion, signature help, hover, go to definition, formatting. Registered as the "csharp" language (".cs") and "csharp-script" (".csx") on both platforms, as a **pre-installed, removable plug-in**: an Idrak plug-in package (`CSharpPlugin`, `[assembly: IdrakPluginPackage]`) that the app never references in code and loads from `plugins/Craft.CSharp/` beside the exe (`CraftPlugins.LoadInstalled`, its own `AssemblyLoadContext`, the contracts shared with the host); without it, or with `CRAFT_PLUGINS_DISABLED=Craft.CSharp`, a .cs file opens as plain text. Not AOT-compatible (Roslyn's MEF uses reflection): `IsAotCompatible` false, its assemblies rooted for the trimmer; Craft never uses NativeAOT. |
 | `Craft.Editor` | The editor without a UI: caret, selection, commands, layout, hit-testing, find and replace, bracket matching, and the drawing of the visible lines through `IEditorCanvas`. The UI hosts it; the tests drive it headless. (Split from `Craft.Maui` in E0 so the control's logic is tested without MAUI.) |
-| `Craft.Ai` | The AI plug-ins on Idrak's contracts: inline completion, chat panel, code actions, agent, and the editor's tools. |
+| `Craft.Ai` | The AI plug-ins on Idrak's contracts: inline completion, chat panel, code actions, agent (the editor's tools moved to `Craft.Plugins.Tools` in P1, reached through `EditorToolSets`). |
 | `Craft.Maui` | The editor control and the pages: the drawn surface behind `IEditorCanvas`, the input adapters per platform, features registered into Idrak.Maui. Targets `net10.0` (headless, for tests) and the Windows target; `net10.0-android` is added in M. |
 | `Craft.App` | The app: Windows only until the owner says "compile Android" (M). It makes the registrations (Idrak's plug-in packages, Craft's plug-ins) and hosts the models. |
 | `Craft.Plugins.*` | The plug-ins of phase P, each its own assembly. Each implements `IIdrakPlugin` too, so one loader (`IdrakPlugins.Load`) serves Idrak's and Craft's registries alike. |
@@ -628,7 +628,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | **Built (2026-10-31, "A1 as built" below).** `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
 | A2 | **Built (2026-10-31, "A2 as built" below; Idrak 6eb11a2 for the agent's steering note). Left: the owner's run on a real model.** The plug-ins: inline completion, chat panel, code actions, agent (desktop). | On a real model the owner names: ghost text appears after the pause and dies on a keystroke; a chat reply applies as a diff; the agent runs a task with each command approved. | A1 |
-| P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
+| P | P1, P2, P3 and P5 first, then P4, P6, P9, P10, then P8 (P7 is built in phase V); P11 only if measured necessary. **First batch built (2026-10-31, "P as built (first batch)" below): P1, P2, P3, P5 and P4. Left: P6, P9, P10, P8, P11.** | Each plug-in's targeted tests and its conformance suite pass; the five checks hold on the Plug-ins page. | A1 (P2 also A0) |
 | V | Voice coding on Idrak.Audio ("Voice coding" above): capture, live transcription, dictation, voice commands, spoken code as a diff, read back; P7 is its first part. | A recorded WAV dictates the expected text, runs a command and asks for code that arrives as a diff; the owner codes by voice on Windows; the latency written here. | A2 (the chat model and the diff view), K |
 | R0 | **Built (2026-10-31, Idrak f419399).** Idrak: preference learning from episodes ("Idrak library gaps", R0): `PreferencePairSources` ("group", "verdict"), the preference losses by name ("dpo", "orpo", "simpo") over the existing `FineTuningLosses`, iterative preference training usable by `idrak reinforce`, the suite and the bench. | Pairs from a scored rollout train a tiny model with the DPO loss falling and the margin rising; memory flat over many rounds; `idrak reinforce --pairs group --loss dpo` runs. | A0 (a slot in Idrak); before R |
 | R | Learning in the editor on Idrak's reinforcement learning ("Learning in the editor" above): episodes from the editor, the editor-verdict reward with `csharp-build`/`csharp-tests`, tasks from the workspace's tests, background adapter training, promotion and rollback, the Learning panel; and the plug-in as the test of Idrak's reinforcement stack through its C# environment. | A fixture workspace's failing test becomes a task the "csharp" environment rewards; recorded episodes replay; an adapter trains with flat memory and is promoted only when better; the same assembly runs under `idrak reinforce`; the owner trains on a real model on Windows. | A2 (the episodes come from its plug-ins), P5 (the sandbox), R0 |
@@ -913,7 +913,7 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
   unsaved text is what they see; paths outside the folder are refused; search reads a file's bytes once and skips it
   without decoding when a case-sensitive query is not in them. `[assembly: ToolProvider(FolderToolProvider)]` over
   `CRAFT_PLUGIN_AI_TOOLSFOLDER` (else the current folder): `idrak tools list|test Craft.Ai.dll` lists and calls the four
-  folder tools (4 of 4 answered here). `find_symbol` waits for a contract a plug-in can reach Roslyn's symbols through
+  folder tools (4 of 4 answered here; since P1 the tools are `Craft.Plugins.Tools`, with `find_symbol`). `find_symbol` waits for a contract a plug-in can reach Roslyn's symbols through
   (a seam for P/A2).
 - **Contracts added** (Craft.Abstractions, all additive, contracts still 1.0 as K and E4 kept them, nothing released):
   `IModelProvider : IKind` with `ModelProviders` ("local"), `ModelRequest`, `ModelLease`, `ModelLoadStatus`; `TextDiff`
@@ -1152,6 +1152,97 @@ E3's bench (`dotnet run -c Release --project benches/Craft.Benches -- editor`, a
   context menu yet, so the selection actions are palette commands; Roslyn's own code fixes are not offered (Craft.CSharp
   could register a provider); the chat's apply goes to the active document; the agent's working copy is a full copy of the
   folder (fine for a project, heavy for a very large tree: `agentCopyIgnore` trims it).
+
+## P as built (first batch, 2026-10-31)
+
+Idrak `main` 4b296ca first (two gaps, by Idrak's rules): `CommandLimits.Output` (each line of a command's output handed
+over while it runs, on the sandbox's reader thread, untrimmed; the process sandbox calls it, the container sandbox passes
+it on; a watcher that throws never stops the command) and `SamplerRequest.Tokenizer` (the generator's tokenizer, for a
+sampler that decides by the tokens' text; `TextGenerator` and `Seq2SeqGenerator` set it; a kept sampler is reused only
+for the same tokenizer). Idrak's `public API`, `custom ITokenSampler`, `command sandboxes` and token-sampler tests: 7
+passed on the CPU.
+
+Each plug-in is a folder `plugins/<Name>/` (its project, its `plugin.json`, a summary naming its registry), built on
+`Craft.Abstractions` and Idrak alone, pre-installed by Craft.App's one new target (every `plugins/*/*.csproj`, its output
+folder copied to `plugins\<Name>\` beside the program, the shared contracts left out) and removable (delete the folder, or
+`CRAFT_PLUGINS_DISABLED`). The tests load each one from a copy of its build output through `CraftPlugins.LoadFolder`, into
+its own load context, and check it only through the registry its consumer reads.
+
+- **Loader** (`CraftPlugins`): each Idrak library a plug-in carries (Idrak, Idrak.Text, …) is loaded once per process,
+  by the first plug-in context that needs it, and handed to every other (`CraftPlugins.SharedIdrakLibraries`): a library's
+  registries are statics, so two copies would be two registries and P2's family would be invisible to Craft.Ai's "local"
+  provider. `Idrak.Abstraction` stays the host's; other dependencies (Roslyn) stay each plug-in's own (P4 carries its own
+  copy of Roslyn's C# parser: its memory to measure on the first Windows run). In the tests the default context already
+  holds Idrak, so this sharing rule itself is proven on Windows (the owner's run: P2's family reaches the model provider).
+- **P1, the editor's tools** (`plugins/Craft.Plugins.Tools`, split out of Craft.Ai as the design's Agent screen names it):
+  the A1 tools with `find_symbol` added on both backings, registered as the tool set "editor" in the new
+  `Craft.Abstractions.EditorToolSets` (`IEditorToolSet : IKind`, `Live(host)`, `Folder(path)`; the registry joins every
+  set's tools by name, the newest set first). Craft.Ai's MCP server now serves `EditorToolSets.Live(host)` and never
+  references the tools' assembly (with no set registered it refuses, naming the plug-in). The tools' settings moved from
+  "ai" to "tools": `CRAFT_PLUGIN_TOOLS_READLINES`, `SEARCHRESULTS`, `SYMBOLRESULTS` (new, 50), `SEARCHFILEKB`, `IGNORE`,
+  `PATCHFOLDER`, `TOOLSFOLDER`. `find_symbol`: `ISemanticLanguageSession.FindSymbolsAsync` (live: an open document's
+  session, the workspace with every open document's unsaved text; `IEditorDocument.SemanticSession` reaches it) and
+  `ILanguage.FindSymbolsAsync(root, …)` (a folder; it shares the workspace a session of that folder holds in the same
+  process), both Roslyn's `SymbolFinder.FindSourceDeclarationsWithPatternAsync` in Craft.CSharp, ranked exact name, then
+  name start, then the rest. The five checks: a new kind ("editor", and any plug-in's set), an override (a newer set's
+  `read_document` shadows the editor's; unregistered, the editor's is back), "not registered" for a missing set, loaded
+  from its folder, one assembly every host (the app's MCP server lists the 7 live tools and reads an open document; the
+  same dll's `[assembly: ToolProvider]` gives the idrak tool 5 folder tools: `idrak tools test Craft.Plugins.Tools.dll`
+  here, 5 of 5 answered). Under the idrak tool `find_symbol` answers that it needs a language plug-in (Craft.CSharp
+  through `-P`) rather than guessing.
+- **P2, StarCoder2** (`plugins/Craft.Plugins.StarCoder2`, an Idrak plug-in package): `Starcoder2ForCausalLM` in
+  `PretrainedArchitectures` (from transformers' `configuration_starcoder2.py` and `modular_starcoder2.py`: layer norms with
+  biases at `norm_epsilon`, `c_fc`/`c_proj` without a gate, GELU's tanh form, biases on every projection when `use_bias`,
+  grouped-query attention, the sliding window in every layer, tied embeddings; `rope_parameters.rope_theta` read too; the
+  dropouts noted, not applied; it writes its own config.json back, checked by reading it again) and the FIM format
+  "starcoder2" in `FillInMiddleFormats` (BigCode's own evaluation harness, its StarCoder FIM task:
+  `<fim_prefix>prefix<fim_suffix>suffix<fim_middle>`, stops `<|endoftext|>` and `<file_sep>`; repository files as
+  `<file_sep>path\ntext`; `<file_sep>` is required, so StarCoder (1)'s tokenizer is not taken for it). Hugging Face itself
+  was not reachable from here: the tokenizer's own `tokenizer_config.json` is to be checked on the owner's machine (the
+  repository-name token `<repo_name>` is not written: its spacing was not verifiable). Checks: "not registered" for the
+  format and the architecture before it loads; loaded from its folder; `FillInMiddleFormatSuite` passes; a tiny
+  StarCoder2 made by `PretrainedModel.Create` has exactly transformers' tensor names, reads its spec back, and completes a
+  FIM prompt. GGUF (llama.cpp's "starcoder2") is not mapped yet.
+- **P3, the bracket-balanced sampler** (`plugins/Craft.Plugins.Sampler`): registered as Idrak's `TokenSamplers`
+  "default" (the slot shadows the library's, which it wraps and `Unregister` brings back). On a completion in a registered
+  FIM layout (the prefix found by the layout's tokens; mode `CRAFT_PLUGIN_SAMPLER_MODE`: fim, always, off) it sets to -∞
+  the tokens that would close a brace, parenthesis or bracket the prefix never opened (brackets inside a string or a
+  character literal are text; a backslash escapes; a line break ends a literal), on a copy of the last position's logits;
+  where nothing is forbidden it passes the logits as they are, and a prompt that is not a completion is not watched (and
+  stays recordable as a graph). The vocabulary's table is made once per tokenizer and compacted to distinct token
+  behaviours. Checks: `TokenSamplerSuite` exact against the library's; the origin reported, the library's back after
+  unregistering; a generation with nothing masked gives the library's very tokens; a masking one closes nothing unopened.
+  **Measured** (`benches/Craft.Benches -- sampler`, CPU, 4 threads, a 2-layer decoder of width 64 with a 49,152-token
+  vocabulary, 128 tokens, warm the median of 9 interleaved runs): nothing masked, library 819 tok/s warm (719 cold) against
+  828 (618 cold), the same tokens; masked every step (384 tokens over 128 steps), library 873 warm (709 cold) against 881
+  (639 cold): the warm cost is within the run-to-run noise on this decoder; cold pays the table, 10 ms and 192 KiB (11
+  distinct behaviours; 1.7 MiB before it was compacted). On a real model the sampler's share of a step is smaller still;
+  the owner's GPU run measures it there.
+- **P4, C#-aware placement** (`plugins/Craft.Plugins.Placement`): `TextMatchers` "csharp-tokens" (a new kind): a
+  snippet goes where the text holds the same run of Roslyn tokens (whitespace and comments ignored), the run nearest by
+  edit distance, with "exact" or "whitespace differed"; no such run, the library's semi-global. With
+  `CRAFT_PLUGIN_PLACEMENT_REPLACESEMIGLOBAL=true` it also takes the "semi-global" slot (shadowing the library's, back on
+  deactivation). Checks: `TextMatcherSuite` passes agreeing with semi-global on prose; on code it places `Log(y);` at
+  `Log( y );` where semi-global takes the nearer letters `Log(x);`; "not registered" before it loads; loaded from its
+  folder. A2's chat and code actions reach it by name only (`CRAFT_PLUGIN_AI_PLACEMENT`, "csharp-tokens" by default):
+  with this plug-in removed they get "not registered" from `TextMatchers`.
+- **P5, the approve-each sandbox** (`plugins/Craft.Plugins.Sandbox`): `CommandSandboxes` "approve-each" (a new kind;
+  A2's agent names it, nothing else is shared). Each command goes to the user through the new
+  `IEditorHost.AskAsync(EditorQuestion)` (title, the command line, the facts "Program: dotnet (allowed: …)", "Time limit:
+  120 s", "Network: on/off", "Folder: the workspace", "Runs in: the process sandbox"; answers Allow once, Allow PROGRAM
+  for this run, Deny and tell the agent; a dismissed question is a denial; the MAUI presenter shows an action sheet until
+  A2's Agent card), then runs in the inner sandbox (`CRAFT_PLUGIN_SANDBOX_INNER`, "process"; "container" turns the network
+  off) with every output line in the panel "Terminal (sandbox)" as it comes (`CommandLimits.Output`, a batch per UI turn,
+  the last `PANELLINES` 400 kept), and its end (exit code, elapsed). "For this run" lasts until `sandbox.endRun` or a gap
+  longer than `RUNGAPMINUTES` (15). Denied, the agent gets a refused result saying the user said no. With no editor to
+  ask, `Check` says why and every command is refused. Checks: "not registered" before it loads; loaded from its folder;
+  allow once, deny, dismissed, allowed for the run (not asked again), asked again after `sandbox.endRun`; Idrak's
+  `CodingTools` with `Sandbox = "approve-each"` asks first; network off is refused naming "container".
+- **Tests**: group `PhaseP` (9), with `Ai` (A2's chat and agent tests now register the tools plug-in's set, as the app's
+  loader does), `ApiGuard`, `Inventory`, `PluginKit`, `Plugins`, `Design`, `Shell`, `Editor`, `Semantic`: 103 passed here
+  after the rebase onto A2 and D; the API dumps of the five plug-ins added. A2's chat now offers `EditorToolSets.Live`
+  (every registered set) and its file chip has its own limit, `CRAFT_PLUGIN_AI_CHATFILELINES` (2000). **Not yet**: the Plug-ins page of the design (registry, slot, guard, cost columns) is phase D's; the
+  list the Plug-ins button shows names each plug-in's registry in its summary; the real StarCoder2 on the owner's machine.
 
 ## Commands for the owner (once a phase is built)
 

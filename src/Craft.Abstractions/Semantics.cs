@@ -305,6 +305,16 @@ public sealed record DefinitionLocation(string? FilePath, int Start, int Length,
     public bool IsMetadata => FilePath is null && !IsSameDocument;
 }
 
+/// <summary>A symbol declared in source, as a symbol search finds it (<see cref="ISemanticLanguageSession.FindSymbolsAsync"/>).</summary>
+/// <param name="Name">Its name ("ReadAsync").</param>
+/// <param name="Kind">What it is, in the language's words ("method", "class", "property").</param>
+/// <param name="Container">The type or namespace it is declared in ("Craft.Ai.FolderBacking"), or null.</param>
+/// <param name="FilePath">The file it is declared in (full path), or null for a document with no file.</param>
+/// <param name="Line">The line of its name, from 1.</param>
+/// <param name="Column">The column of its name, from 1.</param>
+/// <param name="Description">Its signature as the language writes it.</param>
+public sealed record SymbolLocation(string Name, string Kind, string? Container, string? FilePath, int Line, int Column, string Description);
+
 /// <summary>What a language's semantic layer holds now: its workspace's size and its last costs (telemetry).</summary>
 /// <param name="WorkspaceRoot">The workspace it belongs to, or null before one is built.</param>
 /// <param name="Reader">The workspace reader that made it ("csproj", "loose").</param>
@@ -398,4 +408,13 @@ public interface ISemanticLanguageSession : ILanguageSession
     /// </summary>
     Task<DiagnosticSet?> DiagnoseEditsAsync(ITextSnapshot snapshot, IReadOnlyList<TextEdit> edits, CancellationToken cancellationToken) =>
         Task.FromResult<DiagnosticSet?>(null);
+
+    /// <summary>
+    /// The symbols declared in the session's workspace (its open documents with their unsaved text, and the files of its
+    /// projects) whose names hold <paramref name="query"/> (ignoring case; a name's capitals also match, "FB" finds
+    /// FolderBacking), the closest first, at most <paramref name="maxResults"/>: the editor tools' <c>find_symbol</c>.
+    /// Empty when the layer cannot search (the default).
+    /// </summary>
+    Task<IReadOnlyList<SymbolLocation>> FindSymbolsAsync(string query, int maxResults, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<SymbolLocation>>([]);
 }

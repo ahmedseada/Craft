@@ -1,0 +1,13 @@
+<Project>
+  <!-- Craft's own targets (the Idrak clone instead of packages), then what every plug-in of phase P shares. -->
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.targets" />
+
+  <!--
+    Each plug-in's plugin.json goes beside its dll in its own output folder, which Craft.App copies to plugins\<Name>\
+    (CraftPreinstalledPlugins in Craft.App.csproj). Copied by a target, not as content, so it never flows into the output of
+    a project that references the plug-in (the tests).
+  -->
+  <Target Name="CraftCopyPluginManifest" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\plugin.json')">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\plugin.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

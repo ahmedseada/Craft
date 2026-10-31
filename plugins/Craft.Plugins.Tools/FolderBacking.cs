@@ -7,13 +7,13 @@ using System.Text.Json.Nodes;
 using Craft.Abstractions;
 using Idrak.Abstraction.Generation;
 
-namespace Craft.Ai;
+namespace Craft.Plugins.Tools;
 
 /// <summary>
 /// The folder backing of the editor's tools, for a process that is not the editor: the files under one folder, read
 /// from disk; a proposed edit is written as a unified patch the user applies, never into the file.
 /// </summary>
-internal sealed class FolderBacking(string root, AiSettings settings)
+internal sealed class FolderBacking(string root, ToolSettings settings)
 {
     public Task<string> ListAsync(JsonObject arguments, CancellationToken cancellationToken)
     {
@@ -99,22 +99,21 @@ internal sealed class FolderBacking(string root, AiSettings settings)
             $"Written as a patch (+{diff.Added} −{diff.Removed} lines), not applied: {ToolText.Display(root, patch)}. The user applies it with: git apply \"{patch}\"");
     }
 
-    private string NotFound(string path) => $"No file '{path}' under {root}; list_files shows the files.";
-}
-
-/// <summary>
-/// The editor's tools for the idrak tool (<c>idrak tools test Craft.Ai.dll</c>, <c>idrak mcp serve Craft.Ai.dll</c>,
-/// <c>idrak chat MODEL --tools Craft.Ai.dll</c>): the folder backing over <c>CRAFT_PLUGIN_AI_TOOLSFOLDER</c>, else the
-/// current folder, with the plug-in's limits from the environment.
-/// </summary>
-public sealed class FolderToolProvider : IToolProvider
-{
-    /// <summary>The tools, made once.</summary>
-    public IReadOnlyList<ITool> Tools { get; } = Make();
-
-    private static IReadOnlyList<ITool> Make()
+    public async Task<string> FindSymbolAsync(JsonObject arguments, CancellationToken cancellationToken)
     {
-        var settings = AiSettings.FromEnvironment();
-        return EditorTools.Folder(settings.ToolsFolder.Length > 0 ? settings.ToolsFolder : Environment.CurrentDirectory, settings);
+        string query = EditorTools.Text(arguments, "query");
+        int limit = Math.Clamp(EditorTools.Whole(arguments, "max_results") ?? settings.SymbolResults, 1, settings.SymbolResults);
+        var languages = EditorLanguages.All;
+        var found = new List<SymbolLocation>();
+        foreach (var language in languages)
+        {
+            found.AddRange(await language.FindSymbolsAsync(root, query, limit, LanguageSettings.Default, cancellationToken).ConfigureAwait(false));
+        }
+
+        return languages.Count == 0
+            ? "find_symbol needs a language plug-in that knows symbols: load Craft.CSharp beside these tools (idrak ... -P Craft.CSharp.dll), as the editor does."
+            : ToolText.Symbols(root, query, found, limit);
     }
+
+    private string NotFound(string path) => $"No file '{path}' under {root}; list_files shows the files.";
 }

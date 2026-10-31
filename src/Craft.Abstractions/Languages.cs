@@ -52,6 +52,16 @@ public interface ILanguage : IKind
     void ReleaseMemory()
     {
     }
+
+    /// <summary>
+    /// The symbols declared in the files of the workspace at <paramref name="workspaceRoot"/> whose names hold
+    /// <paramref name="query"/> (as <see cref="ISemanticLanguageSession.FindSymbolsAsync"/> matches them), with no document
+    /// of its own open: the folder backing of the editor tools' <c>find_symbol</c>. The files are read from disk, except
+    /// that a language may share the workspace a session of the same folder holds in this process (with that session's
+    /// unsaved text). Off the calling thread. Empty for a language that cannot search (the default).
+    /// </summary>
+    Task<IReadOnlyList<SymbolLocation>> FindSymbolsAsync(string workspaceRoot, string query, int maxResults, LanguageSettings settings, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<SymbolLocation>>([]);
 }
 
 /// <summary>

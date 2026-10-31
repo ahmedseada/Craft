@@ -25,6 +25,9 @@ panels, settings, languages and themes. Craft's own C# support is a plug-in on t
 | `ICodeActionProvider` (registry `CodeActionProviders`) | Code actions for a `CodeActionContext` (a document, a range, its diagnostics): each `CodeAction` has a title, a kind (`CodeActionKinds`: fix, explain, refactor, document, tests) and `RunAsync`. The Problems row shows the fix and explain ones as buttons; edits still go through `ProposeAsync`. `CodeActionProviders.ActionsFor(context)` gathers every provider's. |
 | `IConversationPanel` | A panel with a conversation and an input (the chat column, a sheet in the narrow layout): `ConversationEntry`s by `ConversationRole` (user, assistant, tool row, code block with `PanelAction`s and Copy, note, error, approval card, section, changed file), `ContextChip`s, a status line, header buttons and `SubmitAsync`. Add it with `AddPanel`; raise `ConversationChanged` with `EntryUpdated` for one streamed entry. The AI plug-in's chat and agent run are two. |
 | `IEditorHost.OpenDocumentAsync` | The open document of a file, opening it in the editor when needed (a path with no file yet opens a new document): for a proposal to a closed file. |
+| `IEditorToolSet` (registry `EditorToolSets`) | Tools for models (Idrak `ITool`s) over the running editor (`Live(host)`) and over a folder (`Folder(path)`). The pre-installed tools plug-in registers "editor"; `EditorToolSets.Live(host)` joins every set's tools by name, the newest set first, so a plug-in adds tools (or shadows one of the editor's) by registering a set. What chat, the agent and the editor's MCP server give a model. |
+| `IEditorHost.AskAsync(EditorQuestion)` | Asks the user a question with answers to pick (the approve-each sandbox's card: the command, its facts, Allow once / Allow for this run / Deny); -1 when the host cannot ask, which a plug-in treats as no. |
+| `ISemanticLanguageSession.FindSymbolsAsync`, `ILanguage.FindSymbolsAsync` | Declared symbols by name (`SymbolLocation`: name, kind, container, file, line, column, signature), from an open document's session (its unsaved text included) or over a folder; `IEditorDocument.SemanticSession` gives a document's session. The tools' `find_symbol`. |
 | `CraftContracts.Version` | The contracts' version (now 1.0). |
 
 Everything a plug-in is called with runs on the UI thread, and every host event is raised there. Work that takes time
@@ -158,6 +161,36 @@ wrong field, refuses the plug-in with every reason. A folder without `plugin.jso
 
 The Plug-ins button lists every folder found, with its version, summary, and whether it loaded, was refused, is outdated
 or disabled. Ctrl+Shift+P (or the Commands button) lists the commands and runs the one picked.
+
+## Idrak's libraries in a plug-in
+
+A plug-in may carry Idrak's libraries in its folder (Idrak, Idrak.Text, …: a model family needs Idrak's
+`PretrainedArchitectures`, a text matcher Idrak.Text's `TextMatchers`). Craft loads each Idrak library once per process,
+from the first plug-in folder that needs it, and hands that copy to every other plug-in: a library's registries are its
+statics, so a family one plug-in registers is the one the "local" model provider of another reads. `Idrak.Abstraction`
+is always the host's. Other dependencies (Roslyn, say) stay each plug-in's own.
+
+## Craft's own plug-ins of phase P
+
+Each is a folder under `plugins/` in this repository (`plugins/<Name>/<Name>.csproj` and its `plugin.json`), built and
+copied by Craft.App to `plugins\<Name>\` beside the program, pre-installed and removable like C#. They use nothing a
+third party cannot.
+
+| Folder | What it adds | Registry | Settings |
+|---|---|---|---|
+| `Craft.Plugins.Tools` (P1) | The editor's tools: `open_documents`, `read_document`, `get_selection`, `get_diagnostics`, `search_workspace`, `find_symbol`, `propose_edit` (live; a diff the user accepts) and `list_files`, `read_document`, `search_workspace`, `find_symbol`, `propose_edit` (a folder; a patch file) | `EditorToolSets` "editor"; `[assembly: ToolProvider]` for the idrak tool | `CRAFT_PLUGIN_TOOLS_*`: `readLines`, `searchResults`, `symbolResults`, `searchFileKb`, `ignore`, `patchFolder`, `toolsFolder` |
+| `Craft.Plugins.StarCoder2` (P2) | The StarCoder2 family (BigCode): `Starcoder2ForCausalLM` for the "local" provider, and the fill-in-the-middle format "starcoder2" for inline completion | Idrak's `PretrainedArchitectures`, `FillInMiddleFormats` | none |
+| `Craft.Plugins.Sampler` (P3) | Bracket-balanced completion: on a fill-in-the-middle completion, tokens that would close a brace, parenthesis or bracket the prefix never opened are masked (brackets in strings are text) | Idrak's `TokenSamplers` "default", over the library's (which it wraps, and which `Unregister` brings back) | `CRAFT_PLUGIN_SAMPLER_MODE`: `fim` (default), `always`, `off` |
+| `Craft.Plugins.Placement` (P4) | C#-aware placement of a model's snippet: by Roslyn's tokens, whitespace and comments ignored ("placed by csharp-tokens · exact / whitespace differed"), else the library's semi-global | Idrak.Text's `TextMatchers` "csharp-tokens" (and "semi-global" with the setting) | `CRAFT_PLUGIN_PLACEMENT_REPLACESEMIGLOBAL` (false) |
+| `Craft.Plugins.Sandbox` (P5) | The approve-each command sandbox: every command an agent asks to run is shown to you first (program, time limit, network, folder; Allow once, Allow PROGRAM for this run, Deny and tell the agent), then runs in the inner sandbox with its output live in the panel "Terminal (sandbox)"; denied, the agent gets a refusal; with no editor to ask, every command is refused | Idrak's `CommandSandboxes` "approve-each" (the agent names it: `CodingToolOptions.Sandbox`, `IDRAK_SANDBOX`) | `CRAFT_PLUGIN_SANDBOX_*`: `inner` (process), `runGapMinutes` (15), `panelLines` (400); commands `sandbox.endRun`, `sandbox.clear` |
+
+The tools also work outside the editor, from the same dll (the folder backing over `CRAFT_PLUGIN_TOOLS_TOOLSFOLDER`, else
+the current folder):
+
+```powershell
+dotnet run -c Release --project D:\Projects\Idrak\src\Idrak.Cli -- tools test D:\Projects\Craft\plugins\Craft.Plugins.Tools\bin\Release\net10.0\Craft.Plugins.Tools.dll
+dotnet run -c Release --project D:\Projects\Idrak\src\Idrak.Cli -- mcp serve D:\Projects\Craft\plugins\Craft.Plugins.Tools\bin\Release\net10.0\Craft.Plugins.Tools.dll
+```
 
 ## The template
 

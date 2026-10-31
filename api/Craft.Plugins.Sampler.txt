@@ -1,0 +1,26 @@
+sealed class Craft.Plugins.Sampler.BracketBalancedSamplerKind : Idrak.Abstraction.Generation.ITokenSamplerKind, Idrak.Abstraction.IConfigurableKind, Idrak.Abstraction.IKind, Idrak.Abstraction.IKind<Idrak.Abstraction.Generation.SamplerRequest, Idrak.Abstraction.Generation.ITokenSampler>
+  Idrak.Abstraction.Generation.ITokenSampler Create(Idrak.Abstraction.Generation.SamplerRequest request)
+  System.Collections.Generic.IReadOnlySet<System.String> Keys { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String PluginName = sampler
+  static Craft.Plugins.Sampler.BracketBalancedSamplerKind Instance { get; }
+  static Craft.Plugins.Sampler.BracketMode Mode { get; set; }
+  static Craft.Plugins.Sampler.BracketMode ParseMode(System.String text)
+enum Craft.Plugins.Sampler.BracketMode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Always = 1
+  Fim = 0
+  Off = 2
+sealed class Craft.Plugins.Sampler.SamplerPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+sealed class Craft.Plugins.Sampler.SamplerPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  static Craft.Plugins.Sampler.SamplerPlugin Instance { get; }
+sealed class Craft.Plugins.Sampler.SamplerRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()

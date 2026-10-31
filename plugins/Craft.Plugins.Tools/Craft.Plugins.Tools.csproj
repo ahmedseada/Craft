@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plug-in P1 of plan phase P, the editor's tools: Idrak ITools with two backings behind the same definitions, live over
+    the running editor (IEditorHost) and over a folder for any other process, registered as the tool set "editor" in
+    Craft.Abstractions' EditorToolSets (which Craft.Ai's MCP server and the AI plug-ins read: they never reference this
+    assembly), and declared to the idrak tool with [assembly: ToolProvider] (idrak tools test, idrak mcp serve, idrak chat
+    tools). Pre-installed and removable: Craft.App copies this output folder to plugins\Craft.Plugins.Tools\ without the
+    host's contracts; its own output keeps Craft.Abstractions so the idrak tool loads the assembly alone.
+
+    Android (phase M): no reflection of its own (explicit schemas); ToolProvider is made by the idrak tool's loader.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Tools</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj" />
+  </ItemGroup>
+
+  <!-- Idrak.Abstraction is every host's own (the app's, the idrak tool's): never carried. Craft.Abstractions stays beside
+       the dll for the idrak tool, which does not have it; the app's copy leaves it out. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

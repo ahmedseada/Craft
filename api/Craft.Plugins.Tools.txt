@@ -1,0 +1,53 @@
+static class Craft.Plugins.Tools.EditorToolNames
+  const System.String FindSymbol = find_symbol
+  const System.String GetDiagnostics = get_diagnostics
+  const System.String GetSelection = get_selection
+  const System.String ListFiles = list_files
+  const System.String OpenDocuments = open_documents
+  const System.String ProposeEdit = propose_edit
+  const System.String ReadDocument = read_document
+  const System.String SearchWorkspace = search_workspace
+sealed class Craft.Plugins.Tools.EditorToolSet : Craft.Abstractions.IEditorToolSet, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder)
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  static Craft.Plugins.Tools.EditorToolSet Instance { get; }
+static class Craft.Plugins.Tools.EditorTools
+  static System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder, Craft.Plugins.Tools.ToolSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host, Craft.Plugins.Tools.ToolSettings settings)
+sealed class Craft.Plugins.Tools.FolderToolProvider : Idrak.Abstraction.Generation.IToolProvider
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Tools { get; }
+  ctor()
+sealed class Craft.Plugins.Tools.ToolSettings : System.IEquatable<Craft.Plugins.Tools.ToolSettings>
+  Craft.Plugins.Tools.ToolSettings <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Tools.ToolSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Ignore { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 ReadLines { get; init; }
+  System.Int32 SearchFileKilobytes { get; init; }
+  System.Int32 SearchResults { get; init; }
+  System.Int32 SymbolResults { get; init; }
+  System.String PatchFolder { get; init; }
+  System.String ToString()
+  System.String ToolsFolder { get; init; }
+  const System.String PluginName = tools
+  ctor()
+  static Craft.Plugins.Tools.ToolSettings From(Craft.Abstractions.IPluginSettings settings)
+  static Craft.Plugins.Tools.ToolSettings FromEnvironment()
+  static Craft.Plugins.Tools.ToolSettings Read(System.Func<System.String, System.String> value)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+sealed class Craft.Plugins.Tools.ToolsPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+sealed class Craft.Plugins.Tools.ToolsPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  static Craft.Plugins.Tools.ToolsPlugin Instance { get; }
+sealed class Craft.Plugins.Tools.ToolsRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()

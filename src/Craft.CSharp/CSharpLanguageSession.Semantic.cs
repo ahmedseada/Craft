@@ -187,6 +187,21 @@ public sealed partial class CSharpLanguageSession
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Roslyn's declaration search over the workspace's solution (this folder's projects, every open document at its
+    /// unsaved text), brought to the session's current text first. Empty for a script, which has no workspace here yet.
+    /// </remarks>
+    public Task<IReadOnlyList<SymbolLocation>> FindSymbolsAsync(string query, int maxResults, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Task.Run(async () => await DocumentForAsync(Volatile.Read(ref _latest), cancellationToken).ConfigureAwait(false) is { } document
+            ? await CSharpSemantics.FindSymbolsAsync(document.Project.Solution, query.Trim(), maxResults, cancellationToken).ConfigureAwait(false)
+            : (IReadOnlyList<SymbolLocation>)[], cancellationToken);
+    }
+
+    /// <inheritdoc />
     public void Release()
     {
         lock (_gate)

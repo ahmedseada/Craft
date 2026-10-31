@@ -29,6 +29,9 @@ public interface IEditorPresenter
 
     /// <summary>Shows a message; completes when the user dismissed it.</summary>
     Task ShowMessageAsync(string title, string message);
+
+    /// <summary>Asks <paramref name="question"/>: the index of the answer picked, or its <see cref="EditorQuestion.Dismissed"/>; the default cannot ask (-1).</summary>
+    Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken) => Task.FromResult(-1);
 }
 
 /// <summary>

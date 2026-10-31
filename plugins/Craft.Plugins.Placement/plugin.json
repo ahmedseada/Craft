@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Placement",
+  "version": "0.1.0",
+  "summary": "P4 · C#-aware edit placement: a model's snippet is placed by Roslyn's tokens, whitespace ignored [TextMatchers \"csharp-tokens\", a new kind]",
+  "contractVersion": "1.0",
+  "capabilities": []
+}

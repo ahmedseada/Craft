@@ -5,20 +5,20 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Craft.Abstractions;
 
-namespace Craft.Ai;
+namespace Craft.Plugins.Tools;
 
 /// <summary>
 /// The live backing of the editor's tools: the host's documents are read on its UI thread (a snapshot is immutable, so
 /// the lines are then read off it), and an edit is only ever proposed (<see cref="IEditorHost.ProposeAsync"/>): the user
 /// accepts it in the diff view.
 /// </summary>
-internal sealed class LiveBacking(IEditorHost host, AiSettings settings)
+internal sealed class LiveBacking(IEditorHost host, ToolSettings settings)
 {
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
 
     /// <summary>An open document as the tools see it, taken on the UI thread.</summary>
     private sealed record DocumentView(IEditorDocument Document, string Name, string? Path, ITextSnapshot Snapshot, bool Active, bool Dirty, string Language,
-        SelectionState Selection, DiagnosticSet Diagnostics);
+        SelectionState Selection, DiagnosticSet Diagnostics, ISemanticLanguageSession? Semantic);
 
     private sealed record State(string? Root, DocumentView[] Documents);
 
@@ -162,6 +162,37 @@ internal sealed class LiveBacking(IEditorHost host, AiSettings settings)
         });
     }
 
+    public async Task<string> FindSymbolAsync(JsonObject arguments, CancellationToken cancellationToken)
+    {
+        string query = EditorTools.Text(arguments, "query");
+        int limit = Math.Clamp(EditorTools.Whole(arguments, "max_results") ?? settings.SymbolResults, 1, settings.SymbolResults);
+        var state = await TakeAsync(cancellationToken).ConfigureAwait(false);
+
+        // The open documents' semantic sessions (their workspace holds every open document at its unsaved text), one per
+        // language, the active document's first; with none open, the languages over the open folder, read from disk.
+        var found = new List<SymbolLocation>();
+        var asked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var document in state.Documents.OrderByDescending(d => d.Active))
+        {
+            if (document.Semantic is { } session && asked.Add(document.Language))
+            {
+                found.AddRange(await session.FindSymbolsAsync(query, limit, cancellationToken).ConfigureAwait(false));
+            }
+        }
+
+        if (asked.Count == 0 && state.Root is { } root)
+        {
+            foreach (var language in EditorLanguages.All)
+            {
+                found.AddRange(await language.FindSymbolsAsync(root, query, limit, LanguageSettings.Default, cancellationToken).ConfigureAwait(false));
+            }
+        }
+
+        return asked.Count == 0 && state.Root is null
+            ? "find_symbol needs a document of a language with symbols (C#) open, or a folder open in the editor."
+            : ToolText.Symbols(state.Root, query, found, limit);
+    }
+
     public async Task<string> ProposeAsync(JsonObject arguments, CancellationToken cancellationToken)
     {
         string path = EditorTools.Text(arguments, "path");
@@ -205,7 +236,7 @@ internal sealed class LiveBacking(IEditorHost host, AiSettings settings)
             string? full = document.FilePath is { } p ? System.IO.Path.GetFullPath(p) : null;
             string name = full is null ? string.Create(Culture, $"untitled-{++untitled}") : ToolText.Display(root, full);
             views[i] = new DocumentView(document, name, full, document.Document.Buffer.Current, ReferenceEquals(document, active), document.Document.IsDirty,
-                document.LanguageName, document.Selection, document.Diagnostics);
+                document.LanguageName, document.Selection, document.Diagnostics, document.SemanticSession);
         }
 
         return new State(root, views);

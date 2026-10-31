@@ -26,6 +26,9 @@ public interface IEditorDocument
     /// empty when its language has no semantic layer or the host was not told any.
     /// </summary>
     DiagnosticSet Diagnostics => DiagnosticSet.Empty;
+
+    /// <summary>Its language's semantic session (symbols, completion, diagnostics; any thread), or null when it has none or the host was not told it.</summary>
+    ISemanticLanguageSession? SemanticSession => null;
 }
 
 /// <summary>An event about one open document.</summary>
@@ -174,6 +177,13 @@ public interface IEditorHost
 
     /// <summary>Shows a message to the user (a plug-in's answer to a command); completes when the user dismissed it.</summary>
     Task ShowMessageAsync(string title, string message);
+
+    /// <summary>
+    /// Asks the user <paramref name="question"/> and gives the index of the answer picked, or
+    /// <see cref="EditorQuestion.Dismissed"/> when the question was dismissed or cancelled; -1 when the host has no way to ask
+    /// (the default): a plug-in that needs the user's yes treats that as no.
+    /// </summary>
+    Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) => Task.FromResult(-1);
 
     /// <summary>Writes a line to the editor's log, under the plug-in's name.</summary>
     void Log(EditorLogLevel level, string message, Exception? error = null);

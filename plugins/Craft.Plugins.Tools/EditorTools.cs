@@ -7,7 +7,7 @@ using System.Text.Json.Nodes;
 using Craft.Abstractions;
 using Idrak.Abstraction.Generation;
 
-namespace Craft.Ai;
+namespace Craft.Plugins.Tools;
 
 /// <summary>The editor's tools' names (the same in both backings).</summary>
 public static class EditorToolNames
@@ -30,12 +30,15 @@ public static class EditorToolNames
     /// <summary>Lines that hold a text, across the open documents and the folder's files.</summary>
     public const string SearchWorkspace = "search_workspace";
 
+    /// <summary>Where symbols are declared, found by name (the language's semantic layer: Roslyn for C#).</summary>
+    public const string FindSymbol = "find_symbol";
+
     /// <summary>An edit the user accepts in the diff view (live), or a patch file the user applies (folder).</summary>
     public const string ProposeEdit = "propose_edit";
 }
 
 /// <summary>
-/// The editor's tools as Idrak <see cref="ITool"/>s, with two backings behind the same definitions (plan phase A1):
+/// The editor's tools as Idrak <see cref="ITool"/>s, with two backings behind the same definitions (plan phases A1 and P1):
 /// <see cref="Live"/> over an <see cref="IEditorHost"/> inside the app (the open documents with their unsaved text, the
 /// selection, the diagnostics, <c>propose_edit</c> into the diff view the user accepts), and <see cref="Folder"/> over a
 /// folder for any other process (<c>idrak tools test</c>, <c>idrak mcp serve</c>, <c>idrak chat --tools</c>), whose
@@ -72,6 +75,13 @@ public static class EditorTools
          "required":["path","old_text","new_text"]}
         """);
 
+    private static readonly JsonNode SymbolArguments = Schema("""
+        {"type":"object","properties":{
+          "query":{"type":"string","description":"The symbol's name or part of it (ignoring case; its capitals also match: 'FB' finds FolderBacking)."},
+          "max_results":{"type":"integer","description":"The most symbols to return (at most the editor's limit)."}},
+         "required":["query"]}
+        """);
+
     private static readonly JsonNode DiagnosticsArguments = Schema("""
         {"type":"object","properties":{
           "path":{"type":"string","description":"The document; the active one when not given."}}}
@@ -79,10 +89,10 @@ public static class EditorTools
 
     /// <summary>
     /// The live tools over <paramref name="host"/>: <c>open_documents</c>, <c>read_document</c>, <c>get_selection</c>,
-    /// <c>get_diagnostics</c>, <c>search_workspace</c>, <c>propose_edit</c>. Each reads the host on its UI thread
+    /// <c>get_diagnostics</c>, <c>search_workspace</c>, <c>find_symbol</c>, <c>propose_edit</c>. Each reads the host on its UI thread
     /// (<see cref="IEditorHost.Dispatch"/>) and does its work off it, so a call from an MCP client's thread is safe.
     /// </summary>
-    public static IReadOnlyList<ITool> Live(IEditorHost host, AiSettings settings)
+    public static IReadOnlyList<ITool> Live(IEditorHost host, ToolSettings settings)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(settings);
@@ -94,6 +104,8 @@ public static class EditorTools
             Tool.Create(EditorToolNames.GetSelection, "The active document's selection: its path, start and end (line and column, from 1) and the selected text.", NoArguments, live.SelectionAsync),
             Tool.Create(EditorToolNames.GetDiagnostics, "A document's errors and warnings from its language (line, column, severity, id, message).", DiagnosticsArguments, live.DiagnosticsAsync),
             Tool.Create(EditorToolNames.SearchWorkspace, "Lines holding a text, in the open documents and the open folder's files: path:line: text.", SearchArguments, live.SearchAsync),
+            Tool.Create(EditorToolNames.FindSymbol, "Where types and members are declared, by name: path:line:column: kind name — signature. The open documents' unsaved text included.",
+                SymbolArguments, live.FindSymbolAsync),
             Tool.Create(EditorToolNames.ProposeEdit, "Proposes a change to an open document. The user sees it as a diff and accepts or rejects it; nothing changes without them. Answers whether it was applied.",
                 ProposeArguments, live.ProposeAsync),
         ];
@@ -101,9 +113,9 @@ public static class EditorTools
 
     /// <summary>
     /// The folder tools over <paramref name="folder"/>: <c>list_files</c>, <c>read_document</c>, <c>search_workspace</c>,
-    /// <c>propose_edit</c> (a unified patch under <see cref="AiSettings.PatchFolder"/>, never a change to the file).
+    /// <c>find_symbol</c> (through the registered languages: Craft.CSharp when it is loaded beside them), <c>propose_edit</c> (a unified patch under <see cref="ToolSettings.PatchFolder"/>, never a change to the file).
     /// </summary>
-    public static IReadOnlyList<ITool> Folder(string folder, AiSettings settings)
+    public static IReadOnlyList<ITool> Folder(string folder, ToolSettings settings)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         ArgumentNullException.ThrowIfNull(settings);
@@ -113,6 +125,7 @@ public static class EditorTools
             Tool.Create(EditorToolNames.ListFiles, "The files under the folder (relative paths), skipping build output and hidden folders.", NoArguments, files.ListAsync),
             Tool.Create(EditorToolNames.ReadDocument, "Lines of a file under the folder.", ReadArguments, files.ReadAsync),
             Tool.Create(EditorToolNames.SearchWorkspace, "Lines holding a text in the folder's files: path:line: text.", SearchArguments, files.SearchAsync),
+            Tool.Create(EditorToolNames.FindSymbol, "Where types and members are declared in the folder's code, by name: path:line:column: kind name — signature.", SymbolArguments, files.FindSymbolAsync),
             Tool.Create(EditorToolNames.ProposeEdit, "Proposes a change to a file as a patch the user applies (git apply); the file itself is not changed. Answers where the patch is.",
                 ProposeArguments, files.ProposeAsync),
         ];
@@ -145,7 +158,7 @@ public static class EditorTools
 
     internal static bool Flag(JsonObject arguments, string name) => arguments[name] is JsonValue value && value.TryGetValue(out bool flag) && flag;
 
-    internal static string Search(JsonObject arguments, AiSettings settings, Action<string, StringComparison, byte[], List<string>, int> search)
+    internal static string Search(JsonObject arguments, ToolSettings settings, Action<string, StringComparison, byte[], List<string>, int> search)
     {
         string query = Text(arguments, "query");
         if (query.Length == 0)

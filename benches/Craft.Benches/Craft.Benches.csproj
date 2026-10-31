@@ -10,6 +10,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Craft.Editor\Craft.Editor.csproj" />
     <ProjectReference Include="..\..\src\Craft.CSharp\Craft.CSharp.csproj" />
+    <!-- P3's bench: the sampler and the StarCoder2 FIM layout it watches (Idrak comes with the family). -->
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Sampler\Craft.Plugins.Sampler.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.StarCoder2\Craft.Plugins.StarCoder2.csproj" />
   </ItemGroup>
 
 </Project>

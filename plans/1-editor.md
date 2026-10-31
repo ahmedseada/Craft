@@ -694,7 +694,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | D | **Built (2026-10-31, "D as built" below); left: the window beside the design on Windows (the owner's run).** The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
 | T | **Built (2026-10-31, "T as built" below); left: the owner's run on Windows (ConPTY: `dotnet build` in it, a resize, two terminals, a file-only start in the home folder).** The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
 | U | **Built (2026-10-31, "U as built" below); left: the owner's 7B load and agent run on Windows with the window answering, and the worst stall written here.** The UI never freezes; every operation shows ("The UI never freezes" above): the notification centre (bell, window, toasts for what needs the user), `IEditorHost.Activities` and the status bar's activity list with cancel, every long operation reporting, the UI watchdog with stall reports, the audit of every UI-thread path and the build check against synchronous waits. | The watchdog stays silent through typing, a model load, an agent run and a terminal flood, and reports a deliberate block; the owner loads a 7B model and runs the agent with the window answering throughout. | the owner's request (first in the next free slot) |
-| U2 | Panels and layout ("Panels and layout" above): settings and the Models page as tabs (the menus never covered), the tree following the disk, the right-hand side panel gone (its content in the notification centre and the Models page), every panel collapsible and resizable with sizes kept. | The owner's five points checked on Windows. | the owner's request (beside U) |
+| U2 | **Built (2026-10-31, "U2 as built" below); left: the owner's eye on Windows (the five points, the splitters' drag with a mouse).** Panels and layout ("Panels and layout" above): settings and the Models page as tabs (the menus never covered), the tree following the disk, the right-hand side panel gone (its content in the notification centre and the Models page), every panel collapsible and resizable with sizes kept. | The owner's five points checked on Windows. | the owner's request (beside U) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
 | A1 | **Built (2026-10-31, "A1 as built" below).** `Craft.Ai` host on the plug-in contracts (K): the diff-and-accept view, the editor's tools with both hosts, the app serving the live tools through `McpHost` ("http", a setting with address and token shown in Settings), `IModelProvider` "local". | A fake chat model proposes an edit that arrives as a diff and is accepted into one undo step; `idrak tools test` lists the tools from the built assembly; `idrak chat --mcp` against the running app reads an open document. | E4, K, A0, S0 |
@@ -1755,6 +1755,90 @@ net10.0 here; its Windows target (the same sources) is the owner's build.
 from the telemetry tab (`ui.stall`) written here; a deliberate stall's report. P6's and P9's reporting when P batch 2
 lands. The owner's notes 6 (the GPU actually used: Idrak.Gpu in each model-loading plug-in), 10 (a Craft dialog for the
 remaining message boxes, questions and the About box) and 12 (the doubled inputs) beyond what U covers.
+
+## U2 as built (2026-10-31)
+
+The owner's five points from the Windows run, and the notes 5, 7 and 9 of "The owner's notes from the Windows run" that
+sit in this area. Rebased onto U (`a950bbe`): the models panel's state line and the sandbox's last command are U's
+notification centre status lines (`IEditorHost.ShowStatus`), kept.
+
+- **1. Pages as tabs** (`Craft.Editor.Shell.PageTabs`, `ShellPageIds`): `ShellModel.Pages`; `craft.settings`,
+  `craft.models` and `craft.plugins` open a page tab of the editor area (one each: opening an open one selects it), drawn
+  after the documents' tabs with its own close button (`TabStripView` over both; the narrow switcher shows the page's
+  title, back and close). A document chosen or opened shows again (the page tab stays); Ctrl+W on a page closes it.
+  `SettingsPage`, `ModelsPage` and `PluginsPage` are `ContentView`s now (disposed when their tab closes), never pushed
+  over the window, so the title bar's menus, the rail and the status bar answer while they are open. `IShellUi` lost
+  `ShowSettingsAsync` (nothing shows a page through it any more); `ShellViewNames.Models` is gone. The diff view stays a
+  modal page (a decision the user takes before anything else, A1's).
+- **2. The tree follows the disk**: the contract `IFolderWatcher` and the registry `FolderWatchers` (Craft.Abstractions:
+  "system", .NET's `FileSystemWatcher` over the folder and its subfolders, names only, a 64 KB buffer, an overflow
+  reported as one `Rescan`; "none"), picked by `CRAFT_WORKSPACE_WATCHER` (an unknown name is an options problem, never a
+  crash). `FolderTreeWatch` (Craft.Editor.Shell): the watcher's threads drop a change outside the workspace or inside an
+  ignored folder (`CRAFT_WORKSPACE_IGNORE`, `Workspace.Contains`) at once, gather the touched folders for
+  `CRAFT_WORKSPACE_WATCH_MS` (150), read each once on the thread pool and hand them to the UI thread in one
+  `FolderTree.Apply` (only the folders the tree holds; a gone subfolder forgotten with everything below it; one rebuild of
+  the rows and one `Changed` per batch, none when nothing it holds changed). A rescan asks the UI thread which folders
+  are held and reads them off it. Every save through the host (`DocumentSaved`: the editor's save, save as, a new file
+  saved) is read at once, without the wait, and gives the tab the language of its new name. The agent's accepted new
+  file is created through the new `IEditorHost.SaveAsync(document, path)` (default member; the host's raises
+  `DocumentSaved`): accepting "Agent: new file X" (its placement says "accepting it creates X") is the user's yes to
+  writing it; an existing file's accepted change stays in the editor, unsaved, as before. Measured here (the `Layout`
+  test, 40 ms batches): a file another process writes shows in a second (the check), an editor save at once, twenty
+  files written into `src/bin` give no batch and no row, a rename and a folder's delete show; the agent's accepted file
+  shows within a second (`AiPlugins`, 50 ms batches).
+- **3. The right-hand side panel is gone.** No column of panels: `PanelsView`, `CRAFT_PANEL_WIDTH` and
+  `ShellLayout.PanelsVisible` are removed. A1's "Models and devices" `ListPanel` is gone: what it listed is the provider's
+  status (`ModelProviderStatus.Loaded`, new: the models loaded and whether in use; the local provider raises
+  `StatusChanged` on each load stage), shown on the Models page ("Loaded now") and in U's status line "Chat and agent
+  model". P5's "Terminal (sandbox)" panel is gone: the sandbox writes to the read-only terminal tab "Agent sandbox" of the
+  bottom panel's Terminal tab, through the new `IEditorTerminals.OpenOutput(name)` (`IEditorTerminalOutput`: `Append`
+  from any thread, VT colours, `Show` without the keyboard, `IsOpen`; one tab per name; Craft.Editor's
+  `OutputTerminalSession` queues the bytes for the terminal's own reader, so the screen, scrollback, selection and copy
+  are the terminal's; keys, text and pastes go nowhere; `TerminalViewRequest.Reveal`). The tab opens on the first
+  command, not at start; Ctrl+` and "Run the selection" still open the user's shell when only output tabs are open. The
+  plug-in keeps the last `panelLines` lines for a host without terminals. **Decision (docs/plugins.md, "Where panels
+  appear"): K's `AddPanel` stays; a conversation panel is a tab of the chat column; any other panel is a side view of the
+  rail** (the recommended of the two: it is where P6's search view goes too): the shell gives it a rail item (its title,
+  `RailIcons.Panel`) and a command `craft.sideView.<id>` ("View: <title>"); a click shows it in the explorer's place, a
+  second click folds the side, the Explorer item brings the tree back, `ShowPanel(id)` shows it; a plug-in's own
+  `RailItem` with the panel's id replaces the shell's item. The Learning panel (R) is such a side view now.
+- **4 and 5. Every panel collapses and resizes through one control**: `Craft.Maui.SplitPanel` (the content beside a
+  one-unit line in a 6-unit grip; MAUI's pan gesture drags it live within `PanelLayout.Clamp`, the pointer over it shows
+  the accent; a drag's end raises `Resized` once; `Fill` for the narrow layout, no splitter). The side view (the
+  explorer or a plug-in panel), the chat and agent column (its new close button, Ctrl+Alt+I) and the bottom panel (its
+  new chevron, Ctrl+J, a click on its active tab) each sit in one. `PanelLayout` (Craft.Editor.Shell, `ShellModel.Panels`)
+  keeps each panel's open state and size: read from `CRAFT_PANEL_EXPLORER_WIDTH` (260), `CRAFT_PANEL_CHAT_WIDTH` (360),
+  `CRAFT_PANEL_BOTTOM_HEIGHT` (132), `CRAFT_PANEL_EXPLORER_OPEN`, `CRAFT_PANEL_CHAT_OPEN`, `CRAFT_PANEL_BOTTOM_OPEN`
+  (true), `CRAFT_PANEL_MIN_SIZE` (120: the least a drag leaves a panel and the editor), written when a drag or a toggle
+  ends to the workspace's `.craft/settings.json` (the user's settings with no folder) through `CraftSettings.StoreAsync`
+  (checked and held at once, the file written on the thread pool by `SettingsFile.SaveAsync`, a later copy never
+  overwritten by an earlier one). Renamed (nothing was released): `CRAFT_TREE_WIDTH`, `CRAFT_CHAT_WIDTH`,
+  `CRAFT_BOTTOM_PANEL_HEIGHT` are the `CRAFT_PANEL_*` names above. The narrow layout is unchanged (the tree in the
+  editor's place, the chat as a sheet, no rail, side views or bottom panel).
+- **The owner's note 7** (the rail's Explorer button did nothing): the rail buttons' icon and accent line are
+  input-transparent, so the click reaches the button's tap; the Explorer item (and Ctrl+B) toggles the side view in the
+  wide layout (shows the tree when another view shows), the tree in the narrow one. **Note 9** (the tree re-rendered whole
+  when a file opened): `FolderTreeView` keeps one `ObservableCollection` and replaces only the run of rows that differs
+  (`RowChange.Between`, one walk from each end; within it, equal rows are left as they are): opening a file moves two
+  fills, a folder opened inserts its children, a file the disk added inserts one row; the scroll and the open folders
+  stay; the active file's row is scrolled into view. Rows are found by path, not by index. Keyboard navigation and
+  type-ahead in the tree are X's. **Note 5** (the chat and the agent never scrolled while streaming): the column follows
+  the newest text once it is laid out (its content's size changed), unless the user scrolled up (more than a line from
+  the end); switching panels follows again.
+- **Tests**: group `Layout` (7: pages as tabs with the menus and commands in reach; the tree within a second for a
+  process's file and at once for an editor save, ignored churn, rename, delete, one inserted row; `RowChange`; every
+  panel's state and size round-tripping through the workspace's file and back after a restart, the clamp; the side column
+  gone and a plug-in panel as a rail side view, a conversation panel not; the read-only output tab), `AiPlugins` (the
+  agent's accepted new file created and in the tree within a second), with `Ui`, `Shell`, `Design`, `Terminal`, `Ai`,
+  `PhaseP` (the sandbox's output in its "Agent sandbox" tab), `PluginKit`, `ApiGuard`, `Inventory`: 96 passed here.
+  The first run failed my own new test: the tree showed the fixture's data folder written inside the workspace (right
+  behaviour; the fixture now keeps it outside).
+- **Not compiled here**: nothing. No file under `Platforms/` or in `Craft.App` changed; every changed MAUI file compiled
+  with nullable analysis on Craft.Maui's net10.0 target. Not run here: the window (the splitters' drag with a mouse on
+  WinUI, the grip's hover, the page tabs, the bottom panel's chevron).
+- **Not yet**: the splitter shows no resize cursor (that needs platform code; the hover colour says it); the tree's
+  keyboard navigation and type-ahead (X); a page tab cannot be dragged (X); the owner's note 2 (Ctrl+S on the agent's new
+  file outside the workspace) is helped only for an accepted new file, which is now created at once.
 
 ## Commands for the owner (once a phase is built)
 

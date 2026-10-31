@@ -12,7 +12,7 @@ Windows run (2026-11-01)" at the end.
 |---|---|---|
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
-| 3 | B1-B7: learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
+| 3 | B1-B8: hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
 | 4 | Note 27, X part 4, X part 5 | Lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
@@ -3108,6 +3108,24 @@ measured at run time (card-agnostic; options for each, `CRAFT_PLUGIN_LEARNING_*`
 the batch down and tries again, said in the activity, before it fails with `AiErrors.Describe`'s plain words and what to
 change. Every failure names its stage (load, episodes, pairs, step, evaluate, promote). Device memory measured before
 and after a round does not grow over several rounds (rule 77).
+
+**B8, dragging a splitter to resize is hard (the owner, 2026-11-01: "the drag to resize is a pain and hard, make it
+easy").** Causes (seen in `src/Craft.Maui/SplitPanel.cs`): the grip is 6 units wide and takes layout room; the pointer
+never shows a resize cursor (MAUI has no cursor API); the drag is MAUI's `PanGestureRecognizer`, which on Windows starts
+after a threshold and loses the drag when the pointer moves fast over the editor's canvas (no pointer capture). Fix:
+- The grab area is wider (`CRAFT_SPLITTER_GRIP`, 10 units) and overlaps both neighbours instead of taking room; the
+  visible line stays one unit and turns the accent on hover (after `CRAFT_SPLITTER_HOVER_MS`, 100) and while dragged.
+- The resize cursor (west-east, north-south) on hover and through the drag, through a small contract
+  (`IPointerCursor`, Windows: `ProtectedCursor` with `InputSystemCursor`, under `Platforms/Windows`).
+- The drag by pointer press, move and release with pointer capture (Windows, under `Platforms/Windows` behind the same
+  contract), so it starts at once and never drops; the pan gesture stays the fallback elsewhere.
+- Double-click on a splitter restores the panel's default size; the size steps by keyboard too (focus the splitter,
+  arrows, Shift for bigger steps); the drag snaps closed below the panel's minimum and open again past it.
+- The editor beneath keeps painting smoothly while dragging (B1's cache): a resize lays out only the lines that change.
+- Tests (`Layout`, headless on `SplitPanel`'s logic): clamping, snap, double-click reset, keyboard steps, sizes kept.
+  Windows-only (not compiled here): the cursor and the capture. The owner's check: drag each splitter fast across the
+  editor, double-click to reset, the cursor shows.
+B8 goes first in the next free slot, before the X restart.
 
 Also in the trail, for the slots: `WindowsShellPlatform.RouteKeys` threw "The window has no WinUI content yet" at start
 (hook the keys once the page appeared), a WinRT `InvalidOperationException` at start, and three 0.2-0.3 s "unlabelled UI

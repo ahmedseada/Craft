@@ -168,7 +168,7 @@ public sealed class LearningPlugin : IEditorPlugin
     public string Summary => "Learning in the editor: with your consent, the AI's answers and what you did with them train your local model as an adapter";
 
     /// <inheritdoc />
-    public IReadOnlyList<PluginSetting> Settings => LearningSettings.Declared;
+    public IReadOnlyList<PluginSetting> Settings { get; } = PluginSettingShapes.Apply(LearningSettings.Declared, static _ => SettingSections.Learning);
 
     /// <inheritdoc />
     public IDisposable Activate(IEditorHost host)

@@ -10,7 +10,11 @@ namespace Craft.Core;
 /// <param name="Name">The variable ("CRAFT_TAB_SIZE").</param>
 /// <param name="Default">Its default, as text.</param>
 /// <param name="Meaning">What it sets.</param>
-public sealed record CraftVariable(string Name, string Default, string Meaning);
+public sealed record CraftVariable(string Name, string Default, string Meaning)
+{
+    /// <summary>Its shape on the settings page (kind, section, title, range, choices): declared next to it in <see cref="CraftOptions.Variables"/>.</summary>
+    public SettingShape Shape { get; init; } = SettingShape.Unknown;
+}
 
 /// <summary>
 /// The editor's settings. Every one has a default and an environment variable (<see cref="Variables"/>); the app's
@@ -212,6 +216,15 @@ public sealed record CraftOptions
     /// </summary>
     public IReadOnlyList<KeyBinding> KeyBindings { get; init; } = [];
 
+    /// <summary>
+    /// The keymap of the default shortcuts, by name in <c>EditorKeyMaps</c> (<c>CRAFT_KEYMAP</c>: "vscode", the default,
+    /// or "visualstudio"); the user's own bindings come before it. A name not registered is reported, and no keymap applies.
+    /// </summary>
+    public string KeyMap { get; init; } = EditorKeyMaps.Default;
+
+    /// <summary>What zooming in or out adds to or takes from the code font's size (<c>CRAFT_ZOOM_STEP</c>).</summary>
+    public float ZoomStep { get; init; } = 1;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -365,87 +378,89 @@ public sealed record CraftOptions
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
     [
-        new("CRAFT_FONT", "JetBrains Mono", "The code font's family (bundled; one that does not draw monospaced gives way to CRAFT_FONT_FALLBACK)."),
-        new("CRAFT_FONT_SIZE", "13", "The code font's size, in device-independent units."),
-        new("CRAFT_LINE_SPACING", "1.69", "A line's height as a multiple of the font's height (1.69 at 13: 22-unit lines)."),
-        new("CRAFT_FONT_FALLBACK", "Cascadia Mono, Consolas", "The code fonts tried in order (separated by commas) when CRAFT_FONT does not draw monospaced on this platform."),
-        new("CRAFT_INTERFACE_FONT", "Inter", "The interface's font family (bundled)."),
-        new("CRAFT_INTERFACE_FONT_SIZE", "13", "The interface's text size, in device-independent units."),
-        new("CRAFT_ACCENT", "(the theme's)", "The accent: amber, teal, blue, rose, or #RRGGBB; moved until it reads at 4.5:1 on the theme."),
-        new("CRAFT_TAB_SIZE", "4", "The columns a tab spans."),
-        new("CRAFT_INSERT_SPACES", "true", "Whether Tab inserts spaces rather than a tab character."),
-        new("CRAFT_THEME", "dark", "The theme's name (dark, light, or a registered one)."),
-        new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off."),
-        new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step."),
-        new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept."),
-        new("CRAFT_CRASH_FOLDER", "(local app data)/Craft/crashes", "Where crash reports are written (the crash dialog names the file)."),
-        new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by."),
-        new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's)."),
-        new("CRAFT_PLUGIN_FOLDERS", "(none)", "Folders of user plug-ins (a Name/Name.dll folder each), loaded after the app's own; separated by ';'."),
-        new("CRAFT_PLUGINS_DISABLED", "(none)", "Plug-ins not loaded, by folder name (Craft.CSharp), the pre-installed ones included; separated by ','."),
-        new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','."),
-        new("CRAFT_CARET_BLINK_MS", "530", "Milliseconds between the caret's blinks; 0 shows it solid."),
-        new("CRAFT_CARET_WIDTH", "2", "The caret bar's width, in device-independent units."),
-        new("CRAFT_DOUBLE_CLICK_MS", "500", "Clicks closer in time than this count as a double or triple click."),
-        new("CRAFT_DOUBLE_CLICK_DISTANCE", "4", "Clicks farther apart than this (device-independent units) start a new click count."),
-        new("CRAFT_BRACKET_SCAN_LINES", "5000", "The lines a bracket match scans each way before giving up."),
-        new("CRAFT_SCROLL_MARGIN_LINES", "2", "Lines kept between the caret and the viewport's top or bottom when scrolled into view."),
-        new("CRAFT_SCROLL_MARGIN_COLUMNS", "4", "Columns kept between the caret and the viewport's left or right when scrolled into view."),
-        new("CRAFT_BOTTOM_MARGIN_LINES", "3", "Empty lines the editor can scroll past the last line."),
-        new("CRAFT_GUTTER_PADDING", "2", "Empty cells of the line-number gutter beside the widest number."),
-        new("CRAFT_AUTO_CLOSE_BRACKETS", "false", "Whether typing an opening bracket inserts its closing one too."),
-        new("CRAFT_FIND_COUNT_LIMIT", "100000", "Find stops counting matches at this many."),
-        new("CRAFT_PARSE_WAIT_MS", "8", "Milliseconds a frame waits for the language's parse of its text; longer parses paint the changed text plain, then repaint. 0 never waits."),
-        new("CRAFT_KEY_BINDINGS", "(none)", "The user's key bindings, 'Chord=command' separated by ';' (Ctrl+Shift+W=sample.wordCount); they run before the editor's keys; an empty command unbinds a plug-in's chord."),
-        new("CRAFT_HOST_LOG_LINES", "500", "Lines of the editor host's log (plug-ins' lines included) kept for the log view; 0 keeps none."),
-        new("CRAFT_PROPOSAL_PREVIEW_CHARS", "200", "Characters of a proposed edit's new text its confirmation shows before it cuts."),
-        new("CRAFT_DIFF_CONTEXT_LINES", "3", "Unchanged lines a proposed edit's diff shows around each change."),
-        new("CRAFT_DIFF_LINE_LIMIT", "2000", "Changed lines a diff aligns line by line; a longer run is shown removed then added."),
-        new("CRAFT_DIFF_CHECK", "true", "Whether the diff view shows the language's errors and warnings after the change before it is accepted."),
-        new("CRAFT_DATA_FOLDER", "(local app data)/Craft", "The folder of the app's own files (the recent list, the user's settings.json); from the environment only."),
-        new("CRAFT_RECENT_LIMIT", "20", "The recent files and folders kept; 0 keeps none."),
-        new("CRAFT_NARROW_WIDTH", "720", "The window width (device-independent units) below which the narrow (phone) layout shows."),
-        new("CRAFT_PANEL_EXPLORER_WIDTH", "260", "The explorer's (the rail's side views') width in the wide layout, device-independent units; a splitter drag writes it to the workspace's settings."),
-        new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units)."),
-        new("CRAFT_PANEL_EXPLORER_OPEN", "true", "Whether the explorer (the rail's side view) is open in the wide layout; Ctrl+B and the rail write it to the workspace's settings."),
-        new("CRAFT_PANEL_CHAT_OPEN", "true", "Whether the chat and agent column is open in the wide layout; its close button and Ctrl+Alt+I write it to the workspace's settings."),
-        new("CRAFT_PANEL_BOTTOM_OPEN", "true", "Whether the bottom panel is open; its chevron, Ctrl+J and a click on its active tab write it to the workspace's settings."),
-        new("CRAFT_PANEL_MIN_SIZE", "120", "The smallest size a splitter drag leaves a panel, and the least it leaves the editor (device-independent units)."),
-        new("CRAFT_PANEL_BOTTOM_HEIGHT", "132", "The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), device-independent units; a splitter drag writes it to the workspace's settings."),
-        new("CRAFT_WORKSPACE_WATCHER", "system", "What tells the folder tree a file or folder was made, removed or renamed: system (the platform's file watcher), none, or a registered watcher."),
-        new("CRAFT_WORKSPACE_WATCH_MS", "150", "Milliseconds the folder tree gathers the disk's changes before it reads the folders they touched, once."),
-        new("CRAFT_QUICK_OPEN_FILES", "200000", "The most files quick open (Ctrl+P) lists from the workspace."),
-        new("CRAFT_QUICK_OPEN_ROWS", "12", "The rows quick open shows."),
-        new("CRAFT_TOUCH_TARGET", "44", "The smallest touch target of the narrow layout (device-independent units)."),
-        new("CRAFT_TITLE_BAR", "window", "Where the title bar's row goes: window (in the window's caption) or page (a row under it)."),
-        new("CRAFT_DIAGNOSTICS_DELAY_MS", "400", "Milliseconds after the last change before the document's diagnostics are computed again (off the UI thread)."),
-        new("CRAFT_SEMANTIC_MAX_CHARS", "1000000", "Above this many characters the semantic layer (diagnostics, completion while typing) waits for a command; 0 never waits."),
-        new("CRAFT_WORKSPACE_READERS", "csproj,loose", "The workspace readers tried in order to make a folder's projects, separated by ','."),
-        new("CRAFT_WORKSPACE_CONFIGURATION", "Debug", "The build configuration a project is read for (Debug defines DEBUG)."),
-        new("CRAFT_COMPLETION_DELAY_MS", "50", "Milliseconds after typing an identifier character or '.' before the completion list is asked for."),
-        new("CRAFT_COMPLETION_ROWS", "10", "The rows the completion list shows before it scrolls."),
-        new("CRAFT_INLINE_COMPLETION_PROVIDER", "", "The inline completion (ghost text) provider: a registered name; empty: the first that accepts the document; none: off."),
-        new("CRAFT_PANEL_CHAT_WIDTH", "360", "The chat and agent column's width in the wide layout, device-independent units; a splitter drag writes it to the workspace's settings."),
-        new("CRAFT_PROBLEMS_LIMIT", "500", "The most rows the problems list shows (the counts stay exact)."),
-        new("CRAFT_HOVER_DELAY_MS", "500", "Milliseconds the pointer rests on a symbol before its description shows."),
-        new("CRAFT_SOURCE_GENERATORS", "true", "Whether the projects' source generators run in the semantic model (their generated code counts, as in the build)."),
-        new("CRAFT_SEMANTIC_COLORS_DELAY_MS", "30", "Milliseconds after a change before the visible lines are coloured by meaning (off the UI thread); -1 turns semantic colours off."),
-        new("CRAFT_MEMORY_MONITOR", "gc", "What tells the editor memory runs low, so the languages free what they can build again: gc (the runtime's memory load), none, or a registered one."),
-        new("CRAFT_TERMINAL_SHELL", "(the host's: pwsh, else Windows PowerShell, else cmd on Windows)", "The terminal's shell: a program on the PATH or a full path. A workspace cannot set it."),
-        new("CRAFT_TERMINAL_ARGS", "(the host's)", "The shell's arguments, as one command line. A workspace cannot set it."),
-        new("CRAFT_TERMINAL_ENV", "(none)", "Variables added to the terminal's environment: NAME=value entries separated by '|'; ${NAME} is the app's value; an empty value removes it. A workspace cannot set it."),
-        new("CRAFT_TERMINAL_CWD", "(the open folder, else the home folder)", "The folder every new terminal starts in, over the rule (the explorer's Open in terminal still starts in its folder)."),
-        new("CRAFT_TERMINAL_SCROLLBACK", "5000", "The lines a terminal keeps above its screen; its memory stays flat at that many."),
-        new("CRAFT_TERMINAL_HOST", "auto", "What runs the shell: auto (conpty on Windows, else pipe), pipe (plain redirected pipes), or a registered host. A workspace cannot set it."),
-        new("CRAFT_TERMINAL_LINE_SPACING", "1.3", "A terminal row's height as a multiple of the code font's height."),
-        new("CRAFT_TERMINAL_EDITOR_COMMANDS", "craft.commandPalette,craft.quickOpen,craft.togglePanel,craft.settings", "Commands whose keys still run while a terminal has the keyboard (every other chord goes to the shell), separated by ','."),
-        new("CRAFT_UI_WATCHDOG_MS", "100", "Milliseconds between the UI watchdog's ticks through the dispatcher; 0 turns it off."),
-        new("CRAFT_UI_STALL_MS", "200", "A watchdog tick later than this many milliseconds is a stall of the window: shown, logged and written as a stall report."),
-        new("CRAFT_UI_STALL_REPORTS", "20", "The most stall reports written to the crash folder in a session; 0 writes none (stalls still show)."),
-        new("CRAFT_NOTIFICATIONS_KEEP", "200", "The notifications the centre keeps for the session (running operations and status entries aside)."),
-        new("CRAFT_TOAST_MS", "6000", "Milliseconds a toast (a failure, a question) shows before it waits in the centre; 0 shows none."),
-        new("CRAFT_ACTIVITY_MIN_MS", "300", "An operation that ends within this many milliseconds shows neither in the status bar nor in the centre (a failure always does)."),
-        new("CRAFT_ACTIVITY_FRAME_MS", "16", "The fewest milliseconds between two updates of the running operations and notifications on screen."),
+        new("CRAFT_FONT", "JetBrains Mono", "The code font's family (bundled; one that does not draw monospaced gives way to CRAFT_FONT_FALLBACK).") { Shape = SettingShape.Font(SettingSections.Appearance, "Code font", "Fonts") },
+        new("CRAFT_FONT_SIZE", "13", "The code font's size, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Appearance, "Code font size", 1, 400, 0.5, "units", "Fonts") },
+        new("CRAFT_LINE_SPACING", "1.69", "A line's height as a multiple of the font's height (1.69 at 13: 22-unit lines).") { Shape = SettingShape.Number(SettingSections.Appearance, "Line height", 0.5, 5, 0.01, "× the font", "Fonts") },
+        new("CRAFT_FONT_FALLBACK", "Cascadia Mono, Consolas", "The code fonts tried in order (separated by commas) when CRAFT_FONT does not draw monospaced on this platform.") { Shape = SettingShape.ListOf(SettingSections.Appearance, "Code font fallbacks", "Fonts") },
+        new("CRAFT_INTERFACE_FONT", "Inter", "The interface's font family (bundled).") { Shape = SettingShape.Font(SettingSections.Appearance, "Interface font", "Fonts") },
+        new("CRAFT_INTERFACE_FONT_SIZE", "13", "The interface's text size, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Appearance, "Interface text size", 6, 72, 0.5, "units", "Fonts") },
+        new("CRAFT_ACCENT", "(the theme's)", "The accent: amber, teal, blue, rose, or #RRGGBB; moved until it reads at 4.5:1 on the theme.") { Shape = SettingShape.From(SettingSections.Appearance, "Accent", SettingChoiceSources.Accents, [""], true, "Theme") },
+        new("CRAFT_TAB_SIZE", "4", "The columns a tab spans.") { Shape = SettingShape.Whole(SettingSections.Editor, "Tab size", 1, 32, "columns", "Typing") },
+        new("CRAFT_INSERT_SPACES", "true", "Whether Tab inserts spaces rather than a tab character.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Insert spaces for Tab", "Typing") },
+        new("CRAFT_THEME", "dark", "The theme's name (dark, light, or a registered one).") { Shape = SettingShape.From(SettingSections.Appearance, "Theme", SettingChoiceSources.Themes, null, false, "Theme") },
+        new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off.") { Shape = SettingShape.Whole(SettingSections.Files, "Autosave a recovery copy every", 0, 86_400, "s", "Recovery") },
+        new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step.") { Shape = SettingShape.Whole(SettingSections.Editor, "Undo groups typing paused less than", 0, 60_000, "ms", "Typing", step: 100) },
+        new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept.") { Shape = SettingShape.PathTo(SettingSections.Files, "Recovery folder", "Recovery") },
+        new("CRAFT_CRASH_FOLDER", "(local app data)/Craft/crashes", "Where crash reports are written (the crash dialog names the file).") { Shape = SettingShape.PathTo(SettingSections.Files, "Crash reports folder", "Recovery") },
+        new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by.") { Shape = SettingShape.Whole(SettingSections.Editor, "Text buffer block", 16, 64 * 1024 * 1024, "characters", "Advanced", step: 4096) },
+        new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's).") { Shape = SettingShape.Choice(SettingSections.Files, "Line ending of a new file", ["auto", "lf", "crlf"], "Files") },
+        new("CRAFT_PLUGIN_FOLDERS", "(none)", "Folders of user plug-ins (a Name/Name.dll folder each), loaded after the app's own; separated by ';'.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Plug-in folders", "Loading") },
+        new("CRAFT_PLUGINS_DISABLED", "(none)", "Plug-ins not loaded, by folder name (Craft.CSharp), the pre-installed ones included; separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Disabled plug-ins", "Loading") },
+        new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','.") { Shape = SettingShape.ListOf(SettingSections.Files, "Folders the workspace skips", "Workspace") },
+        new("CRAFT_CARET_BLINK_MS", "530", "Milliseconds between the caret's blinks; 0 shows it solid.") { Shape = SettingShape.Whole(SettingSections.Editor, "Caret blink", 0, 10_000, "ms", "Caret", step: 10) },
+        new("CRAFT_CARET_WIDTH", "2", "The caret bar's width, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Editor, "Caret width", 0.5, 50, 0.5, "units", "Caret") },
+        new("CRAFT_DOUBLE_CLICK_MS", "500", "Clicks closer in time than this count as a double or triple click.") { Shape = SettingShape.Whole(SettingSections.Editor, "Double-click time", 0, 10_000, "ms", "Mouse", step: 10) },
+        new("CRAFT_DOUBLE_CLICK_DISTANCE", "4", "Clicks farther apart than this (device-independent units) start a new click count.") { Shape = SettingShape.Number(SettingSections.Editor, "Double-click distance", 0, 1000, 1, "units", "Mouse") },
+        new("CRAFT_BRACKET_SCAN_LINES", "5000", "The lines a bracket match scans each way before giving up.") { Shape = SettingShape.Whole(SettingSections.Editor, "Bracket match scans", 0, 100_000_000, "lines", "Advanced", step: 100) },
+        new("CRAFT_SCROLL_MARGIN_LINES", "2", "Lines kept between the caret and the viewport's top or bottom when scrolled into view.") { Shape = SettingShape.Whole(SettingSections.Editor, "Scroll margin", 0, 1000, "lines", "Scrolling") },
+        new("CRAFT_SCROLL_MARGIN_COLUMNS", "4", "Columns kept between the caret and the viewport's left or right when scrolled into view.") { Shape = SettingShape.Whole(SettingSections.Editor, "Horizontal scroll margin", 0, 1000, "columns", "Scrolling") },
+        new("CRAFT_BOTTOM_MARGIN_LINES", "3", "Empty lines the editor can scroll past the last line.") { Shape = SettingShape.Whole(SettingSections.Editor, "Scroll past the end", 0, 10_000, "lines", "Scrolling") },
+        new("CRAFT_GUTTER_PADDING", "2", "Empty cells of the line-number gutter beside the widest number.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Line number padding", 0, 100, "cells", "Editor") },
+        new("CRAFT_AUTO_CLOSE_BRACKETS", "false", "Whether typing an opening bracket inserts its closing one too.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Close brackets as you type", "Typing") },
+        new("CRAFT_FIND_COUNT_LIMIT", "100000", "Find stops counting matches at this many.") { Shape = SettingShape.Whole(SettingSections.Editor, "Find counts at most", 1, int.MaxValue, "matches", "Find", step: 1000) },
+        new("CRAFT_PARSE_WAIT_MS", "8", "Milliseconds a frame waits for the language's parse of its text; longer parses paint the changed text plain, then repaint. 0 never waits.") { Shape = SettingShape.Whole(SettingSections.Editor, "A frame waits for the parse", 0, 10_000, "ms", "Advanced") },
+        new("CRAFT_KEY_BINDINGS", "(none)", "The user's key bindings, 'Keys=command' separated by ';' (Ctrl+Shift+W=sample.wordCount;Ctrl+K Ctrl+C=craft.editor.comment); the keyboard section writes them; they run before the editor's keys; an empty command unbinds a plug-in's chord.") { Shape = new SettingShape(SettingKind.KeyBindings, SettingSections.Keyboard, "Your key bindings") },
+        new("CRAFT_HOST_LOG_LINES", "500", "Lines of the editor host's log (plug-ins' lines included) kept for the log view; 0 keeps none.") { Shape = SettingShape.Whole(SettingSections.Plugins, "Host log keeps", 0, 1_000_000, "lines", "Log", step: 100) },
+        new("CRAFT_PROPOSAL_PREVIEW_CHARS", "200", "Characters of a proposed edit's new text its confirmation shows before it cuts.") { Shape = SettingShape.Whole(SettingSections.Agent, "Proposal preview", 0, 1_000_000, "characters", "Proposals", step: 10) },
+        new("CRAFT_DIFF_CONTEXT_LINES", "3", "Unchanged lines a proposed edit's diff shows around each change.") { Shape = SettingShape.Whole(SettingSections.Agent, "Diff context", 0, 1000, "lines", "Diff view") },
+        new("CRAFT_DIFF_LINE_LIMIT", "2000", "Changed lines a diff aligns line by line; a longer run is shown removed then added.") { Shape = SettingShape.Whole(SettingSections.Agent, "Diff aligns at most", 0, 100_000, "lines", "Diff view", step: 100) },
+        new("CRAFT_DIFF_CHECK", "true", "Whether the diff view shows the language's errors and warnings after the change before it is accepted.") { Shape = SettingShape.Toggle(SettingSections.Agent, "Check the change before accepting", "Diff view") },
+        new("CRAFT_DATA_FOLDER", "(local app data)/Craft", "The folder of the app's own files (the recent list, the user's settings.json); from the environment only.") { Shape = SettingShape.PathTo(SettingSections.Files, "Data folder", "Files") },
+        new("CRAFT_RECENT_LIMIT", "20", "The recent files and folders kept; 0 keeps none.") { Shape = SettingShape.Whole(SettingSections.Files, "Recent files and folders kept", 0, 10_000, null, "Files") },
+        new("CRAFT_NARROW_WIDTH", "720", "The window width (device-independent units) below which the narrow (phone) layout shows.") { Shape = SettingShape.Number(SettingSections.Appearance, "Narrow layout below", 0, 100_000, 10, "units", "Layout") },
+        new("CRAFT_PANEL_EXPLORER_WIDTH", "260", "The explorer's (the rail's side views') width in the wide layout, device-independent units; a splitter drag writes it to the workspace's settings.") { Shape = SettingShape.Number(SettingSections.Appearance, "Explorer width", 40, 10_000, 10, "units", "Layout") },
+        new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units).") { Shape = SettingShape.Number(SettingSections.Files, "Tree indent", 0, 200, 1, "units", "Tree") },
+        new("CRAFT_PANEL_EXPLORER_OPEN", "true", "Whether the explorer (the rail's side view) is open in the wide layout; Ctrl+B and the rail write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Explorer open", "Layout") },
+        new("CRAFT_PANEL_CHAT_OPEN", "true", "Whether the chat and agent column is open in the wide layout; its close button and Ctrl+Alt+I write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Chat and agent column open", "Layout") },
+        new("CRAFT_PANEL_BOTTOM_OPEN", "true", "Whether the bottom panel is open; its chevron, Ctrl+J and a click on its active tab write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Bottom panel open", "Layout") },
+        new("CRAFT_PANEL_MIN_SIZE", "120", "The smallest size a splitter drag leaves a panel, and the least it leaves the editor (device-independent units).") { Shape = SettingShape.Number(SettingSections.Appearance, "Smallest panel", 0, 10_000, 10, "units", "Layout") },
+        new("CRAFT_PANEL_BOTTOM_HEIGHT", "132", "The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), device-independent units; a splitter drag writes it to the workspace's settings.") { Shape = SettingShape.Number(SettingSections.Appearance, "Bottom panel height", 40, 10_000, 10, "units", "Layout") },
+        new("CRAFT_WORKSPACE_WATCHER", "system", "What tells the folder tree a file or folder was made, removed or renamed: system (the platform's file watcher), none, or a registered watcher.") { Shape = SettingShape.From(SettingSections.Files, "Watch the disk with", SettingChoiceSources.FolderWatchers, null, true, "Tree") },
+        new("CRAFT_WORKSPACE_WATCH_MS", "150", "Milliseconds the folder tree gathers the disk's changes before it reads the folders they touched, once.") { Shape = SettingShape.Whole(SettingSections.Files, "Gather disk changes for", 0, 60_000, "ms", "Tree", step: 10) },
+        new("CRAFT_QUICK_OPEN_FILES", "200000", "The most files quick open (Ctrl+P) lists from the workspace.") { Shape = SettingShape.Whole(SettingSections.Files, "Quick open lists at most", 0, 100_000_000, "files", "Quick open", step: 1000) },
+        new("CRAFT_QUICK_OPEN_ROWS", "12", "The rows quick open shows.") { Shape = SettingShape.Whole(SettingSections.Files, "Quick open rows", 1, 200, "rows", "Quick open") },
+        new("CRAFT_TOUCH_TARGET", "44", "The smallest touch target of the narrow layout (device-independent units).") { Shape = SettingShape.Number(SettingSections.Appearance, "Touch target (narrow layout)", 16, 200, 1, "units", "Layout") },
+        new("CRAFT_TITLE_BAR", "window", "Where the title bar's row goes: window (in the window's caption) or page (a row under it).") { Shape = SettingShape.Choice(SettingSections.Appearance, "Title bar", ["window", "page"], "Layout") },
+        new("CRAFT_DIAGNOSTICS_DELAY_MS", "400", "Milliseconds after the last change before the document's diagnostics are computed again (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.CSharp, "Diagnostics after a pause of", 0, 600_000, "ms", "Diagnostics", step: 50) },
+        new("CRAFT_SEMANTIC_MAX_CHARS", "1000000", "Above this many characters the semantic layer (diagnostics, completion while typing) waits for a command; 0 never waits.") { Shape = SettingShape.Whole(SettingSections.CSharp, "Semantic layer waits above", 0, int.MaxValue, "characters", "Diagnostics", step: 100000) },
+        new("CRAFT_WORKSPACE_READERS", "csproj,loose", "The workspace readers tried in order to make a folder's projects, separated by ','.") { Shape = SettingShape.ListOf(SettingSections.CSharp, "Workspace readers", "Workspace") },
+        new("CRAFT_WORKSPACE_CONFIGURATION", "Debug", "The build configuration a project is read for (Debug defines DEBUG).") { Shape = SettingShape.Choice(SettingSections.CSharp, "Build configuration", ["Debug", "Release"], "Workspace") with { OtherAllowed = true } },
+        new("CRAFT_COMPLETION_DELAY_MS", "50", "Milliseconds after typing an identifier character or '.' before the completion list is asked for.") { Shape = SettingShape.Whole(SettingSections.Completion, "List after typing", 0, 60_000, "ms", "Completion list", step: 10) },
+        new("CRAFT_COMPLETION_ROWS", "10", "The rows the completion list shows before it scrolls.") { Shape = SettingShape.Whole(SettingSections.Completion, "List rows", 1, 100, "rows", "Completion list") },
+        new("CRAFT_INLINE_COMPLETION_PROVIDER", "", "The inline completion (ghost text) provider: a registered name; empty: the first that accepts the document; none: off.") { Shape = SettingShape.From(SettingSections.Completion, "Inline completion (ghost text)", SettingChoiceSources.InlineCompletion, ["", "none"], true, "Inline completion") },
+        new("CRAFT_PANEL_CHAT_WIDTH", "360", "The chat and agent column's width in the wide layout, device-independent units; a splitter drag writes it to the workspace's settings.") { Shape = SettingShape.Number(SettingSections.Appearance, "Chat column width", 120, 10_000, 10, "units", "Layout") },
+        new("CRAFT_PROBLEMS_LIMIT", "500", "The most rows the problems list shows (the counts stay exact).") { Shape = SettingShape.Whole(SettingSections.CSharp, "Problems list shows at most", 1, 1_000_000, "rows", "Diagnostics", step: 50) },
+        new("CRAFT_HOVER_DELAY_MS", "500", "Milliseconds the pointer rests on a symbol before its description shows.") { Shape = SettingShape.Whole(SettingSections.CSharp, "Hover after", 0, 60_000, "ms", "Hover", step: 50) },
+        new("CRAFT_SOURCE_GENERATORS", "true", "Whether the projects' source generators run in the semantic model (their generated code counts, as in the build).") { Shape = SettingShape.Toggle(SettingSections.CSharp, "Run source generators", "Workspace") },
+        new("CRAFT_SEMANTIC_COLORS_DELAY_MS", "30", "Milliseconds after a change before the visible lines are coloured by meaning (off the UI thread); -1 turns semantic colours off.") { Shape = SettingShape.Whole(SettingSections.CSharp, "Semantic colours after (-1: off)", -1, 60_000, "ms", "Colours", step: 10) },
+        new("CRAFT_MEMORY_MONITOR", "gc", "What tells the editor memory runs low, so the languages free what they can build again: gc (the runtime's memory load), none, or a registered one.") { Shape = SettingShape.From(SettingSections.Editor, "Memory monitor", SettingChoiceSources.MemoryMonitors, null, true, "Advanced") },
+        new("CRAFT_TERMINAL_SHELL", "(the host's: pwsh, else Windows PowerShell, else cmd on Windows)", "The terminal's shell: a program on the PATH or a full path. A workspace cannot set it.") { Shape = SettingShape.Text(SettingSections.Terminal, "Shell", "Shell") },
+        new("CRAFT_TERMINAL_ARGS", "(the host's)", "The shell's arguments, as one command line. A workspace cannot set it.") { Shape = SettingShape.Text(SettingSections.Terminal, "Shell arguments", "Shell") },
+        new("CRAFT_TERMINAL_ENV", "(none)", "Variables added to the terminal's environment: NAME=value entries separated by '|'; ${NAME} is the app's value; an empty value removes it. A workspace cannot set it.") { Shape = SettingShape.Text(SettingSections.Terminal, "Environment", "Shell") },
+        new("CRAFT_TERMINAL_CWD", "(the open folder, else the home folder)", "The folder every new terminal starts in, over the rule (the explorer's Open in terminal still starts in its folder).") { Shape = SettingShape.PathTo(SettingSections.Terminal, "Start folder", "Shell") },
+        new("CRAFT_TERMINAL_SCROLLBACK", "5000", "The lines a terminal keeps above its screen; its memory stays flat at that many.") { Shape = SettingShape.Whole(SettingSections.Terminal, "Scrollback", 0, 1_000_000, "lines", "Screen", step: 500) },
+        new("CRAFT_TERMINAL_HOST", "auto", "What runs the shell: auto (conpty on Windows, else pipe), pipe (plain redirected pipes), or a registered host. A workspace cannot set it.") { Shape = SettingShape.From(SettingSections.Terminal, "Host", SettingChoiceSources.TerminalHosts, ["auto"], true, "Shell") },
+        new("CRAFT_TERMINAL_LINE_SPACING", "1.3", "A terminal row's height as a multiple of the code font's height.") { Shape = SettingShape.Number(SettingSections.Terminal, "Row height", 0.8, 4, 0.05, "× the font", "Screen") },
+        new("CRAFT_TERMINAL_EDITOR_COMMANDS", "craft.commandPalette,craft.quickOpen,craft.togglePanel,craft.settings", "Commands whose keys still run while a terminal has the keyboard (every other chord goes to the shell), separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Terminal, "Commands kept from the shell", "Keys") },
+        new("CRAFT_UI_WATCHDOG_MS", "100", "Milliseconds between the UI watchdog's ticks through the dispatcher; 0 turns it off.") { Shape = SettingShape.Whole(SettingSections.Editor, "UI watchdog tick", 0, 10_000, "ms", "Responsiveness", step: 10) },
+        new("CRAFT_UI_STALL_MS", "200", "A watchdog tick later than this many milliseconds is a stall of the window: shown, logged and written as a stall report.") { Shape = SettingShape.Whole(SettingSections.Editor, "A stall is longer than", 1, 600_000, "ms", "Responsiveness", step: 10) },
+        new("CRAFT_UI_STALL_REPORTS", "20", "The most stall reports written to the crash folder in a session; 0 writes none (stalls still show).") { Shape = SettingShape.Whole(SettingSections.Editor, "Stall reports per session", 0, 100_000, null, "Responsiveness") },
+        new("CRAFT_NOTIFICATIONS_KEEP", "200", "The notifications the centre keeps for the session (running operations and status entries aside).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Notifications kept", 0, 100_000, null, "Notifications", step: 10) },
+        new("CRAFT_TOAST_MS", "6000", "Milliseconds a toast (a failure, a question) shows before it waits in the centre; 0 shows none.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Toasts show for", 0, 600_000, "ms", "Notifications", step: 500) },
+        new("CRAFT_ACTIVITY_MIN_MS", "300", "An operation that ends within this many milliseconds shows neither in the status bar nor in the centre (a failure always does).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Operations show after", 0, 600_000, "ms", "Notifications", step: 50) },
+        new("CRAFT_ACTIVITY_FRAME_MS", "16", "The fewest milliseconds between two updates of the running operations and notifications on screen.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Activity updates at most every", 1, 1000, "ms", "Notifications") },
+        new("CRAFT_KEYMAP", "vscode", "The default shortcuts: vscode (VS Code's), visualstudio (Visual Studio's where the two differ), or a registered keymap; your own bindings come first.") { Shape = SettingShape.From(SettingSections.Keyboard, "Keymap", SettingChoiceSources.KeyMaps, null, false, null) },
+        new("CRAFT_ZOOM_STEP", "1", "What Ctrl+= and Ctrl+- add to or take from the code font's size (written to your settings; Ctrl+0 takes it back).") { Shape = SettingShape.Number(SettingSections.Appearance, "Zoom step (Ctrl+= and Ctrl+-)", 0.5, 10, 0.5, "units", "Fonts") },
     ];
 
     /// <summary>
@@ -602,6 +617,16 @@ public sealed record CraftOptions
             {
                 throw new ArgumentException($"CRAFT_KEY_BINDINGS is '{bindings}': {e.Message}. It takes 'Chord=command' entries separated by ';'.", "CRAFT_KEY_BINDINGS", e);
             }
+        }
+
+        if (Text(read, "CRAFT_KEYMAP") is { } keyMap)
+        {
+            options = options with { KeyMap = keyMap };
+        }
+
+        if (Text(read, "CRAFT_ZOOM_STEP") is { } zoomStep)
+        {
+            options = options with { ZoomStep = Positive(zoomStep, "CRAFT_ZOOM_STEP", 0.5f, 10) };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)

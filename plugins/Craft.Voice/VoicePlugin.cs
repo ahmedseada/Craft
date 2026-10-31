@@ -175,7 +175,7 @@ public sealed class VoicePlugin : IEditorPlugin
     public string Summary => "Coding by voice: dictation at the caret, voice commands, spoken code as a diff, and read back, on Idrak.Audio";
 
     /// <inheritdoc />
-    public IReadOnlyList<PluginSetting> Settings => VoiceSettings.Declared;
+    public IReadOnlyList<PluginSetting> Settings { get; } = PluginSettingShapes.Apply(VoiceSettings.Declared, static _ => SettingSections.Voice);
 
     /// <inheritdoc />
     public IDisposable Activate(IEditorHost host)

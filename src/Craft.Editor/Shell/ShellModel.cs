@@ -96,6 +96,27 @@ public static class ShellCommandIds
 
     /// <summary>The agent (phase A2's plug-in registers it; its rail item shows from then).</summary>
     public const string Agent = "craft.agent";
+
+    /// <summary>File: Save all (Ctrl+K S).</summary>
+    public const string SaveAll = "craft.saveAll";
+
+    /// <summary>Tab: Reopen the closed tab (Ctrl+Shift+T).</summary>
+    public const string ReopenClosedTab = "craft.reopenClosedTab";
+
+    /// <summary>View: Zoom in (Ctrl+=): the code font one <c>CRAFT_ZOOM_STEP</c> larger, written to the user's settings.</summary>
+    public const string ZoomIn = "craft.zoomIn";
+
+    /// <summary>View: Zoom out (Ctrl+-).</summary>
+    public const string ZoomOut = "craft.zoomOut";
+
+    /// <summary>View: Reset the zoom (Ctrl+0): the code font's size back to the files' or the default.</summary>
+    public const string ZoomReset = "craft.zoomReset";
+
+    /// <summary>Go: Go to line (Ctrl+G): quick open with ':'.</summary>
+    public const string GoToLine = "craft.goToLine";
+
+    /// <summary>Settings: Keyboard shortcuts (Ctrl+K Ctrl+S): the settings page's Keyboard section.</summary>
+    public const string KeyboardShortcuts = "craft.keyboardShortcuts";
 }
 
 /// <summary>The views a shell command asks the app to show (<see cref="ShellModel.ViewRequested"/>).</summary>
@@ -103,6 +124,9 @@ public static class ShellViewNames
 {
     /// <summary>The search box, focused, for quick open.</summary>
     public const string QuickOpen = "quickOpen";
+
+    /// <summary>Quick open with ':' typed (go to a line of the active editor).</summary>
+    public const string GoToLine = "quickOpen.line";
 
     /// <summary>The bottom panel shown or hidden.</summary>
     public const string TogglePanel = "panel";
@@ -134,7 +158,7 @@ public sealed class ShellModel : IDisposable
     /// <summary>The settings that take effect at the next start (the plug-ins load, the host reads its bindings, at start).</summary>
     public static IReadOnlySet<string> AppliedAtStart { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
-        "CRAFT_PLUGIN_FOLDERS", "CRAFT_PLUGINS_DISABLED", "CRAFT_KEY_BINDINGS", "CRAFT_HOST_LOG_LINES", "CRAFT_PROPOSAL_PREVIEW_CHARS", "CRAFT_DATA_FOLDER",
+        "CRAFT_PLUGIN_FOLDERS", "CRAFT_PLUGINS_DISABLED", "CRAFT_HOST_LOG_LINES", "CRAFT_PROPOSAL_PREVIEW_CHARS", "CRAFT_DATA_FOLDER",
     };
 
     private readonly IFileDialogs _dialogs;
@@ -145,6 +169,7 @@ public sealed class ShellModel : IDisposable
     private readonly List<(string Menu, string Command)> _menuItems = [];
     private readonly List<string> _railItems = [];
     private readonly Dictionary<string, (string Command, bool Rail)> _sideViews = new(StringComparer.Ordinal);
+    private readonly List<string> _closedFiles = [];
     private FolderTreeWatch? _treeWatch;
     private string _optionsSignature;
     private bool _disposed;
@@ -195,8 +220,93 @@ public sealed class ShellModel : IDisposable
         host.OpenFile = async (path, token) => File.Exists(path)
             ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument
             : (Tabs.FindSuggested(path) ?? NewFile(path)).HostDocument;
+        host.SetKeyBindings(Options.KeyBindings, Options.KeyMap);
         RegisterCommands();
         WatchMemory();
+    }
+
+    /// <summary>The prompts and pages (the shell's questions, a pick from a list).</summary>
+    public IShellUi Ui => _ui;
+
+    /// <summary>The section the settings page shows (a <see cref="SettingSections"/> id); <see cref="ShowSettings"/> sets it.</summary>
+    public string SettingsSection { get; private set; } = SettingSections.Editor;
+
+    /// <summary>Raised when <see cref="ShowSettings"/> asks the open settings page for another section.</summary>
+    public event EventHandler? SettingsSectionChanged;
+
+    /// <summary>The files of the tabs closed, latest last (<see cref="ReopenClosedTabAsync"/> takes them back; at most <c>CRAFT_RECENT_LIMIT</c>).</summary>
+    public IReadOnlyList<string> ClosedFiles => _closedFiles;
+
+    /// <summary>Opens the settings page's tab at <paramref name="section"/> (the one shown last when null).</summary>
+    public void ShowSettings(string? section = null)
+    {
+        if (section is not null && !string.Equals(section, SettingsSection, StringComparison.OrdinalIgnoreCase))
+        {
+            SettingsSection = section;
+            SettingsSectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        Pages.Open(ShellPageIds.Settings, "Settings");
+    }
+
+    /// <summary>Saves every tab with unsaved changes (a new document asks where); true when every one was saved.</summary>
+    public async Task<bool> SaveAllAsync(CancellationToken cancellationToken = default)
+    {
+        bool all = true;
+        foreach (var tab in Tabs.Tabs.ToArray())
+        {
+            if (tab.IsDirty && !await SaveAsync(tab, cancellationToken))
+            {
+                all = false;
+            }
+        }
+
+        return all;
+    }
+
+    /// <summary>Opens the file of the tab closed last again (one still on disk); false when there is none.</summary>
+    public async Task<bool> ReopenClosedTabAsync(CancellationToken cancellationToken = default)
+    {
+        while (_closedFiles.Count > 0)
+        {
+            var path = _closedFiles[^1];
+            _closedFiles.RemoveAt(_closedFiles.Count - 1);
+            if (File.Exists(path) && Tabs.Find(path) is null)
+            {
+                return await OpenFileAsync(path, cancellationToken: cancellationToken) is not null;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Zooms the code font: <paramref name="steps"/> times <see cref="CraftOptions.ZoomStep"/> larger (smaller when
+    /// negative), written to the user's settings (the workspace's when there is no user file) and applied at once; 0 takes
+    /// the user's size off, so the workspace's or the default applies. Null, or why it could not (the environment sets the size).
+    /// </summary>
+    public async Task<string?> ZoomAsync(int steps)
+    {
+        const string Variable = "CRAFT_FONT_SIZE";
+        if (Settings.SourceOf(Variable) == SettingSource.Environment)
+        {
+            return $"The environment sets {Variable}, so the zoom cannot change it.";
+        }
+
+        var layer = Settings.User is not null ? SettingLayer.User : SettingLayer.Workspace;
+        string? value = steps == 0 ? null
+            : Math.Clamp(Options.FontSize + (steps * Options.ZoomStep), 1, 400).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        try
+        {
+            var write = Settings.StoreAsync(layer, Variable, value);
+            ReloadOptions();
+            await write.ConfigureAwait(true);
+            return null;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return e.Message;
+        }
     }
 
     /// <summary>How many times low memory made the languages free what they can build again (<see cref="CraftOptions.MemoryMonitor"/>).</summary>
@@ -290,7 +400,7 @@ public sealed class ShellModel : IDisposable
 
     /// <summary>The settings page's rows: every Craft option, then every plug-in's declared setting.</summary>
     public IReadOnlyList<SettingRow> SettingRows() =>
-        Settings.Rows(Host.Settings.All.Select(p => new CraftVariable(p.Variable, p.Setting.Default, $"{p.Plugin}: {p.Setting.Description}")));
+        Settings.Rows(Host.Settings.All.Select(p => new CraftVariable(p.Variable, p.Setting.Default, $"{p.Plugin}: {p.Setting.Description}") { Shape = p.Setting.Shape ?? PluginSettingShapes.Infer(p.Setting, SettingSections.Plugins) }));
 
     /// <summary>
     /// Opens the folder <paramref name="path"/> as the workspace (in place of the open one; the tabs stay): its
@@ -523,6 +633,16 @@ public sealed class ShellModel : IDisposable
             return false;
         }
 
+        if (tab.FilePath is { } closed)
+        {
+            _closedFiles.Remove(closed);
+            _closedFiles.Add(closed);
+            if (_closedFiles.Count > Math.Max(1, Options.RecentLimit))
+            {
+                _closedFiles.RemoveAt(0);
+            }
+        }
+
         Tabs.Remove(tab);
         return true;
     }
@@ -628,6 +748,7 @@ public sealed class ShellModel : IDisposable
         }
 
         Recent.Limit = options.RecentLimit;
+        Host.SetKeyBindings(options.KeyBindings, options.KeyMap);
         Layout.Options = options;
         Panels.Load(options);
         OptionsChanged?.Invoke(this, EventArgs.Empty);
@@ -652,9 +773,9 @@ public sealed class ShellModel : IDisposable
         foreach (var binding in _bindings)
         {
             // Only while the chord is still the shell's (a later registration, a plug-in's, keeps its own).
-            if (EditorKeyBindings.Find(binding.Chord) is { } current && ReferenceEquals(current, binding))
+            if ((binding.Then is { } then ? EditorKeyBindings.Find(binding.Chord, then) : EditorKeyBindings.Find(binding.Chord)) is { } current && ReferenceEquals(current, binding))
             {
-                EditorKeyBindings.Unregister(binding.Chord);
+                EditorKeyBindings.Unregister(binding);
             }
         }
 
@@ -878,7 +999,14 @@ public sealed class ShellModel : IDisposable
         Command(ShellCommandIds.CloseTab, "Tab: Close", (_, token) => CloseTabAsync(null, token), _ => Tabs.Active is not null || Pages.Active is not null, "Ctrl+W");
         Command(ShellCommandIds.NextTab, "Tab: Next", (_, _) => { Tabs.Next(); return Task.CompletedTask; }, _ => Tabs.Tabs.Count > 1, "Ctrl+Tab");
         Command(ShellCommandIds.PreviousTab, "Tab: Previous", (_, _) => { Tabs.Previous(); return Task.CompletedTask; }, _ => Tabs.Tabs.Count > 1, "Ctrl+Shift+Tab");
-        Command(ShellCommandIds.Settings, "Settings: Open", (_, _) => { Pages.Open(ShellPageIds.Settings, "Settings"); return Task.CompletedTask; }, null, "Ctrl+Comma");
+        Command(ShellCommandIds.Settings, "Settings: Open", (_, _) => { ShowSettings(); return Task.CompletedTask; }, null, "Ctrl+Comma");
+        Command(ShellCommandIds.KeyboardShortcuts, "Settings: Keyboard shortcuts", (_, _) => { ShowSettings(SettingSections.Keyboard); return Task.CompletedTask; }, null, "Ctrl+K Ctrl+S");
+        Command(ShellCommandIds.SaveAll, "File: Save all", (_, token) => SaveAllAsync(token), _ => Tabs.HasUnsaved, "Ctrl+K S");
+        Command(ShellCommandIds.ReopenClosedTab, "Tab: Reopen the closed tab", (_, token) => ReopenClosedTabAsync(token), _ => _closedFiles.Count > 0, "Ctrl+Shift+T");
+        Command(ShellCommandIds.ZoomIn, "View: Zoom in", (_, _) => ZoomCommandAsync(1), null, "Ctrl+=");
+        Command(ShellCommandIds.ZoomOut, "View: Zoom out", (_, _) => ZoomCommandAsync(-1), null, "Ctrl+-");
+        Command(ShellCommandIds.ZoomReset, "View: Reset the zoom", (_, _) => ZoomCommandAsync(0), null, "Ctrl+0");
+        Command(ShellCommandIds.GoToLine, "Go: Go to line", (_, _) => View(ShellViewNames.GoToLine), _ => Tabs.Active is not null, "Ctrl+G");
         Command(ShellCommandIds.ToggleTree, "View: Show or hide the folder tree", (_, _) => ToggleTree(), _ => Workspace is not null || !Layout.IsNarrow, "Ctrl+B");
         Command(ShellCommandIds.RefreshTree, "View: Refresh the folder tree", (_, _) => { Tree?.Refresh(); return Task.CompletedTask; }, _ => Tree is not null, null);
         Command(ShellCommandIds.ToggleTheme, "View: Switch light and dark", (_, _) => { ToggleTheme(); return Task.CompletedTask; }, null, null);
@@ -902,6 +1030,8 @@ public sealed class ShellModel : IDisposable
         Menu(EditorMenus.File, ShellCommandIds.OpenRecent, 0, 3);
         Menu(EditorMenus.File, ShellCommandIds.Save, 1, 0);
         Menu(EditorMenus.File, ShellCommandIds.SaveAs, 1, 1);
+        Menu(EditorMenus.File, ShellCommandIds.SaveAll, 1, 2);
+        Menu(EditorMenus.File, ShellCommandIds.KeyboardShortcuts, 3, 2);
         Menu(EditorMenus.File, ShellCommandIds.CloseTab, 2, 0);
         Menu(EditorMenus.File, ShellCommandIds.CloseFolder, 2, 1);
         Menu(EditorMenus.File, ShellCommandIds.Settings, 3, 0);
@@ -918,6 +1048,9 @@ public sealed class ShellModel : IDisposable
         Menu(EditorMenus.View, ShellCommandIds.NextTab, 3, 0);
         Menu(EditorMenus.View, ShellCommandIds.PreviousTab, 3, 1);
         Menu(EditorMenus.View, ShellCommandIds.ToggleTheme, 4, 0);
+        Menu(EditorMenus.View, ShellCommandIds.ZoomIn, 4, 1);
+        Menu(EditorMenus.View, ShellCommandIds.ZoomOut, 4, 2);
+        Menu(EditorMenus.View, ShellCommandIds.ZoomReset, 4, 3);
         Menu(EditorMenus.Plugins, ShellCommandIds.Plugins, 0, 0);
         Menu(EditorMenus.Help, ShellCommandIds.CommandPalette, 0, 0, "Every command and its keys");
         Menu(EditorMenus.Help, ShellCommandIds.PluginGuide, 0, 1);
@@ -945,6 +1078,14 @@ public sealed class ShellModel : IDisposable
         return Task.CompletedTask;
     }
 
+    private async Task ZoomCommandAsync(int steps)
+    {
+        if (await ZoomAsync(steps) is { } problem)
+        {
+            Host.ShowStatus("Zoom", problem, NotificationSeverity.Warning);
+        }
+    }
+
     private Task View(string name)
     {
         ViewRequested?.Invoke(this, name);
@@ -969,7 +1110,8 @@ public sealed class ShellModel : IDisposable
         _commandIds.Add(id);
         if (chord is not null)
         {
-            var binding = new KeyBinding(KeyChord.Parse(chord), id);
+            var (first, then) = KeyBinding.ParseKeys(chord);
+            var binding = new KeyBinding(first, id, Then: then);
             EditorKeyBindings.Register(binding);
             _bindings.Add(binding);
         }

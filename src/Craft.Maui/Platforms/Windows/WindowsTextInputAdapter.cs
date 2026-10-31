@@ -126,6 +126,15 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
         VirtualKey.F12 => EditorKey.F12,
         (VirtualKey)0xBC => EditorKey.Comma, // VK_OEM_COMMA, which VirtualKey does not name
         (VirtualKey)0xC0 => EditorKey.Backquote, // VK_OEM_3, the key left of 1 (` on US keyboards), for the terminal's Ctrl+`
+        // The owner's note 16: the punctuation of the shortcuts (Ctrl+/, Ctrl+., Ctrl+=, Ctrl+-, Ctrl+[ and Ctrl+]).
+        (VirtualKey)0xBE => EditorKey.Period, // VK_OEM_PERIOD
+        (VirtualKey)0xBF => EditorKey.Slash, // VK_OEM_2 (/ on US keyboards)
+        (VirtualKey)0xBD => EditorKey.Minus, // VK_OEM_MINUS
+        VirtualKey.Subtract => EditorKey.Minus,
+        (VirtualKey)0xBB => EditorKey.Plus, // VK_OEM_PLUS (the = and + key)
+        VirtualKey.Add => EditorKey.Plus,
+        (VirtualKey)0xDB => EditorKey.BracketLeft, // VK_OEM_4 ([ on US keyboards)
+        (VirtualKey)0xDD => EditorKey.BracketRight, // VK_OEM_6 (] on US keyboards)
         _ => EditorKey.None,
     };
 

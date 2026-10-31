@@ -151,7 +151,7 @@ public sealed class AiPlugin : IEditorPlugin
     public string Summary => "The AI plug-ins: inline completion, the chat, code actions and the agent, on the editor's tools (served over MCP when asked), the diff for every model edit and the local model provider";
 
     /// <inheritdoc />
-    public IReadOnlyList<PluginSetting> Settings => AiSettings.Declared;
+    public IReadOnlyList<PluginSetting> Settings => AiSettingShapes.Declared;
 
     /// <inheritdoc />
     public IDisposable Activate(IEditorHost host)

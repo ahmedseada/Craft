@@ -133,7 +133,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog));
         _shell = shell;
         _palette = new ShellPalette(_shell.Theme, _shell.Options);
-        _editCommands = new ShellEditCommands(() => _shown?.Model);
+        _editCommands = new ShellEditCommands(() => _shown?.Model, _shell);
         _quickOpen = new QuickOpen(_host, _shell.Options.QuickOpenRows) { CraftOptionsLimit = _shell.Options.QuickOpenFiles };
         _pluginStatus = new StatusItemsView(_host);
         // The plug-ins' conversation panels (the AI plug-in's chat and agent run): the design's chat column when wide (its
@@ -146,6 +146,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.ModelChip.Tapped += (_, _) => _ = PickModelAsync();
         _host.PanelShowRequested += OnPanelShowRequested;
         _host.PanelsChanged += OnHostPanelsChanged;
+        _host.PendingChordChanged += OnPendingChordChanged;
         _host.SelectionRequested += OnSelectionRequested;
         // A plug-in's IEditorHost.OpenExternalAsync (the learning plug-in's folder): the system's own launcher, any platform.
         _host.OpenExternal = path => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(new Uri(path));
@@ -372,6 +373,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         EditorMenus.Changed -= OnMenusChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
         _host.PanelsChanged -= OnHostPanelsChanged;
+        _host.PendingChordChanged -= OnPendingChordChanged;
         _host.SelectionRequested -= OnSelectionRequested;
         _conversations.Dispose();
         foreach (var view in _sideViews.Values)
@@ -884,7 +886,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         var stack = new VerticalStackLayout { Spacing = 0, Padding = new Thickness(0, 4) };
         if (items.Count == 0)
         {
-            string why = text.TrimStart().StartsWith('>') ? "No command matches."
+            string why = QuickOpen.IsLineQuery(text) ? (_shown is null ? "Open a file to go to one of its lines." : "Type a line number (:42, or :42:7 for a column).")
+                : text.TrimStart().StartsWith('>') ? "No command matches."
                 : _shell.Workspace is null ? "Open a folder (Ctrl+Shift+O) to find its files by name; type '>' for a command."
                 : _quickOpen.IsIndexing ? "Listing the folder's files…" : "No file matches; type '>' for a command.";
             var none = _palette.Label(why, _palette.Secondary, _palette.SmallSize);
@@ -926,6 +929,19 @@ public sealed class ShellPage : ContentPage, IDisposable
         _popup.Show(box, at with { X = Math.Max(0, at.X) }, QuickOpenWidth);
     }
 
+    // A two-key chord's first key: the status bar says the second is awaited (VS Code's "(Ctrl+K) was pressed").
+    private void OnPendingChordChanged(object? sender, EventArgs e)
+    {
+        if (_host.PendingChord is { } first)
+        {
+            _status.Notice.Text = $"({first.DisplayText}) was pressed. Waiting for the second key…";
+        }
+        else if ((_status.Notice.Text ?? "").EndsWith("Waiting for the second key…", StringComparison.Ordinal))
+        {
+            _status.Notice.Text = "";
+        }
+    }
+
     private async Task PickQuickOpenAsync(int index)
     {
         var items = _quickOpen.Query(_lastQuery.Length > 0 ? _lastQuery : _titleWide.Search.Text ?? "");
@@ -937,7 +953,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         var item = items[index];
-        if (item.CommandId is { } command)
+        if (item.Line > 0)
+        {
+            _shown?.Model?.GoToLine(item.Line, item.Column);
+        }
+        else if (item.CommandId is { } command)
         {
             await _host.ExecuteCommandAsync(command);
         }
@@ -974,12 +994,37 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
+    // Narrow: a prompt for the line (and column).
+    private async Task GoToLineNarrowAsync()
+    {
+        if (_shown?.Model is not { } model)
+        {
+            return;
+        }
+
+        string? text = await _dialog.PromptAsync("Go to line", "", $"A line from 1 to {model.Snapshot.LineCount} (line:column for a column)", "Go");
+        if (text is not null && _quickOpen.Query(":" + text) is [{ Line: > 0 } item])
+        {
+            model.GoToLine(item.Line, item.Column);
+            _shown?.Focus();
+        }
+    }
+
     private void OnViewRequested(string view)
     {
         switch (view)
         {
             case ShellViewNames.QuickOpen when _shell.Layout.IsNarrow:
                 _ = QuickOpenNarrowAsync();
+                break;
+            case ShellViewNames.GoToLine when _shell.Layout.IsNarrow:
+                _ = GoToLineNarrowAsync();
+                break;
+            case ShellViewNames.GoToLine:
+                _titleWide.Search.Text = ":";
+                _titleWide.Search.Focus();
+                _titleWide.Search.CursorPosition = 1;
+                ShowQuickOpen(":");
                 break;
             case ShellViewNames.QuickOpen:
                 _titleWide.Search.Focus();

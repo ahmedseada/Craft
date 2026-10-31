@@ -119,7 +119,9 @@ public static class FuzzyMatch
 /// <param name="Path">The file's full path, or null for a command.</param>
 /// <param name="CommandId">The command's id, or null for a file.</param>
 /// <param name="Score">Its score (higher first).</param>
-public sealed record QuickOpenItem(string Text, string? Detail, string? Path, string? CommandId, int Score);
+/// <param name="Line">For ':' (go to line): the line, from 1; 0 for a file or a command.</param>
+/// <param name="Column">For ':': the column, from 1 (1 when none was typed).</param>
+public sealed record QuickOpenItem(string Text, string? Detail, string? Path, string? CommandId, int Score, int Line = 0, int Column = 1);
 
 /// <summary>
 /// Quick open (Ctrl+P, the title bar's search box): the workspace's files by fuzzy name, or, after a leading '&gt;', the
@@ -250,7 +252,37 @@ public sealed class QuickOpen
     {
         ArgumentNullException.ThrowIfNull(text);
         var span = text.AsSpan().Trim();
+        if (span.Length > 0 && span[0] == ':')
+        {
+            return GoToLine(span[1..].Trim());
+        }
+
         return span.Length > 0 && span[0] == '>' ? Commands(span[1..].Trim()) : FilesFor(span);
+    }
+
+    /// <summary>Whether <paramref name="text"/> asks for a line (':' first).</summary>
+    public static bool IsLineQuery(string text) => text.AsSpan().TrimStart() is [':', ..];
+
+    // ":42" or ":42:7" (":42,7" too): one row that puts the caret there; nothing for text that is not a line number.
+    private static List<QuickOpenItem> GoToLine(ReadOnlySpan<char> query)
+    {
+        int split = query.IndexOfAny(':', ',');
+        var linePart = split < 0 ? query : query[..split];
+        if (!int.TryParse(linePart, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int line) || line < 1)
+        {
+            return [];
+        }
+
+        int column = 1;
+        if (split >= 0 && (!int.TryParse(query[(split + 1)..].Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out column) || column < 1))
+        {
+            column = 1;
+        }
+
+        string text = column > 1
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Go to line {line}, column {column}")
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Go to line {line}");
+        return [new QuickOpenItem(text, "in the active editor", null, null, 0, line, column)];
     }
 
     private List<QuickOpenItem> FilesFor(ReadOnlySpan<char> query)

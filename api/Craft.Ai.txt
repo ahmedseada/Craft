@@ -140,6 +140,9 @@ sealed class Craft.Ai.AiSession : System.IDisposable
   System.Threading.Tasks.Task<System.Boolean> RunActionAsync(System.String kind, System.Threading.CancellationToken cancellationToken)
   System.Void Dispose()
   System.Void ShowPanel(System.String id)
+static class Craft.Ai.AiSettingShapes
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+  static System.String SectionOf(Craft.Abstractions.PluginSetting setting)
 sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   Craft.Ai.AiSettings <Clone>$()
   System.Boolean ChatKeep { get; init; }

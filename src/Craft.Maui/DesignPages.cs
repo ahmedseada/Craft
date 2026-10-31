@@ -336,7 +336,8 @@ public sealed class PluginsPage : ContentView
 /// </summary>
 public sealed class ModelsPage : ContentView, IDisposable
 {
-    private static readonly string[] Sections = ["Editor", "C# and Roslyn", "Models and devices", "Completion", "Agent and sandbox", "Plug-ins", "Appearance"];
+    // The settings page's sections (the owner's note 13); this page stands in for "Models and AI" beside them.
+    private static readonly (string Id, string Title)[] Sections = [.. SettingSections.All.Select(s => s.Id == SettingSections.Models ? (s.Id, "Models and devices") : s)];
     private readonly ShellModel _shell;
     private readonly ShellPalette _palette;
     private readonly VerticalStackLayout _main = new() { Spacing = 24, Padding = new Thickness(32, 24) };
@@ -355,10 +356,10 @@ public sealed class ModelsPage : ContentView, IDisposable
         _notice = p.Label("", p.Secondary, p.SmallSize);
         _notice.LineBreakMode = LineBreakMode.WordWrap;
         var nav = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(10, 16) };
-        foreach (var section in Sections)
+        foreach (var (section, sectionTitle) in Sections)
         {
-            bool here = section == "Models and devices";
-            var link = p.Flat(section, here ? p.Text : p.Secondary, 34);
+            bool here = section == SettingSections.Models;
+            var link = p.Flat(sectionTitle, here ? p.Text : p.Secondary, 34);
             link.BackgroundColor = here ? p.Selection : Colors.Transparent;
             link.HorizontalOptions = LayoutOptions.Fill;
             if (!here)
@@ -426,10 +427,10 @@ public sealed class ModelsPage : ContentView, IDisposable
 
     private void OnProgress(object? sender, EditorProgressItem e) => Dispatcher.Dispatch(Refresh);
 
-    private async Task OpenSectionAsync(string section)
+    private Task OpenSectionAsync(string section)
     {
-        _ = section;
-        await _shell.Host.ExecuteCommandAsync(ShellCommandIds.Settings);
+        _shell.ShowSettings(section);
+        return Task.CompletedTask;
     }
 
     private void Refresh()

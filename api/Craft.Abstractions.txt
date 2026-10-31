@@ -434,6 +434,8 @@ enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, Sys
   B = 26
   Backquote = 65
   Backspace = 9
+  BracketLeft = 70
+  BracketRight = 71
   C = 18
   Comma = 64
   D = 27
@@ -476,16 +478,20 @@ enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, Sys
   L = 33
   Left = 1
   M = 34
+  Minus = 68
   N = 35
   None = 0
   O = 36
   P = 37
   PageDown = 8
   PageUp = 7
+  Period = 66
+  Plus = 69
   Q = 38
   R = 39
   Right = 2
   S = 21
+  Slash = 67
   Space = 16
   T = 40
   Tab = 12
@@ -498,6 +504,9 @@ enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, Sys
   Z = 25
 static class Craft.Abstractions.EditorKeyBindings
   static Craft.Abstractions.KeyBinding Find(Craft.Abstractions.KeyChord chord)
+  static Craft.Abstractions.KeyBinding Find(Craft.Abstractions.KeyChord chord, Craft.Abstractions.KeyChord then)
+  static System.Boolean IsPrefix(Craft.Abstractions.KeyChord chord)
+  static System.Boolean Unregister(Craft.Abstractions.KeyBinding binding)
   static System.Boolean Unregister(Craft.Abstractions.KeyChord chord)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> All { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
@@ -505,6 +514,14 @@ static class Craft.Abstractions.EditorKeyBindings
 sealed class Craft.Abstractions.EditorKeyEventArgs : System.EventArgs
   Craft.Abstractions.KeyChord Chord { get; }
   ctor(Craft.Abstractions.KeyChord chord)
+static class Craft.Abstractions.EditorKeyMaps
+  const System.String Default = vscode
+  static Craft.Abstractions.IKeyMap Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IKeyMap Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IKeyMap> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.IKeyMap keyMap)
 static class Craft.Abstractions.EditorLanguages
   static Craft.Abstractions.ILanguage Find(System.ReadOnlySpan<System.Char> name)
   static Craft.Abstractions.ILanguage ForFile(System.String path)
@@ -767,6 +784,9 @@ interface Craft.Abstractions.IInlineCompletionProvider : Idrak.Abstraction.IKind
   System.Boolean Accepts(Craft.Abstractions.InlineCompletionRequest request)
   System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.InlineCompletionPiece> CompleteAsync(Craft.Abstractions.InlineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
   System.Int32 DelayMilliseconds { get; }
+interface Craft.Abstractions.IKeyMap : Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> Bindings { get; }
+  System.String Title { get; }
 interface Craft.Abstractions.ILanguage : Idrak.Abstraction.IKind
   Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
   Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
@@ -805,6 +825,8 @@ interface Craft.Abstractions.ISemanticLanguageSession : Craft.Abstractions.ILang
   System.Void EnableSemantics()
   System.Void Release()
   event System.EventHandler DiagnosticsChanged
+interface Craft.Abstractions.ISettingChoices : Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Choices { get; }
 interface Craft.Abstractions.IStatusItem
   Craft.Abstractions.StatusAlignment Alignment { get; }
   System.Int32 Priority { get; }
@@ -894,30 +916,55 @@ sealed class Craft.Abstractions.InlineCompletionRequest : System.IEquatable<Craf
 sealed class Craft.Abstractions.KeyBinding : Idrak.Abstraction.IKind, System.IEquatable<Craft.Abstractions.KeyBinding>
   Craft.Abstractions.KeyBinding <Clone>$()
   Craft.Abstractions.KeyChord Chord { get; init; }
+  Craft.Abstractions.KeyChord? Then { get; init; }
+  Craft.Abstractions.KeyContext When { get; init; }
   System.Boolean Equals(Craft.Abstractions.KeyBinding other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean HasKeys(Craft.Abstractions.KeyChord chord, Craft.Abstractions.KeyChord? then)
   System.Boolean OverridesEditor { get; init; }
   System.Int32 GetHashCode()
   System.String CommandId { get; init; }
+  System.String DisplayText { get; }
   System.String Name { get; }
   System.String Summary { get; }
   System.String ToString()
-  System.Void Deconstruct(out Craft.Abstractions.KeyChord Chord, out System.String CommandId, out System.Boolean OverridesEditor)
-  ctor(Craft.Abstractions.KeyChord Chord, System.String CommandId, System.Boolean OverridesEditor = false)
+  System.Void Deconstruct(out Craft.Abstractions.KeyChord Chord, out System.String CommandId, out System.Boolean OverridesEditor, out Craft.Abstractions.KeyChord? Then, out Craft.Abstractions.KeyContext When)
+  const System.Int32 MaxKeysLength = 65
+  ctor(Craft.Abstractions.KeyChord Chord, System.String CommandId, System.Boolean OverridesEditor = false, Craft.Abstractions.KeyChord? Then = null, Craft.Abstractions.KeyContext When = Anywhere)
+  static System.Boolean TryParseKeys(System.ReadOnlySpan<System.Char> text, out Craft.Abstractions.KeyChord chord, out Craft.Abstractions.KeyChord? then, out System.String error)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> ParseList(System.ReadOnlySpan<System.Char> text)
+  static System.String FormatList(System.Collections.Generic.IEnumerable<Craft.Abstractions.KeyBinding> bindings)
+  static System.ValueTuple<Craft.Abstractions.KeyChord, Craft.Abstractions.KeyChord?> ParseKeys(System.ReadOnlySpan<System.Char> text)
 struct Craft.Abstractions.KeyChord : System.IEquatable<Craft.Abstractions.KeyChord>
   Craft.Abstractions.EditorKey Key { get; init; }
   Craft.Abstractions.KeyModifiers Modifiers { get; init; }
   System.Boolean Equals(Craft.Abstractions.KeyChord other)
   System.Boolean Equals(System.Object obj)
   System.Int32 Format(System.Span<System.Char> destination)
+  System.Int32 FormatDisplay(System.Span<System.Char> destination)
   System.Int32 GetHashCode()
+  System.String DisplayText { get; }
   System.String ToString()
   System.Void Deconstruct(out Craft.Abstractions.EditorKey Key, out Craft.Abstractions.KeyModifiers Modifiers)
   const System.Int32 MaxLength = 32
   ctor(Craft.Abstractions.EditorKey Key, Craft.Abstractions.KeyModifiers Modifiers)
   static Craft.Abstractions.KeyChord Parse(System.ReadOnlySpan<System.Char> text)
   static System.Boolean TryParse(System.ReadOnlySpan<System.Char> text, out Craft.Abstractions.KeyChord chord, out System.String error)
+enum Craft.Abstractions.KeyContext : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Anywhere = 0
+  TextEditor = 1
+sealed class Craft.Abstractions.KeyMap : Craft.Abstractions.IKeyMap, Idrak.Abstraction.IKind, System.IEquatable<Craft.Abstractions.KeyMap>
+  Craft.Abstractions.KeyMap <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.KeyMap other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> Bindings { get; init; }
+  System.Int32 GetHashCode()
+  System.String Name { get; init; }
+  System.String Summary { get; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Title, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> Bindings)
+  ctor(System.String Name, System.String Title, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> Bindings)
 enum Craft.Abstractions.KeyModifiers : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Alt = 4
   Control = 2
@@ -1166,6 +1213,7 @@ static class Craft.Abstractions.PluginCapabilities
   static System.Collections.Generic.IReadOnlyList<System.String> All { get; }
 sealed class Craft.Abstractions.PluginSetting : System.IEquatable<Craft.Abstractions.PluginSetting>
   Craft.Abstractions.PluginSetting <Clone>$()
+  Craft.Abstractions.SettingShape Shape { get; init; }
   System.Boolean Equals(Craft.Abstractions.PluginSetting other)
   System.Boolean Equals(System.Object obj)
   System.Int32 GetHashCode()
@@ -1176,6 +1224,9 @@ sealed class Craft.Abstractions.PluginSetting : System.IEquatable<Craft.Abstract
   System.Void Deconstruct(out System.String Key, out System.String Default, out System.String Description)
   ctor(System.String Key, System.String Default, System.String Description)
   static System.String VariableName(System.String plugin, System.String key)
+static class Craft.Abstractions.PluginSettingShapes
+  static Craft.Abstractions.SettingShape Infer(Craft.Abstractions.PluginSetting setting, System.String section)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Apply(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> settings, System.Func<Craft.Abstractions.PluginSetting, System.String> section, System.Func<Craft.Abstractions.PluginSetting, Craft.Abstractions.SettingShape> shape = null)
 sealed class Craft.Abstractions.PluginSettingValue : System.IEquatable<Craft.Abstractions.PluginSettingValue>
   Craft.Abstractions.PluginSetting Setting { get; init; }
   Craft.Abstractions.PluginSettingValue <Clone>$()
@@ -1274,6 +1325,80 @@ sealed class Craft.Abstractions.SemanticTelemetry : System.IEquatable<Craft.Abst
   System.Void Deconstruct(out System.String WorkspaceRoot, out System.String Reader, out System.Int32 Projects, out System.Int32 Documents, out System.Int32 References, out System.Int64 ReferenceBytes, out System.Int64 HeapBytes, out System.TimeSpan BuildTime, out System.TimeSpan LastDiagnosticsTime, out System.Int32 Generation)
   ctor(System.String WorkspaceRoot, System.String Reader, System.Int32 Projects, System.Int32 Documents, System.Int32 References, System.Int64 ReferenceBytes, System.Int64 HeapBytes, System.TimeSpan BuildTime, System.TimeSpan LastDiagnosticsTime, System.Int32 Generation)
   static Craft.Abstractions.SemanticTelemetry None { get; }
+static class Craft.Abstractions.SettingChoiceSources
+  const System.String Accents = accents
+  const System.String FolderWatchers = folderWatchers
+  const System.String Fonts = fonts
+  const System.String InlineCompletion = inlineCompletion
+  const System.String KeyMaps = keymaps
+  const System.String MemoryMonitors = memoryMonitors
+  const System.String TerminalHosts = terminalHosts
+  const System.String Themes = themes
+  static Craft.Abstractions.ISettingChoices Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.ISettingChoices Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.ISettingChoices source)
+sealed class Craft.Abstractions.SettingChoices : Craft.Abstractions.ISettingChoices, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Choices { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor(System.String name, System.Func<System.Collections.Generic.IReadOnlyList<System.String>> read, System.String summary)
+enum Craft.Abstractions.SettingKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Choice = 4
+  Font = 5
+  KeyBindings = 8
+  List = 7
+  Number = 3
+  Path = 6
+  Text = 0
+  Toggle = 1
+  Whole = 2
+static class Craft.Abstractions.SettingSections
+  const System.String Agent = agent
+  const System.String Appearance = appearance
+  const System.String CSharp = csharp
+  const System.String Completion = completion
+  const System.String Editor = editor
+  const System.String Files = files
+  const System.String Keyboard = keyboard
+  const System.String Learning = learning
+  const System.String Models = models
+  const System.String Plugins = plugins
+  const System.String Terminal = terminal
+  const System.String Voice = voice
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> All { get; }
+  static System.String TitleOf(System.String id)
+sealed class Craft.Abstractions.SettingShape : System.IEquatable<Craft.Abstractions.SettingShape>
+  Craft.Abstractions.SettingKind Kind { get; init; }
+  Craft.Abstractions.SettingShape <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.SettingShape other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean OtherAllowed { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> AllChoices()
+  System.Collections.Generic.IReadOnlyList<System.String> Choices { get; init; }
+  System.Double? Max { get; init; }
+  System.Double? Min { get; init; }
+  System.Double? Step { get; init; }
+  System.Int32 GetHashCode()
+  System.String ChoicesFrom { get; init; }
+  System.String Group { get; init; }
+  System.String Section { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.String Unit { get; init; }
+  System.Void Deconstruct(out Craft.Abstractions.SettingKind Kind, out System.String Section, out System.String Title)
+  ctor(Craft.Abstractions.SettingKind Kind, System.String Section, System.String Title = null)
+  static Craft.Abstractions.SettingShape Choice(System.String section, System.String title, System.Collections.Generic.IReadOnlyList<System.String> choices, System.String group = null)
+  static Craft.Abstractions.SettingShape Font(System.String section, System.String title, System.String group = null)
+  static Craft.Abstractions.SettingShape From(System.String section, System.String title, System.String source, System.Collections.Generic.IReadOnlyList<System.String> also = null, System.Boolean other = false, System.String group = null)
+  static Craft.Abstractions.SettingShape ListOf(System.String section, System.String title, System.String group = null)
+  static Craft.Abstractions.SettingShape Number(System.String section, System.String title, System.Double min, System.Double max, System.Double step, System.String unit = null, System.String group = null)
+  static Craft.Abstractions.SettingShape PathTo(System.String section, System.String title, System.String group = null)
+  static Craft.Abstractions.SettingShape Text(System.String section, System.String title, System.String group = null)
+  static Craft.Abstractions.SettingShape Toggle(System.String section, System.String title, System.String group = null)
+  static Craft.Abstractions.SettingShape Unknown { get; }
+  static Craft.Abstractions.SettingShape Whole(System.String section, System.String title, System.Int64 min, System.Int64 max, System.String unit = null, System.String group = null, System.Double step = 1)
 sealed class Craft.Abstractions.SignatureHelp : System.IEquatable<Craft.Abstractions.SignatureHelp>
   Craft.Abstractions.SignatureHelp <Clone>$()
   System.Boolean Equals(Craft.Abstractions.SignatureHelp other)

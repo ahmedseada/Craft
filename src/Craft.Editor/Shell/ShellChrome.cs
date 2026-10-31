@@ -477,7 +477,9 @@ public sealed class TelemetryLog : IDisposable
 
 /// <summary>
 /// The Edit menu's commands (undo, redo, cut, copy, paste, select all, find, replace, format, go to definition), each the
-/// editor's own key sent to the active editor, so the menu and the keys do one thing. Registered on the public contracts;
+/// editor's own key sent to the active editor, so the menu and the keys do one thing; the editor's line commands and the
+/// standard shortcuts (<see cref="StandardShortcuts"/>: toggle comment, move and copy lines, select line, expand the
+/// selection, quick fix) with their bindings, and the Visual Studio keymap. Registered on the public contracts;
 /// disposing takes them back.
 /// </summary>
 public sealed class ShellEditCommands : IDisposable
@@ -497,34 +499,161 @@ public sealed class ShellEditCommands : IDisposable
         ("craft.goToDefinition", "Edit: Go to definition", EditorKey.F12, KeyModifiers.None, "F12"),
     ];
 
-    private readonly List<string> _registered = [];
+    /// <summary>More of the editor's own keys as commands, for the palette and the keyboard page (not in the menu).</summary>
+    public static IReadOnlyList<(string Id, string Title, EditorKey Key, KeyModifiers Modifiers)> MoreKeys { get; } =
+    [
+        ("craft.findNext", "Edit: Find next", EditorKey.F3, KeyModifiers.None),
+        ("craft.findPrevious", "Edit: Find previous", EditorKey.F3, KeyModifiers.Shift),
+        ("craft.triggerCompletion", "Edit: Trigger completion", EditorKey.Space, KeyModifiers.Control),
+        ("craft.parameterHints", "Edit: Parameter hints", EditorKey.Space, KeyModifiers.Control | KeyModifiers.Shift),
+    ];
 
-    /// <summary>Registers the commands over <paramref name="active"/> (the active editor, or null) and their Edit menu items.</summary>
-    public ShellEditCommands(Func<EditorModel?> active)
+    private readonly List<string> _registered = [];
+    private readonly List<(string Menu, string Id)> _menus = [];
+    private readonly List<KeyBinding> _bindings = [];
+    private readonly Func<EditorModel?> _active;
+    private readonly ShellModel? _shell;
+    private bool _keyMapRegistered;
+
+    /// <summary>
+    /// Registers the commands over <paramref name="active"/> (the active editor, or null) and their Edit menu items, the
+    /// standard bindings and the Visual Studio keymap; with <paramref name="shell"/>, quick fix too (it asks through the shell's UI).
+    /// </summary>
+    public ShellEditCommands(Func<EditorModel?> active, ShellModel? shell = null)
     {
         ArgumentNullException.ThrowIfNull(active);
+        _active = active;
+        _shell = shell;
         int order = 0;
         foreach (var (id, title, key, modifiers, shortcut) in Keys)
         {
-            EditorCommands.Register(new EditorCommand(id, title, (_, _) =>
-            {
-                active()?.OnKey(key, modifiers);
-                return Task.CompletedTask;
-            }, _ => active() is not null));
+            Register(id, title, model => model.OnKey(key, modifiers));
             EditorMenus.Register(new MenuItem(EditorMenus.Edit, id, Order: order++, Group: order <= 2 ? 0 : order <= 6 ? 1 : order <= 8 ? 2 : 3, Shortcut: shortcut));
-            _registered.Add(id);
+            _menus.Add((EditorMenus.Edit, id));
+        }
+
+        foreach (var (id, title, key, modifiers) in MoreKeys)
+        {
+            Register(id, title, model => model.OnKey(key, modifiers));
+        }
+
+        int lineOrder = 0;
+        foreach (var (id, title, run, inMenu) in StandardShortcuts.LineCommands)
+        {
+            Register(id, title, run);
+            if (inMenu)
+            {
+                EditorMenus.Register(new MenuItem(EditorMenus.Edit, id, Order: lineOrder++, Group: 4));
+                _menus.Add((EditorMenus.Edit, id));
+            }
+        }
+
+        if (shell is not null)
+        {
+            EditorCommands.Register(new EditorCommand(StandardShortcuts.QuickFix, "Edit: Quick fix", (_, token) => QuickFixAsync(token), _ => _active() is not null && shell.Tabs.Active is not null,
+                "The code actions the plug-ins offer for the problems at the caret"));
+            _registered.Add(StandardShortcuts.QuickFix);
+        }
+
+        foreach (var binding in StandardShortcuts.Bindings)
+        {
+            EditorKeyBindings.Register(binding);
+            _bindings.Add(binding);
+        }
+
+        if (EditorKeyMaps.Find(StandardShortcuts.VisualStudio) is null)
+        {
+            EditorKeyMaps.Register(StandardShortcuts.VisualStudioKeyMap);
+            _keyMapRegistered = true;
+        }
+
+        // The host read CRAFT_KEYMAP before this keymap was registered: read it again now.
+        if (shell is not null)
+        {
+            shell.Host.SetKeyBindings(shell.Options.KeyBindings, shell.Options.KeyMap);
         }
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
+        foreach (var (menu, id) in _menus)
+        {
+            EditorMenus.Unregister(menu, id);
+        }
+
         foreach (var id in _registered)
         {
-            EditorMenus.Unregister(EditorMenus.Edit, id);
             EditorCommands.Unregister(id);
         }
 
+        foreach (var binding in _bindings)
+        {
+            var current = binding.Then is { } then ? EditorKeyBindings.Find(binding.Chord, then) : EditorKeyBindings.Find(binding.Chord);
+            if (ReferenceEquals(current, binding))
+            {
+                EditorKeyBindings.Unregister(binding);
+            }
+        }
+
+        if (_keyMapRegistered)
+        {
+            EditorKeyMaps.Unregister(StandardShortcuts.VisualStudio);
+            _keyMapRegistered = false;
+        }
+
+        _menus.Clear();
         _registered.Clear();
+        _bindings.Clear();
+    }
+
+    private void Register(string id, string title, Func<EditorModel, bool> run)
+    {
+        EditorCommands.Register(new EditorCommand(id, title, (_, _) =>
+        {
+            if (_active() is { } model)
+            {
+                run(model);
+            }
+
+            return Task.CompletedTask;
+        }, _ => _active() is not null));
+        _registered.Add(id);
+    }
+
+    // The code actions the providers offer for the problems at the caret (or for the caret's line when there are none):
+    // one runs at once, several are picked from a list; none is said so.
+    private async Task QuickFixAsync(CancellationToken cancellationToken)
+    {
+        if (_shell is not { Tabs.Active: { } tab } shell || _active() is not { } model)
+        {
+            return;
+        }
+
+        int caret = model.Selection.Caret;
+        var diagnostics = model.DiagnosticsAt(caret);
+        var context = new CodeActionContext(tab.HostDocument, diagnostics.Count > 0 ? diagnostics.Min(d => d.Start) : model.Selection.Start,
+            diagnostics.Count > 0 ? diagnostics.Max(d => d.End) : model.Selection.End, diagnostics);
+        var actions = CodeActionProviders.ActionsFor(context, (name, error) => shell.Host.Log(EditorLogLevel.Warning, $"The code actions of {name} failed.", error));
+        if (actions.Count == 0)
+        {
+            shell.Host.ShowStatus("Quick fix", diagnostics.Count > 0 ? "No plug-in offers a fix for the problem here." : "Nothing to fix here.");
+            return;
+        }
+
+        int picked = actions.Count == 1 ? 0 : await shell.Ui.PickAsync("Quick fix", [.. actions.Select(a => a.Title)], cancellationToken);
+        if (picked < 0 || picked >= actions.Count)
+        {
+            return;
+        }
+
+        try
+        {
+            await actions[picked].RunAsync(cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            shell.Host.Log(EditorLogLevel.Error, $"The code action '{actions[picked].Title}' failed.", error);
+        }
     }
 }

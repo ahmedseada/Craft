@@ -92,6 +92,8 @@ public static class InventoryTests
             // Phase U2: panels and layout, the tree following the disk.
             ["CRAFT_PANEL_EXPLORER_OPEN"] = "false", ["CRAFT_PANEL_CHAT_OPEN"] = "false", ["CRAFT_PANEL_BOTTOM_OPEN"] = "false", ["CRAFT_PANEL_MIN_SIZE"] = "80",
             ["CRAFT_WORKSPACE_WATCHER"] = "none", ["CRAFT_WORKSPACE_WATCH_MS"] = "40",
+            // The owner's note 16: the keymap and the zoom.
+            ["CRAFT_KEYMAP"] = "visualstudio", ["CRAFT_ZOOM_STEP"] = "2",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -116,6 +118,7 @@ public static class InventoryTests
             UiWatchdogMilliseconds = 50, UiStallMilliseconds = 500, UiStallReports = 3, NotificationsKeep = 10, ToastMilliseconds = 0,
             ActivityMinimumMilliseconds = 0, ActivityFrameMilliseconds = 33,
             ExplorerOpen = false, ChatOpen = false, BottomPanelOpen = false, PanelMinimumSize = 80, WorkspaceWatcher = "none", WorkspaceWatchMilliseconds = 40,
+            KeyMap = "visualstudio", ZoomStep = 2,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

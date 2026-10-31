@@ -262,6 +262,27 @@ public enum EditorKey
 
     /// <summary>The backquote (grave accent) key of the main keyboard; "`" in a chord's text.</summary>
     Backquote,
+
+    // The owner's note 16: the keys of the shortcuts a C# developer expects (Ctrl+/, Ctrl+., Ctrl+=, Ctrl+-, Ctrl+[ and
+    // Ctrl+]), added at the end so the values above keep theirs.
+
+    /// <summary>The period key of the main keyboard; "." in a chord's text.</summary>
+    Period,
+
+    /// <summary>The slash key of the main keyboard; "/" in a chord's text.</summary>
+    Slash,
+
+    /// <summary>The minus key (the main keyboard's or the keypad's); "-" in a chord's text.</summary>
+    Minus,
+
+    /// <summary>The equals-and-plus key of the main keyboard (VK_OEM_PLUS), or the keypad's plus; "=" in a chord's text.</summary>
+    Plus,
+
+    /// <summary>The opening square bracket key; "[" in a chord's text.</summary>
+    BracketLeft,
+
+    /// <summary>The closing square bracket key; "]" in a chord's text.</summary>
+    BracketRight,
 }
 
 /// <summary>Where the platform's input goes: the editor implements it, a <see cref="ITextInputAdapter"/> calls it.</summary>

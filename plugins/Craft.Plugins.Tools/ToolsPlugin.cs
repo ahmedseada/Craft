@@ -87,7 +87,7 @@ public sealed class ToolsPlugin : IEditorPlugin
     public string Summary => "The editor's tools for models (chat, the agent, MCP clients): read, search, find symbols, diagnostics, edits proposed as a diff";
 
     /// <inheritdoc />
-    public IReadOnlyList<PluginSetting> Settings => ToolSettings.Declared;
+    public IReadOnlyList<PluginSetting> Settings { get; } = PluginSettingShapes.Apply(ToolSettings.Declared, static _ => SettingSections.Agent);
 
     /// <inheritdoc />
     public IDisposable Activate(IEditorHost host)

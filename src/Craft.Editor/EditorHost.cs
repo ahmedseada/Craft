@@ -25,7 +25,11 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     public const string HostSource = "host";
 
     private readonly Action<Action> _dispatch;
-    private readonly Dictionary<KeyChord, string> _userBindings = [];
+    private readonly Dictionary<(KeyChord Chord, KeyChord Then), string> _userBindings = [];
+    private readonly HashSet<KeyChord> _userPrefixes = [];
+    private readonly Dictionary<(KeyChord Chord, KeyChord Then), KeyBinding> _keyMapBindings = [];
+    private readonly HashSet<KeyChord> _keyMapPrefixes = [];
+    private KeyChord? _pendingChord;
     private readonly List<OpenDocument> _documents = [];
     private readonly List<IStatusItem> _statusItems = [];
     private readonly List<IEditorPanel> _panels = [];
@@ -58,9 +62,73 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         Notifications = new NotificationCenter(ActivityCenter, action => Dispatch("notifications: show", action), Options);
         Presenter = presenter;
         Settings = new PluginSettingsReader(readVariable ?? Environment.GetEnvironmentVariable);
-        foreach (var binding in Options.KeyBindings)
+        SetKeyBindings(Options.KeyBindings, Options.KeyMap);
+    }
+
+    /// <summary>The first chord of a two-key chord pressed, while the second is awaited (the status bar shows it); null otherwise.</summary>
+    public KeyChord? PendingChord => _pendingChord;
+
+    /// <summary>Raised when <see cref="PendingChord"/> changes.</summary>
+    public event EventHandler? PendingChordChanged;
+
+    /// <summary>
+    /// Takes every chord before any binding or the editor while set (the keyboard page recording a shortcut): true when
+    /// it took the chord. The page sets it while it records and clears it after.
+    /// </summary>
+    public Func<KeyChord, bool>? KeyCapture { get; set; }
+
+    /// <summary>The keymap in effect (<see cref="CraftOptions.KeyMap"/>), or null when its name is not registered.</summary>
+    public IKeyMap? KeyMap { get; private set; }
+
+    /// <summary>Why no keymap applies (its name is not registered), or null.</summary>
+    public string? KeyMapProblem { get; private set; }
+
+    /// <summary>
+    /// Takes <paramref name="user"/> (the user's bindings, <c>CRAFT_KEY_BINDINGS</c>) and the keymap <paramref name="keyMap"/>
+    /// (by name in <see cref="EditorKeyMaps"/>) in place of the ones in use: the settings page's changes apply at once.
+    /// A keymap not registered is reported in <see cref="KeyMapProblem"/> and the log, and the registered bindings apply alone.
+    /// </summary>
+    public void SetKeyBindings(IReadOnlyList<KeyBinding> user, string? keyMap)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        _userBindings.Clear();
+        _userPrefixes.Clear();
+        foreach (var binding in user)
         {
-            _userBindings[binding.Chord] = binding.CommandId;
+            _userBindings[(binding.Chord, binding.Then ?? default)] = binding.CommandId;
+            if (binding.Then is not null && binding.CommandId.Length > 0)
+            {
+                _userPrefixes.Add(binding.Chord);
+            }
+        }
+
+        _keyMapBindings.Clear();
+        _keyMapPrefixes.Clear();
+        KeyMap = null;
+        KeyMapProblem = null;
+        if (string.IsNullOrWhiteSpace(keyMap))
+        {
+            return;
+        }
+
+        try
+        {
+            KeyMap = EditorKeyMaps.Get(keyMap.Trim());
+        }
+        catch (NotRegisteredException e)
+        {
+            KeyMapProblem = $"CRAFT_KEYMAP: {e.Message}";
+            Log(HostSource, EditorLogLevel.Warning, KeyMapProblem, null);
+            return;
+        }
+
+        foreach (var binding in KeyMap.Bindings)
+        {
+            _keyMapBindings[(binding.Chord, binding.Then ?? default)] = binding;
+            if (binding.Then is not null && binding.CommandId.Length > 0)
+            {
+                _keyMapPrefixes.Add(binding.Chord);
+            }
         }
     }
 
@@ -407,10 +475,15 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
 
     /// <summary>
     /// A key the focused editor received, routed in this order: a user's binding (<see cref="CraftOptions.KeyBindings"/>)
-    /// runs its command; a plug-in's or the app's binding that overrides the editor runs its command; then the editor's
-    /// own keys (<paramref name="editor"/>, the <see cref="EditorModel"/>); then a plug-in's or the app's binding for a
-    /// chord the editor did not handle. So the built-in keys keep working and plug-ins add new chords. A user's binding
-    /// with an empty command removes the plug-ins' binding of the chord (the editor's own key stays).
+    /// runs its command; the first chord of a two-key chord ("Ctrl+K Ctrl+C", any layer's) waits for the second, which
+    /// then runs that chord's command (a second key no layer binds ends the wait and does nothing); the keymap's binding
+    /// (<see cref="CraftOptions.KeyMap"/>) stands in for the registered one of the same keys; a binding that overrides
+    /// the editor, or one for the text editor (<see cref="KeyContext.TextEditor"/>, only when <paramref name="editor"/> is
+    /// the text editor), runs its command; then the editor's own keys (<paramref name="editor"/>, the
+    /// <see cref="EditorModel"/>); then a binding for a chord the editor did not handle. So the built-in keys keep working
+    /// and plug-ins add new chords. A user's or a keymap's binding with an empty command removes the chord's binding
+    /// below it (the editor's own key stays). A terminal (any <paramref name="editor"/> that is not the text editor) gets
+    /// no two-key wait and no text-editor binding: its keys stay the shell's. No string is made per keystroke.
     /// </summary>
     public bool HandleKey(EditorKey key, KeyModifiers modifiers, IEditorInputSink? editor)
     {
@@ -425,19 +498,49 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
             Raise(_keyPressed, new EditorKeyEventArgs(chord), nameof(KeyPressed));
         }
 
-        if (_userBindings.TryGetValue(chord, out var userCommand))
+        if (KeyCapture is { } capture && capture(chord))
+        {
+            return true;
+        }
+
+        bool textEditor = editor is EditorModel;
+        if (_pendingChord is { } first)
+        {
+            SetPending(null);
+            if (ResolveSecond(first, chord) is { Length: > 0 } command)
+            {
+                Run(command);
+            }
+            else
+            {
+                Log(HostSource, EditorLogLevel.Information, $"{first.DisplayText} {chord.DisplayText} is not bound to a command.", null);
+            }
+
+            return true;
+        }
+
+        if (_userBindings.TryGetValue((chord, default), out var userCommand))
         {
             if (userCommand.Length == 0)
             {
                 return editor?.OnKey(key, modifiers) ?? false;
             }
 
-            Run(userCommand);
+            if (textEditor || !IsTextEditorCommand(userCommand))
+            {
+                Run(userCommand);
+                return true;
+            }
+        }
+
+        if ((editor is null || textEditor) && (_userPrefixes.Contains(chord) || _keyMapPrefixes.Contains(chord) || EditorKeyBindings.IsPrefix(chord)))
+        {
+            SetPending(chord);
             return true;
         }
 
-        var binding = EditorKeyBindings.Find(chord);
-        if (binding is { OverridesEditor: true, CommandId.Length: > 0 })
+        var binding = _keyMapBindings.TryGetValue((chord, default), out var mapped) ? mapped : EditorKeyBindings.Find(chord);
+        if (binding is { CommandId.Length: > 0 } && (binding.OverridesEditor || (binding.When == KeyContext.TextEditor && textEditor)))
         {
             Run(binding.CommandId);
             return true;
@@ -448,13 +551,70 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
             return true;
         }
 
-        if (binding is { CommandId.Length: > 0 })
+        if (binding is { CommandId.Length: > 0, When: KeyContext.Anywhere })
         {
             Run(binding.CommandId);
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>Ends a two-key chord's wait (Escape, the focus moved); true when one was waiting.</summary>
+    public bool CancelPendingChord()
+    {
+        if (_pendingChord is null)
+        {
+            return false;
+        }
+
+        SetPending(null);
+        return true;
+    }
+
+    // The command of first-then: the user's, else the keymap's, else the registered one; empty or null when unbound.
+    private string? ResolveSecond(KeyChord first, KeyChord then)
+    {
+        if (_userBindings.TryGetValue((first, then), out var user))
+        {
+            return user;
+        }
+
+        if (_keyMapBindings.TryGetValue((first, then), out var mapped))
+        {
+            return mapped.CommandId;
+        }
+
+        return EditorKeyBindings.Find(first, then)?.CommandId;
+    }
+
+    // Whether a command's default binding answers in the text editor only (a user's binding of it then does too).
+    private bool IsTextEditorCommand(string commandId)
+    {
+        var all = EditorKeyBindings.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            if (all[i].When == KeyContext.TextEditor && string.Equals(all[i].CommandId, commandId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        foreach (var binding in _keyMapBindings.Values)
+        {
+            if (binding.When == KeyContext.TextEditor && string.Equals(binding.CommandId, commandId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void SetPending(KeyChord? chord)
+    {
+        _pendingChord = chord;
+        PendingChordChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <inheritdoc />

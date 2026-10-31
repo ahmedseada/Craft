@@ -129,7 +129,7 @@ public sealed class SandboxPlugin : IEditorPlugin
     public string Summary => "The approve-each command sandbox: each command an agent wants to run is shown to you first, its output live in the sandbox terminal";
 
     /// <inheritdoc />
-    public IReadOnlyList<PluginSetting> Settings => SandboxSettings.Declared;
+    public IReadOnlyList<PluginSetting> Settings { get; } = PluginSettingShapes.Apply(SandboxSettings.Declared, static _ => SettingSections.Agent);
 
     /// <inheritdoc />
     public IDisposable Activate(IEditorHost host)

@@ -167,6 +167,12 @@ public static class EditorPlugins
 public sealed record PluginSetting(string Key, string Default, string Description)
 {
     /// <summary>
+    /// Its shape on the settings page (kind, section, title, range, choices); null: text, under the plug-in in the
+    /// Plug-ins section. A plug-in's settings are grouped under the plug-in in whichever section they name.
+    /// </summary>
+    public SettingShape? Shape { get; init; }
+
+    /// <summary>
     /// The environment variable of <paramref name="key"/> of the plug-in <paramref name="plugin"/>:
     /// <c>CRAFT_PLUGIN_</c>, the plug-in's name, <c>_</c>, the key, upper-cased, each character not a letter or a digit
     /// made <c>_</c> ("sample", "showCharacters" → <c>CRAFT_PLUGIN_SAMPLE_SHOWCHARACTERS</c>).

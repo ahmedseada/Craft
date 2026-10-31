@@ -67,12 +67,14 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Single TouchTarget { get; init; }
   System.Single TreeIndent { get; init; }
   System.Single TreeWidth { get; init; }
+  System.Single ZoomStep { get; init; }
   System.String CrashFolder { get; init; }
   System.String DataFolder { get; init; }
   System.String FontFallback { get; init; }
   System.String FontFamily { get; init; }
   System.String InlineCompletionProvider { get; init; }
   System.String InterfaceFont { get; init; }
+  System.String KeyMap { get; init; }
   System.String MemoryMonitor { get; init; }
   System.String NewLine { get; init; }
   System.String RecoveryFolder { get; init; }
@@ -94,6 +96,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceIgnore { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceReaders { get; }
 sealed class Craft.Core.CraftVariable : System.IEquatable<Craft.Core.CraftVariable>
+  Craft.Abstractions.SettingShape Shape { get; init; }
   Craft.Core.CraftVariable <Clone>$()
   System.Boolean Equals(Craft.Core.CraftVariable other)
   System.Boolean Equals(System.Object obj)

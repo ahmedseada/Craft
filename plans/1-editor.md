@@ -1993,6 +1993,10 @@ the owner's machine, not only headless.
 13. **The settings page looks bad**: sections (Editor, C# and Roslyn, Models, Completion, Agent and sandbox, Plug-ins,
     Appearance, Keyboard), proper controls (switches, numbers, drop-downs, a font picker) instead of a text box and Set
     for each, search, and the variable shown small; the composer of the chat and the agent made as good as the design.
+    **Done (2026-10-31).** The settings page is made from metadata declared next to each option (`SettingShape` on every
+    `CraftOptions.Variables` entry and on `PluginSetting`): sections in a left list, a search across them, a control per
+    kind, live apply, the file per change, modified marks and resets, the environment read-only with why, plug-ins under
+    their names. The composer is notes 11 and 12 (the model chip, `CraftInput`). See "Notes 13 and 16 as built".
 14. **The editor's font**: the default code font looks wrong; JetBrains Mono must actually draw (the bundled font
     reaching the drawn surface), else a well-chosen monospaced fallback, with the line height and weight tuned.
     **Fixed (2026-10-31).** Cause: the editor's canvas is Win2D through MAUI Graphics, whose text format takes a family
@@ -2013,6 +2017,9 @@ the owner's machine, not only headless.
 16. **Keyboard shortcuts**: every shortcut a C# developer expects (Visual Studio's and VS Code's common ones: go to
     line, go to file, comment, duplicate line, move line, multi-caret, rename, find in files, quick fix, and so on),
     and a page to see and remap them (searchable, conflicts shown, reset), saved in the settings.
+    **Done (2026-10-31)** but multi-caret (phase X) and the shortcuts of commands that do not exist yet (rename, peek,
+    find in files: no contract or P6 not merged). Two-key chords, a keymap choice (VS Code, Visual Studio), the editor's
+    line commands, and the Keyboard section of the settings. See "Notes 13 and 16 as built".
 17. **Languages of a C# project in the C# plug-in**: syntax colours (and bracket matching, folding later) for `.csproj`,
     `.props`, `.targets`, `.sln`/`.slnx`, `.xml`, `.xaml`, `.config`, `.resx`, `.razor`/`.cshtml` (markup and C#),
     `.editorconfig`, `.json` (`appsettings.json`, `launchSettings.json`, `global.json`); each removable with the plug-in.
@@ -2024,6 +2031,74 @@ files showing in the tree, the side panel gone, every panel collapsible and resi
 whether voice dictation goes through the diff view (not answered yet).
 
 The held phases (M Android, L more languages, A3 remote models) stay held for the owner's word.
+
+## Notes 13 and 16 as built (2026-10-31)
+
+- **Settings metadata** (`Craft.Abstractions/Settings.cs`): `SettingKind` (text, toggle, whole, number, choice, font,
+  path, list, key bindings), `SettingSections` (Editor, Appearance, Files and workspace, C# and Roslyn, Models and AI,
+  Completion, Agent and sandbox, Terminal, Voice, Learning, Plug-ins, Keyboard, in that order), `SettingShape` (section,
+  title, group, range, step, unit, listed choices, a choice source, other values allowed), declared on every
+  `CraftVariable` (`Shape`) and on `PluginSetting` (`Shape`). `SettingChoiceSources` (a registry, library defaults:
+  themes, accents, folder watchers, memory monitors, inline completion providers, terminal hosts, keymaps, the bundled
+  fonts; a platform or a plug-in registers over them). `PluginSettingShapes.Apply` places a plug-in's settings in a
+  section and reads a switch or a number box off a default it does not shape; the AI plug-in (`AiSettingShapes`:
+  Models and AI, Completion, Agent and sandbox), Learning, Voice, Sandbox and Tools name their sections; a plug-in that
+  names none sits under Plug-ins. A test checks every option's declared range against its parser (min and max taken,
+  one past refused) and every listed choice against it.
+- **The page** (`Craft.Editor.Shell.SettingsPageModel`, headless; `Craft.Maui.SettingsPage`): the left list with the
+  count set in each section, a search across every section (title, variable, words, section, group, plug-in), the
+  scope (your settings or this workspace's) per change, a switch, a number box with − and + steppers, its range in the
+  tooltip and its unit, a drop-down (with a box for another value where one is allowed), a font picker with a preview,
+  text boxes in `CraftInput`; each change checked against its shape (a plug-in's too) and applied at once through
+  `ShellModel.ApplySetting`; "modified · user / workspace / environment" marks, a reset per setting and per section;
+  the environment's value and a file that may not set the variable read-only with why; the variable small in the code
+  font; plug-ins' settings under the plug-in's name; the Models and AI section links the Models page, whose own left
+  list now opens these sections. Narrow width: the list folds into a drop-down.
+- **Keys** (`Craft.Abstractions`): `EditorKey` gained `Period`, `Slash`, `Minus`, `Plus` (the = key), `BracketLeft`,
+  `BracketRight` (at the end); `KeyChord.DisplayText` ("Ctrl+/"; `ToString` keeps the names, the registry's keys);
+  `KeyBinding` gained `Then` (a two-key chord, "Ctrl+K Ctrl+C") and `When` (`KeyContext.TextEditor`: only while the text
+  editor has the keyboard, before its own keys; a terminal never runs it); `ParseKeys`, `FormatList` (round trip);
+  `EditorKeyBindings.Find(first, then)`, `IsPrefix` (a set kept on registration: no scan per keystroke); `IKeyMap`,
+  `KeyMap`, `EditorKeyMaps` ("vscode" the library's default, "visualstudio" registered by Craft.Editor). Options
+  `CRAFT_KEYMAP`, `CRAFT_ZOOM_STEP`; `CRAFT_KEY_BINDINGS` applies live now (out of `AppliedAtStart`).
+- **The router** (`EditorHost.HandleKey`): the user's binding; the first key of a two-key chord waits for the second
+  (`PendingChord`, the status bar says "(Ctrl+K) was pressed"); the keymap's binding over the registered one; an
+  overriding or a text-editor binding; the editor's own keys; then the rest. `SetKeyBindings` takes new user bindings
+  and keymap at once; `KeyCapture` hands the keyboard page every chord while it records. A user's binding of a
+  text-editor command stays text-editor only.
+- **The shortcuts** (`StandardShortcuts`, registered by `ShellEditCommands` and `ShellModel`): new editor commands on
+  `EditorModel` (`EditorModel.Lines.cs`, each one undo step): toggle line comment Ctrl+/, comment Ctrl+K Ctrl+C,
+  uncomment Ctrl+K Ctrl+U, duplicate lines (Visual Studio: Ctrl+D; VS Code leaves Ctrl+D to X's multi-caret), delete
+  lines Ctrl+Shift+K (VS: Ctrl+Shift+L), move lines Alt+Up/Down, copy lines Shift+Alt+Up/Down, indent and outdent lines
+  Ctrl+] and Ctrl+[, select line Ctrl+L (again: the next line), expand and shrink the selection Shift+Alt+Right/Left (VS:
+  Shift+Alt+= / -; word, the brackets' inside, the brackets, the lines, everything), go to line Ctrl+G (quick open's
+  ':42:7'). Shell: save all Ctrl+K S (VS: Ctrl+Shift+S), reopen the closed tab Ctrl+Shift+T, close tab Ctrl+F4 too,
+  next and previous tab Ctrl+PageDown/PageUp (VS: Ctrl+Alt+PageDown/PageUp), zoom in, out, reset Ctrl+=, Ctrl+-, Ctrl+0
+  (the code font's size in your settings, `CRAFT_ZOOM_STEP`; VS: Ctrl+Shift+. and ,), the palette F1 too (VS: Ctrl+Q),
+  quick open Ctrl+P (VS: Ctrl+T), the explorer Ctrl+B (VS: Ctrl+Alt+L), quick fix Ctrl+. (VS: Alt+Enter too; the code
+  actions the plug-ins offer at the caret), format Ctrl+K Ctrl+D beside Shift+Alt+F, keyboard shortcuts Ctrl+K Ctrl+S.
+  As commands for the palette and the page: find next and previous (F3, Shift+F3), trigger completion (Ctrl+Space),
+  parameter hints (Ctrl+Shift+Space). Already there and listed: the file commands, Ctrl+F/H, F12, Ctrl+J, Ctrl+`,
+  Ctrl+Alt+I, Ctrl+Shift+P. Not registered (no command yet): rename F2, peek Alt+F12, find in files Ctrl+Shift+F (P6),
+  go to symbol, multi-caret (X).
+- **The Keyboard section** (`KeyboardModel` headless, `Craft.Maui.KeyboardSection`): every command with its keys and
+  where each comes from (yours, keymap, default, built in: the editor's own), search by words or by pressing the keys,
+  conflicts marked (keys over another command's, a key that is the first of a two-key chord, the editor's key taken),
+  + records a chord by pressing it (two for Ctrl+K Ctrl+C) or typing it, the conflict said before Save, × removes (a
+  default becomes "Keys=" in your bindings; the editor's own key is given to another command, not removed), ↺ resets a
+  command, Reset all, the keymap drop-down; saved in `CRAFT_KEY_BINDINGS` (your settings file), applied at once.
+- **Tests**: groups `Settings` (5: every option's shape against its parser; the sections and controls from the
+  metadata; a change live in the chosen file, refused outside its range or choices, resets; the environment read-only;
+  a plug-in's settings under it, checked and read live) and `Keys` (6: chords and lists round trip; the standard
+  shortcuts registered as declared with no conflict; two-key chords, the text-editor context, a terminal keeping its
+  keys, the Visual Studio keymap live, an unregistered keymap said; recording, remapping, removing and resetting through
+  the settings file and back; every line command; go to line, zoom, reopen, the Keyboard section opened), with
+  `Shell`, `Design`, `Layout`, `Editor`, `PluginKit`, `ApiGuard`, `Inventory`.
+- **Not compiled here**: `src/Craft.Maui/Platforms/Windows/WindowsTextInputAdapter.cs` (the new keys' VirtualKey arms:
+  0xBE, 0xBF, 0xBD, Subtract, 0xBB, Add, 0xDB, 0xDD). Every other file compiled (Craft.Maui on net10.0 with the tests).
+- **Not yet**: a platform's installed font families as a choice source (the font picker offers the bundled ones and
+  takes any typed); a second chord without Ctrl or Alt (Ctrl+K S) is caught by the window only when the editor has the
+  keyboard; the Keyboard section draws every command's row at once (about a hundred).
 
 ## Usability before features (the owner's order, 2026-10-31)
 

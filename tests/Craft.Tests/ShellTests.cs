@@ -126,14 +126,17 @@ public static class ShellTests
         Check.SequenceEqual([d, c, a], [.. list.Entries.Select(e => e.Path)], "the oldest fall off past the limit");
         Check.Equal(6, changes, "each change is raised");
 
+        list.FlushAsync().GetAwaiter().GetResult();             // a change is written off the UI thread
         var read = RecentList.Load(path, 3);
         Check.Equal(0, read.Problems.Count, "the file reads back clean");
         Check.SequenceEqual([d, c, a], [.. read.Entries.Select(e => e.Path)], "in the same order");
         Check.Equal(2, read.RemoveMissing(), "c and d do not exist");
         Check.SequenceEqual([a], [.. read.Entries.Select(e => e.Path)], "the one that exists stays");
         read.Add(folder.Path, RecentKind.Folder);
+        read.FlushAsync().GetAwaiter().GetResult();
         Check.Equal(RecentKind.Folder, RecentList.Load(path, 3).Entries[0].Kind, "a folder is stored as one");
         read.Limit = 1;
+        read.FlushAsync().GetAwaiter().GetResult();
         Check.Equal(1, RecentList.Load(path, 10).Entries.Count, "lowering the limit drops the oldest and saves");
         Check.True(read.Remove(folder.Path) && read.Entries.Count == 0, "removed");
 

@@ -3,6 +3,7 @@
 
 using System.Buffers;
 using System.Globalization;
+using System.Threading.Channels;
 using Craft.Abstractions;
 
 namespace Craft.Editor.Terminal;
@@ -11,7 +12,9 @@ namespace Craft.Editor.Terminal;
 /// One terminal: its shell's session (<see cref="ITerminalSession"/>) and its screen. The output is read and parsed on a
 /// thread-pool loop (never on the UI thread), in slices under the screen's lock, and the view is asked to redraw once per
 /// burst (<see cref="Invalidated"/>, raised through the host's dispatch on the UI thread). Keys and text are encoded and
-/// written to the shell; the view's scroll position, its selection and the exit are kept here, UI-free.
+/// written to the shell off the calling thread (phase U: a shell that is not reading, its pipe full, never blocks the UI
+/// thread, nor the parser that holds the screen's lock while it answers a query), in order; the view's scroll position,
+/// its selection and the exit are kept here, UI-free.
 /// </summary>
 public sealed class TerminalInstance : IDisposable
 {
@@ -19,6 +22,7 @@ public sealed class TerminalInstance : IDisposable
     private const int SliceBytes = 16 * 1024;
     private readonly Action<Action> _dispatch;
     private readonly CancellationTokenSource _stop = new();
+    private readonly Channel<byte[]> _input = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
     private readonly string? _name;
     private int _invalidatePending;
     private long _scrolledSeen;
@@ -40,7 +44,11 @@ public sealed class TerminalInstance : IDisposable
         screen.Respond = Write;
         screen.TitleChanged += (_, _) => _dispatch(() => TitleChanged?.Invoke(this, EventArgs.Empty));
         Completion = ReadAsync();
+        Writes = WriteAsync();
     }
+
+    /// <summary>The writer's loop: completes once the terminal is disposed and what was written before is sent.</summary>
+    public Task Writes { get; }
 
     /// <summary>Its number in this run (1 for the first terminal).</summary>
     public int Id { get; }
@@ -146,7 +154,7 @@ public sealed class TerminalInstance : IDisposable
     {
         if (Volatile.Read(ref _disposed) == 0 && !input.IsEmpty)
         {
-            Session.Write(input);
+            _input.Writer.TryWrite(input.ToArray());
         }
     }
 
@@ -278,9 +286,31 @@ public sealed class TerminalInstance : IDisposable
             return;
         }
 
+        _input.Writer.TryComplete();
         _stop.Cancel();
         Session.Dispose();
         _stop.Dispose();
+    }
+
+    // The thread pool's loop that sends the typed bytes to the shell, in order; a shell that ended takes nothing more.
+    private async Task WriteAsync()
+    {
+        await foreach (var bytes in _input.Reader.ReadAllAsync().ConfigureAwait(false))
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                Session.Write(bytes);
+            }
+            catch (Exception error) when (error is ObjectDisposedException or IOException or InvalidOperationException)
+            {
+                // The shell ended meanwhile: what it would have read goes nowhere, as a write after the end does.
+            }
+        }
     }
 
     private async Task ReadAsync()

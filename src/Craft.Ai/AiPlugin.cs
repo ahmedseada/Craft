@@ -174,7 +174,7 @@ public sealed class AiSession : IDisposable
     private IDisposable? _mcpShown;
     private readonly StatusItem _completionStatus = new("ai.completion", "", StatusAlignment.Right, 9);
     private IDisposable? _completionShown;
-    private IEditorProgress? _loading;
+    private readonly IEditorNotification _modelStatus;
     private string _modelState = "not loaded";
     private bool _disposed;
 
@@ -184,10 +184,16 @@ public sealed class AiSession : IDisposable
         _closed = closed;
         var settings = Settings;
         AiPlugin.Local.Settings = settings;
-        Models = new AiModels(() => Settings) { Progress = new Progress<ModelLoadStatus>(status => _host.Dispatch(() => OnLoad(status))) };
+        Models = new AiModels(() => Settings)
+        {
+            Progress = new Progress<ModelLoadStatus>(status => _host.Dispatch("ai: a model load's stage", () => OnLoad(status))),
+            Activities = host.Activities,
+        };
+        // Phase U: the model's state as a status line of the notification centre (U2 moves the side panel's content there).
+        _modelStatus = host.ShowStatus("Chat and agent model", _modelState);
         Chat = new AiChatPanel(host, () => Settings, Models);
         Agent = new AiAgentPanel(host, () => Settings, Models);
-        Completion = new AiInlineCompletion(() => Settings, Models, () => !_disposed);
+        Completion = new AiInlineCompletion(() => Settings, Models, () => !_disposed) { Activities = host.Activities };
         Actions = new AiCodeActions(host, () => Settings, Models, Chat);
         Chat.RunAction = (name, token) => RunActionAsync(name switch
         {
@@ -319,11 +325,12 @@ public sealed class AiSession : IDisposable
             return;
         }
 
-        using var progress = _host.StartProgress($"Loading {settings.Model}");
-        // The provider reports from its worker; the host is reached on its UI thread.
-        var report = new Progress<ModelLoadStatus>(status => _host.Dispatch(() =>
+        using var progress = _host.Activities.Start($"Loading {settings.Model}", ActivityKinds.ModelLoad, cancellable: true, cancellationToken);
+        cancellationToken = progress.CancellationToken;
+        // The provider reports from its worker; the activity takes it there, the host is reached on its UI thread.
+        var report = new Progress<ModelLoadStatus>(status => _host.Dispatch("ai: a model load's stage", () =>
         {
-            progress.Report(status.Fraction, status.Message);
+            progress.Report(status.Fraction is { } f && f < 1 ? f : null, status.Message);
             _modelState = status.Message;
             AiPlugin.Local.SetState(status.Message);
             RefreshModels();
@@ -335,13 +342,15 @@ public sealed class AiSession : IDisposable
                 $"loaded{(lease.Loaded ? $" in {lease.LoadDuration.TotalSeconds:F1} s" : "")} · context {lease.ContextLength} · {(lease.Chat is null ? "no chat template" : "chat")} · text");
             _host.Record("ai.model.load", lease.LoadDuration.TotalMilliseconds, "ms");
             AiPlugin.Local.SetState(_modelState);
+            progress.Complete(_modelState);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             _modelState = "failed: " + error.Message;
             AiPlugin.Local.SetState(_modelState, isProblem: true);
             _host.Log(EditorLogLevel.Error, $"The model {settings.Model} did not load.", error);
-            await _host.ShowMessageAsync("AI: the model did not load", error.Message);
+            // A failure is a notification with a toast and Retry (no modal message that stops the window).
+            progress.Fail($"The model {settings.Model} did not load: {error.Message}", error, () => _ = LoadModelAsync(CancellationToken.None));
         }
 
         RefreshModels();
@@ -361,7 +370,7 @@ public sealed class AiSession : IDisposable
         Chat.Dispose();
         Agent.Dispose();
         Models.Dispose();
-        _loading?.Dispose();
+        _modelStatus.Dispose();
         _completionShown?.Dispose();
         _mcpShown?.Dispose();
         if (Mcp is { } server)
@@ -381,17 +390,7 @@ public sealed class AiSession : IDisposable
             return;
         }
 
-        if (status.Stage == "ready")
-        {
-            _loading?.Dispose();
-            _loading = null;
-        }
-        else
-        {
-            _loading ??= _host.StartProgress("AI: loading the model");
-            _loading.Report(status.Fraction, status.Message);
-        }
-
+        // The status bar shows the load as AiModels' activity; here the panel's and the centre's state line.
         _modelState = status.Message;
         RefreshModels();
     }
@@ -432,6 +431,7 @@ public sealed class AiSession : IDisposable
         }
 
         _models.SetItems(items);
+        _modelStatus.Update($"{(settings.Model.Length == 0 ? "(none set)" : settings.Model)} · {_modelState} · device {settings.Device}");
     }
 
     private static string Limits(AiSettings settings)

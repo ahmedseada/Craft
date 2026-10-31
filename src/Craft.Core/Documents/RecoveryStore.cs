@@ -36,6 +36,7 @@ public sealed class RecoveryStore : IDisposable
     private readonly List<Tracked> _tracked = [];
     private readonly Timer? _timer;
     private int _writing;
+    private Task _stops = Task.CompletedTask;
     private bool _disposed;
 
     /// <summary>A store in <paramref name="options"/>' recovery folder (created when missing), its timer started when autosave is on.</summary>
@@ -71,7 +72,17 @@ public sealed class RecoveryStore : IDisposable
     }
 
     /// <summary>Writes the copy of every tracked dirty document whose text changed since its last copy, and deletes those of clean ones, now (what the timer does).</summary>
-    public Task WriteNowAsync(CancellationToken cancellationToken = default) => Task.Run(() => WriteAll(cancellationToken), cancellationToken);
+    public async Task WriteNowAsync(CancellationToken cancellationToken = default)
+    {
+        await Task.Run(() => WriteAll(cancellationToken), cancellationToken).ConfigureAwait(false);
+        Task stops;
+        lock (_lock)
+        {
+            stops = _stops;
+        }
+
+        await stops.ConfigureAwait(false);                  // the copies of documents closed meanwhile are gone too
+    }
 
     /// <summary>The copies in the folder that no tracked document of this store owns (the ones a crash left), newest first.</summary>
     public IReadOnlyList<RecoveryEntry> ListRecoverable()
@@ -140,7 +151,7 @@ public sealed class RecoveryStore : IDisposable
 
         foreach (var tracked in all)
         {
-            tracked.Dispose();
+            tracked.Stop(wait: true);              // the store closes with the app: its copies go now
         }
     }
 
@@ -200,7 +211,7 @@ public sealed class RecoveryStore : IDisposable
     {
         // The copy is UTF-8 whatever the document's encoding (the sidecar keeps that), written as a save is: to a
         // temporary file, then moved over the last copy.
-        TextDocument.WriteAtomicallyAsync(snapshot, CopyPath(id), new UTF8Encoding(false), byteOrderMark: false, CancellationToken.None).GetAwaiter().GetResult();
+        TextDocument.WriteAtomically(snapshot, CopyPath(id), new UTF8Encoding(false), byteOrderMark: false);
         var sidecar = new System.Buffers.ArrayBufferWriter<byte>(512);
         using (var json = new Utf8JsonWriter(sidecar, new JsonWriterOptions { Indented = true }))
         {
@@ -287,7 +298,10 @@ public sealed class RecoveryStore : IDisposable
             }
         }
 
-        public void Dispose()
+        /// <summary>Stops following the document; its copy goes off the calling thread (the UI's, when a tab closes): <see cref="WriteNowAsync"/> awaits it.</summary>
+        public void Dispose() => Stop(wait: false);
+
+        public void Stop(bool wait)
         {
             lock (store._lock)
             {
@@ -299,12 +313,37 @@ public sealed class RecoveryStore : IDisposable
 
             document.StateChanged -= OnStateChanged;
             document.Closed -= OnClosed;
-            lock (_files)
+            if (wait)
             {
-                _stopped = true;
+                lock (_files)
+                {
+                    _stopped = true;
+                }
+
+                Sync();
+                return;
             }
 
-            Sync();
+            // A copy being written now holds the files' lock for as long as the write takes: the closing thread never waits on it.
+            lock (store._lock)
+            {
+                store._stops = Task.WhenAll(store._stops, Task.Run(() =>
+                {
+                    lock (_files)
+                    {
+                        _stopped = true;
+                    }
+
+                    try
+                    {
+                        Sync();
+                    }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                    {
+                        // A copy that cannot be deleted now is listed as recoverable at the next start.
+                    }
+                }));
+            }
         }
     }
 }

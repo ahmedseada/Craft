@@ -5,6 +5,56 @@ static class Craft.Abstractions.AccentColors
   const System.UInt32 Teal = 4284467636
   static System.Boolean TryParse(System.ReadOnlySpan<System.Char> text, out System.UInt32 argb)
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+static class Craft.Abstractions.ActivityKinds
+  const System.String Agent = agent
+  const System.String Build = build
+  const System.String Command = command
+  const System.String Download = download
+  const System.String General = general
+  const System.String Generation = generation
+  const System.String Indexing = indexing
+  const System.String ModelLoad = model-load
+  const System.String Plugin = plugin
+  const System.String Save = save
+  const System.String Training = training
+  const System.String Voice = voice
+struct Craft.Abstractions.ActivityRate : System.IEquatable<Craft.Abstractions.ActivityRate>
+  System.Boolean Equals(Craft.Abstractions.ActivityRate other)
+  System.Boolean Equals(System.Object obj)
+  System.Double Value { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.String Unit { get; init; }
+  System.Void Deconstruct(out System.Double Value, out System.String Unit)
+  ctor(System.Double Value, System.String Unit)
+sealed class Craft.Abstractions.ActivitySnapshot : System.IEquatable<Craft.Abstractions.ActivitySnapshot>
+  Craft.Abstractions.ActivityRate? Rate { get; init; }
+  Craft.Abstractions.ActivitySnapshot <Clone>$()
+  Craft.Abstractions.ActivityState State { get; init; }
+  System.Boolean CanRetry { get; init; }
+  System.Boolean Cancellable { get; init; }
+  System.Boolean Equals(Craft.Abstractions.ActivitySnapshot other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Keep { get; init; }
+  System.DateTimeOffset Started { get; init; }
+  System.Double? Fraction { get; init; }
+  System.Int32 GetHashCode()
+  System.Int64 Id { get; init; }
+  System.String Error { get; init; }
+  System.String Kind { get; init; }
+  System.String Source { get; init; }
+  System.String Text { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.TimeSpan Elapsed { get; init; }
+  System.TimeSpan? Left { get; init; }
+  System.Void Deconstruct(out System.Int64 Id, out System.String Title, out System.String Kind, out System.String Source, out Craft.Abstractions.ActivityState State, out System.Double? Fraction, out System.String Text, out Craft.Abstractions.ActivityRate? Rate, out System.DateTimeOffset Started, out System.TimeSpan Elapsed, out System.Boolean Cancellable)
+  ctor(System.Int64 Id, System.String Title, System.String Kind, System.String Source, Craft.Abstractions.ActivityState State, System.Double? Fraction, System.String Text, Craft.Abstractions.ActivityRate? Rate, System.DateTimeOffset Started, System.TimeSpan Elapsed, System.Boolean Cancellable)
+enum Craft.Abstractions.ActivityState : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Cancelled = 3
+  Completed = 1
+  Failed = 2
+  Running = 0
 sealed class Craft.Abstractions.AiAnswer : System.IEquatable<Craft.Abstractions.AiAnswer>
   Craft.Abstractions.AiAnswer <Clone>$()
   Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
@@ -566,6 +616,15 @@ sealed class Craft.Abstractions.HoverInfo : System.IEquatable<Craft.Abstractions
   System.String ToString()
   System.Void Deconstruct(out System.String Text, out System.Int32 Start, out System.Int32 Length)
   ctor(System.String Text, System.Int32 Start, System.Int32 Length)
+interface Craft.Abstractions.IActivity : System.IDisposable
+  System.Boolean IsEnded { get; }
+  System.Int64 Id { get; }
+  System.String Kind { get; }
+  System.String Title { get; }
+  System.Threading.CancellationToken CancellationToken { get; }
+  System.Void Complete(System.String outcome = null)
+  System.Void Fail(System.String reason, System.Exception error = null, System.Action retry = null)
+  System.Void Report(System.Double? fraction, System.String text = null, Craft.Abstractions.ActivityRate? rate = null)
 interface Craft.Abstractions.IAiEventSink : Idrak.Abstraction.IKind
   System.Void Answered(Craft.Abstractions.AiAnswer answer)
   System.Void Judged(Craft.Abstractions.AiVerdict verdict)
@@ -582,6 +641,13 @@ interface Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPane
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
   System.Void RemoveChip(System.String id)
   event System.EventHandler<Craft.Abstractions.ConversationChangedEventArgs> ConversationChanged
+interface Craft.Abstractions.IEditorActivities
+  Craft.Abstractions.IActivity Start(System.String title, System.String kind = "general", System.Boolean cancellable = false, System.Threading.CancellationToken cancellationToken = null, System.Boolean keep = true)
+  System.Boolean Cancel(System.Int64 id)
+  System.Boolean Retry(System.Int64 id)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Recent { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Running { get; }
+  event System.EventHandler Changed
 interface Craft.Abstractions.IEditorCanvas
   System.Void DrawLine(System.Single x1, System.Single y1, System.Single x2, System.Single y2, System.UInt32 argb, System.Single thickness)
   System.Void DrawText(System.String text, System.Single x, System.Single top, in Craft.Abstractions.TextStyle style)
@@ -599,7 +665,10 @@ interface Craft.Abstractions.IEditorDocument
   System.String FilePath { get; }
   System.String LanguageName { get; }
 interface Craft.Abstractions.IEditorHost
+  Craft.Abstractions.IEditorActivities Activities { get; }
   Craft.Abstractions.IEditorDocument ActiveDocument { get; }
+  Craft.Abstractions.IEditorNotification Notify(System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
+  Craft.Abstractions.IEditorNotification ShowStatus(System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
   Craft.Abstractions.IEditorProgress StartProgress(System.String title)
   Craft.Abstractions.IEditorTerminals Terminals { get; }
   Craft.Abstractions.IPluginSettings Settings { get; }
@@ -621,6 +690,7 @@ interface Craft.Abstractions.IEditorHost
   System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispatch(System.Action action)
+  System.Void Dispatch(System.String label, System.Action action)
   System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
   System.Void Record(System.String metric, System.Double value, System.String unit)
   System.Void ShowPanel(System.String panelId)
@@ -634,6 +704,9 @@ interface Craft.Abstractions.IEditorHost
 interface Craft.Abstractions.IEditorInputSink
   System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Void OnText(System.String text)
+interface Craft.Abstractions.IEditorNotification : System.IDisposable
+  System.Int64 Id { get; }
+  System.Void Update(System.String text, Craft.Abstractions.NotificationSeverity? severity = null)
 interface Craft.Abstractions.IEditorPanel
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
   System.String Id { get; }
@@ -819,6 +892,7 @@ enum Craft.Abstractions.KeyModifiers : System.IComparable, System.IConvertible, 
   None = 0
   Shift = 1
 sealed class Craft.Abstractions.LanguageOpenContext : System.IEquatable<Craft.Abstractions.LanguageOpenContext>
+  Craft.Abstractions.IEditorActivities Activities { get; init; }
   Craft.Abstractions.LanguageOpenContext <Clone>$()
   Craft.Abstractions.LanguageSettings Settings { get; init; }
   System.Boolean Equals(Craft.Abstractions.LanguageOpenContext other)
@@ -988,6 +1062,39 @@ sealed class Craft.Abstractions.ModelSettingField : System.IEquatable<Craft.Abst
   System.String Variable { get; init; }
   System.Void Deconstruct(out System.String Variable, out System.String Label, out System.String Placeholder)
   ctor(System.String Variable, System.String Label, System.String Placeholder = null)
+sealed class Craft.Abstractions.NoActivities : Craft.Abstractions.IEditorActivities
+  Craft.Abstractions.IActivity Start(System.String title, System.String kind = "general", System.Boolean cancellable = false, System.Threading.CancellationToken cancellationToken = null, System.Boolean keep = true)
+  System.Boolean Cancel(System.Int64 id)
+  System.Boolean Retry(System.Int64 id)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Recent { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Running { get; }
+  ctor()
+  event System.EventHandler Changed
+  static Craft.Abstractions.NoActivities Instance { get; }
+sealed class Craft.Abstractions.NoNotification : Craft.Abstractions.IEditorNotification, System.IDisposable
+  System.Int64 Id { get; }
+  System.Void Dispose()
+  System.Void Update(System.String text, Craft.Abstractions.NotificationSeverity? severity = null)
+  ctor()
+  static Craft.Abstractions.NoNotification Instance { get; }
+sealed class Craft.Abstractions.NotificationAction : System.IEquatable<Craft.Abstractions.NotificationAction>
+  Craft.Abstractions.NotificationAction <Clone>$()
+  System.Boolean Dismisses { get; init; }
+  System.Boolean Equals(Craft.Abstractions.NotificationAction other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Primary { get; init; }
+  System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> RunAsync { get; init; }
+  System.Int32 GetHashCode()
+  System.String Label { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Label, out System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> RunAsync, out System.Boolean Primary, out System.Boolean Dismisses)
+  ctor(System.String Label, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> RunAsync, System.Boolean Primary = false, System.Boolean Dismisses = true)
+enum Craft.Abstractions.NotificationSeverity : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Error = 3
+  Information = 0
+  Question = 4
+  Success = 1
+  Warning = 2
 sealed class Craft.Abstractions.PanelAction : System.IEquatable<Craft.Abstractions.PanelAction>
   Craft.Abstractions.PanelAction <Clone>$()
   System.Boolean Equals(Craft.Abstractions.PanelAction other)

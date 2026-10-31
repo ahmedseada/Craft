@@ -21,6 +21,123 @@ enum Craft.Editor.Abstractions.UnsavedChoice : System.IComparable, System.IConve
   Cancel = 2
   Discard = 1
   Save = 0
+sealed class Craft.Editor.Activities.ActivityCenter : Craft.Abstractions.IEditorActivities
+  Craft.Abstractions.IActivity Start(System.String title, System.String kind = "general", System.Boolean cancellable = false, System.Threading.CancellationToken cancellationToken = null, System.Boolean keep = true)
+  Craft.Abstractions.IActivity Start(System.String title, System.String kind, System.Boolean cancellable, System.Threading.CancellationToken cancellationToken, System.Boolean keep, System.String source)
+  System.Boolean Cancel(System.Int64 id)
+  System.Boolean Retry(System.Int64 id)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Recent { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Running { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Visible { get; }
+  System.Int32 ChangedCount { get; }
+  System.Int32 Keep { get; }
+  System.TimeSpan Minimum { get; }
+  System.Void EndAll(System.String source, System.String why)
+  ctor(System.Action<System.Action> dispatch = null, Craft.Core.CraftOptions options = null, System.TimeProvider time = null)
+  event System.EventHandler Changed
+  event System.EventHandler<Craft.Abstractions.ActivitySnapshot> Ended
+static class Craft.Editor.Activities.ActivityText
+  const System.String Cancel = Cancel
+  const System.String OpenLog = Open log
+  const System.String Retry = Retry
+  static System.String Duration(System.TimeSpan time)
+  static System.String Outcome(Craft.Abstractions.ActivitySnapshot activity)
+  static System.String Progress(Craft.Abstractions.ActivitySnapshot activity)
+  static System.String Stall(System.TimeSpan duration, System.String label)
+  static System.String StatusLine(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running)
+sealed class Craft.Editor.Activities.NotificationCenter : System.IDisposable
+  Craft.Abstractions.IEditorNotification Post(System.String source, System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
+  Craft.Abstractions.IEditorNotification ShowStatus(System.String source, System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
+  System.Action OpenLog { get; set; }
+  System.Boolean Dismiss(System.Int64 id)
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> Entries { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> StatusOf(System.String source)
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationGroup> Groups { get; }
+  System.Int32 DismissAll(System.String source = null)
+  System.Int32 Keep { get; }
+  System.Int32 Unseen { get; }
+  System.Threading.Tasks.Task RunAsync(System.Int64 id, Craft.Abstractions.NotificationAction action, System.Threading.CancellationToken cancellationToken = null)
+  System.Void AddEnded(System.String source, System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity, System.TimeSpan duration)
+  System.Void Dispose()
+  System.Void MarkSeen()
+  System.Void RemoveStatuses(System.String source)
+  const System.String WatchdogSource = watchdog
+  ctor(Craft.Editor.Activities.ActivityCenter activities, System.Action<System.Action> dispatch = null, Craft.Core.CraftOptions options = null, System.TimeProvider time = null)
+  event System.EventHandler Changed
+  event System.EventHandler<Craft.Editor.Activities.NotificationEntry> Toast
+sealed class Craft.Editor.Activities.NotificationEntry : System.IEquatable<Craft.Editor.Activities.NotificationEntry>
+  Craft.Abstractions.ActivitySnapshot Activity { get; init; }
+  Craft.Abstractions.NotificationSeverity Severity { get; init; }
+  Craft.Editor.Activities.NotificationEntry <Clone>$()
+  Craft.Editor.Activities.NotificationKind Kind { get; init; }
+  System.Boolean Equals(Craft.Editor.Activities.NotificationEntry other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsRunning { get; }
+  System.Boolean Seen { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> Actions { get; init; }
+  System.DateTimeOffset Time { get; init; }
+  System.Int32 GetHashCode()
+  System.Int64 Id { get; init; }
+  System.String Source { get; init; }
+  System.String Text { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.TimeSpan? Duration { get; init; }
+  System.Void Deconstruct(out System.Int64 Id, out Craft.Editor.Activities.NotificationKind Kind, out System.String Source, out System.String Title, out System.String Text, out Craft.Abstractions.NotificationSeverity Severity, out System.DateTimeOffset Time)
+  ctor(System.Int64 Id, Craft.Editor.Activities.NotificationKind Kind, System.String Source, System.String Title, System.String Text, Craft.Abstractions.NotificationSeverity Severity, System.DateTimeOffset Time)
+sealed class Craft.Editor.Activities.NotificationGroup : System.IEquatable<Craft.Editor.Activities.NotificationGroup>
+  Craft.Editor.Activities.NotificationGroup <Clone>$()
+  System.Boolean Equals(Craft.Editor.Activities.NotificationGroup other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> Entries { get; init; }
+  System.Int32 GetHashCode()
+  System.String Source { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Source, out System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> Entries)
+  ctor(System.String Source, System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> Entries)
+enum Craft.Editor.Activities.NotificationKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Activity = 0
+  Message = 1
+  Status = 2
+sealed class Craft.Editor.Activities.UiStall : System.IEquatable<Craft.Editor.Activities.UiStall>
+  Craft.Editor.Activities.UiStall <Clone>$()
+  System.Boolean Equals(Craft.Editor.Activities.UiStall other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> RecentWork { get; init; }
+  System.DateTimeOffset At { get; init; }
+  System.Int32 FullCollections { get; init; }
+  System.Int32 GetHashCode()
+  System.String Label { get; init; }
+  System.String ReportPath { get; init; }
+  System.String ToString()
+  System.TimeSpan CollectionPause { get; init; }
+  System.TimeSpan Duration { get; init; }
+  System.Void Deconstruct(out System.DateTimeOffset At, out System.TimeSpan Duration, out System.String Label, out System.Collections.Generic.IReadOnlyList<System.String> RecentWork)
+  ctor(System.DateTimeOffset At, System.TimeSpan Duration, System.String Label, System.Collections.Generic.IReadOnlyList<System.String> RecentWork)
+sealed class Craft.Editor.Activities.UiStallReports
+  System.Int32 Written { get; }
+  System.String Write(Craft.Editor.Activities.UiStall stall)
+  ctor(Craft.Core.CraftOptions options)
+  static System.String Format(Craft.Editor.Activities.UiStall stall)
+sealed class Craft.Editor.Activities.UiWatchdog : System.IDisposable
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.UiStall> Stalls { get; }
+  System.Func<Craft.Editor.Activities.UiStall, System.String> WriteReport { get; init; }
+  System.Int64 StallCount { get; }
+  System.Int64 Ticks { get; }
+  System.TimeSpan Worst { get; }
+  System.Void Dispose()
+  System.Void Start()
+  ctor(System.Action<System.Action> dispatch, Craft.Editor.Activities.UiWorkLabels labels, System.Int32 tickMilliseconds, System.Int32 stallMilliseconds)
+  event System.EventHandler<Craft.Editor.Activities.UiStall> Stalled
+sealed class Craft.Editor.Activities.UiWorkLabels
+  Craft.Editor.Activities.UiWorkLabels.Scope Enter(System.String label)
+  System.Collections.Generic.IReadOnlyList<System.String> Recent()
+  System.String Current { get; }
+  System.ValueTuple<System.String, System.TimeSpan> Last { get; }
+  System.Void Run(System.String label, System.Action action)
+  ctor()
+struct Craft.Editor.Activities.UiWorkLabels.Scope : System.IDisposable
+  System.Void Dispose()
 struct Craft.Editor.BracketMatch : System.IEquatable<Craft.Editor.BracketMatch>
   System.Boolean Equals(Craft.Editor.BracketMatch other)
   System.Boolean Equals(System.Object obj)
@@ -88,14 +205,21 @@ sealed class Craft.Editor.EditorFind
   System.Int32 ReplaceAll(System.String replacement)
   System.String Query { get; set; }
 sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Editor.Abstractions.IEditorKeyHandler, System.IDisposable
+  Craft.Abstractions.IEditorActivities Activities { get; }
   Craft.Abstractions.IEditorDocument ActiveDocument { get; }
   Craft.Abstractions.IEditorDocument Open(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, System.String languageName = null)
+  Craft.Abstractions.IEditorNotification Notify(System.String source, System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions)
+  Craft.Abstractions.IEditorNotification Notify(System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
+  Craft.Abstractions.IEditorNotification ShowStatus(System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
   Craft.Abstractions.IEditorProgress StartProgress(System.String title)
   Craft.Abstractions.IEditorTerminals Terminals { get; set; }
   Craft.Abstractions.IPluginSettings Settings { get; }
   Craft.Abstractions.SelectionState Selection { get; }
   Craft.Core.CraftOptions Options { get; }
   Craft.Editor.Abstractions.IEditorPresenter Presenter { get; set; }
+  Craft.Editor.Activities.ActivityCenter ActivityCenter { get; }
+  Craft.Editor.Activities.NotificationCenter Notifications { get; }
+  Craft.Editor.Activities.UiWorkLabels Labels { get; }
   System.Boolean Deactivate(System.String name)
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
   System.Boolean Select(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
@@ -124,6 +248,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
   System.Void Close(Craft.Abstractions.IEditorDocument document)
   System.Void Dispatch(System.Action action)
+  System.Void Dispatch(System.String label, System.Action action)
   System.Void Dispose()
   System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
   System.Void Record(System.String metric, System.Double value, System.String unit)
@@ -236,7 +361,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Void ResetTelemetry()
   System.Void Select(System.Int32 anchor, System.Int32 caret)
   System.Void UpdateViewport(System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight)
-  ctor(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, Craft.Core.CraftOptions options, Craft.Abstractions.ITheme theme, Craft.Abstractions.ITextMeasurer measurer, Craft.Editor.Abstractions.IEditorClipboard clipboard, System.TimeProvider time = null, System.String workspaceRoot = null)
+  ctor(Craft.Abstractions.ITextDocument document, Craft.Abstractions.ILanguage language, Craft.Core.CraftOptions options, Craft.Abstractions.ITheme theme, Craft.Abstractions.ITextMeasurer measurer, Craft.Editor.Abstractions.IEditorClipboard clipboard, System.TimeProvider time = null, System.String workspaceRoot = null, Craft.Abstractions.IEditorActivities activities = null)
   event System.EventHandler CaretMoved
   event System.EventHandler ContentSizeChanged
   event System.EventHandler DiagnosticsChanged
@@ -259,6 +384,7 @@ struct Craft.Editor.EditorPoint : System.IEquatable<Craft.Editor.EditorPoint>
   System.Void Deconstruct(out System.Single X, out System.Single Y)
   ctor(System.Single X, System.Single Y)
 sealed class Craft.Editor.EditorProgressItem : Craft.Abstractions.IEditorProgress, System.IDisposable
+  Craft.Abstractions.IActivity Activity { get; }
   System.Boolean IsDone { get; }
   System.Double? Fraction { get; }
   System.String Message { get; }
@@ -704,6 +830,7 @@ sealed class Craft.Editor.Terminal.TerminalInstance : System.IDisposable
   System.String Title { get; }
   System.String WorkingDirectory { get; }
   System.Threading.Tasks.Task Completion { get; }
+  System.Threading.Tasks.Task Writes { get; }
   System.Threading.Tasks.Task<System.Int32> Exited { get; }
   System.Void Clear()
   System.Void Dispose()

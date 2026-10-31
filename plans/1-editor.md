@@ -693,7 +693,7 @@ Phases are a dependency order, not a barrier. At most three agents work at a tim
 | E5 | `Craft.CSharp`, semantic layer: `WorkspaceReaders` ("csproj", "loose"), semantic colours, diagnostics as squiggles and a list, completion, signature help, hover, go to definition, format document. **Built (2026-10-31, "E5 as built" below), semantic colours and source generators included; Craft's own solution compiles with 0 errors in the reader's model (the bench and the `Semantic` tests). Left: the window on Windows (the owner's run).** | Diagnostics and completion on Craft's own solution; memory and cold start measured on Windows and written here. | E3 (parallel with E4) |
 | D | **Built (2026-10-31, "D as built" below); left: the window beside the design on Windows (the owner's run).** The approved design ("The approved design" above): the shell's look and layout from `docs/design/Main.dc.html` (title bar and menus, search, model chip, activity rail, explorer with the Roslyn card, tabs, breadcrumb, bottom panel, status bar), the theme tokens and fonts, the Plug-ins and Models pages; later screens follow their design files. | The window beside the design at 1440x900 and narrow, the owner the judge; contrast checked; the keystroke and paint numbers unchanged. | E4, K (runs beside A1; A1 and A2 build their screens from the same files) |
 | T | **Built (2026-10-31, "T as built" below); left: the owner's run on Windows (ConPTY: `dotnet build` in it, a resize, two terminals, a file-only start in the home folder).** The terminal ("The terminal" above): the Terminal tab, the user's shell over ConPTY behind `ITerminalHost`, Craft's own VT grid, several terminals; it starts in the open folder, else (a file only) in the shell's default path, `CRAFT_TERMINAL_CWD` overriding. | The VT tests pass; the start folder is right in the three cases; the owner builds in it on Windows. | D (the bottom panel), K |
-| U | The UI never freezes; every operation shows ("The UI never freezes" above): the notification centre (bell, window, toasts for what needs the user), `IEditorHost.Activities` and the status bar's activity list with cancel, every long operation reporting, the UI watchdog with stall reports, the audit of every UI-thread path and the build check against synchronous waits. | The watchdog stays silent through typing, a model load, an agent run and a terminal flood, and reports a deliberate block; the owner loads a 7B model and runs the agent with the window answering throughout. | the owner's request (first in the next free slot) |
+| U | **Built (2026-10-31, "U as built" below); left: the owner's 7B load and agent run on Windows with the window answering, and the worst stall written here.** The UI never freezes; every operation shows ("The UI never freezes" above): the notification centre (bell, window, toasts for what needs the user), `IEditorHost.Activities` and the status bar's activity list with cancel, every long operation reporting, the UI watchdog with stall reports, the audit of every UI-thread path and the build check against synchronous waits. | The watchdog stays silent through typing, a model load, an agent run and a terminal flood, and reports a deliberate block; the owner loads a 7B model and runs the agent with the window answering throughout. | the owner's request (first in the next free slot) |
 | U2 | Panels and layout ("Panels and layout" above): settings and the Models page as tabs (the menus never covered), the tree following the disk, the right-hand side panel gone (its content in the notification centre and the Models page), every panel collapsible and resizable with sizes kept. | The owner's five points checked on Windows. | the owner's request (beside U) |
 | A0 | Idrak: the FIM contract, registry and suite; the coder families already in `Idrak.Text.Plugins` register their formats; the reuse and cancellation bench, with fixes. | The bench shows prefix reuse, a stop within one token of cancellation and flat memory over a thousand requests. | the owner's go (parallel with E1-E2) |
 | K | **Built (2026-10-31, "K as built" below).** The plug-in contracts and kit ("Plug-ins first" above): `IEditorPlugin`, `IEditorHost`, commands and key bindings, status bar items, panels, plug-in settings, `plugin.json` and contract versioning, the sample plug-in, the template, `docs/plugins.md`. | The sample plug-in, built outside Craft's solution against `Craft.Abstractions` alone, dropped into `plugins/`, adds its command and status item; removed, the app runs without it. | E3, and the owner's first try of the Windows version; E4's shell is built on it |
@@ -1655,6 +1655,106 @@ No Idrak gap was met: R0's `PreferencePairSources`, `PreferencePairs.Build`, `Pr
   they are); the consent screens are the host's question card (a page of their own when phase U brings the activities
   contract); the agent's episodes carry the changed files, not their diffs; the panel's progress is the status line until
   phase U; training loads its own copy of the model beside the AI plug-in's.
+
+## U as built (2026-10-31)
+
+**Contracts (`Craft.Abstractions`).** `IEditorHost.Activities` (`IEditorActivities`: `Start(title, kind, cancellable,
+token, keep)` gives an `IActivity` with `Report(fraction or null, text, ActivityRate)`, `Complete(outcome)`,
+`Fail(reason, error, retry)`, its `CancellationToken`; `Running`, `Recent`, `Cancel(id)`, `Retry(id)`, `Changed`;
+`ActivityKinds`: download, model-load, agent, generation, training, indexing, build, save, command, plugin, voice;
+`NoActivities` for a host without them). `IEditorHost.Notify(title, text, severity, actions)` and
+`IEditorHost.ShowStatus(title, text, severity, actions)` (`IEditorNotification` updates in place, disposed takes it
+away; `NotificationSeverity`, `NotificationAction`). `IEditorHost.Dispatch(label, action)`. `LanguageOpenContext.Activities`
+for a language's long work. All default members: a third-party host or plug-in built before U still runs.
+
+**Craft.Editor (`Craft.Editor.Activities`, headless).** `ActivityCenter` (one short lock, no work under it; the UI hears
+`Changed` through the dispatcher at most once per `CRAFT_ACTIVITY_FRAME_MS`, 16; an activity ending within
+`CRAFT_ACTIVITY_MIN_MS`, 300, never shows nor is kept, a failure always is; the time left from the share and the time
+so far; Cancel through `CancelAsync`, so the work's token callbacks never run on the UI thread). `NotificationCenter`
+(running operations live, sticky status lines, ended operations with outcome and time taken, failures with Retry and
+Open log, messages with their buttons; grouped by source; `CRAFT_NOTIFICATIONS_KEEP`, 200; the bell's count is what is
+unseen, never a status line; `Toast` for a failure or a question only; `StatusOf(source)` and `ShowStatus` are what U2
+moves the side panel into). `UiWorkLabels` (every host dispatch runs under a label, a plug-in's as "plug-in NAME" or
+"NAME: label"; the editor view labels its keys, typed text, pointer and paint, a key's label made once per key) and
+`UiWatchdog` (its own thread posts a tick every `CRAFT_UI_WATCHDOG_MS`, 100; while a tick waits past
+`CRAFT_UI_STALL_MS`, 200, the running label is taken; the stall is kept with the full collections and the runtime's
+pause during it) with `UiStallReports` (a `stall-*.txt` under `CRAFT_CRASH_FOLDER`, at most `CRAFT_UI_STALL_REPORTS`, 20,
+a session). `ActivityText` words the bar and the centre. The host: `ActivityCenter`, `Notifications`, `Labels`;
+`StartProgress` is an activity now; a save is an activity ("Saving NAME"); a plug-in's running activities end and its
+status lines go when it is deactivated.
+
+**The window (Craft.Maui).** The status bar: the newest running activity (a spinner, or a bar when its share is known;
+its title, share, rate, time left, text, "+N"), a tap opens the centre; the bell with its count at the right.
+`NotificationCenterView` (the centre as a card over the body's corner: groups with Dismiss, rows kept per entry and
+updated in place so a progress report redraws a label, Cancel, Retry, Open log, the plug-ins' buttons, Clear all),
+`ToastView` (failures and questions, `CRAFT_TOAST_MS`, 6000; Show opens the centre), `View: Show or hide the
+notifications` (craft.notifications). A stall shows in the status bar ("The window was blocked 3.2 s by …"), Output,
+the centre (watchdog, with Open report), and the telemetry tab (`ui.stall`). The plug-ins' load results (with their
+load time) and activation failures, and settings that were not taken, are notifications and toasts now, not the
+platform's message boxes (the owner's note 10, for those). All styled from the palette's tokens; no input of its own
+(note 12 adds nothing).
+
+**Every long operation reports.** A model's download and load (`AiModels` starts an activity per lease, fed by the
+provider's stages: resolving, the 500 ms load ticker, ready; a failure with Retry; `LocalModelProvider` also turns every
+stage into its `Status`, so the status bar's model text and the chip show the device in use once loaded, whoever asked
+for the lease: the owner's note 6, the display half), the load command (cancellable), agent runs (turn, tokens, tok/s,
+Cancel; the folder copy's files), chat replies (tokens, tok/s, Cancel), inline completion (shown while it runs, never
+kept), code actions and voice (their progress), training rounds and the learning plug-in's test runs (R: Cancel stops
+the round), the C# workspace's build and a long diagnostics pass (the first compilation, the source generators), saves,
+the approve-each sandbox's commands (the last output line, Cancel; a status line of the last command). P6's indexing
+and P9's reporter bridge are not on main (P batch 2 is on wip/p-batch-2); they report through the same contract when
+they land (P9: an `IProgressReporterKind` whose reporter is an `IActivity`).
+
+**The audit: every UI-thread path found, and its fix.**
+1. `ModelHost` loaded under its lock and the Models panel read `Loaded` on the UI thread (Idrak d99c89c, before U).
+2. The plug-ins' Idrak libraries (`IdrakInPlugins.IncludeLibraries`: every Idrak*.dll loaded and its built-ins
+   registered) ran in the AI and voice plug-ins' activation on the UI thread: now at the plug-in's load at start-up,
+   before the window (`CraftPlugins`), so activation returns at once.
+3. `AiModels` called `EnsureIncluded` under its lock on the calling (UI) thread before a lease: now inside the lease's
+   `Task.Run`.
+4. The chat posted one dispatch per token, each rebuilding the reply's text (quadratic on the UI thread for a long
+   reply): the pieces are gathered and posted once per UI turn, in order with the tool rows. Its file is written on the
+   thread pool. The chat's failure was logged from the pool thread (the log is the UI thread's): now through the dispatcher.
+5. The agent deleted its working copy (a recursive delete of the folder's copy) on the UI thread at start, Clear,
+   Discard all and close; read the copy's files for each edited file's counts on the UI thread; read and wrote them in
+   the review: all on the thread pool now.
+6. The terminal wrote typed bytes, pastes and the screen's answers to the shell synchronously, the answers while the
+   parser held the screen's lock: a shell not reading (a full pipe) blocked the UI thread or the paint. The writes go
+   through a queue to a writer loop, in order.
+7. The recent list wrote its file on every file or folder opened, on the UI thread: serialized there, written on the
+   thread pool in order (`FlushAsync` for the tests and the close).
+8. `RecoveryStore` waited on an async write (`GetAwaiter().GetResult()`) on the pool, and a tab's close deleted the copy
+   on the UI thread, waiting for a copy being written: a synchronous atomic write (`TextDocument.WriteAtomically`) on
+   the pool, and the close's delete off the closing thread (`WriteNowAsync` awaits it); the store's own dispose still
+   deletes at once. (The store is not used by the app yet.)
+9. `CSharpWorkspace`: a session's leave and a memory release waited on the mutation gate (`_mutate.Wait()`) on a pool
+   thread for as long as a build: `LeaveAsync` and an awaited release; the sync `Leave` and `Release` stay for the
+   bench and the tests.
+10. The watchdog's own dispose joined its thread on the UI thread: it only signals now.
+11. Read and kept as they are, with why: the editor's bounded parse wait (`WaitUntilClassified`, `CRAFT_PARSE_WAIT_MS`
+    8, the frame's own budget); the continuations' `.Result` on completed tasks; the C# parser's worker
+    (`_resume.Wait`, `Monitor.Wait`), off the UI thread; the learning trainer's sync waits, on its training thread.
+The build check: `Ui.TheUiSideHasNoSynchronousWait` scans `src/Craft.Maui`, `src/Craft.App`, `src/Craft.Ai`,
+`src/Craft.Editor` and `plugins/*` for `.Result`, `.Wait(`, `.WaitOne(`, `.WaitAll(`, `GetAwaiter().GetResult()`,
+`Monitor.Wait(`, `Thread.Sleep(` and `SpinWait.SpinUntil(` outside an allow-list with reasons, failing with file:line
+(and on an allowed line that is gone).
+
+**Checks (headless, here).** `Activities` (6), `Notifications` (2), `Ui` (3): reports from four threads coalesced into
+one or two UI updates; kept outcomes, Retry once, Cancel reaching the work's token, the minimum; the bar's words; the
+host's progress and saves as activities; a scripted session of all eleven kinds listed newest first with "+10" and each
+cancelled; the centre's running, status, finished and failed entries grouped by source, Open log and Retry, the bell's
+count, toasts only for the failure and the question, the keep limit, a plug-in's message, status and operation under
+its name and taken back on deactivation; the watchdog reporting a deliberate 700 ms block by its label with a report
+file; the watchdog silent (threshold 250 ms on the shared test machine) through 600 typed keys, a fake 7B load's 200
+reports, a fake agent run's 100 and a 4 MB terminal flood parsed under the screen's lock while the UI reads it.
+
+**Windows-only, not compiled here.** Nothing under `Platforms/Windows` or `Craft.App` changed. `Craft.Maui` builds for
+net10.0 here; its Windows target (the same sources) is the owner's build.
+
+**Left.** The owner's run: a 7B download and load with the window answering, the agent beside it, the worst stall
+from the telemetry tab (`ui.stall`) written here; a deliberate stall's report. P6's and P9's reporting when P batch 2
+lands. The owner's notes 6 (the GPU actually used: Idrak.Gpu in each model-loading plug-in), 10 (a Craft dialog for the
+remaining message boxes, questions and the About box) and 12 (the doubled inputs) beyond what U covers.
 
 ## Commands for the owner (once a phase is built)
 

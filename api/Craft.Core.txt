@@ -14,6 +14,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Collections.Generic.IReadOnlyList<System.String> TerminalEditorCommands { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceReaders { get; init; }
+  System.Int32 ActivityFrameMilliseconds { get; init; }
+  System.Int32 ActivityMinimumMilliseconds { get; init; }
   System.Int32 AutosaveSeconds { get; init; }
   System.Int32 BottomMarginLines { get; init; }
   System.Int32 BracketScanLines { get; init; }
@@ -30,6 +32,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 GutterPaddingCells { get; init; }
   System.Int32 HostLogLines { get; init; }
   System.Int32 HoverDelayMilliseconds { get; init; }
+  System.Int32 NotificationsKeep { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
   System.Int32 ProblemsListLimit { get; init; }
   System.Int32 ProposalPreviewCharacters { get; init; }
@@ -42,6 +45,10 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 TerminalScrollback { get; init; }
+  System.Int32 ToastMilliseconds { get; init; }
+  System.Int32 UiStallMilliseconds { get; init; }
+  System.Int32 UiStallReports { get; init; }
+  System.Int32 UiWatchdogMilliseconds { get; init; }
   System.Int32 UndoGroupMilliseconds { get; init; }
   System.Single BottomPanelHeight { get; init; }
   System.Single CaretWidth { get; init; }
@@ -161,6 +168,7 @@ sealed class Craft.Core.Plugins.PluginLoadResult : System.IEquatable<Craft.Core.
   System.String Summary { get; }
   System.String ToString()
   System.String Version { get; }
+  System.TimeSpan LoadTime { get; init; }
   System.Void Deconstruct(out System.String Name, out System.String Folder, out System.Boolean Loaded, out System.String Error)
   ctor(System.String Name, System.String Folder, System.Boolean Loaded, System.String Error)
 sealed class Craft.Core.Plugins.PluginManifest : System.IEquatable<Craft.Core.Plugins.PluginManifest>
@@ -256,6 +264,8 @@ sealed class Craft.Core.Workspaces.RecentList
   System.Int32 Limit { get; set; }
   System.Int32 RemoveMissing()
   System.String FilePath { get; }
+  System.String WriteProblem { get; }
+  System.Threading.Tasks.Task FlushAsync()
   System.Void Add(System.String path, Craft.Core.Workspaces.RecentKind kind, System.DateTimeOffset? opened = null)
   System.Void Clear()
   System.Void Save()

@@ -40,6 +40,11 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     private readonly Dictionary<ToolCall, int> _toolRows = new(ReferenceEqualityComparer.Instance);
     private readonly StringBuilder _segment = new();
     private readonly StringBuilder _reply = new();
+    private readonly Lock _incomingGate = new();
+    private readonly StringBuilder _incoming = new();
+    private int _incomingGeneration;
+    private bool _incomingPending;
+    private Task _writes = Task.CompletedTask;
     private CancellationTokenSource? _running;
     private int _generation;
     private int _segmentIndex = -1;
@@ -152,7 +157,9 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         _toolRows.Clear();
         IsBusy = true;
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = Task.Run(() => StreamAsync(messages, user, settings, generation, source.Token, done), CancellationToken.None);
+        // Phase U: the reply shows in the status bar (tokens, tok/s) with Cancel, which stops it as Stop does.
+        var activity = Host.Activities.Start("Chat: " + Cut(message, 48), ActivityKinds.Generation, cancellable: true, source.Token);
+        _ = Task.Run(() => StreamAsync(messages, user, settings, generation, activity, done), CancellationToken.None);
         LastReply = done.Task;
         return done.Task;
     }
@@ -267,12 +274,14 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         ? new AiVerdict(answer.Id, AiVerdicts.Accepted) { Document = document, Start = edit.Start, Length = edit.Text.Length }
         : new AiVerdict(answer.Id, AiVerdicts.Rejected) { Document = document, Kept = answer.Before is { Length: > 0 } before ? before : null };
 
-    private async Task StreamAsync(List<ChatMessage> messages, ChatMessage user, AiSettings settings, int generation, CancellationToken token, TaskCompletionSource done)
+    private async Task StreamAsync(List<ChatMessage> messages, ChatMessage user, AiSettings settings, int generation, IActivity activity, TaskCompletionSource done)
     {
         int tokens = 0;
         var watch = new Stopwatch();
+        var token = activity.CancellationToken;
         try
         {
+            activity.Report(null, "waiting for the model");
             var lease = await _models.ChatAsync(token).ConfigureAwait(false);
             var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot chat.");
             Post(() =>
@@ -293,28 +302,85 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
                 string piece = chunk.Delta.Content;
                 if (piece.Length > 0)
                 {
-                    Post(() => Append(generation, piece));
+                    Queue(generation, piece);
                 }
+
+                double so = watch.Elapsed.TotalSeconds;
+                activity.Report(null, string.Create(CultureInfo.InvariantCulture, $"{tokens:N0} tokens"), so > 0 ? new ActivityRate(tokens / so, "tok/s") : null);
             }
 
             double seconds = watch.Elapsed.TotalSeconds;
             Post(() => Finish(generation, user, Rate(tokens, seconds), null));
+            activity.Complete(Rate(tokens, seconds));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             Post(() => Finish(generation, user, Rate(tokens, watch.Elapsed.TotalSeconds), "Stopped."));
+            activity.Dispose();
         }
 #pragma warning disable CA1031 // The failure is shown in the panel; the editor goes on.
         catch (Exception error)
 #pragma warning restore CA1031
         {
-            Post(() => Finish(generation, user, null, error.Message));
-            Host.Log(EditorLogLevel.Error, "The chat reply failed.", error);
+            Post(() =>
+            {
+                Finish(generation, user, null, error.Message);
+                Host.Log(EditorLogLevel.Error, "The chat reply failed.", error);       // the log is the UI thread's
+            });
+            activity.Fail("the reply failed: " + error.Message, error);
         }
         finally
         {
             Post(() => done.TrySetResult());
         }
+    }
+
+    // Any thread: the pieces since the last UI turn go in one dispatch (never one per token, which redrew the reply per token).
+    private void Queue(int generation, string piece)
+    {
+        bool schedule;
+        lock (_incomingGate)
+        {
+            if (generation != _incomingGeneration)
+            {
+                _incoming.Clear();                 // an older reply's pieces never reach this one
+                _incomingGeneration = generation;
+            }
+
+            _incoming.Append(piece);
+            schedule = !_incomingPending;
+            _incomingPending = true;
+        }
+
+        if (schedule)
+        {
+            Post(FlushIncoming);
+        }
+    }
+
+    // On the UI thread: the pieces queued so far, in order (a tool row or the end flushes first, so the text stays in order).
+    private void FlushIncoming()
+    {
+        string pieces;
+        int generation;
+        lock (_incomingGate)
+        {
+            pieces = _incoming.ToString();
+            generation = _incomingGeneration;
+            _incoming.Clear();
+            _incomingPending = false;
+        }
+
+        if (pieces.Length > 0)
+        {
+            Append(generation, pieces);
+        }
+    }
+
+    private static string Cut(string text, int width)
+    {
+        string line = text.ReplaceLineEndings(" ");
+        return line.Length <= width ? line : string.Concat(line.AsSpan(0, width - 1), "…");
     }
 
     private void Append(int generation, string piece)
@@ -339,6 +405,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
     private void ToolStarted(int generation, ToolCall call)
     {
+        FlushIncoming();
         if (generation != _generation)
         {
             return;
@@ -352,6 +419,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
     private void ToolEnded(int generation, ToolResult result)
     {
+        FlushIncoming();
         if (generation != _generation || !_toolRows.TryGetValue(result.Call, out int index))
         {
             return;
@@ -362,6 +430,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
     private void Finish(int generation, ChatMessage user, string? status, string? problem)
     {
+        FlushIncoming();
         if (generation != _generation)
         {
             return;
@@ -634,11 +703,17 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         {
             if (_history.Count == 0 && Entries.Count == 0)
             {
-                if (File.Exists(path))
+                _writes = _writes.ContinueWith(_ =>
                 {
-                    File.Delete(path);
-                }
-
+                    try
+                    {
+                        File.Delete(path);
+                    }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                    {
+                        // A file that cannot go now is read back next time: the conversation shows again, nothing is lost.
+                    }
+                }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
                 return;
             }
 
@@ -654,12 +729,27 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
                 entries.Add((JsonNode)new JsonObject { ["role"] = entry.Role.ToString(), ["text"] = entry.Text, ["detail"] = entry.Detail, ["language"] = entry.Language });
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, new JsonObject { ["version"] = 1, ["messages"] = messages, ["entries"] = entries }.ToJsonString());
+            // Serialized here (the entries are the UI thread's), written on the thread pool after the writes before it.
+            string json = new JsonObject { ["version"] = 1, ["messages"] = messages, ["entries"] = entries }.ToJsonString();
+            _writes = _writes.ContinueWith(_ =>
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllText(path, json);
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    Post(() => Host.Log(EditorLogLevel.Warning, $"The chat could not be kept in {path}.", error));
+                }
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             Host.Log(EditorLogLevel.Warning, $"The chat could not be kept in {path}.", error);
         }
     }
+
+    /// <summary>Completes when the conversation's file holds every change so far (the tests await it).</summary>
+    public Task Kept => _writes;
 }

@@ -331,9 +331,12 @@ public sealed partial class CSharpLanguageSession
         try
         {
             long start = Stopwatch.GetTimestamp();
+            // Phase U: a long pass (the first compilation, the source generators) shows while it runs, never kept.
+            using var activity = _context.Activities.Start($"C#: diagnostics of {(_context.FilePath is { } file ? Path.GetFileName(file) : "untitled")}", ActivityKinds.Build, keep: false);
             var document = await DocumentForAsync(snapshot, run.Token).ConfigureAwait(false);
             if (document is not null)
             {
+                activity.Report(null, CSharpPluginGenerators(document) ? "compiling, the source generators running" : "compiling");
                 var items = await CSharpSemantics.DiagnosticsAsync(document, run.Token).ConfigureAwait(false);
                 Volatile.Write(ref _diagnostics, new DiagnosticSet(snapshot, items));
                 Volatile.Write(ref _lastDiagnosticsTicks, Stopwatch.GetElapsedTime(start).Ticks);
@@ -390,6 +393,9 @@ public sealed partial class CSharpLanguageSession
         }
     }
 
+    // Whether the document's project runs source generators (the settings' switch and an analyzer reference).
+    private bool CSharpPluginGenerators(Document document) => _context.Settings.SourceGenerators && document.Project.AnalyzerReferences.Count > 0;
+
     /// <summary>
     /// The workspace's document at <paramref name="snapshot"/>: for the newest snapshot, the solution is brought to it
     /// (in one incremental step from the version it holds) and kept; for an older one, a solution made for this answer only.
@@ -409,7 +415,7 @@ public sealed partial class CSharpLanguageSession
             var workspace = Volatile.Read(ref _workspace);
             if (workspace is null)
             {
-                workspace = CSharpWorkspace.Enter(RootFor(), _context.Settings);
+                workspace = CSharpWorkspace.Enter(RootFor(), _context.Settings, _context.Activities);
                 Volatile.Write(ref _workspace, workspace);
             }
 
@@ -510,7 +516,7 @@ public sealed partial class CSharpLanguageSession
 
         if (Interlocked.Exchange(ref _workspace, null) is { } workspace)
         {
-            _ = Task.Run(() => workspace.Leave(this));
+            _ = workspace.LeaveAsync(this);                      // never blocks the closing (UI) thread on a running build
         }
     }
 }

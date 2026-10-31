@@ -338,6 +338,56 @@ public sealed class TextDocument : ITextDocument
         }
     }
 
+    /// <summary>
+    /// <see cref="WriteAtomicallyAsync"/> on the calling thread, which is never the UI's (the recovery copies are written
+    /// on the thread pool): the same temporary file, flush and move, without waiting on a task.
+    /// </summary>
+    internal static void WriteAtomically(ITextSnapshot snapshot, string path, Encoding encoding, bool byteOrderMark)
+    {
+        var folder = Path.GetDirectoryName(path) ?? throw new ArgumentException($"'{path}' has no folder.", nameof(path));
+        var temporary = Path.Combine(folder, "." + Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N")[..8] + ".craft-save");
+        var strict = Encoding.GetEncoding(encoding.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ReplacementFallback);
+        var encoder = strict.GetEncoder();
+        var chars = ArrayPool<char>.Shared.Rent(SaveBlockCharacters);
+        var bytes = ArrayPool<byte>.Shared.Rent(strict.GetMaxByteCount(SaveBlockCharacters));
+        try
+        {
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 0))
+            {
+                if (byteOrderMark)
+                {
+                    stream.Write(PreambleOf(encoding));
+                }
+
+                int length = snapshot.Length;
+                int position = 0;
+                do
+                {
+                    int take = Math.Min(SaveBlockCharacters, length - position);
+                    int written = EncodeBlock(snapshot, position, take, encoder, chars, bytes, flush: position + take == length);
+                    stream.Write(bytes.AsSpan(0, written));
+                    position += take;
+                }
+                while (position < length);
+
+                stream.Flush();
+                FlushToDisk(stream);
+            }
+
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(temporary);
+            throw;
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(chars);
+            ArrayPool<byte>.Shared.Return(bytes);
+        }
+    }
+
     /// <summary>The bytes of <paramref name="encoding"/>'s byte order mark (none for an encoding that has no mark).</summary>
     internal static byte[] PreambleOf(Encoding encoding) => encoding.CodePage switch
     {

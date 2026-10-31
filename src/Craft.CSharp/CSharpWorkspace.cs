@@ -49,6 +49,7 @@ internal sealed class CSharpWorkspace
     private long _referenceBytes;
     private long _heapBytes;
     private TimeSpan _buildTime;
+    private IEditorActivities _activities = NoActivities.Instance;
 
     private CSharpWorkspace(string key, string? root, LanguageSettings settings)
     {
@@ -67,7 +68,7 @@ internal sealed class CSharpWorkspace
     public Solution? Solution => Volatile.Read(ref _solution);
 
     /// <summary>The workspace of <paramref name="root"/> for <paramref name="settings"/>, its user count raised (give it back with <see cref="Leave"/>).</summary>
-    public static CSharpWorkspace Enter(string? root, LanguageSettings settings)
+    public static CSharpWorkspace Enter(string? root, LanguageSettings settings, IEditorActivities? activities = null)
     {
         var key = string.Join('|', root ?? "", settings.Configuration, string.Join(',', settings.WorkspaceReaders), settings.SourceGenerators ? "generators" : "");
         lock (RegistryGate)
@@ -79,6 +80,11 @@ internal sealed class CSharpWorkspace
             }
 
             workspace._users++;
+            if (activities is not null and not NoActivities)
+            {
+                workspace._activities = activities;            // the latest session's host shows its builds
+            }
+
             return workspace;
         }
     }
@@ -153,7 +159,52 @@ internal sealed class CSharpWorkspace
         }
     }
 
-    /// <summary>A user leaves; the last one disposes the workspace.</summary>
+    /// <summary>A user leaves without blocking its thread (the session's close): <see cref="Leave"/> awaiting the gate.</summary>
+    public async Task LeaveAsync(object owner)
+    {
+        await _mutate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            DetachHeld(owner);
+        }
+        finally
+        {
+            _mutate.Release();
+        }
+
+        if (LeaveRegistry())
+        {
+            await _mutate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                ReleaseHeld();
+            }
+            finally
+            {
+                _mutate.Release();
+            }
+
+            References.Clear();
+            Workspaces.ReferenceAssemblies.Clear();
+        }
+    }
+
+    // The user count down; true when this was the last (the workspace goes from the registry).
+    private bool LeaveRegistry()
+    {
+        lock (RegistryGate)
+        {
+            if (--_users > 0)
+            {
+                return false;
+            }
+
+            Open.Remove(_key);
+            return true;
+        }
+    }
+
+    /// <summary>A user leaves; the last one disposes the workspace. It waits for a running build (the tests and the bench; the app's sessions use <see cref="LeaveAsync"/>).</summary>
     public void Leave(object owner)
     {
         Detach(owner);
@@ -194,9 +245,9 @@ internal sealed class CSharpWorkspace
     public void RequestRelease()
     {
         Volatile.Write(ref _releaseRequested, 1);
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
-            _mutate.Wait();
+            await _mutate.WaitAsync().ConfigureAwait(false);       // a pool thread is never held while a build runs
             try
             {
                 ReleaseIfRequested();
@@ -308,6 +359,18 @@ internal sealed class CSharpWorkspace
         _mutate.Wait();
         try
         {
+            DetachHeld(owner);
+        }
+        finally
+        {
+            _mutate.Release();
+        }
+    }
+
+    // Called holding the mutation gate.
+    private void DetachHeld(object owner)
+    {
+        {
             if (!_owners.Remove(owner, out var id) || _solution is not { } solution || solution.GetDocument(id) is not { } document)
             {
                 return;
@@ -322,10 +385,6 @@ internal sealed class CSharpWorkspace
             {
                 Volatile.Write(ref _solution, solution.WithDocumentTextLoader(id, new FileTextLoader(document.FilePath, null), PreservationMode.PreserveValue));
             }
-        }
-        finally
-        {
-            _mutate.Release();
         }
     }
 
@@ -342,16 +401,31 @@ internal sealed class CSharpWorkspace
 
     private void Build(string? path)
     {
-        long start = Stopwatch.GetTimestamp();
-        long heap = GC.GetTotalMemory(false);
-        _workspace = new AdhocWorkspace(HostServices());
-        Volatile.Write(ref _solution, _workspace.CurrentSolution);
-        Volatile.Write(ref _referenceBytes, 0);
-        _referenced.Clear();
-        Interlocked.Increment(ref _generation);
-        AddProjectsFor(path);
-        _buildTime = Stopwatch.GetElapsedTime(start);
-        Volatile.Write(ref _heapBytes, Math.Max(0, GC.GetTotalMemory(false) - heap));
+        // Phase U: the build shows in the status bar (the readers, the projects, the references), however it ends.
+        string name = _root is null ? "loose files" : Path.GetFileName(_root);
+        using var activity = _activities.Start($"C#: building the workspace of {name}", ActivityKinds.Build);
+        activity.Report(null, "reading the projects (" + string.Join(", ", _settings.WorkspaceReaders) + ")");
+        try
+        {
+            long start = Stopwatch.GetTimestamp();
+            long heap = GC.GetTotalMemory(false);
+            _workspace = new AdhocWorkspace(HostServices());
+            Volatile.Write(ref _solution, _workspace.CurrentSolution);
+            Volatile.Write(ref _referenceBytes, 0);
+            _referenced.Clear();
+            Interlocked.Increment(ref _generation);
+            AddProjectsFor(path);
+            _buildTime = Stopwatch.GetElapsedTime(start);
+            Volatile.Write(ref _heapBytes, Math.Max(0, GC.GetTotalMemory(false) - heap));
+            var built = Volatile.Read(ref _solution);
+            activity.Complete(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{built?.ProjectIds.Count ?? 0} projects, {_referenced.Count} references, by {_reader ?? "no reader"}"));
+        }
+        catch (Exception error)
+        {
+            activity.Fail("the workspace could not be built: " + error.Message, error);
+            throw;
+        }
     }
 
     /// <summary>The owner's document id: known, found by its path, or added by the readers (a made-up project takes a file none has).</summary>

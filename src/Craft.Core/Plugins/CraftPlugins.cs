@@ -19,6 +19,9 @@ public sealed record PluginLoadResult(string Name, string Folder, bool Loaded, s
     /// <summary>Its <c>plugin.json</c>, or null when the folder has none (it still loads) or the file was refused.</summary>
     public PluginManifest? Manifest { get; init; }
 
+    /// <summary>How long its load took (its manifest, its assembly, its package's registration, its Idrak libraries).</summary>
+    public TimeSpan LoadTime { get; init; }
+
     /// <summary>Whether it was skipped because it is disabled (<c>CRAFT_PLUGINS_DISABLED</c>).</summary>
     public bool Disabled { get; init; }
 
@@ -112,12 +115,13 @@ public static class CraftPlugins
         var name = Path.GetFileName(folder);
         var dll = Path.Combine(folder, name + ".dll");
         PluginLoadResult result;
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
         lock (Gate)
         {
             result = Load(name, folder, dll);
         }
 
-        return Note(result);
+        return Note(result with { LoadTime = System.Diagnostics.Stopwatch.GetElapsedTime(start) });
     }
 
     [RequiresUnreferencedCode("A plug-in is loaded and its package made by reflection.")]
@@ -234,6 +238,13 @@ public static class CraftPlugins
 
             IdrakPlugins.Load(assembly);
             IdrakPlugins.RegisterAll(package);
+            // Phase U: the Idrak libraries it carries register here, at start-up before the window opens, not in its
+            // activation on the UI thread (loading them and their built-ins took a while there); its own call then returns at once.
+            if (Directory.EnumerateFiles(folder, "Idrak*.dll").Any(file => !Path.GetFileNameWithoutExtension(file).Equals("Idrak.Abstraction", StringComparison.OrdinalIgnoreCase)))
+            {
+                IdrakInPlugins.IncludeLibraries(assembly);
+            }
+
             return new PluginLoadResult(name, folder, true, null);
         }
 #pragma warning disable CA1031 // A plug-in's failure, whatever it is, is reported and the host goes on.

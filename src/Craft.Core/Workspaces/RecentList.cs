@@ -37,6 +37,10 @@ public sealed class RecentList
     private readonly List<string> _problems = [];
     private int _limit;
 
+    private readonly Lock _writeGate = new();
+    private readonly Lock _fileGate = new();
+    private Task _writes = Task.CompletedTask;
+
     private RecentList(string path, int limit)
     {
         FilePath = Path.GetFullPath(path);
@@ -67,7 +71,7 @@ public sealed class RecentList
             _limit = limit;
             if (Trim())
             {
-                Save();
+                SaveLater();
                 Changed?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -121,7 +125,7 @@ public sealed class RecentList
 
         _entries.Insert(0, new RecentEntry(full, kind, opened ?? DateTimeOffset.Now));
         Trim();
-        Save();
+        SaveLater();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -136,7 +140,7 @@ public sealed class RecentList
         }
 
         _entries.RemoveAt(at);
-        Save();
+        SaveLater();
         Changed?.Invoke(this, EventArgs.Empty);
         return true;
     }
@@ -147,7 +151,7 @@ public sealed class RecentList
         int removed = _entries.RemoveAll(e => e.Kind == RecentKind.File ? !File.Exists(e.Path) : !Directory.Exists(e.Path));
         if (removed > 0)
         {
-            Save();
+            SaveLater();
             Changed?.Invoke(this, EventArgs.Empty);
         }
 
@@ -163,17 +167,73 @@ public sealed class RecentList
         }
 
         _entries.Clear();
-        Save();
+        SaveLater();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Writes the entries to <see cref="FilePath"/> (its folder made when missing), through a temporary file moved over it.</summary>
+    /// <summary>
+    /// The last write that failed (the list in memory stays right; the next change writes it again), or null. A change
+    /// (<see cref="Add"/>, <see cref="Remove"/>, ...) is written off the calling thread, the UI's, in order.
+    /// </summary>
+    public string? WriteProblem { get; private set; }
+
+    /// <summary>Completes when every change made so far is written (the tests and the app's close await it).</summary>
+    public Task FlushAsync()
+    {
+        lock (_writeGate)
+        {
+            return _writes;
+        }
+    }
+
+    /// <summary>Writes the entries to <see cref="FilePath"/> (its folder made when missing), through a temporary file moved over it, now, on the calling thread.</summary>
     public void Save()
+    {
+        var bytes = Serialize();
+        lock (_fileGate)
+        {
+            WriteFile(bytes);
+        }
+    }
+
+    // A change's entries, serialized here (they change only on the UI thread), written on the thread pool after the
+    // writes before it: a file open never waits for the disk.
+    private void SaveLater()
+    {
+        var bytes = Serialize();
+        lock (_writeGate)
+        {
+            _writes = _writes.ContinueWith(_ =>
+            {
+                try
+                {
+                    lock (_fileGate)
+                    {
+                        WriteFile(bytes);
+                    }
+
+                    WriteProblem = null;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    WriteProblem = $"{FilePath} could not be written: {e.Message}";
+                }
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        }
+    }
+
+    private void WriteFile(byte[] bytes)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         var temporary = FilePath + ".tmp";
-        using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        File.WriteAllBytes(temporary, bytes);
+        File.Move(temporary, FilePath, overwrite: true);
+    }
+
+    private byte[] Serialize()
+    {
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true }))
         {
             writer.WriteStartObject();
             writer.WriteStartArray("entries");
@@ -190,7 +250,7 @@ public sealed class RecentList
             writer.WriteEndObject();
         }
 
-        File.Move(temporary, FilePath, overwrite: true);
+        return buffer.WrittenSpan.ToArray();
     }
 
     private int IndexOf(string full)

@@ -596,9 +596,20 @@ public sealed class VoiceSession : IDisposable
     // A load shown in the status bar while it runs (its stage and time, reported from the worker, shown on the UI thread).
     private async Task<T> WithProgressAsync<T>(string title, Func<IProgress<string>, Task<T>> load)
     {
-        using var progress = Host.StartProgress(title);
-        var report = new Progress<string>(message => Host.Dispatch(() => progress.Report(null, message)));
-        return await load(report).ConfigureAwait(true);
+        // Phase U: an activity of its own kind; its stages come from the worker straight to it (any thread).
+        using var progress = Host.Activities.Start(title, ActivityKinds.Voice);
+        var report = new Progress<string>(message => progress.Report(null, message));
+        try
+        {
+            var loaded = await load(report).ConfigureAwait(true);
+            progress.Complete();
+            return loaded;
+        }
+        catch (Exception error)
+        {
+            progress.Fail(error.Message, error);
+            throw;
+        }
     }
 
     private static IAudioInput OpenInput(VoiceSettings settings)
@@ -866,7 +877,7 @@ public sealed class VoiceSession : IDisposable
         string selected = snapshot.GetText(start, end - start);
         string name = document.FilePath is { } path ? Path.GetFileName(path) : "the new file";
 
-        using var progress = Host.StartProgress($"Voice: asking {model}");
+        using var progress = Host.Activities.Start($"Voice: asking {model}", ActivityKinds.Generation);
         string reply;
         bool heard;
         string served;

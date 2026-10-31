@@ -109,7 +109,7 @@ public static class SemanticGeneratorTests
         }
         finally
         {
-            workspace.Leave(workspace);
+            await workspace.LeaveAsync(workspace);
         }
     }
 

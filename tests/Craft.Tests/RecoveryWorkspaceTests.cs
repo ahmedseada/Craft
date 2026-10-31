@@ -75,6 +75,7 @@ public static class RecoveryTests
         store.WriteNowAsync().GetAwaiter().GetResult();
         Check.Equal(2, Directory.GetFiles(store.Folder).Length, "a draft has a copy");
         closed.Dispose();
+        store.WriteNowAsync().GetAwaiter().GetResult();          // the copy goes off the closing (UI) thread
         Check.Equal(0, Directory.GetFiles(store.Folder).Length, "closing deletes the copy");
     }
 

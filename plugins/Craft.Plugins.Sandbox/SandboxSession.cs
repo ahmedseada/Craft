@@ -36,6 +36,7 @@ internal sealed class SandboxSession : IDisposable
     private readonly List<string> _lines = [];
     private readonly HashSet<string> _allowed = new(StringComparer.OrdinalIgnoreCase);
     private readonly IDisposable _panelShown;
+    private readonly IEditorNotification _status;
     private SandboxSettings _settings;
     private long _lastCommand;
     private bool _flushPending;
@@ -46,6 +47,8 @@ internal sealed class SandboxSession : IDisposable
         _host = host;
         _settings = SandboxSettings.From(host.Settings);
         _panelShown = host.AddPanel(_panel);
+        // Phase U: the last command as a status line of the notification centre (U2 moves the side panel there).
+        _status = host.ShowStatus("Sandbox: the last command", "none yet");
         Append("Commands an agent runs through the approve-each sandbox show here, each after you allow it.");
     }
 
@@ -175,22 +178,30 @@ internal sealed class SandboxSession : IDisposable
 
         Append($"$ {line}{(remembered ? "    (allowed for this run)" : "")}");
         var clock = Stopwatch.StartNew();
-        var watched = limits with { Output = WithLive(limits.Output) };
+        // Phase U: the command shows in the status bar with its last line and Cancel (which stops it as the agent's stop does).
+        using var activity = _host.Activities.Start("Sandbox: " + (line.Length <= 60 ? line : string.Concat(line.AsSpan(0, 59), "…")), ActivityKinds.Command, cancellable: true, cancellationToken);
+        var watched = limits with { Output = WithLive(limits.Output, activity) };
+        _status.Update("$ " + line + " · running");
         try
         {
-            var result = await inner.RunAsync(command, directory, watched, cancellationToken).ConfigureAwait(false);
-            Append(result switch
+            var result = await inner.RunAsync(command, directory, watched, activity.CancellationToken).ConfigureAwait(false);
+            string outcome = result switch
             {
                 { Refused: true } => $"  refused by the {inner.Name} sandbox: {result.Output}",
                 { TimedOut: true } => $"  stopped at its time limit, {ApproveEachSandbox.Seconds(limits.Time)}",
                 { OutOfMemory: true } => "  stopped at its memory limit",
                 _ => string.Create(Culture, $"  exit code {result.ExitCode} · elapsed {clock.Elapsed:hh\\:mm\\:ss\\.ff}"),
-            });
+            };
+            Append(outcome);
+            _status.Update("$ " + line + " ·" + outcome, result.Succeeded ? NotificationSeverity.Success : NotificationSeverity.Warning);
+            activity.Complete(outcome.Trim());      // a non-zero exit is the agent's to read, not a failure that toasts
+
             return result;
         }
         catch (OperationCanceledException)
         {
             Append("  stopped (cancelled)");
+            _status.Update("$ " + line + " · stopped (cancelled)", NotificationSeverity.Warning);
             throw;
         }
     }
@@ -204,6 +215,7 @@ internal sealed class SandboxSession : IDisposable
 
         _disposed = true;
         _panelShown.Dispose();
+        _status.Dispose();
     }
 
     // The question, asked on the UI thread; a dismissed one (or a host that cannot ask) is a denial.
@@ -263,13 +275,12 @@ internal sealed class SandboxSession : IDisposable
         };
     }
 
-    private Action<string> WithLive(Action<string>? other) => other is null
-        ? Append
-        : text =>
-        {
-            Append(text);
-            other(text);
-        };
+    private Action<string> WithLive(Action<string>? other, IActivity activity) => text =>
+    {
+        Append(text);
+        activity.Report(null, text.Length <= 80 ? text.Trim() : string.Concat(text.AsSpan(0, 79), "…").Trim());
+        other?.Invoke(text);
+    };
 
     // Any thread: the line is kept, and one UI turn shows every line kept since the last.
     private void Append(string text)

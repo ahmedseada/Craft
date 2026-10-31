@@ -49,8 +49,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <param name="clipboard">The clipboard for copy, cut and paste.</param>
     /// <param name="time">The clock for click counting and the input-to-paint telemetry (the system's when null).</param>
     /// <param name="workspaceRoot">The open folder the document belongs to (its language's workspace), or null.</param>
+    /// <param name="activities">Where its language shows long work (a workspace build), or null for nowhere.</param>
     public EditorModel(ITextDocument document, ILanguage? language, CraftOptions? options, ITheme? theme, ITextMeasurer measurer,
-        IEditorClipboard clipboard, TimeProvider? time = null, string? workspaceRoot = null)
+        IEditorClipboard clipboard, TimeProvider? time = null, string? workspaceRoot = null, IEditorActivities? activities = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(measurer);
@@ -68,7 +69,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         Find = new EditorFind(this);
         WorkspaceRoot = workspaceRoot;
         InlineCompletion = new InlineCompletionController(this);
-        _session = language?.Open(document.Buffer, new LanguageOpenContext(document.FilePath, workspaceRoot, Options.ToLanguageSettings()));
+        _session = language?.Open(document.Buffer, new LanguageOpenContext(document.FilePath, workspaceRoot, Options.ToLanguageSettings()) { Activities = activities ?? NoActivities.Instance });
         if (_session is not null)
         {
             _session.Reclassified += OnSessionReclassified;

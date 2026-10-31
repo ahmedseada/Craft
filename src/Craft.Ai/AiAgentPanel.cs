@@ -44,6 +44,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private double _modelSeconds;
     private string _sandboxName = "";
     private bool _waiting;
+    private IActivity? _activity;
     private bool _disposed;
 
     /// <summary>An agent panel in <paramref name="host"/>.</summary>
@@ -128,13 +129,13 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             return false;
         }
 
-        string target = copy.NewText(change.Path);
+        // The copy's file is read, and the edits made, off the UI thread.
         var snapshot = document.Document.Buffer.Current;
         string current = snapshot.GetText(0, snapshot.Length);
-        var edits = AgentWorkspace.Edits(current, target);
+        var edits = await Task.Run(() => AgentWorkspace.Edits(current, copy.NewText(change.Path)), cancellationToken).ConfigureAwait(true);
         if (edits.Count == 0)
         {
-            copy.Settle(change.Path, current);
+            await Task.Run(() => copy.Settle(change.Path, current), CancellationToken.None).ConfigureAwait(true);
             _changes.Remove(change.Relative);
             ShowChanges();
             return true;
@@ -151,8 +152,13 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         if (accepted)
         {
             Judge(AiVerdicts.Accepted);
-            copy.Settle(change.Path, now.GetText(0, now.Length));
-            if (copy.ChangeOf(change.Relative) is { } rest)
+            string settled = now.GetText(0, now.Length);
+            var left = await Task.Run(() =>
+            {
+                copy.Settle(change.Path, settled);
+                return copy.ChangeOf(change.Relative);
+            }, CancellationToken.None).ConfigureAwait(true);
+            if (left is { } rest)
             {
                 _changes[change.Relative] = rest;      // some hunks only: the rest stays to review
             }
@@ -183,7 +189,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         }
 
         _changes.Clear();
-        _copy?.Discard();
+        DiscardLater(_copy);
         _copy = null;
         Log(new ConversationEntry(ConversationRole.Note, "Discarded every change of the run."));
         ShowChanges();
@@ -229,7 +235,16 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         _disposed = true;
         Stop();
         _ticker?.Dispose();
-        _copy?.Discard();
+        DiscardLater(_copy);
+    }
+
+    // The working copy goes on the thread pool: a recursive delete of a folder's copy never runs on the UI thread.
+    private static void DiscardLater(AgentWorkspace? copy)
+    {
+        if (copy is not null)
+        {
+            _ = Task.Run(copy.Discard);
+        }
     }
 
     private async Task StartAsync(string task, CancellationToken cancellationToken)
@@ -241,7 +256,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             return;
         }
 
-        _copy?.Discard();
+        DiscardLater(_copy);
         _copy = null;
         _changes.Clear();
         _answer = null;
@@ -255,6 +270,9 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         Title = task;
         var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _running = source;
+        // Phase U: the run shows in the status bar (turn, tokens, tok/s) with Cancel, which stops it as Stop does.
+        var activity = Host.Activities.Start("Agent: " + (task.Length <= 48 ? task : string.Concat(task.AsSpan(0, 47), "…")), ActivityKinds.Agent, cancellable: true, source.Token);
+        _activity = activity;
         _elapsed.Restart();
         IsBusy = true;
         _ticker = TimeProvider.System.CreateTimer(_ => Post(UpdateStatus), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
@@ -272,11 +290,13 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         string end;
         try
         {
-            end = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, source.Token), CancellationToken.None).ConfigureAwait(true);
+            end = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, activity), CancellationToken.None).ConfigureAwait(true);
+            activity.Complete(end);
         }
         catch (OperationCanceledException)
         {
             end = "Stopped.";
+            activity.Dispose();
         }
 #pragma warning disable CA1031 // The failure is shown in the panel; the editor goes on.
         catch (Exception error)
@@ -285,7 +305,10 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             Host.Log(EditorLogLevel.Error, "The agent run failed.", error);
             Log(new ConversationEntry(ConversationRole.Error, error.Message));
             end = "Failed.";
+            activity.Fail("the agent run failed: " + error.Message, error, () => Run = StartAsync(task, CancellationToken.None));
         }
+
+        _activity = null;
 
         _ticker?.Dispose();
         _ticker = null;
@@ -299,14 +322,18 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     }
 
     // On the thread pool: the model, the working copy, the sandbox, the tools and the agent's loop.
-    private async Task<string> RunAgentAsync(string task, string workspace, Dictionary<string, string> unsaved, AiSettings settings, CancellationToken token)
+    private async Task<string> RunAgentAsync(string task, string workspace, Dictionary<string, string> unsaved, AiSettings settings, IActivity activity)
     {
+        var token = activity.CancellationToken;
+        activity.Report(null, "waiting for the model (its download and load show on their own)");
         var lease = await _models.ChatAsync(token).ConfigureAwait(false);
         var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot run as an agent.");
         // Idrak's built-ins (the "process" sandbox, the coding languages of the families' plug-in) are registered by now:
         // the lease's load registered the plug-in's Idrak libraries and the idrakPlugins packages.
         IdrakLibraries.EnsureIncluded();
-        var copy = AgentWorkspace.Create(workspace, settings.AgentFolder, settings.AgentCopyIgnore, unsaved, token);
+        activity.Report(null, "copying the folder");
+        var copy = AgentWorkspace.Create(workspace, settings.AgentFolder, settings.AgentCopyIgnore, unsaved, token,
+            files => activity.Report(null, string.Create(CultureInfo.InvariantCulture, $"copying the folder: {files:N0} files")));
         Post(() =>
         {
             _copy = copy;
@@ -342,7 +369,8 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         var agent = new CodingAgent(observed, options)
         {
             OnDelta = delta => { if (delta.Content.Length > 0) { Post(() => Said(delta.Content)); } },
-            OnToolResult = result => Post(() => ToolDone(result)),
+            // A changed file's diff counts are read here, on the agent's thread, never on the UI's.
+            OnToolResult = result => { var change = ChangeAfter(copy, result); Post(() => ToolDone(result, change)); },
         };
         Post(() => _agent = agent);
         var run = await agent.RunAsync(task, tools, token).ConfigureAwait(false);
@@ -391,7 +419,18 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         }
     }
 
-    private void ToolDone(ToolResult result)
+    // The change an edit_file or write_file left (null: none, or not such a tool), and the relative path it touched.
+    private static (AgentChange? Change, string? Relative)? ChangeAfter(AgentWorkspace copy, ToolResult result)
+    {
+        if (result.Call.Name is not ("edit_file" or "write_file") || result.Call.Arguments["path"]?.ToString() is not { } path)
+        {
+            return null;
+        }
+
+        return (copy.ChangeOf(path), System.IO.Path.GetRelativePath(copy.Workspace, copy.WorkspacePath(path)).Replace('\\', '/'));
+    }
+
+    private void ToolDone(ToolResult result, (AgentChange? Change, string? Relative)? edited)
     {
         _assistant = -1;
         _text.Clear();
@@ -405,15 +444,15 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             });
         }
 
-        if (result.Call.Name is "edit_file" or "write_file" && result.Call.Arguments["path"]?.ToString() is { } path && _copy is { } copy)
+        if (edited is { } after && _copy is not null)
         {
-            if (copy.ChangeOf(path) is { } change)
+            if (after.Change is { } change)
             {
                 _changes[change.Relative] = change;
             }
-            else
+            else if (after.Relative is { } relative)
             {
-                _changes.Remove(System.IO.Path.GetRelativePath(copy.Workspace, copy.WorkspacePath(path)).Replace('\\', '/'));
+                _changes.Remove(relative);
             }
 
             ShowChanges();
@@ -471,6 +510,11 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         string state = IsBusy ? (_waiting ? "Waiting for you · " : "Running · ") : "";
         Status = string.Create(CultureInfo.InvariantCulture,
             $"{state}Turn {_turn} of {settings.AgentMaxTurns} · {_tokens:N0} tokens · {(_modelSeconds > 0 ? _tokens / _modelSeconds : 0):F0} tok/s · Elapsed {(int)elapsed.TotalMinutes}:{elapsed.Seconds:D2} · Sandbox {(_sandboxName.Length > 0 ? _sandboxName : settings.AgentSandbox)}");
+        if (IsBusy && _turn > 0)
+        {
+            _activity?.Report(null, string.Create(CultureInfo.InvariantCulture, $"{(_waiting ? "waiting for you · " : "")}turn {_turn} of {settings.AgentMaxTurns} · {_tokens:N0} tokens"),
+                _modelSeconds > 0 ? new ActivityRate(_tokens / _modelSeconds, "tok/s") : null);
+        }
     }
 
     private int Log(ConversationEntry entry)
@@ -521,7 +565,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         _log.Clear();
         if (_changes.Count == 0)
         {
-            _copy?.Discard();
+            DiscardLater(_copy);
             _copy = null;
         }
 

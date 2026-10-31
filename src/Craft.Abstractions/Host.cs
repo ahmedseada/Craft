@@ -80,7 +80,7 @@ public enum EditorLogLevel
     Error,
 }
 
-/// <summary>Long work a plug-in shows (in the status bar): report as it goes, dispose when it is done.</summary>
+/// <summary>Long work a plug-in shows (in the status bar, as an activity of <see cref="IEditorHost.Activities"/>): report as it goes, dispose when it is done.</summary>
 public interface IEditorProgress : IDisposable
 {
     /// <summary>What it is doing.</summary>
@@ -94,7 +94,7 @@ public interface IEditorProgress : IDisposable
 /// What a plug-in reaches: the open documents and their events, the active document's selection, edits proposed to the
 /// user (never applied silently), commands, status bar items, panels, its settings, progress, the log and telemetry, and
 /// the UI thread. Every event is raised on the host's UI thread, and every member is called there (use
-/// <see cref="Dispatch"/> from another thread). A plug-in gets it in <see cref="IEditorPlugin.Activate"/>.
+/// <see cref="Dispatch(Action)"/> from another thread). A plug-in gets it in <see cref="IEditorPlugin.Activate"/>.
 /// </summary>
 public interface IEditorHost
 {
@@ -249,4 +249,42 @@ public interface IEditorHost
 
     /// <summary>Runs <paramref name="action"/> on the host's UI thread (later, never inline from another thread).</summary>
     void Dispatch(Action action);
+
+    /// <summary>
+    /// <see cref="Dispatch(Action)"/> under <paramref name="label"/> ("chat: show the reply"): the UI watchdog names the
+    /// label when that work blocks the window. The label alone by default.
+    /// </summary>
+    void Dispatch(string label, Action action) => Dispatch(action);
+
+    /// <summary>
+    /// The running operations (phase U): every operation that can outlast a moment starts one, so the status bar shows it
+    /// with its progress, rate, time left and Cancel, and the notification centre keeps how it ended. Any thread. A host
+    /// without them gives <see cref="NoActivities.Instance"/>.
+    /// </summary>
+    IEditorActivities Activities => NoActivities.Instance;
+
+    /// <summary>
+    /// Posts a message to the notification centre (the bell's count rises): <paramref name="title"/>, its
+    /// <paramref name="text"/>, how much it matters (an error or a question also shows a toast) and its
+    /// <paramref name="actions"/> (buttons). Kept for the session, grouped under the plug-in's name, until the user
+    /// dismisses it or the result is disposed. Any thread. A host without a centre logs it.
+    /// </summary>
+    IEditorNotification Notify(string title, string text, NotificationSeverity severity = NotificationSeverity.Information, IReadOnlyList<NotificationAction>? actions = null)
+    {
+        Log(severity switch
+        {
+            NotificationSeverity.Error => EditorLogLevel.Error,
+            NotificationSeverity.Warning => EditorLogLevel.Warning,
+            _ => EditorLogLevel.Information,
+        }, $"{title}: {text}");
+        return NoNotification.Instance;
+    }
+
+    /// <summary>
+    /// Shows a status entry in the notification centre: a sticky line at the top of the plug-in's group (a model's state,
+    /// the device, a sandbox's last command) that the result updates in place and that stays until it is disposed (or the
+    /// plug-in is deactivated); it never raises the bell's count or a toast. Any thread. Nothing by default.
+    /// </summary>
+    IEditorNotification ShowStatus(string title, string text, NotificationSeverity severity = NotificationSeverity.Information, IReadOnlyList<NotificationAction>? actions = null) =>
+        NoNotification.Instance;
 }

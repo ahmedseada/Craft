@@ -9,6 +9,7 @@ using Craft.Core.Plugins;
 using Craft.Core.Settings;
 using Craft.Core.Workspaces;
 using Craft.Editor;
+using Craft.Editor.Activities;
 using Craft.Editor.Shell;
 using Craft.Editor.Terminal;
 using Microsoft.Maui.Controls;
@@ -77,6 +78,13 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly TerminalPanelView _terminalPanel;
     private readonly StatusItemsView _pluginStatus;
     private readonly StatusBarView _status;
+    private readonly ActivityStatusView _activity;
+    private readonly BellView _bell;
+    private readonly NotificationCenterView _centre;
+    private readonly ToastView _toast;
+    private readonly UiStallReports _stallReports;
+    private UiWatchdog? _watchdog;
+    private IDispatcherTimer? _noticeTimer;
     private readonly PanelsView _panels;
     private readonly ContentView _panelsBox;
     private readonly ConversationsView _conversations;
@@ -219,7 +227,20 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bottom.TerminalContent = _terminalPanel;
         _terminals.ViewRequested += (_, request) => OnTerminalView(request);
         _tree.OpenInTerminalRequested += (_, folder) => _terminals.OpenInFolder(folder);
-        _status = new StatusBarView(_palette, _pluginStatus);
+        // Phase U: the running operations in the status bar, the bell, the notification centre and its toasts.
+        _activity = new ActivityStatusView(_host.ActivityCenter, _palette);
+        _bell = new BellView(_palette);
+        _centre = new NotificationCenterView(_host.Notifications, _host.ActivityCenter, _palette);
+        _toast = new ToastView(_host.Notifications, _palette);
+        _stallReports = new UiStallReports(startup.Options);
+        _activity.Tapped += (_, _) => ToggleCentre(true);
+        _bell.Tapped += (_, _) => ToggleCentre();
+        _centre.CloseRequested += (_, _) => ToggleCentre(false);
+        _toast.ShowCentreRequested += (_, _) => ToggleCentre(true);
+        _host.Notifications.OpenLog = () => ShowBottom(BottomTab.Output);
+        _host.Notifications.Changed += OnNotificationsChanged;
+        _host.Notifications.Toast += OnToast;
+        _status = new StatusBarView(_palette, _pluginStatus, _activity, _bell);
         _status.ProblemsTapped += (_, _) => ShowBottom(BottomTab.Problems);
 
         _railLine = _palette.Line(vertical: true);
@@ -273,6 +294,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         root.Add(_body, 0, 2);
         root.Add(_statusLine, 0, 3);
         root.Add(_status, 0, 4);
+        root.Add(_toast, 0, 2);
+        root.Add(_centre, 0, 2);
         root.Add(_popup, 0, 0);
         Grid.SetRowSpan(_popup, 5);
         Content = root;
@@ -319,6 +342,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         _disposed = true;
+        _watchdog?.Dispose();
+        _noticeTimer?.Stop();
+        _host.Notifications.Changed -= OnNotificationsChanged;
+        _host.Notifications.Toast -= OnToast;
+        _activity.Dispose();
+        _centre.Dispose();
         EditorMenus.Changed -= OnMenusChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
         _host.SelectionRequested -= OnSelectionRequested;
@@ -356,15 +385,35 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         _started = true;
+        StartWatchdog();
         HookPlatform();
 
-        // The plug-ins start first, so they see the first document open (the sample's word count counts it).
+        // How each plug-in's load went (at start-up, before the window), kept in the notification centre; a failure toasts.
+        foreach (var plugin in _startup.Plugins)
+        {
+            if (plugin.Disabled)
+            {
+                continue;
+            }
+
+            _host.Notifications.AddEnded(EditorHost.HostSource, $"Plug-in {plugin.Name}",
+                plugin.Loaded ? "loaded" + (plugin.Note is { } note ? " · " + note : "") : $"did not load ({plugin.Folder}): {plugin.Error}",
+                plugin.Loaded ? NotificationSeverity.Success : NotificationSeverity.Error, plugin.LoadTime);
+            if (!plugin.Loaded && plugin.Error is not null)
+            {
+                _status.Notice.Text = $"Plug-in {plugin.Name} did not load";
+                _host.Log(EditorLogLevel.Error, $"Plug-in {plugin.Name} ({plugin.Folder}) did not load: {plugin.Error}");
+            }
+        }
+
+        // The plug-ins start first, so they see the first document open (the sample's word count counts it); a failure
+        // is a notification with a toast (Craft's own card), not the platform's message box.
         foreach (var activation in _host.RefreshPlugins())
         {
             if (activation.Error is not null)
             {
                 _status.Notice.Text = $"Plug-in {activation.Name} did not start";
-                await DisplayAlertAsync("Craft: a plug-in did not start", $"{activation.Name}: {activation.Error}", "OK");
+                _host.Notify($"Plug-in {activation.Name} did not start", activation.Error, NotificationSeverity.Error);
             }
         }
 
@@ -390,16 +439,79 @@ public sealed class ShellPage : ContentPage, IDisposable
         if (_startup.Problems.Count > 0 || _shell.OptionsProblems.Count > 0)
         {
             var problems = _startup.Problems.Concat(_shell.OptionsProblems).Distinct(StringComparer.Ordinal);
-            await DisplayAlertAsync("Craft: a setting was not taken", string.Join("\n", problems) + "\nThe settings page (Ctrl+Comma) shows each one.", "OK");
+            _host.Notify("A setting was not taken", string.Join("\n", problems) + "\nThe settings page (Ctrl+Comma) shows each one.", NotificationSeverity.Error,
+                [new NotificationAction("Open settings", _ => _host.ExecuteCommandAsync(ShellCommandIds.Settings), Primary: true)]);
+        }
+    }
+
+    // Phase U: the UI watchdog (CRAFT_UI_WATCHDOG_MS, CRAFT_UI_STALL_MS); its stalls show in the status bar, Output, the
+    // centre and the telemetry tab, each written as a stall report under CRAFT_CRASH_FOLDER.
+    private void StartWatchdog()
+    {
+        var options = _startup.Options;
+        if (options.UiWatchdogMilliseconds <= 0 || _watchdog is not null)
+        {
+            return;
         }
 
-        foreach (var plugin in _startup.Plugins)
+        _watchdog = new UiWatchdog(action => Dispatcher.Dispatch(action), _host.Labels, options.UiWatchdogMilliseconds, options.UiStallMilliseconds)
         {
-            if (!plugin.Loaded && plugin.Error is not null)
+            WriteReport = _stallReports.Write,
+        };
+        _watchdog.Stalled += (_, stall) => _host.Dispatch("watchdog: show a stall", () => OnStall(stall));
+        _watchdog.Start();
+    }
+
+    private void OnStall(UiStall stall)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        string line = ActivityText.Stall(stall.Duration, stall.Label);
+        _status.Notice.Text = line;
+        _noticeTimer?.Stop();
+        _noticeTimer = Dispatcher.CreateTimer();
+        _noticeTimer.Interval = TimeSpan.FromSeconds(10);
+        _noticeTimer.IsRepeating = false;
+        _noticeTimer.Tick += (_, _) =>
+        {
+            if (_status.Notice.Text == line)
             {
-                _status.Notice.Text = $"Plug-in {plugin.Name} did not load";
-                await DisplayAlertAsync("Craft: a plug-in did not load", $"{plugin.Name} ({plugin.Folder}): {plugin.Error}", "OK");
+                _status.Notice.Text = "";
             }
+        };
+        _noticeTimer.Start();
+        _host.Record("ui.stall", stall.Duration.TotalMilliseconds, "ms");
+        string report = stall.ReportPath is { } path ? " Report: " + path : "";
+        _host.Log(EditorLogLevel.Warning, $"{line}.{report}");
+        var actions = stall.ReportPath is { } file
+            ? (IReadOnlyList<NotificationAction>)[new NotificationAction("Open report", _ => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(
+                new Microsoft.Maui.ApplicationModel.OpenFileRequest("Stall report", new Microsoft.Maui.Storage.ReadOnlyFile(file))), Dismisses: false)]
+            : [];
+        _host.Notifications.Post(NotificationCenter.WatchdogSource, "The window was blocked", $"{ActivityText.Duration(stall.Duration)} by {stall.Label}"
+            + (stall.FullCollections > 0 ? $" · {stall.FullCollections} full collections, {stall.CollectionPause.TotalMilliseconds:F0} ms paused" : ""), NotificationSeverity.Warning, actions);
+    }
+
+    private void ToggleCentre(bool? open = null)
+    {
+        _centre.Toggle(open);
+        if (_centre.IsVisible)
+        {
+            _toast.Hide();
+        }
+
+        OnNotificationsChanged(this, EventArgs.Empty);
+    }
+
+    private void OnNotificationsChanged(object? sender, EventArgs e) => _bell.Show(_host.Notifications.Unseen, _host.ActivityCenter.Running.Count);
+
+    private void OnToast(object? sender, NotificationEntry entry)
+    {
+        if (!_centre.IsVisible)
+        {
+            _toast.Show(entry, _shell.Options.ToastMilliseconds);
         }
     }
 
@@ -482,7 +594,7 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         if (attempt < PlatformHookAttempts)
         {
-            Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(PlatformHookRetryMilliseconds), () => HookPlatform(attempt + 1));
+            Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(PlatformHookRetryMilliseconds), () => _host.Labels.Run("shell: hook the platform", () => HookPlatform(attempt + 1)));
         }
         else
         {
@@ -502,6 +614,11 @@ public sealed class ShellPage : ContentPage, IDisposable
             return Task.CompletedTask;
         }, _ => _conversations.HasPanels, "The plug-ins' chat column (a sheet in the narrow layout)"));
         EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.I, KeyModifiers.Control | KeyModifiers.Alt), "craft.chat"));
+        EditorCommands.Register(new EditorCommand("craft.notifications", "View: Show or hide the notifications", (_, _) =>
+        {
+            ToggleCentre();
+            return Task.CompletedTask;
+        }, null, "The notification centre: running operations with Cancel, how they ended, the plug-ins' messages"));
     }
 
     private void ToggleChat()
@@ -617,7 +734,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     {
         if (Dispatcher.IsDispatchRequired)
         {
-            Dispatcher.Dispatch(_titleWide.RebuildMenus);
+            Dispatcher.Dispatch(() => _host.Labels.Run("shell: rebuild the menus", _titleWide.RebuildMenus));
         }
         else
         {
@@ -820,7 +937,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         ShowBottom(BottomTab.Terminal);
-        Dispatcher.Dispatch(_terminalPanel.FocusTerminal);
+        _host.Dispatch("shell: focus the terminal", _terminalPanel.FocusTerminal);
     }
 
     private void ShowBottom(BottomTab tab)
@@ -845,7 +962,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         UpdateModel();
     }
 
-    private void OnModelStatusChanged(object? sender, EventArgs e) => Dispatcher.Dispatch(UpdateModel);
+    private void OnModelStatusChanged(object? sender, EventArgs e) => _host.Dispatch("shell: the model's status", UpdateModel);
 
     private void UpdateModel()
     {
@@ -889,6 +1006,8 @@ public sealed class ShellPage : ContentPage, IDisposable
             Options = _shell.Options,
             Theme = _shell.Theme,
             KeyHandler = _host,
+            Labels = _host.Labels,
+            Activities = _host.Activities,
             WorkspaceRoot = _shell.Workspace?.Root,
         };
         view.Open(tab.Document, tab.Language);
@@ -1148,6 +1267,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bottom.Apply(p);
         _terminalPanel.Apply(p);
         _status.Apply(p);
+        _activity.Apply(p);
+        _bell.Apply(p);
+        _centre.Apply(p);
+        _toast.Apply(p);
         _center.BackgroundColor = p.Surface;
         _editorArea.BackgroundColor = p.Surface;
         _empty.TextColor = p.Secondary;

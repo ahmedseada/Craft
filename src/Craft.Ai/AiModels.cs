@@ -25,8 +25,14 @@ public sealed class AiModels : IDisposable
         ModelAdapters.Changed += OnAdaptersChanged;
     }
 
-    /// <summary>Reports a load's stages (set by the session: the status bar), or null.</summary>
+    /// <summary>Reports a load's stages (set by the session: the models panel), or null.</summary>
     public IProgress<ModelLoadStatus>? Progress { get; set; }
+
+    /// <summary>
+    /// Where a load shows (phase U: the host's activities, so the status bar shows the model's download and load with its
+    /// stage and time, and the notification centre how it ended, a failure with Retry); none by default.
+    /// </summary>
+    public IEditorActivities Activities { get; set; } = NoActivities.Instance;
 
     /// <summary>The chat model's lease (the setting <c>model</c>).</summary>
     /// <exception cref="InvalidOperationException">No model is set.</exception>
@@ -83,6 +89,68 @@ public sealed class AiModels : IDisposable
     // A promoted or rolled-back adapter (the learning plug-in): the next request leases the model with it.
     private void OnAdaptersChanged(object? sender, EventArgs e) => Release();
 
+    /// <summary>A load's stages into its activity (the stage's message, its fraction) and on to the session's progress.</summary>
+    private sealed class LoadProgress(IActivity activity, IProgress<ModelLoadStatus>? next) : IProgress<ModelLoadStatus>
+    {
+        public void Report(ModelLoadStatus value)
+        {
+            activity.Report(value.Fraction is { } f && f < 1 ? f : null, value.Message);
+            next?.Report(value);
+        }
+    }
+
+    // The lease's load, off the calling thread (the UI's, for a chat or a completion): Idrak's built-ins (model sources,
+    // formats) register from this plug-in's folder first, then the provider loads; an activity shows it all.
+    private Task<ModelLease> Load(IModelProvider provider, string key, string model, string? adapter)
+    {
+        var activity = Activities.Start($"Loading {model}", ActivityKinds.ModelLoad);
+        var progress = new LoadProgress(activity, Progress);
+        // Not tied to one request's cancellation: the lease is shared by the requests that follow.
+        var lease = Task.Run(() =>
+        {
+            activity.Report(null, "registering Idrak's libraries");
+            IdrakLibraries.EnsureIncluded();
+            return provider.AcquireAsync(new ModelRequest(model) { Adapter = adapter }, progress, CancellationToken.None);
+        });
+        _ = lease.ContinueWith(done =>
+        {
+            if (done.IsCompletedSuccessfully)
+            {
+                var held = done.Result;
+                activity.Complete(held.Loaded
+                    ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"loaded in {held.LoadDuration.TotalSeconds:F1} s, context {held.ContextLength}")
+                    : "loaded already");
+                return;
+            }
+
+            // A failed load is not kept (the next request, or Retry, tries again).
+            lock (_gate)
+            {
+                if (_leases.TryGetValue(key, out var kept) && ReferenceEquals(kept, done))
+                {
+                    _leases.Remove(key);
+                }
+            }
+
+            var error = done.Exception?.GetBaseException();
+            activity.Fail($"{model} did not load: {error?.Message ?? "cancelled"}", error, () => _ = RetryAsync(model));
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return lease;
+    }
+
+    private async Task RetryAsync(string model)
+    {
+        try
+        {
+            await LeaseAsync(model, CancellationToken.None).ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // A retry's failure shows as its own activity's.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+    }
+
     private async Task<ModelLease> LeaseAsync(string model, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -99,11 +167,8 @@ public sealed class AiModels : IDisposable
         {
             if (!_leases.TryGetValue(key, out lease!))
             {
-                // Idrak's built-ins (model sources, formats) register from this plug-in's folder before the first load.
-                IdrakLibraries.EnsureIncluded();
                 var provider = ModelProviders.Get(settings.ModelProvider);
-                // Not tied to one request's cancellation: the lease is shared by the requests that follow.
-                lease = provider.AcquireAsync(new ModelRequest(model) { Adapter = adapter }, Progress, CancellationToken.None);
+                lease = Load(provider, key, model, adapter);
                 _leases[key] = lease;
             }
         }

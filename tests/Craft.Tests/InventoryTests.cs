@@ -86,6 +86,9 @@ public static class InventoryTests
             ["CRAFT_TERMINAL_SHELL"] = "bash", ["CRAFT_TERMINAL_ARGS"] = "-l", ["CRAFT_TERMINAL_ENV"] = "A=1|B=2", ["CRAFT_TERMINAL_CWD"] = "start",
             ["CRAFT_TERMINAL_SCROLLBACK"] = "200", ["CRAFT_TERMINAL_HOST"] = "pipe", ["CRAFT_TERMINAL_LINE_SPACING"] = "1.5",
             ["CRAFT_TERMINAL_EDITOR_COMMANDS"] = "craft.quickOpen, craft.settings",
+            // Phase U: the watchdog, activities and notifications.
+            ["CRAFT_UI_WATCHDOG_MS"] = "50", ["CRAFT_UI_STALL_MS"] = "500", ["CRAFT_UI_STALL_REPORTS"] = "3", ["CRAFT_NOTIFICATIONS_KEEP"] = "10",
+            ["CRAFT_TOAST_MS"] = "0", ["CRAFT_ACTIVITY_MIN_MS"] = "0", ["CRAFT_ACTIVITY_FRAME_MS"] = "33",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -107,6 +110,8 @@ public static class InventoryTests
             InlineCompletionProvider = "ai", ChatWidth = 400,
             TerminalShell = "bash", TerminalArguments = "-l", TerminalEnvironment = options.TerminalEnvironment, TerminalWorkingDirectory = "start",
             TerminalScrollback = 200, TerminalHost = "pipe", TerminalLineSpacing = 1.5f, TerminalEditorCommands = options.TerminalEditorCommands,
+            UiWatchdogMilliseconds = 50, UiStallMilliseconds = 500, UiStallReports = 3, NotificationsKeep = 10, ToastMilliseconds = 0,
+            ActivityMinimumMilliseconds = 0, ActivityFrameMilliseconds = 33,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

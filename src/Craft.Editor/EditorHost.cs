@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Craft.Abstractions;
 using Craft.Core;
 using Craft.Editor.Abstractions;
+using Craft.Editor.Activities;
 
 namespace Craft.Editor;
 
@@ -52,6 +53,9 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     {
         Options = options ?? new CraftOptions();
         _dispatch = dispatch ?? (static action => action());
+        Labels = new UiWorkLabels();
+        ActivityCenter = new ActivityCenter(action => Dispatch("activities: show", action), Options);
+        Notifications = new NotificationCenter(ActivityCenter, action => Dispatch("notifications: show", action), Options);
         Presenter = presenter;
         Settings = new PluginSettingsReader(readVariable ?? Environment.GetEnvironmentVariable);
         foreach (var binding in Options.KeyBindings)
@@ -62,6 +66,18 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
 
     /// <summary>The settings.</summary>
     public CraftOptions Options { get; }
+
+    /// <summary>The labels of the UI work running (every dispatch of the host runs under one; the UI watchdog names them).</summary>
+    public UiWorkLabels Labels { get; }
+
+    /// <summary>The running operations (phase U): the status bar's activity and its list.</summary>
+    public ActivityCenter ActivityCenter { get; }
+
+    /// <summary>The notification centre (phase U): the bell, the centre's list, the toasts.</summary>
+    public NotificationCenter Notifications { get; }
+
+    /// <inheritdoc />
+    public IEditorActivities Activities => ActivityCenter;
 
     /// <summary>How the user is asked (a page's dialogs); null rejects every proposed edit.</summary>
     public IEditorPresenter? Presenter { get; set; }
@@ -289,7 +305,19 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     public async Task SaveAsync(IEditorDocument document, string? path = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
-        await document.Document.SaveAsync(path, cancellationToken);
+        string name = Path.GetFileName(path ?? document.FilePath ?? "untitled");
+        using var activity = ActivityCenter.Start($"Saving {name}", ActivityKinds.Save, false, cancellationToken, true, HostSource);
+        try
+        {
+            await document.Document.SaveAsync(path, cancellationToken);
+            activity.Complete(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{document.Document.Buffer.Current.Length:N0} characters"));
+        }
+        catch (Exception error)
+        {
+            activity.Fail(error.Message, error);
+            throw;
+        }
+
         if (document is OpenDocument { IsClosed: false } open)
         {
             Raise(_saved, new EditorDocumentEventArgs(open), nameof(DocumentSaved));
@@ -469,10 +497,35 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     public void Record(string metric, double value, string unit) => Record(HostSource, metric, value, unit);
 
     /// <inheritdoc />
-    public void Dispatch(Action action)
+    public void Dispatch(Action action) => Dispatch("host: dispatch", action);
+
+    /// <inheritdoc />
+    public void Dispatch(string label, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        _dispatch(action);
+        string named = string.IsNullOrWhiteSpace(label) ? "host: dispatch" : label;
+        _dispatch(() => Labels.Run(named, action));
+    }
+
+    /// <inheritdoc />
+    public IEditorNotification Notify(string title, string text, NotificationSeverity severity = NotificationSeverity.Information, IReadOnlyList<NotificationAction>? actions = null) =>
+        Notify(HostSource, title, text, severity, actions);
+
+    /// <inheritdoc />
+    public IEditorNotification ShowStatus(string title, string text, NotificationSeverity severity = NotificationSeverity.Information, IReadOnlyList<NotificationAction>? actions = null) =>
+        Notifications.ShowStatus(HostSource, title, text, severity, actions);
+
+    /// <summary>Posts a message under <paramref name="source"/>, logged too (the Output tab keeps every one).</summary>
+    public IEditorNotification Notify(string source, string title, string text, NotificationSeverity severity, IReadOnlyList<NotificationAction>? actions)
+    {
+        var level = severity switch
+        {
+            NotificationSeverity.Error => EditorLogLevel.Error,
+            NotificationSeverity.Warning => EditorLogLevel.Warning,
+            _ => EditorLogLevel.Information,
+        };
+        Dispatch("notify: log", () => Log(source, level, $"{title}: {text}", null));    // any thread: the log is the UI thread's
+        return Notifications.Post(source, title, text, severity, actions);
     }
 
     /// <summary>
@@ -536,6 +589,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
 
         _documents.Clear();
         _activeDocument = null;
+        Notifications.Dispose();
         _disposed = true;
     }
 
@@ -674,7 +728,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     internal EditorProgressItem StartProgress(string title, string source)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
-        var item = new EditorProgressItem(this, title, source);
+        var item = new EditorProgressItem(this, title, source, ActivityCenter.Start(title, ActivityKinds.General, false, CancellationToken.None, true, source));
         _progress.Add(item);
         ProgressChanged?.Invoke(this, item);
         return item;

@@ -15,6 +15,7 @@ public sealed partial class EditorHost
     private sealed class PluginScope(EditorHost host, string name) : IEditorHost
     {
         private readonly List<Action> _undo = [];
+        private ScopedActivities? _activities;
         private bool _closed;
 
         public bool IsClosed => _closed;
@@ -134,10 +135,12 @@ public sealed partial class EditorHost
 
         public void Record(string metric, double value, string unit) => host.Record(name, metric, value, unit);
 
-        public void Dispatch(Action action)
+        public void Dispatch(Action action) => Dispatch("plug-in " + name, action);
+
+        public void Dispatch(string label, Action action)
         {
             ArgumentNullException.ThrowIfNull(action);
-            host.Dispatch(() =>
+            host.Dispatch(string.IsNullOrWhiteSpace(label) ? "plug-in " + name : name + ": " + label, () =>
             {
                 if (!_closed)
                 {
@@ -146,10 +149,29 @@ public sealed partial class EditorHost
             });
         }
 
+        public IEditorActivities Activities => _activities ??= new ScopedActivities(host.ActivityCenter, name, this);
+
+        public IEditorNotification Notify(string title, string text, NotificationSeverity severity = NotificationSeverity.Information, IReadOnlyList<NotificationAction>? actions = null) =>
+            _closed ? NoNotification.Instance : host.Notify(name, title, text, severity, actions);
+
+        public IEditorNotification ShowStatus(string title, string text, NotificationSeverity severity = NotificationSeverity.Information, IReadOnlyList<NotificationAction>? actions = null) =>
+            _closed ? NoNotification.Instance : host.Notifications.ShowStatus(name, title, text, severity, actions);
+
+        /// <summary>Remembers how to take back something the plug-in added.</summary>
+        public void Remember(Action undo)
+        {
+            if (!_closed)
+            {
+                _undo.Add(undo);
+            }
+        }
+
         /// <summary>Takes back what the plug-in left, the last added first.</summary>
         public void Close(EditorHost owner)
         {
             _closed = true;
+            owner.ActivityCenter.EndAll(name, "the plug-in was deactivated");
+            owner.Notifications.RemoveStatuses(name);
             for (int i = _undo.Count - 1; i >= 0; i--)
             {
                 try
@@ -220,6 +242,32 @@ public sealed partial class EditorHost
                 terminal.Show();
             }
         }
+    }
+
+    /// <summary>The activities as one plug-in starts them: under its name, and refused (shown nowhere) once it is deactivated.</summary>
+    private sealed class ScopedActivities(Activities.ActivityCenter center, string name, PluginScope scope) : IEditorActivities
+    {
+        public IReadOnlyList<ActivitySnapshot> Running => center.Running;
+
+        public IReadOnlyList<ActivitySnapshot> Recent => center.Recent;
+
+        public event EventHandler? Changed
+        {
+            add
+            {
+                center.Changed += value;
+                scope.Remember(() => center.Changed -= value);
+            }
+
+            remove => center.Changed -= value;
+        }
+
+        public IActivity Start(string title, string kind = ActivityKinds.General, bool cancellable = false, CancellationToken cancellationToken = default, bool keep = true) =>
+            scope.IsClosed ? NoActivities.Instance.Start(title, kind, cancellable, cancellationToken, keep) : center.Start(title, kind, cancellable, cancellationToken, keep, name);
+
+        public bool Cancel(long id) => center.Cancel(id);
+
+        public bool Retry(long id) => center.Retry(id);
     }
 
     private sealed class Nothing : IDisposable

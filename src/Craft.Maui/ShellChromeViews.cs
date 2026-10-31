@@ -883,8 +883,11 @@ public sealed class StatusBarView : ContentView
     private readonly FlexLayout _bar = new() { Wrap = FlexWrap.NoWrap, AlignItems = FlexAlignItems.Center, Padding = new Thickness(12, 0) };
     private ShellPalette _palette;
 
-    /// <summary>The bar with <paramref name="pluginItems"/> (the plug-ins' status items) before the model's text.</summary>
-    public StatusBarView(ShellPalette palette, View pluginItems)
+    /// <summary>
+    /// The bar with <paramref name="pluginItems"/> (the plug-ins' status items) before the model's text; phase U's running
+    /// <paramref name="activity"/> after the notice and the <paramref name="bell"/> at the far right, when given.
+    /// </summary>
+    public StatusBarView(ShellPalette palette, View pluginItems, View? activity = null, View? bell = null)
     {
         ArgumentNullException.ThrowIfNull(palette);
         ArgumentNullException.ThrowIfNull(pluginItems);
@@ -905,6 +908,12 @@ public sealed class StatusBarView : ContentView
         _bar.Children.Add(Problems);
         _bar.Children.Add(Semantic);
         _bar.Children.Add(Notice);
+        if (activity is not null)
+        {
+            _bar.Children.Add(activity);
+            _bar.SetShrink(activity, 1);
+        }
+
         _bar.Children.Add(spacer);
         _bar.SetGrow(spacer, 1);
         _bar.SetShrink(Notice, 1);
@@ -916,6 +925,11 @@ public sealed class StatusBarView : ContentView
         _bar.Children.Add(Paint);
         _bar.Children.Add(pluginItems);
         _bar.Children.Add(Model);
+        if (bell is not null)
+        {
+            _bar.Children.Add(bell);
+        }
+
         var tap = new TapGestureRecognizer();
         tap.Tapped += (_, _) => ProblemsTapped?.Invoke(this, EventArgs.Empty);
         Problems.GestureRecognizers.Add(tap);

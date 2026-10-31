@@ -4,6 +4,7 @@
 using Craft.Abstractions;
 using Craft.Core;
 using Craft.Editor;
+using Craft.Editor.Activities;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Dispatching;
 using Microsoft.Maui.Graphics;
@@ -35,6 +36,7 @@ public sealed class EditorView : ContentView, IDisposable
     private ITheme? _theme;
     private CraftOptions _options = new();
     private string? _workspaceRoot;
+    private UiWorkLabels? _labels;
     private bool _caretOn = true;
     private bool _reclassifying;
     private bool _disposed;
@@ -119,6 +121,20 @@ public sealed class EditorView : ContentView, IDisposable
             }
         }
     }
+
+    /// <summary>The labels of the UI work (phase U's watchdog names a key, a paint or a pointer that blocks the window), or null.</summary>
+    public UiWorkLabels? Labels
+    {
+        get => _labels;
+        set
+        {
+            _labels = value;
+            _drawable.Labels = value;
+        }
+    }
+
+    /// <summary>Where the document's language shows its long work (the host's activities), or null; set before <see cref="Open"/>.</summary>
+    public IEditorActivities? Activities { get; set; }
 
     /// <summary>The open folder the document belongs to (its language's workspace), or null; a change makes a new model.</summary>
     public string? WorkspaceRoot
@@ -207,8 +223,8 @@ public sealed class EditorView : ContentView, IDisposable
             return;
         }
 
-        var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot);
-        model.Dispatch = action => Dispatcher.Dispatch(action);
+        var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities);
+        model.Dispatch = action => Dispatcher.Dispatch(_labels is { } labels ? () => labels.Run("editor: a language's answer", action) : action);
         model.DiagnosticsChanged += OnModelDiagnosticsChanged;
         model.DefinitionRequested += OnModelDefinitionRequested;
         model.Invalidated += OnModelInvalidated;
@@ -360,6 +376,7 @@ public sealed class EditorView : ContentView, IDisposable
 
         var modifiers = _inputConnection is IKeyModifierSource source ? source.CurrentModifiers : KeyModifiers.None;
         var point = e.Touches[0];
+        using var label = _labels?.Enter("editor: pointer pressed");
         _model.PointerPressed(point.X, point.Y, modifiers);
     }
 
@@ -371,10 +388,15 @@ public sealed class EditorView : ContentView, IDisposable
         }
 
         var point = e.Touches[0];
+        using var label = _labels?.Enter("editor: pointer moved");
         _model.PointerMoved(point.X, point.Y);
     }
 
-    private void OnEndInteraction(object? sender, TouchEventArgs e) => _model?.PointerReleased();
+    private void OnEndInteraction(object? sender, TouchEventArgs e)
+    {
+        using var label = _labels?.Enter("editor: pointer released");
+        _model?.PointerReleased();
+    }
 
     private void OnMoveHoverInteraction(object? sender, TouchEventArgs e)
     {
@@ -439,9 +461,21 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>The keyboard's sink: the current model, whichever it is when the key arrives.</summary>
     private sealed class InputForwarder(EditorView view) : IEditorInputSink
     {
-        public bool OnKey(EditorKey key, KeyModifiers modifiers) =>
-            view.KeyHandler is { } handler ? handler.HandleKey(key, modifiers, view._model) : view._model?.OnKey(key, modifiers) ?? false;
+        private static readonly Dictionary<EditorKey, string> KeyLabels = Enum.GetValues<EditorKey>().Distinct().ToDictionary(k => k, k => "editor: key " + k.ToString());
 
-        public void OnText(string text) => view._model?.OnText(text);
+        public bool OnKey(EditorKey key, KeyModifiers modifiers)
+        {
+            using var label = view._labels?.Enter(KeyLabel(key));
+            return view.KeyHandler is { } handler ? handler.HandleKey(key, modifiers, view._model) : view._model?.OnKey(key, modifiers) ?? false;
+        }
+
+        public void OnText(string text)
+        {
+            using var label = view._labels?.Enter("editor: typed text");
+            view._model?.OnText(text);
+        }
+
+        // The key's label, made once per key (a keystroke allocates nothing for it).
+        private static string KeyLabel(EditorKey key) => KeyLabels.TryGetValue(key, out var label) ? label : "editor: key";
     }
 }

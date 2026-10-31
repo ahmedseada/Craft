@@ -173,10 +173,12 @@ public static class AiPluginTests
             Check.True(Text(document) == "class A\n{\n    int x;\n}\n" && !document.CanUndo, "one undo step");
 
             string kept = Path.Combine(root, ".craft", "chat.json");
+            await panel.Kept.WaitAsync(TimeSpan.FromSeconds(10));                 // written off the UI thread
             Check.True(File.Exists(kept), "the conversation is kept in the workspace");
             var again = new AiChatPanel(host, () => fixture.Settings, fixture.Models);
             Check.True(again.History.Count == 2 && again.Entries.Any(e => e.Role == ConversationRole.Code && e.Actions.Count == 1), "a new panel reads it back, its code still applicable");
             again.NewChat();
+            await again.Kept.WaitAsync(TimeSpan.FromSeconds(10));
             Check.True(!File.Exists(kept) && again.Entries.Count == 0, "New chat clears it");
             panel.Dispose();
             again.Dispose();

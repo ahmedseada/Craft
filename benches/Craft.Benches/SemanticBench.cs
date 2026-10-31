@@ -81,8 +81,8 @@ internal static class SemanticBench
         await solution.Projects.First(p => p.Name == "Craft.Editor").GetCompilationAsync().ConfigureAwait(false);
         double compileWarm = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         results.Append(CultureInfo.InvariantCulture, $"  build warm after a release (references read again): {F(rebuilt)} ms; another workspace with the references shared: {F(shared)} ms; Craft.Editor's compilation warm: {F(compileWarm)} ms\n");
-        other.Leave(other);
-        workspace.Leave(workspace);
+        await other.LeaveAsync(other).ConfigureAwait(false);
+        await workspace.LeaveAsync(workspace).ConfigureAwait(false);
         solution = null;
         compilation = null;
         editor = null;
@@ -198,7 +198,7 @@ internal static class SemanticBench
         start = Stopwatch.GetTimestamp();
         await DiagnoseAllAsync(changed).ConfigureAwait(false);
         double warm = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-        workspace.Leave(workspace);
+        await workspace.LeaveAsync(workspace).ConfigureAwait(false);
         return string.Create(CultureInfo.InvariantCulture, $"  {(generators ? "with" : "without")} generators: every compilation and its diagnostics {F(cold)} ms, {errors} errors, {generated} generated documents, {held / 1024.0 / 1024:F1} MB held; after a one-character change in {Path.GetFileName(document.FilePath)}, every compilation and its diagnostics again {F(warm)} ms\n");
     }
 
@@ -270,7 +270,7 @@ internal static class SemanticBench
         await BuildAndDiagnoseAsync(workspace, diagnose: false).ConfigureAwait(false);
         double rebuilt = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         await Stage($"built again (the MEF host composed again, warm: {F(rebuilt)} ms)").ConfigureAwait(false);
-        workspace.Leave(workspace);
+        await workspace.LeaveAsync(workspace).ConfigureAwait(false);
         CSharpWorkspace.ReleaseAll();
         await Stage("all released again").ConfigureAwait(false);
         results.Append("memory, over the start (GC.GetTotalMemory, and the live heap after a compacting collection), each measured after the stack unwound:\n");

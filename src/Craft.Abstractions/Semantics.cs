@@ -17,6 +17,9 @@ public sealed record LanguageOpenContext(string? FilePath, string? WorkspaceRoot
 {
     /// <summary>No file, no workspace, the default settings.</summary>
     public static LanguageOpenContext None { get; } = new(null, null, LanguageSettings.Default);
+
+    /// <summary>Where the session shows its long work (a workspace's build, a compilation with its source generators); none by default.</summary>
+    public IEditorActivities Activities { get; init; } = NoActivities.Instance;
 }
 
 /// <summary>

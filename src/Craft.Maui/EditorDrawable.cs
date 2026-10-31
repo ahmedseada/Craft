@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.Editor;
+using Craft.Editor.Activities;
 using Microsoft.Maui.Graphics;
 
 namespace Craft.Maui;
@@ -46,6 +47,9 @@ public sealed class EditorDrawable : IDrawable, IDisposable
     /// <summary>Whether a frame is being drawn now.</summary>
     public bool IsDrawing { get; private set; }
 
+    /// <summary>The labels of the UI work (the watchdog names a paint that blocks the window), or null.</summary>
+    public UiWorkLabels? Labels { get; set; }
+
     /// <summary>The renderer (its counters are the paint's telemetry).</summary>
     public EditorRenderer Renderer => _renderer;
 
@@ -69,6 +73,7 @@ public sealed class EditorDrawable : IDrawable, IDisposable
         }
 
         IsDrawing = true;
+        using var label = Labels?.Enter("editor: paint");
         try
         {
             var options = model.Options;

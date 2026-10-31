@@ -119,13 +119,33 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         cancellationToken.ThrowIfCancellationRequested();
         var host = Host(settings);
         var watch = Stopwatch.StartNew();
-        using var ticker = new Timer(_ => progress?.Report(new ModelLoadStatus("loading", null,
+        // Phase U: every stage also becomes the provider's state (the status bar's model text and the chip follow
+        // StatusChanged), whoever asked for the lease: the load command, the chat, the agent or completion.
+        void Report(ModelLoadStatus status)
+        {
+            progress?.Report(status);
+            SetState(status.Message, isProblem: false);
+        }
+
+        using var ticker = new Timer(_ => Report(new ModelLoadStatus("loading", null,
             string.Create(CultureInfo.InvariantCulture, $"loading {key.Model} on {key.Device}, {watch.Elapsed.TotalSeconds:F1} s"))), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
-        progress?.Report(new ModelLoadStatus("resolving", null, $"resolving {key.Model} (Idrak's model sources)"));
-        var lease = host.Acquire(key.Text, _keepAlive);
+        Report(new ModelLoadStatus("resolving", null, $"resolving {key.Model} (Idrak's model sources)"));
+        ModelHost<LocalModel>.Lease lease;
+        try
+        {
+            lease = host.Acquire(key.Text, _keepAlive);
+        }
+        catch (Exception error)
+        {
+            ticker.Dispose();
+            SetState("failed: " + error.Message, isProblem: true);
+            throw;
+        }
+
+        ticker.Dispose();
         var model = lease.Model;
-        _device = model.Device;
-        progress?.Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
+        _device = model.Device;                    // the device in use, shown in the status bar and the chip
+        Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
             ? string.Create(CultureInfo.InvariantCulture, $"{key.Model} loaded on {model.Device} in {lease.LoadDuration.TotalSeconds:F1} s, context {model.ContextLength}")
             : $"{key.Model} on {model.Device} (loaded already)"));
         return new ModelLease(key.Model, model.Chat, model.Text, model.ContextLength, lease.LoadDuration, lease) { Tokenizer = model.Tokenizer };

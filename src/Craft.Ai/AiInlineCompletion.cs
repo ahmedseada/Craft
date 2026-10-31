@@ -51,6 +51,9 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
         _active = active ?? (static () => true);
     }
 
+    /// <summary>Where a request shows while it writes (the host's activities); none by default.</summary>
+    public IEditorActivities Activities { get; set; } = NoActivities.Instance;
+
     /// <inheritdoc />
     public string Name => ProviderName;
 
@@ -97,10 +100,13 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
         int generated = 0;
         // What the ghost showed, for the AI events' sinks (the learning plug-in); gathered only while one listens.
         var shown = AiEvents.Listening ? new StringBuilder() : null;
+        // Phase U: a request that runs long shows in the status bar while it writes (never kept: the next key ends it).
+        using var activity = Activities.Start("Completion", ActivityKinds.Generation, keep: false);
         try
         {
             await foreach (var chunk in model.StreamAsync(prompt, options, cancellationToken).ConfigureAwait(false))
             {
+                activity.Report(null, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Math.Max(generated, chunk.Generated)} tokens"));
                 if (chunk.Done && chunk.Stats is { } stats)
                 {
                     Completed?.Invoke(this, stats);

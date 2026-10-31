@@ -50,10 +50,10 @@ public sealed class AgentWorkspace : IDisposable
 
     /// <summary>
     /// Copies <paramref name="workspace"/> into a new folder under <paramref name="folder"/> (the system's temporary folder
-    /// when empty), leaving out <paramref name="ignore"/>, then writes <paramref name="unsaved"/> (full path to text) over their copies.
+    /// when empty), leaving out <paramref name="ignore"/>, then writes <paramref name="unsaved"/> (full path to text) over their copies; <paramref name="copied"/> hears the files copied so far, every 200.
     /// </summary>
     public static AgentWorkspace Create(string workspace, string folder, IReadOnlyList<string> ignore, IReadOnlyDictionary<string, string> unsaved,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, Action<int>? copied = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspace);
         ArgumentNullException.ThrowIfNull(ignore);
@@ -76,7 +76,10 @@ public sealed class AgentWorkspace : IDisposable
             foreach (var file in Directory.EnumerateFiles(from))
             {
                 File.Copy(file, System.IO.Path.Combine(to, System.IO.Path.GetFileName(file)));
-                files++;
+                if (++files % 200 == 0)
+                {
+                    copied?.Invoke(files);
+                }
             }
 
             foreach (var directory in Directory.EnumerateDirectories(from))

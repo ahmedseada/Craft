@@ -13,7 +13,7 @@ namespace Craft.Plugins.Learning;
 /// answers and the user's verdicts as episodes only while the first consent holds, shows the Learning panel and the
 /// status marks (recording, sharing, training), trains on demand or when the machine is idle, promotes and rolls back
 /// adapters, and shares only after the preview. Called on the host's UI thread; nothing there waits: files, the model,
-/// training and sharing run on the thread pool and come back through <see cref="IEditorHost.Dispatch"/>.
+/// training and sharing run on the thread pool and come back through <see cref="IEditorHost.Dispatch(Action)"/>.
 /// </summary>
 public sealed class LearningSession : IDisposable
 {
@@ -774,7 +774,9 @@ public sealed class LearningSession : IDisposable
         string? workspace = _host.WorkspaceFolder;
         var source = new CancellationTokenSource();
         _train = source;
-        var progress = _host.StartProgress("Learning: training the adapter");
+        // Phase U: the training round is an activity with Cancel (the status bar's stops it as Stop does).
+        var progress = _host.Activities.Start("Learning: training the adapter", ActivityKinds.Training, cancellable: true, source.Token);
+        progress.CancellationToken.Register(source.Cancel);
         Show(ref _trainingShown, _training, true);
         _training.Text = $"Learning: loading {model}";
         var reports = new Progress(p => Post(s =>
@@ -924,7 +926,7 @@ public sealed class LearningSession : IDisposable
         var settings = Settings();
         var store = Store;
         var marked = _marked.Select(m => new WorkspaceTest(m, "marked by you")).ToList();
-        using var progress = _host.StartProgress("Learning: running the tests");
+        using var progress = _host.Activities.Start("Learning: running the tests", ActivityKinds.Command);
         string message;
         try
         {

@@ -313,6 +313,33 @@ public sealed record CraftOptions
     /// </summary>
     public IReadOnlyList<string> TerminalEditorCommands { get; init; } = ["craft.commandPalette", "craft.quickOpen", "craft.togglePanel", "craft.settings"];
 
+    /// <summary>
+    /// Milliseconds between the UI watchdog's ticks through the dispatcher (<c>CRAFT_UI_WATCHDOG_MS</c>, phase U); 0
+    /// turns the watchdog off.
+    /// </summary>
+    public int UiWatchdogMilliseconds { get; init; } = 100;
+
+    /// <summary>A tick later than this many milliseconds is a stall of the UI thread, reported (<c>CRAFT_UI_STALL_MS</c>).</summary>
+    public int UiStallMilliseconds { get; init; } = 200;
+
+    /// <summary>The most stall reports written to the crash folder in a session (<c>CRAFT_UI_STALL_REPORTS</c>); 0 writes none (they still show).</summary>
+    public int UiStallReports { get; init; } = 20;
+
+    /// <summary>The notifications the centre keeps for the session, running ones and status entries aside (<c>CRAFT_NOTIFICATIONS_KEEP</c>).</summary>
+    public int NotificationsKeep { get; init; } = 200;
+
+    /// <summary>Milliseconds a toast (a failure, a question) shows before it goes to the centre (<c>CRAFT_TOAST_MS</c>); 0 shows none.</summary>
+    public int ToastMilliseconds { get; init; } = 6000;
+
+    /// <summary>
+    /// An activity that ends within this many milliseconds shows neither in the status bar nor in the centre's history
+    /// (a failure always does) (<c>CRAFT_ACTIVITY_MIN_MS</c>).
+    /// </summary>
+    public int ActivityMinimumMilliseconds { get; init; } = 300;
+
+    /// <summary>The fewest milliseconds between two updates of the activities and notifications on screen (<c>CRAFT_ACTIVITY_FRAME_MS</c>; 16: once a frame).</summary>
+    public int ActivityFrameMilliseconds { get; init; } = 16;
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -389,6 +416,13 @@ public sealed record CraftOptions
         new("CRAFT_TERMINAL_HOST", "auto", "What runs the shell: auto (conpty on Windows, else pipe), pipe (plain redirected pipes), or a registered host. A workspace cannot set it."),
         new("CRAFT_TERMINAL_LINE_SPACING", "1.3", "A terminal row's height as a multiple of the code font's height."),
         new("CRAFT_TERMINAL_EDITOR_COMMANDS", "craft.commandPalette,craft.quickOpen,craft.togglePanel,craft.settings", "Commands whose keys still run while a terminal has the keyboard (every other chord goes to the shell), separated by ','."),
+        new("CRAFT_UI_WATCHDOG_MS", "100", "Milliseconds between the UI watchdog's ticks through the dispatcher; 0 turns it off."),
+        new("CRAFT_UI_STALL_MS", "200", "A watchdog tick later than this many milliseconds is a stall of the window: shown, logged and written as a stall report."),
+        new("CRAFT_UI_STALL_REPORTS", "20", "The most stall reports written to the crash folder in a session; 0 writes none (stalls still show)."),
+        new("CRAFT_NOTIFICATIONS_KEEP", "200", "The notifications the centre keeps for the session (running operations and status entries aside)."),
+        new("CRAFT_TOAST_MS", "6000", "Milliseconds a toast (a failure, a question) shows before it waits in the centre; 0 shows none."),
+        new("CRAFT_ACTIVITY_MIN_MS", "300", "An operation that ends within this many milliseconds shows neither in the status bar nor in the centre (a failure always does)."),
+        new("CRAFT_ACTIVITY_FRAME_MS", "16", "The fewest milliseconds between two updates of the running operations and notifications on screen."),
     ];
 
     /// <summary>
@@ -761,6 +795,41 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_TERMINAL_EDITOR_COMMANDS") is { } terminalCommands)
         {
             options = options with { TerminalEditorCommands = terminalCommands.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
+        }
+
+        if (Text(read, "CRAFT_UI_WATCHDOG_MS") is { } watchdog)
+        {
+            options = options with { UiWatchdogMilliseconds = Whole(watchdog, "CRAFT_UI_WATCHDOG_MS", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_UI_STALL_MS") is { } stall)
+        {
+            options = options with { UiStallMilliseconds = Whole(stall, "CRAFT_UI_STALL_MS", 1, 600_000) };
+        }
+
+        if (Text(read, "CRAFT_UI_STALL_REPORTS") is { } stallReports)
+        {
+            options = options with { UiStallReports = Whole(stallReports, "CRAFT_UI_STALL_REPORTS", 0, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_NOTIFICATIONS_KEEP") is { } keep)
+        {
+            options = options with { NotificationsKeep = Whole(keep, "CRAFT_NOTIFICATIONS_KEEP", 0, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_TOAST_MS") is { } toast)
+        {
+            options = options with { ToastMilliseconds = Whole(toast, "CRAFT_TOAST_MS", 0, 600_000) };
+        }
+
+        if (Text(read, "CRAFT_ACTIVITY_MIN_MS") is { } activityMin)
+        {
+            options = options with { ActivityMinimumMilliseconds = Whole(activityMin, "CRAFT_ACTIVITY_MIN_MS", 0, 600_000) };
+        }
+
+        if (Text(read, "CRAFT_ACTIVITY_FRAME_MS") is { } frame)
+        {
+            options = options with { ActivityFrameMilliseconds = Whole(frame, "CRAFT_ACTIVITY_FRAME_MS", 1, 1000) };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

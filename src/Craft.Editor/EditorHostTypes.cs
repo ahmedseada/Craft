@@ -216,13 +216,18 @@ public sealed class EditorMeasureEventArgs(string source, string metric, double 
 public sealed class EditorProgressItem : IEditorProgress
 {
     private readonly EditorHost _host;
+    private readonly IActivity _activity;
 
-    internal EditorProgressItem(EditorHost host, string title, string source)
+    internal EditorProgressItem(EditorHost host, string title, string source, IActivity activity)
     {
         _host = host;
         Title = title;
         Source = source;
+        _activity = activity;
     }
+
+    /// <summary>The activity it shows as (phase U: the status bar's list and the notification centre).</summary>
+    public IActivity Activity => _activity;
 
     /// <inheritdoc />
     public string Title { get; }
@@ -249,6 +254,7 @@ public sealed class EditorProgressItem : IEditorProgress
 
         Fraction = fraction is { } f ? Math.Clamp(f, 0, 1) : null;
         Message = message;
+        _activity.Report(Fraction, message);
         _host.OnProgressChanged(this);
     }
 
@@ -258,6 +264,7 @@ public sealed class EditorProgressItem : IEditorProgress
         if (!IsDone)
         {
             IsDone = true;
+            _activity.Dispose();
             _host.OnProgressEnded(this);
         }
     }

@@ -11,7 +11,7 @@ namespace Craft.Ai;
 /// <summary>
 /// What the AI plug-in's conversation panels share (the chat and the agent run): the entries, chips, status and busy
 /// state of an <see cref="IConversationPanel"/>, changed on the host's UI thread only (work on another thread posts
-/// through <see cref="IEditorHost.Dispatch"/>), with one change event per entry while a reply streams.
+/// through <see cref="IEditorHost.Dispatch(Action)"/>), with one change event per entry while a reply streams.
 /// </summary>
 public abstract class ConversationPanel : IConversationPanel
 {

@@ -118,7 +118,7 @@ public sealed class CSharpLanguage : ILanguage
             }
             finally
             {
-                workspace.Leave(owner);
+                await workspace.LeaveAsync(owner).ConfigureAwait(false);
             }
         }, cancellationToken);
     }

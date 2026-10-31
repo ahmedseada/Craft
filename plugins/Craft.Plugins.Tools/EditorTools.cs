@@ -90,7 +90,7 @@ public static class EditorTools
     /// <summary>
     /// The live tools over <paramref name="host"/>: <c>open_documents</c>, <c>read_document</c>, <c>get_selection</c>,
     /// <c>get_diagnostics</c>, <c>search_workspace</c>, <c>find_symbol</c>, <c>propose_edit</c>. Each reads the host on its UI thread
-    /// (<see cref="IEditorHost.Dispatch"/>) and does its work off it, so a call from an MCP client's thread is safe.
+    /// (<see cref="IEditorHost.Dispatch(Action)"/>) and does its work off it, so a call from an MCP client's thread is safe.
     /// </summary>
     public static IReadOnlyList<ITool> Live(IEditorHost host, ToolSettings settings)
     {

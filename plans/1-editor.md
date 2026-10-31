@@ -2152,6 +2152,22 @@ the owner's machine, not only headless.
       model and device; every one a `CRAFT_PLUGIN_AI_*` variable and a `.craft/settings.json` key; the lease per role
       (d260816) keys on the role's own settings, so two roles on one model and settings share one copy.
 
+26. **The bottom panel's text is one read-only text surface, not a list with checkboxes** (the owner, 2026-11-01: "the
+    checkbox is so gross, why didn't you add a multi-line editor and append to it"; "I can only select one line, and
+    when I need more I need to check: is that the friendly, usable design I asked for?"). Note 19 made Output and
+    telemetry a `CollectionView` in `SelectionMode.Multiple`, which on Windows draws a checkbox per row, and its rows
+    `SelectableLabel`s, which select within one line only. Next free slot, before note 25.
+    - Output and Idrak telemetry are Craft's own editor surface in a read-only mode (a new `IsReadOnly` on the editor
+      model: typing, paste, cut, delete and the AI never change it; the host appends through its own path, outside undo):
+      drag-select across lines, Shift+click, Ctrl+A, Ctrl+C and Copy in the context menu, Ctrl+F, only visible lines
+      laid out and drawn, new lines appended at the end and followed unless the user scrolled up, the code font and the
+      theme, error and warning lines coloured (a small log language), bounded by `CRAFT_HOST_LOG_LINES` (oldest lines
+      trimmed in one step).
+    - Problems stays a list (a row jumps to its place) with no checkboxes: plain rows, Ctrl+click and Shift+click to
+      pick several, Ctrl+C copies the picked rows, Copy all stays.
+    - Tests headless: read-only refuses every edit path, append keeps the selection and the follow rule, the trim keeps
+      the view's place; and a scan that no `SelectionMode.Multiple` list is left in the shell.
+
 **Already planned and still owed** (from the earlier notes, in U and U2 above): the notification centre, every
 operation in the status bar, the window never freezing, the settings and Models pages not covering the menus, new
 files showing in the tree, the side panel gone, every panel collapsible and resizable, and the open question of

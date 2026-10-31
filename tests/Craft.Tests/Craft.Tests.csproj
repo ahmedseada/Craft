@@ -18,6 +18,9 @@
     <ProjectReference Include="..\..\src\Craft.Editor\Craft.Editor.csproj" />
     <ProjectReference Include="..\..\src\Craft.CSharp\Craft.CSharp.csproj" />
     <ProjectReference Include="..\..\src\Craft.Ai\Craft.Ai.csproj" />
+    <!-- Built, not referenced: the one test build also compiles the MAUI views (net10.0), so a change or a merge that breaks
+         them fails here, not first on the owner's app build. -->
+    <ProjectReference Include="..\..\src\Craft.Maui\Craft.Maui.csproj" ReferenceOutputAssembly="false" SetTargetFramework="TargetFramework=net10.0" SkipGetTargetFrameworkProperties="true" />
     <!-- The plug-ins of phase P (plugins/): referenced for their API dumps and their own tests; the Plugins group also loads
          each from a copy of its own output folder through CraftPlugins.LoadFolder, as the app does. -->
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Tools\Craft.Plugins.Tools.csproj" />

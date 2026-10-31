@@ -56,8 +56,8 @@ public sealed class SplitPanel : Grid
             ColumnDefinitions = edge == SplitEdge.Start
                 ? [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)]
                 : [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)];
-            Add(_grip, edge == SplitEdge.Start ? 0 : 1, 0);
-            Add(_host, edge == SplitEdge.Start ? 1 : 0, 0);
+            this.Add(_grip, edge == SplitEdge.Start ? 0 : 1, 0);
+            this.Add(_host, edge == SplitEdge.Start ? 1 : 0, 0);
         }
         else
         {
@@ -66,8 +66,8 @@ public sealed class SplitPanel : Grid
             _line.VerticalOptions = LayoutOptions.Center;
             _line.HorizontalOptions = LayoutOptions.Fill;
             RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)];
-            Add(_grip, 0, 0);
-            Add(_host, 0, 1);
+            this.Add(_grip, 0, 0);
+            this.Add(_host, 0, 1);
         }
 
         _grip.Add(_line);

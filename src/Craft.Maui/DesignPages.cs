@@ -525,9 +525,9 @@ public sealed class ModelsPage : ContentView, IDisposable
         {
             // What the right-hand "Models and devices" panel listed before phase U2.
             var loaded = new VerticalStackLayout { Spacing = 6 };
-            foreach (var model in status.Loaded)
+            foreach (var loadedName in status.Loaded)
             {
-                loaded.Children.Add(Mono(model, p.Text));
+                loaded.Children.Add(Mono(loadedName, p.Text));
             }
 
             _main.Children.Add(Section("Loaded now", loaded));

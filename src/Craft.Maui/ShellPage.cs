@@ -221,7 +221,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         // settings when it ends (not on every move).
         Wire(_sideSplit, ShellPanel.Explorer, () => Width - _rail.Width - (_chatSplit.IsVisible ? _chatSplit.Width : 0));
         Wire(_chatSplit, ShellPanel.Chat, () => Width - _rail.Width - (_sideSplit.IsVisible ? _sideSplit.Width : 0));
-        Wire(_bottomSplit, ShellPanel.Bottom, () => _center.Height - _tabStrip.Height - _breadcrumb.Height);
+        Wire(_bottomSplit, ShellPanel.Bottom, () => (_center?.Height ?? 0) - _tabStrip.Height - _breadcrumb.Height);
 
         // Phase T: the terminals in the Terminal tab, on the platform's host (ConPTY on Windows) when it has one.
         if (startup.Platform.TerminalHost is { } terminalHost)

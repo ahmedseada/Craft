@@ -27,6 +27,7 @@ public sealed class WindowsShellPlatform : IShellPlatform
         SelectableText.Configure();
         WindowsControlStyles.Configure();                            // the owner's notes 10 and 12, before any control is made
         ComposerKeys.Configure();                                    // Enter sends, Shift+Enter a line, Escape leaves the composer
+        EntryKeys.Configure();                                       // phase X: the palette's and find's keys before their text boxes
     }
 
     /// <inheritdoc />
@@ -43,6 +44,27 @@ public sealed class WindowsShellPlatform : IShellPlatform
 
     /// <inheritdoc />
     public IShellFiles? ShellFiles { get; } = new WindowsShellFiles();
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> DroppedPathsAsync(Microsoft.Maui.Controls.DropEventArgs drop)
+    {
+        ArgumentNullException.ThrowIfNull(drop);
+        if (drop.PlatformArgs?.DragEventArgs is not { } args || !args.DataView.Contains(global::Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+        {
+            return [];
+        }
+
+        var deferral = args.GetDeferral();                       // the data stays readable across the await
+        try
+        {
+            var items = await args.DataView.GetStorageItemsAsync();
+            return [.. items.Select(i => i.Path).Where(p => !string.IsNullOrEmpty(p))];
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+    }
 
     /// <inheritdoc />
     public IDisposable RouteKeys(MauiWindow window, IEditorKeyHandler handler)

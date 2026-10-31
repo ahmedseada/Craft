@@ -450,6 +450,26 @@ public sealed record CraftOptions
     /// <summary>Whether Ctrl+C in a terminal copies its selection when there is one (else it is the shell's interrupt) (<c>CRAFT_TERMINAL_CTRL_C_COPIES</c>).</summary>
     public bool TerminalCtrlCCopies { get; init; } = true;
 
+    // Phase X slice 3: inline, not modal; the welcome page.
+
+    /// <summary>Whether the welcome page opens at start when no folder is open (<c>CRAFT_WELCOME_AT_START</c>; its "Show at start" switch writes it).</summary>
+    public bool WelcomeAtStart { get; init; } = true;
+
+    /// <summary>Milliseconds an inline bar with Undo (a cleared notification centre, a removed recent folder) stays before the change is kept (<c>CRAFT_UNDO_BAR_MS</c>).</summary>
+    public int UndoBarMilliseconds { get; init; } = 5000;
+
+    /// <summary>A document longer than this many characters is searched off the UI thread by find and replace (<c>CRAFT_FIND_BACKGROUND_CHARS</c>); 0 always does.</summary>
+    public int FindBackgroundCharacters { get; init; } = 200_000;
+
+    /// <summary>Milliseconds a find's regular expression may take on one line before it is stopped and said so (<c>CRAFT_FIND_REGEX_TIMEOUT_MS</c>).</summary>
+    public int FindRegexTimeoutMilliseconds { get; init; } = 250;
+
+    /// <summary>A file list longer than this is matched off the UI thread by quick open (<c>CRAFT_QUICK_OPEN_BACKGROUND_FILES</c>); 0 always is.</summary>
+    public int QuickOpenBackgroundFiles { get; init; } = 2000;
+
+    /// <summary>The files and commands quick open and the palette keep as recent, shown first (<c>CRAFT_QUICK_OPEN_RECENT</c>); 0 keeps none.</summary>
+    public int QuickOpenRecent { get; init; } = 20;
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -562,6 +582,13 @@ public sealed record CraftOptions
         new("CRAFT_FOLDING", "true", "Whether documents whose language folds show fold chevrons (Ctrl+Shift+[ and ] fold and unfold).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Code folding", "Display") },
         new("CRAFT_FOLDING_DELAY_MS", "300", "Milliseconds after the last change before the folding ranges are asked for again (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.Editor, "Folding ranges follow edits after", 0, 60_000, "ms", "Advanced", step: 50) },
         new("CRAFT_MAX_CARETS", "10000", "The most carets one editor holds (Alt+click, Ctrl+D, select all occurrences, column selection).") { Shape = SettingShape.Whole(SettingSections.Editor, "Most carets", 1, 1_000_000, "carets", "Carets", step: 100) },
+        // Phase X slice 3: inline, not modal; the welcome page.
+        new("CRAFT_WELCOME_AT_START", "true", "Whether the welcome page (open a folder, a new file, the recent folders, the main shortcuts) opens at start when no folder is open; Help › Welcome opens it any time.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Show the welcome page at start", "Welcome") },
+        new("CRAFT_UNDO_BAR_MS", "5000", "Milliseconds the inline bar with Undo stays after a change that can be taken back (the notification centre cleared, a recent folder removed).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Undo bar stays for", 500, 600_000, "ms", "Notifications", step: 500) },
+        new("CRAFT_FIND_BACKGROUND_CHARS", "200000", "Documents longer than this many characters are searched off the UI thread by find and replace (the count, next and previous); 0 always searches off it.") { Shape = SettingShape.Whole(SettingSections.Editor, "Search off the UI thread above", 0, int.MaxValue, "characters", "Find", step: 10_000) },
+        new("CRAFT_FIND_REGEX_TIMEOUT_MS", "250", "Milliseconds a find's regular expression may take on one line before it is stopped (said in the find box).") { Shape = SettingShape.Whole(SettingSections.Editor, "Regular expression time limit", 1, 60_000, "ms", "Find", step: 50) },
+        new("CRAFT_QUICK_OPEN_BACKGROUND_FILES", "2000", "File lists longer than this are matched off the UI thread by quick open; 0 always matches off it.") { Shape = SettingShape.Whole(SettingSections.Files, "Match off the UI thread above", 0, int.MaxValue, "files", "Quick open", step: 500) },
+        new("CRAFT_QUICK_OPEN_RECENT", "20", "The files and commands quick open and the command palette keep as recent and show first; 0 keeps none.") { Shape = SettingShape.Whole(SettingSections.Files, "Recent items kept", 0, 1000, null, "Quick open") },
     ];
 
     /// <summary>
@@ -1109,6 +1136,36 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_TERMINAL_CTRL_C_COPIES") is { } ctrlC)
         {
             options = options with { TerminalCtrlCCopies = Flag(ctrlC, "CRAFT_TERMINAL_CTRL_C_COPIES") };
+        }
+
+        if (Text(read, "CRAFT_WELCOME_AT_START") is { } welcome)
+        {
+            options = options with { WelcomeAtStart = Flag(welcome, "CRAFT_WELCOME_AT_START") };
+        }
+
+        if (Text(read, "CRAFT_UNDO_BAR_MS") is { } undoBar)
+        {
+            options = options with { UndoBarMilliseconds = Whole(undoBar, "CRAFT_UNDO_BAR_MS", 500, 600_000) };
+        }
+
+        if (Text(read, "CRAFT_FIND_BACKGROUND_CHARS") is { } findBackground)
+        {
+            options = options with { FindBackgroundCharacters = Whole(findBackground, "CRAFT_FIND_BACKGROUND_CHARS", 0, int.MaxValue) };
+        }
+
+        if (Text(read, "CRAFT_FIND_REGEX_TIMEOUT_MS") is { } regexTimeout)
+        {
+            options = options with { FindRegexTimeoutMilliseconds = Whole(regexTimeout, "CRAFT_FIND_REGEX_TIMEOUT_MS", 1, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_QUICK_OPEN_BACKGROUND_FILES") is { } quickBackground)
+        {
+            options = options with { QuickOpenBackgroundFiles = Whole(quickBackground, "CRAFT_QUICK_OPEN_BACKGROUND_FILES", 0, int.MaxValue) };
+        }
+
+        if (Text(read, "CRAFT_QUICK_OPEN_RECENT") is { } quickRecent)
+        {
+            options = options with { QuickOpenRecent = Whole(quickRecent, "CRAFT_QUICK_OPEN_RECENT", 0, 1000) };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

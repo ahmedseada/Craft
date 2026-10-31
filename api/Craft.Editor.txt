@@ -58,6 +58,7 @@ sealed class Craft.Editor.Activities.NotificationCenter : System.IDisposable
   System.Boolean Dismiss(System.Int64 id)
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> Entries { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> StatusOf(System.String source)
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> TakeAll(System.String source = null)
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationGroup> Groups { get; }
   System.Int32 DismissAll(System.String source = null)
   System.Int32 Keep { get; }
@@ -67,6 +68,7 @@ sealed class Craft.Editor.Activities.NotificationCenter : System.IDisposable
   System.Void Dispose()
   System.Void MarkSeen()
   System.Void RemoveStatuses(System.String source)
+  System.Void Restore(System.Collections.Generic.IReadOnlyList<Craft.Editor.Activities.NotificationEntry> entries)
   const System.String WatchdogSource = watchdog
   ctor(Craft.Editor.Activities.ActivityCenter activities, System.Action<System.Action> dispatch = null, Craft.Core.CraftOptions options = null, System.TimeProvider time = null)
   event System.EventHandler Changed
@@ -206,14 +208,19 @@ sealed class Craft.Editor.EditProposal : System.IEquatable<Craft.Editor.EditProp
   static System.String Summarize(Craft.Abstractions.ITextSnapshot snapshot, System.String filePath, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Int32 previewCharacters)
 sealed class Craft.Editor.EditorFind
   Craft.Editor.FindCount CountMatches()
+  Craft.Editor.FindPattern Pattern { get; }
+  System.Boolean FindFromSelection()
   System.Boolean FindNext()
   System.Boolean FindPrevious()
   System.Boolean IsHighlighting { get; set; }
+  System.Boolean IsListed { get; }
   System.Boolean LastWrapped { get; }
   System.Boolean MatchCase { get; set; }
   System.Boolean ReplaceOne(System.String replacement)
+  System.Boolean UseRegex { get; set; }
   System.Boolean WholeWord { get; set; }
   System.Int32 ReplaceAll(System.String replacement)
+  System.String Problem { get; }
   System.String Query { get; set; }
 sealed class Craft.Editor.EditorFolding : System.IDisposable
   Craft.Editor.FoldMap Map { get; }
@@ -234,6 +241,9 @@ sealed class Craft.Editor.EditorFolding : System.IDisposable
   System.Void Dispose()
   System.Void SetRanges(System.Collections.Generic.IEnumerable<Craft.Abstractions.FoldingRange> ranges)
   event System.EventHandler RangesChanged
+  System.Threading.Tasks.Task<Craft.Editor.FindCount> CountInBackgroundAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> FindAsync(System.Boolean forward, System.Boolean fromSelectionStart = false, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> ReplaceAllInBackgroundAsync(System.String replacement, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Editor.Abstractions.IEditorKeyHandler, System.IDisposable
   Craft.Abstractions.IEditorActivities Activities { get; }
   Craft.Abstractions.IEditorDocument ActiveDocument { get; }
@@ -513,10 +523,25 @@ struct Craft.Editor.FindCount : System.IEquatable<Craft.Editor.FindCount>
   System.Boolean Equals(Craft.Editor.FindCount other)
   System.Boolean Equals(System.Object obj)
   System.Int32 Count { get; init; }
+  System.Int32 Current { get; init; }
   System.Int32 GetHashCode()
+  System.String Text { get; }
   System.String ToString()
-  System.Void Deconstruct(out System.Int32 Count, out System.Boolean Capped)
-  ctor(System.Int32 Count, System.Boolean Capped)
+  System.Void Deconstruct(out System.Int32 Count, out System.Boolean Capped, out System.Int32 Current)
+  ctor(System.Int32 Count, System.Boolean Capped, System.Int32 Current = 0)
+sealed class Craft.Editor.FindPattern
+  System.Boolean IsRegex { get; }
+  System.Boolean MatchCase { get; }
+  System.Boolean Searchable { get; }
+  System.Boolean TimedOut { get; }
+  System.Boolean WholeWord { get; }
+  System.Int32 NextIn(System.ReadOnlySpan<System.Char> line, System.Int32 from, out System.Int32 length)
+  System.Int32 PreviousIn(System.ReadOnlySpan<System.Char> line, System.Int32 limit, out System.Int32 length)
+  System.String Problem { get; }
+  System.String Query { get; }
+  System.String Replacement(System.ReadOnlySpan<System.Char> line, System.Int32 start, System.String replacement)
+  ctor(System.String query, System.Boolean matchCase, System.Boolean wholeWord, System.Boolean regex, System.TimeSpan regexTimeout)
+  static Craft.Editor.FindPattern None { get; }
 sealed class Craft.Editor.FindRequestedEventArgs : System.EventArgs
   System.Boolean Replace { get; }
   System.String InitialQuery { get; }
@@ -743,6 +768,8 @@ sealed class Craft.Editor.Shell.DocumentTabs : System.IDisposable
   Craft.Editor.Shell.DocumentTab Find(System.String path)
   Craft.Editor.Shell.DocumentTab FindSuggested(System.String path)
   System.Boolean HasUnsaved { get; }
+  System.Boolean Move(Craft.Editor.Shell.DocumentTab tab, System.Int32 index)
+  System.Boolean MoveOnto(Craft.Editor.Shell.DocumentTab dragged, Craft.Editor.Shell.DocumentTab target)
   System.Boolean Next()
   System.Boolean Previous()
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.DocumentTab> Tabs { get; }
@@ -779,6 +806,17 @@ sealed class Craft.Editor.Shell.EmptyState : System.IEquatable<Craft.Editor.Shel
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String Text, out System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions)
   ctor(System.String Title, System.String Text, System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions)
+sealed class Craft.Editor.Shell.DropResult : System.IEquatable<Craft.Editor.Shell.DropResult>
+  Craft.Editor.Shell.DropResult <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.DropResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Files { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Skipped { get; init; }
+  System.Int32 GetHashCode()
+  System.String Folder { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<System.String> Files, out System.String Folder, out System.Collections.Generic.IReadOnlyList<System.String> Skipped)
+  ctor(System.Collections.Generic.IReadOnlyList<System.String> Files, System.String Folder, System.Collections.Generic.IReadOnlyList<System.String> Skipped)
 sealed class Craft.Editor.Shell.FolderListing : System.IEquatable<Craft.Editor.Shell.FolderListing>
   Craft.Editor.Shell.FolderListing <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.FolderListing other)
@@ -832,7 +870,9 @@ struct Craft.Editor.Shell.FontFileMetrics : System.IEquatable<Craft.Editor.Shell
   static Craft.Editor.Shell.FontFileMetrics? ReadFile(System.String path)
 static class Craft.Editor.Shell.FuzzyMatch
   const System.Int32 None = -2147483648
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.Int32, System.Int32>> Runs(System.ReadOnlySpan<System.Int32> positions, System.Int32 offset = 0)
   static System.Int32 Score(System.ReadOnlySpan<System.Char> query, System.ReadOnlySpan<System.Char> text)
+  static System.Int32 Score(System.ReadOnlySpan<System.Char> query, System.ReadOnlySpan<System.Char> text, System.Span<System.Int32> positions)
 static class Craft.Editor.Shell.GitBranch
   static System.String FromHead(System.ReadOnlySpan<System.Byte> head)
   static System.String Read(System.String folder)
@@ -933,6 +973,16 @@ enum Craft.Editor.Shell.ModelPickKind : System.IComparable, System.IConvertible,
   Device = 1
   Model = 0
   Page = 2
+sealed class Craft.Editor.Shell.OverlaySelection
+  System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Int32 Count { get; }
+  System.Int32 Move(System.Int32 step)
+  System.Int32 Page(System.Int32 direction)
+  System.Int32 PageRows { get; set; }
+  System.Int32 Select(System.Int32 index)
+  System.Int32 Selected { get; }
+  System.Void Reset(System.Int32 count)
+  ctor()
 sealed class Craft.Editor.Shell.PageTab
   System.Object View { get; set; }
   System.String Id { get; }
@@ -1015,18 +1065,33 @@ sealed class Craft.Editor.Shell.ProblemReport : System.IDisposable
 sealed class Craft.Editor.Shell.QuickOpen
   System.Boolean Capped { get; }
   System.Boolean IsIndexing { get; }
+  System.Boolean LastQueryInBackground { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.QuickOpenItem> Query(System.String text)
   System.Collections.Generic.IReadOnlyList<System.String> Files { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> RecentCommands { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> RecentFiles { get; }
+  System.Int32 BackgroundFiles { get; set; }
   System.Int32 CraftOptionsLimit { get; set; }
+  System.Int32 RecentLimit { get; set; }
   System.Int32 Rows { get; set; }
   System.String Root { get; }
   System.Threading.Tasks.Task IndexAsync(Craft.Core.Workspaces.Workspace workspace)
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.QuickOpenItem>> QueryInBackgroundAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Void NoteChosen(Craft.Editor.Shell.QuickOpenItem item)
+  System.Void NoteFile(System.String path)
+  System.Void SetFiles(System.String root, System.Collections.Generic.IEnumerable<System.String> relativePaths)
   ctor(Craft.Editor.EditorHost host, System.Int32 rows)
+  static Craft.Editor.Shell.QuickOpenMode ModeOf(System.String text)
   static System.Boolean IsLineQuery(System.String text)
+  static System.String PrefixOf(Craft.Editor.Shell.QuickOpenMode mode)
 sealed class Craft.Editor.Shell.QuickOpenItem : System.IEquatable<Craft.Editor.Shell.QuickOpenItem>
+  Craft.Abstractions.FileIcon Icon { get; init; }
   Craft.Editor.Shell.QuickOpenItem <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.QuickOpenItem other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean IsRecent { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.Int32, System.Int32>> DetailHighlights { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.Int32, System.Int32>> TextHighlights { get; init; }
   System.Int32 Column { get; init; }
   System.Int32 GetHashCode()
   System.Int32 Line { get; init; }
@@ -1034,10 +1099,15 @@ sealed class Craft.Editor.Shell.QuickOpenItem : System.IEquatable<Craft.Editor.S
   System.String CommandId { get; init; }
   System.String Detail { get; init; }
   System.String Path { get; init; }
+  System.String Shortcut { get; init; }
   System.String Text { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String Text, out System.String Detail, out System.String Path, out System.String CommandId, out System.Int32 Score, out System.Int32 Line, out System.Int32 Column)
   ctor(System.String Text, System.String Detail, System.String Path, System.String CommandId, System.Int32 Score, System.Int32 Line = 0, System.Int32 Column = 1)
+enum Craft.Editor.Shell.QuickOpenMode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Commands = 1
+  Files = 0
+  Line = 2
 struct Craft.Editor.Shell.RowChange : System.IEquatable<Craft.Editor.Shell.RowChange>
   System.Boolean Equals(Craft.Editor.Shell.RowChange other)
   System.Boolean Equals(System.Object obj)
@@ -1131,6 +1201,7 @@ sealed class Craft.Editor.Shell.SettingsPageModel
 static class Craft.Editor.Shell.ShellCommandIds
   const System.String About = craft.about
   const System.String Agent = craft.agent
+  const System.String ClearNotifications = craft.clearNotifications
   const System.String CloseFolder = craft.closeFolder
   const System.String CloseOtherTabs = craft.closeOtherTabs
   const System.String CloseTab = craft.closeTab
@@ -1172,6 +1243,7 @@ static class Craft.Editor.Shell.ShellCommandIds
   const System.String TogglePanel = craft.togglePanel
   const System.String ToggleTheme = craft.toggleTheme
   const System.String ToggleTree = craft.toggleTree
+  const System.String Welcome = craft.welcome
   const System.String ZoomIn = craft.zoomIn
   const System.String ZoomOut = craft.zoomOut
   const System.String ZoomReset = craft.zoomReset
@@ -1227,16 +1299,21 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Editor.Shell.PageTabs Pages { get; }
   Craft.Editor.Shell.PanelLayout Panels { get; }
   Craft.Editor.Shell.ShellLayout Layout { get; }
+  Craft.Editor.Shell.UndoBar UndoBar { get; }
+  System.Boolean RemoveRecent(System.String path)
+  System.Boolean WelcomeAtStart { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> SettingRows()
   System.Collections.Generic.IReadOnlyList<System.String> ClosedFiles { get; }
   System.Collections.Generic.IReadOnlyList<System.String> OptionsProblems { get; }
   System.Func<Craft.Editor.Shell.DocumentTab, Craft.Editor.EditorModel> EditorOf { get; set; }
+  System.Int32 ClearNotifications()
   System.Int32 MemoryReleases { get; }
   System.String ApplySetting(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
   System.String Branch { get; }
   System.String SettingsSection { get; }
   System.Threading.Tasks.Task OpenRecentAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Shell.DocumentTab> OpenFileAsync(System.String path, System.Boolean fromTree = false, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Editor.Shell.DropResult> OpenDroppedAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> CloseTabAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ConfirmCloseAllAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> OpenFolderAsync(System.String path)
@@ -1250,6 +1327,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Void OnMemoryPressure(Craft.Abstractions.MemoryPressureLevel level)
   System.Void ReloadOptions()
   System.Void ShowSettings(System.String section = null)
+  System.Void ShowWelcome()
   System.Void ToggleTheme()
   ctor(Craft.Editor.EditorHost host, Craft.Core.Settings.CraftSettings settings, Craft.Core.Workspaces.RecentList recent, Craft.Editor.Abstractions.IFileDialogs dialogs, Craft.Editor.Abstractions.IShellUi ui, System.Func<System.String, Craft.Core.CraftOptions, System.Threading.CancellationToken, System.Threading.Tasks.Task<Craft.Abstractions.ITextDocument>> openDocument = null, Craft.Editor.Abstractions.IShellFiles files = null, Craft.Editor.Abstractions.IEditorClipboard clipboard = null)
   event System.EventHandler OptionsChanged
@@ -1264,6 +1342,7 @@ static class Craft.Editor.Shell.ShellPageIds
   const System.String Models = models
   const System.String Plugins = plugins
   const System.String Settings = settings
+  const System.String Welcome = welcome
 enum Craft.Editor.Shell.ShellPanel : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Bottom = 2
   Chat = 1
@@ -1395,6 +1474,62 @@ sealed class Craft.Editor.SmoothScroll
   System.Void ScrollTo(System.Double x, System.Double y, System.Double maxX, System.Double maxY, System.Int64 now)
   ctor()
   static System.Double WheelPixels(System.Double delta, System.Int32 lines, System.Double lineHeight)
+sealed class Craft.Editor.Shell.UndoBar : System.IDisposable
+  Craft.Editor.Shell.UndoBarEntry Current { get; }
+  Craft.Editor.Shell.UndoBarEntry Show(System.String text, System.Action undo)
+  System.Boolean ExpireIfDue()
+  System.Boolean Undo()
+  System.Int32 Milliseconds { get; set; }
+  System.Void Dismiss()
+  System.Void Dispose()
+  ctor(System.Int32 milliseconds, System.Action<System.Action> dispatch = null, System.TimeProvider time = null)
+  event System.EventHandler Changed
+sealed class Craft.Editor.Shell.UndoBarEntry : System.IEquatable<Craft.Editor.Shell.UndoBarEntry>
+  Craft.Editor.Shell.UndoBarEntry <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.UndoBarEntry other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int64 Id { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int64 Id, out System.String Text)
+  ctor(System.Int64 Id, System.String Text)
+sealed class Craft.Editor.Shell.WelcomeFolder : System.IEquatable<Craft.Editor.Shell.WelcomeFolder>
+  Craft.Editor.Shell.WelcomeFolder <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.WelcomeFolder other)
+  System.Boolean Equals(System.Object obj)
+  System.DateTimeOffset Opened { get; init; }
+  System.Int32 GetHashCode()
+  System.String Name { get; init; }
+  System.String Path { get; init; }
+  System.String Place { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Place, out System.String Path, out System.DateTimeOffset Opened)
+  ctor(System.String Name, System.String Place, System.String Path, System.DateTimeOffset Opened)
+sealed class Craft.Editor.Shell.WelcomePageModel
+  Craft.Editor.Shell.DocumentTab NewFile()
+  System.Boolean Remove(System.String path)
+  System.Boolean ShowAtStart { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.WelcomeFolder> RecentFolders { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.WelcomeShortcut> Shortcuts { get; }
+  System.String SetShowAtStart(System.Boolean show)
+  System.String ShowAtStartReadOnly { get; }
+  System.Threading.Tasks.Task<System.Boolean> OpenAsync(System.String path)
+  System.Threading.Tasks.Task<System.Boolean> OpenFolderAsync()
+  const System.String ShowAtStartVariable = CRAFT_WELCOME_AT_START
+  ctor(Craft.Editor.Shell.ShellModel shell)
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> MainCommands { get; }
+sealed class Craft.Editor.Shell.WelcomeShortcut : System.IEquatable<Craft.Editor.Shell.WelcomeShortcut>
+  Craft.Editor.Shell.WelcomeShortcut <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.WelcomeShortcut other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String CommandId { get; init; }
+  System.String Keys { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Title, out System.String CommandId, out System.String Keys)
+  ctor(System.String Title, System.String CommandId, System.String Keys)
 sealed class Craft.Editor.Terminal.OutputTerminalSession : Craft.Abstractions.ITerminalSession, System.IDisposable
   System.Boolean Append(System.String text)
   System.Boolean IsOpen { get; }

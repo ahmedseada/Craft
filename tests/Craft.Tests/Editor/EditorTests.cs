@@ -249,7 +249,7 @@ public static class EditorTests
         Check.Equal(new SelectionState(12, 15), model.Selection, "Shift+F3 from the first match wraps to the last");
         model.Find.FindPrevious();
         Check.Equal(new SelectionState(8, 11), model.Selection, "previous");
-        Check.Equal(new FindCount(3, false), model.Find.CountMatches(), "the match count");
+        Check.Equal(new FindCount(3, false, 2), model.Find.CountMatches(), "the match count, the selection the second of them");
 
         var (words, _, _) = Editors.Make("foobar foo");
         words.Find.Query = "foo";

@@ -14,6 +14,9 @@ public static class ShellPageIds
 
     /// <summary>The Plug-ins page.</summary>
     public const string Plugins = "plugins";
+
+    /// <summary>The welcome page (Help › Welcome; at start when no folder is open and <c>CRAFT_WELCOME_AT_START</c> says so).</summary>
+    public const string Welcome = "welcome";
 }
 
 /// <summary>A page open as a tab of the editor area.</summary>

@@ -635,6 +635,28 @@ static class Craft.Abstractions.EditorToolSets
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.String Origin(System.String name)
   static System.Void Register(Craft.Abstractions.IEditorToolSet set)
+sealed class Craft.Abstractions.FileIcon : Idrak.Abstraction.IKind, System.IEquatable<Craft.Abstractions.FileIcon>
+  Craft.Abstractions.FileIcon <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.FileIcon other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Badge { get; init; }
+  System.String Extension { get; init; }
+  System.String Language { get; init; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String ToString()
+  System.UInt32 Argb { get; init; }
+  System.Void Deconstruct(out System.String Extension, out System.String Badge, out System.UInt32 Argb, out System.String Language)
+  ctor(System.String Extension, System.String Badge, System.UInt32 Argb, System.String Language)
+static class Craft.Abstractions.FileIcons
+  static Craft.Abstractions.FileIcon Find(System.ReadOnlySpan<System.Char> extension)
+  static Craft.Abstractions.FileIcon For(System.ReadOnlySpan<System.Char> path)
+  static Craft.Abstractions.FileIcon Get(System.ReadOnlySpan<System.Char> extension)
+  static Craft.Abstractions.FileIcon Plain { get; }
+  static System.Boolean Unregister(System.String extension)
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.FileIcon icon)
 struct Craft.Abstractions.FolderChange : System.IEquatable<Craft.Abstractions.FolderChange>
   Craft.Abstractions.FolderChangeKind Kind { get; init; }
   System.Boolean Equals(Craft.Abstractions.FolderChange other)

@@ -56,7 +56,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private const int PlatformHookAttempts = 50;                 // 50 tries 100 ms apart: five seconds for WinUI to attach the content
     private const int PlatformHookRetryMilliseconds = 100;
     private const double MenuWidth = 300;
-    private const double QuickOpenWidth = 460;
+    private const double QuickOpenWidth = 600;
     private const string ContextMenuCommand = "craft.contextMenu";
     private readonly ShellStartup _startup;
     private readonly string? _initialPath;
@@ -71,17 +71,10 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly ContentView _editorArea = new();
     private readonly List<EditorView> _views = [];
     private readonly Label _empty;
-    private readonly FlexLayout _findBar;
-    private readonly Entry _query;
-    private readonly Entry _replacement;
-    private readonly CraftInput _queryBox;
-    private readonly CraftInput _replacementBox;
-    private readonly CheckBox _matchCase;
-    private readonly CheckBox _wholeWord;
-    private readonly Label _matchCount;
-    private readonly HorizontalStackLayout _replaceRow;
-    private readonly List<Label> _findLabels = [];
-    private readonly List<Button> _findButtons = [];
+    private readonly FindOverlay _find;
+    private readonly QuickOpenOverlay _overlay;
+    private readonly UndoBarView _undoBar;
+    private readonly Grid _editorStack = new();
     private readonly TitleBarView _titleWide;
     private readonly TitleBarView _titleNarrow;
     private readonly ContentView _titleRow = new();
@@ -127,7 +120,6 @@ public sealed class ShellPage : ContentPage, IDisposable
     private bool _started;
     private CraftOptions? _appliedOptions;
     private ITheme? _appliedTheme;
-    private string _lastQuery = "";
 
     /// <summary>The shell, opening <paramref name="path"/> when given (a folder as the workspace, a file in a tab; else an untitled document).</summary>
     public ShellPage(ShellStartup startup, string? path)
@@ -164,7 +156,17 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         _editCommands = new ShellEditCommands(() => _shown?.Model, _shell);
-        _quickOpen = new QuickOpen(_host, _shell.Options.QuickOpenRows) { CraftOptionsLimit = _shell.Options.QuickOpenFiles };
+        _quickOpen = new QuickOpen(_host, _shell.Options.QuickOpenRows * 10)
+        {
+            CraftOptionsLimit = _shell.Options.QuickOpenFiles,
+            BackgroundFiles = _shell.Options.QuickOpenBackgroundFiles,
+            RecentLimit = _shell.Options.QuickOpenRecent,
+        };
+        foreach (var entry in startup.Recent.Entries.Where(e => e.Kind == Craft.Core.Workspaces.RecentKind.File).Reverse())
+        {
+            _quickOpen.NoteFile(entry.Path);                     // the recent list's files come first in quick open
+        }
+
         _pluginStatus = new StatusItemsView(_host);
         // The plug-ins' conversation panels (the AI plug-in's chat and agent run): the design's chat column when wide (its
         // splitter and close button, phase U2), a sheet over the editor when narrow (PhoneChat.dc.html); craft.chat
@@ -199,21 +201,40 @@ public sealed class ShellPage : ContentPage, IDisposable
             bar.MenuRequested += (_, request) => ShowMenu(request.Menu, request.Anchor);
             bar.NarrowFilesTapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.ToggleTree);
             bar.NarrowUndoTapped += (_, _) => _shown?.Model?.OnKey(EditorKey.Z, KeyModifiers.Control);
-            bar.NarrowCommandsTapped += (_, _) => _ = CommandPalette.ShowAsync(_dialog, _host);
+            bar.NarrowCommandsTapped += (_, _) => ShowOverlay(">");
         }
 
-        _titleWide.SearchChanged += (_, text) => ShowQuickOpen(text);
-        _titleWide.SearchFocused += (_, _) => ShowQuickOpen(_titleWide.Search.Text ?? "");
-        _titleWide.SearchSubmitted += (_, _) => _ = PickQuickOpenAsync(0);
+        // Phase X: the title bar's search box opens the one overlay (quick open and the palette) under it, with what was typed.
+        _titleWide.SearchFocused += (_, _) => ShowOverlay(TakeSearchText());
+        _titleWide.SearchChanged += (_, text) =>
+        {
+            if (text.Length > 0 && !_popup.IsOpen)
+            {
+                ShowOverlay(TakeSearchText());
+            }
+        };
+        _overlay = new QuickOpenOverlay(_quickOpen, _palette) { VisibleRows = _shell.Options.QuickOpenRows };
+        _overlay.Picked += (_, item) => _ = PickAsync(item);
+        _overlay.EmptyStateFor = text => ShellEmptyStates.Search(_host, text, _shell.Workspace is not null, _shown is not null, _quickOpen.IsIndexing);
+        _overlay.EmptyActionChosen += (_, action) =>
+        {
+            _popup.Hide();
+            RunEmptyAction(action);
+        };
+        _overlay.Dismissed += (_, _) =>
+        {
+            _popup.Hide();
+            _shown?.Focus();
+        };
         _popup.Closed += (_, _) =>
         {
-            _lastQuery = "";
             _menu.Close();
         };
 
         _rail = new RailView(_host, _palette);
         _tree.Indent = _shell.Options.TreeIndent;
         _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
+        _tree.DragsFiles = true;                                 // phase X: a file dragged from the tree onto the editor opens
         _explorer = new ExplorerView(_tree, _palette);
         _explorer.SetFolder(null);
         _explorer.Empty.ActionChosen += (_, action) => RunEmptyAction(action);
@@ -225,55 +246,25 @@ public sealed class ShellPage : ContentPage, IDisposable
         _tabStrip.ListRequested += (_, _) => _ = PickTabAsync();
         _tabStrip.Tooltip = (title, command) => ShellTooltips.For(_host, title, command);
         _tabStrip.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, e.Tab.FilePath, false, e.Tab), e.Where);
+        _tabStrip.NewFileRequested += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.NewFile);
         _breadcrumb = new BreadcrumbView(_palette);
         _empty = _palette.Label("No file is open.\nCtrl+O opens a file, Ctrl+Shift+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.", _palette.Secondary);
         _empty.HorizontalTextAlignment = TextAlignment.Center;
         _empty.LineBreakMode = LineBreakMode.WordWrap;
         _empty.Margin = new Thickness(24);
 
-        _query = _palette.Input("Find", 30);
-        _queryBox = _palette.Field(_query);
-        _queryBox.WidthRequest = 220;
-        _query.TextChanged += OnQueryChanged;
-        _query.Completed += (_, _) => FindNext();
-        _replacement = _palette.Input("Replace", 30);
-        _replacementBox = _palette.Field(_replacement);
-        _replacementBox.WidthRequest = 220;
-        _matchCase = new CheckBox();
-        _matchCase.CheckedChanged += OnFindOptionChanged;
-        _wholeWord = new CheckBox();
-        _wholeWord.CheckedChanged += OnFindOptionChanged;
-        _matchCount = FindLabel("");
-        _matchCount.Margin = new Thickness(8, 0);
-        var previous = FindButton("Previous", FindPrevious);
-        var next = FindButton("Next", FindNext);
-        var replaceOne = FindButton("Replace", () =>
+        // Phase X: find and replace as an overlay in the editor's top-right corner, the undo bar at its bottom.
+        _find = new FindOverlay(_palette);
+        _find.Closed += (_, _) =>
         {
-            _shown?.Model?.Find.ReplaceOne(_replacement.Text ?? "");
-            UpdateCount();
-        });
-        var replaceAll = FindButton("Replace all", ReplaceAll);
-        var close = FindButton("Close", CloseFind);
-        _replaceRow = new HorizontalStackLayout { Spacing = 6, Children = { _replacementBox, replaceOne, replaceAll } };
-        _findBar = new FlexLayout
-        {
-            Wrap = FlexWrap.Wrap,
-            AlignItems = FlexAlignItems.Center,
-            Padding = new Thickness(12, 4),
-            IsVisible = false,
-            Children =
-            {
-                _queryBox,
-                new HorizontalStackLayout { Children = { _matchCase, FindLabel("Match case") } },
-                new HorizontalStackLayout { Children = { _wholeWord, FindLabel("Whole word") } },
-                previous,
-                next,
-                _matchCount,
-                _replaceRow,
-                close,
-            },
+            _shown?.Invalidate();
+            _shown?.Focus();
         };
-
+        _find.Notice += (_, text) => _status!.Notice.Text = text;      // raised after the page is made
+        _undoBar = new UndoBarView(_shell.UndoBar, _palette);
+        _editorStack.Add(_editorArea);
+        _editorStack.Add(_find);
+        _editorStack.Add(_undoBar);
         _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested };
         _bottom.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
         _bottomSplit.Panel = _bottom;
@@ -298,7 +289,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         // Phase U: the running operations in the status bar, the bell, the notification centre and its toasts.
         _activity = new ActivityStatusView(_host.ActivityCenter, _palette);
         _bell = new BellView(_palette);
-        _centre = new NotificationCenterView(_host.Notifications, _host.ActivityCenter, _palette);
+        _centre = new NotificationCenterView(_host.Notifications, _host.ActivityCenter, _palette) { ClearAll = () => _shell.ClearNotifications() };
         _toast = new ToastView(_host.Notifications, _palette);
         _stallReports = new UiStallReports(startup.Options);
         _activity.Tapped += (_, _) => ToggleCentre(true);
@@ -329,8 +320,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
         _center.Add(_tabStrip, 0, 0);
         _center.Add(_breadcrumb, 0, 1);
-        _center.Add(_findBar, 0, 2);
-        _center.Add(_editorArea, 0, 3);
+        _center.Add(_editorStack, 0, 3);
         _center.Add(_bottomSplit, 0, 4);
 
         // The rail, its side view (the explorer or a plug-in panel), the editor area, the chat column: no fixed column of
@@ -364,10 +354,23 @@ public sealed class ShellPage : ContentPage, IDisposable
         Grid.SetRowSpan(_popup, 5);
         root.Add(_dialog, 0, 0);
         Grid.SetRowSpan(_dialog, 5);
+        // Phase X: a file dragged from the tree, or files and a folder dropped from the system's file manager, anywhere on
+        // the window open (the platform reads the outside drop's paths: IShellPlatform.DroppedPathsAsync).
+        var drop = new DropGestureRecognizer { AllowDrop = true };
+        drop.DragOver += (_, e) => e.AcceptedOperation = DataPackageOperation.Copy;
+        drop.Drop += OnDrop;
+        root.GestureRecognizers.Add(drop);
         Content = root;
 
         _shell.Tabs.TabsChanged += OnTabsChanged;
-        _shell.Tabs.ActiveChanged += (_, _) => ShowActive();
+        _shell.Tabs.ActiveChanged += (_, _) =>
+        {
+            ShowActive();
+            if (_shell.Tabs.Active?.FilePath is { } opened)
+            {
+                _quickOpen.NoteFile(opened);                     // every file opened counts as recent in quick open
+            }
+        };
         _shell.Tabs.TabChanged += (_, _) =>
         {
             UpdateStatus();
@@ -563,7 +566,15 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             if (_shell.Tabs.Tabs.Count == 0 && _shell.Workspace is null)
             {
-                _shell.NewFile();
+                // Phase X: nothing asked to open and no folder: the welcome page (CRAFT_WELCOME_AT_START), else a new file.
+                if (_shell.WelcomeAtStart)
+                {
+                    _shell.ShowWelcome();
+                }
+                else
+                {
+                    _shell.NewFile();
+                }
             }
 
             if (_startup.Problems.Count > 0 || _shell.OptionsProblems.Count > 0)
@@ -678,21 +689,6 @@ public sealed class ShellPage : ContentPage, IDisposable
         return comma is > 0 and <= 16 ? summary[..comma].ToString() : language.Name;
     }
 
-    private Label FindLabel(string text)
-    {
-        var label = _palette.Label(text);
-        _findLabels.Add(label);
-        return label;
-    }
-
-    private Button FindButton(string text, Action clicked)
-    {
-        var button = _palette.SecondaryButton(text);
-        button.Clicked += (_, _) => clicked();
-        _findButtons.Add(button);
-        return button;
-    }
-
     // The platform's pieces need the window's native view and its content, which WinUI may attach after the page has
     // appeared: each piece is hooked on its own and retried until it takes (the keys outside the editor, the
     // unsaved-changes question on closing), and only a piece still missing after the tries is reported.
@@ -748,7 +744,11 @@ public sealed class ShellPage : ContentPage, IDisposable
     /// <summary>The app's own commands, on the same contracts as the plug-ins': the palette (Ctrl+Shift+P) and the Plug-ins page (the shell registers the rest).</summary>
     private void RegisterAppCommands()
     {
-        EditorCommands.Register(new EditorCommand(ShellCommandIds.CommandPalette, "View: Show all commands", (_, _) => CommandPalette.ShowAsync(_dialog, _host)));
+        EditorCommands.Register(new EditorCommand(ShellCommandIds.CommandPalette, "View: Show all commands", (_, _) =>
+        {
+            ShowOverlay(">");
+            return Task.CompletedTask;
+        }));
         EditorCommands.Register(new EditorCommand(ShellCommandIds.Plugins, "Plug-ins: Show the installed plug-ins", (_, _) =>
         {
             _shell.Pages.Open(ShellPageIds.Plugins, "Plug-ins");
@@ -859,6 +859,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             ShellPageIds.Settings => new SettingsPage(_shell),
             ShellPageIds.Models => new ModelsPage(_shell),
+            ShellPageIds.Welcome => new WelcomeView(_shell, _palette),
             ShellPageIds.Plugins => new PluginsPage(_shell, () => PluginList.Rows(CraftPlugins.Installed, _host.Plugins)),
             _ => _palette.Label($"No view for the page '{page.Id}'.", _palette.Secondary),
         };
@@ -1036,60 +1037,63 @@ public sealed class ShellPage : ContentPage, IDisposable
         ToolTipProperties.SetText(_status.Model, "The model in use: pick another with the model chip under the chat's input");
     }
 
-    // Quick open's list under the search box; the files are listed when a folder opens.
-    private void ShowQuickOpen(string text)
+    // The search box's text, taken into the overlay (the box itself stays a button-like field).
+    private string TakeSearchText()
     {
-        if (_shell.Layout.IsNarrow)
+        var text = _titleWide.Search.Text ?? "";
+        if (text.Length > 0)
         {
-            return;
+            _titleWide.Search.Text = "";
         }
 
-        _lastQuery = text;
+        return text;
+    }
+
+    // Phase X: the one overlay for quick open, the palette ('>') and go to line (':'), under the title bar's search box
+    // (across the top in the narrow layout).
+    private void ShowOverlay(string text)
+    {
         _menu.Close();
-        var items = _quickOpen.Query(text);
-        var stack = new VerticalStackLayout { Spacing = 0, Padding = new Thickness(0, 4) };
-        if (items.Count == 0)
+        _overlay.Apply(_palette);
+        double width;
+        Point at;
+        if (_shell.Layout.IsNarrow || _windowTitleBar is not null)
         {
-            // Phase X: a search with no results says what to type, or what to open first.
-            var none = new EmptyStateView(_palette);
-            none.Show(ShellEmptyStates.Search(_host, text, _shell.Workspace is not null, _shown is not null, _quickOpen.IsIndexing));
-            none.ActionChosen += (_, action) =>
-            {
-                _popup.Hide();
-                RunEmptyAction(action);
-            };
-            stack.Children.Add(none);
+            width = Math.Max(200, Width - 16);
+            at = new Point(8, _shell.Layout.IsNarrow ? _titleNarrow.Height : 4);
+        }
+        else
+        {
+            width = Math.Min(QuickOpenWidth, Math.Max(240, Width - 32));
+            var below = _popup.Below(_titleWide.Search);
+            double center = below.X + (_titleWide.Search.Width / 2);
+            at = new Point(Math.Max(8, center - (width / 2)), Math.Max(4, below.Y + 2));
         }
 
-        for (int i = 0; i < items.Count; i++)
-        {
-            var item = items[i];
-            var cell = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)], ColumnSpacing = 10, Padding = new Thickness(12, 0), MinimumHeightRequest = 28 };
-            var states = _palette.States(cell, InteractionKind.MenuItem);     // phase X: hover and pressed; Enter's row selected
-            states.Selected = i == 0;
-            cell.Add(_palette.Label(item.Text), 0, 0);
-            if (item.Detail is { } detail)
-            {
-                cell.Add(_palette.Label(detail, _palette.Secondary, _palette.SmallSize), 1, 0);
-            }
+        _popup.Show(_overlay, at, width);
+        _overlay.Start(text);
+    }
 
-            var tap = new TapGestureRecognizer();
-            int index = i;
-            tap.Tapped += (_, _) => _ = PickQuickOpenAsync(index);
-            cell.GestureRecognizers.Add(tap);
-            stack.Children.Add(cell);
+    private async Task PickAsync(QuickOpenItem item)
+    {
+        _popup.Hide();
+        if (item.Line > 0)
+        {
+            _shown?.Model?.GoToLine(item.Line, item.Column);
+        }
+        else if (item.CommandId is { } command)
+        {
+            await _host.ExecuteCommandAsync(command);
+        }
+        else if (item.Path is { } path)
+        {
+            await _shell.OpenFileAsync(path);
         }
 
-        if (_quickOpen.Capped && !text.TrimStart().StartsWith('>'))
+        if (item.CommandId is null)
         {
-            var capped = _palette.Label(string.Create(CultureInfo.InvariantCulture, $"The first {_quickOpen.Files.Count:N0} files are listed (CRAFT_QUICK_OPEN_FILES)."), _palette.Secondary, _palette.CaptionSize);
-            capped.Margin = new Thickness(12, 4);
-            stack.Children.Add(capped);
+            _shown?.Focus();
         }
-
-        var box = _palette.Box(stack, 6, new Thickness(0), _palette.Raised, _palette.BorderStrong);
-        var at = _popup.Below(_titleWide.Search);
-        _popup.Show(box, at with { X = Math.Max(0, at.X) }, QuickOpenWidth);
     }
 
     // A two-key chord's first key: the status bar says the second is awaited (VS Code's "(Ctrl+K) was pressed").
@@ -1105,71 +1109,34 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
-    private async Task PickQuickOpenAsync(int index)
+    // A drop on the window: a file dragged from the tree (its path in the drag's properties), else what the system's file
+    // manager dropped (the platform reads its paths). Files open in tabs, a folder as the workspace.
+    private async void OnDrop(object? sender, DropEventArgs e)
     {
-        var items = _quickOpen.Query(_lastQuery.Length > 0 ? _lastQuery : _titleWide.Search.Text ?? "");
-        _popup.Hide();
-        _titleWide.Search.Text = "";
-        if (index < 0 || index >= items.Count)
+        try
         {
-            return;
-        }
+            IReadOnlyList<string> paths = e.Data.Properties.TryGetValue(FolderTreeView.DragPathKey, out var dragged) && dragged is string path
+                ? [path]
+                : await _startup.Platform.DroppedPathsAsync(e);
+            if (paths.Count == 0)
+            {
+                return;
+            }
 
-        var item = items[index];
-        if (item.Line > 0)
-        {
-            _shown?.Model?.GoToLine(item.Line, item.Column);
-        }
-        else if (item.CommandId is { } command)
-        {
-            await _host.ExecuteCommandAsync(command);
-        }
-        else if (item.Path is { } path)
-        {
-            await _shell.OpenFileAsync(path);
-        }
+            e.Handled = true;
+            var result = await _shell.OpenDroppedAsync(paths);
+            if (result.Skipped.Count > 0)
+            {
+                _status.Notice.Text = "Not opened: " + string.Join("; ", result.Skipped);
+            }
 
-        _shown?.Focus();
-    }
-
-    // Narrow: a prompt for the name, then the matches as a list (the phone has no room for the box).
-    private async Task QuickOpenNarrowAsync()
-    {
-        string? text = await _dialog.PromptAsync("Open", "", "A file's name, or '>' and a command", "Search");
-        if (text is null)
-        {
-            return;
-        }
-
-        var items = _quickOpen.Query(text);
-        if (items.Count == 0)
-        {
-            await _dialog.ShowMessageAsync("Open", "Nothing matches.");
-            return;
-        }
-
-        var titles = items.Select(i => i.Detail is null ? i.Text : $"{i.Text}  ({i.Detail})").ToArray();
-        int index = await _dialog.PickAsync("Open", titles);
-        if (index >= 0)
-        {
-            _lastQuery = text;
-            await PickQuickOpenAsync(index);
-        }
-    }
-
-    // Narrow: a prompt for the line (and column).
-    private async Task GoToLineNarrowAsync()
-    {
-        if (_shown?.Model is not { } model)
-        {
-            return;
-        }
-
-        string? text = await _dialog.PromptAsync("Go to line", "", $"A line from 1 to {model.Snapshot.LineCount} (line:column for a column)", "Go");
-        if (text is not null && _quickOpen.Query(":" + text) is [{ Line: > 0 } item])
-        {
-            model.GoToLine(item.Line, item.Column);
             _shown?.Focus();
+        }
+#pragma warning disable CA1031 // An async void drop handler: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the window: a drop", error);
         }
     }
 
@@ -1177,21 +1144,11 @@ public sealed class ShellPage : ContentPage, IDisposable
     {
         switch (view)
         {
-            case ShellViewNames.QuickOpen when _shell.Layout.IsNarrow:
-                _ = QuickOpenNarrowAsync();
-                break;
-            case ShellViewNames.GoToLine when _shell.Layout.IsNarrow:
-                _ = GoToLineNarrowAsync();
-                break;
             case ShellViewNames.GoToLine:
-                _titleWide.Search.Text = ":";
-                _titleWide.Search.Focus();
-                _titleWide.Search.CursorPosition = 1;
-                ShowQuickOpen(":");
+                ShowOverlay(":");
                 break;
             case ShellViewNames.QuickOpen:
-                _titleWide.Search.Focus();
-                ShowQuickOpen(_titleWide.Search.Text ?? "");
+                ShowOverlay(TakeSearchText());
                 break;
             case ShellViewNames.TogglePanel:
                 break;                       // the command toggled the panel's state (PanelLayout); Changed laid it out
@@ -1395,6 +1352,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             if (ReferenceEquals(view, _shown))
             {
                 UpdateStatus();
+                _find.Recount();
             }
         };
         view.Painted += (_, _) =>
@@ -1425,13 +1383,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             _shown = view;
             _editorArea.Content = content;
+            _find.Model = view?.Model;                           // the find overlay follows the shown editor
             if (view?.Model is { } model)
             {
-                if (_findBar.IsVisible)
-                {
-                    ApplyFind(model);
-                }
-
                 model.EnsureCaretVisible();
                 view.Focus();
             }
@@ -1550,8 +1504,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         ShellMotion.Milliseconds = Motion.Duration(options);
-        _quickOpen.Rows = options.QuickOpenRows;
+        _find.Model = _shown?.Model;                             // a new model on the new options
+        _quickOpen.Rows = options.QuickOpenRows * 10;
         _quickOpen.CraftOptionsLimit = options.QuickOpenFiles;
+        _quickOpen.BackgroundFiles = options.QuickOpenBackgroundFiles;
+        _quickOpen.RecentLimit = options.QuickOpenRecent;
+        _overlay.VisibleRows = options.QuickOpenRows;
         _tree.Indent = options.TreeIndent;
         ApplyTheme();
         ApplyLayout();
@@ -1647,8 +1605,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         BackgroundColor = p.Ground;
         _titleWide.Apply(p);
         _dialog.Apply(p);
-        _queryBox.Apply(p);
-        _replacementBox.Apply(p);
+        _find.Apply(p);
+        _overlay.Apply(p);
+        _undoBar.Apply(p);
         _titleNarrow.Apply(p);
         if (_windowTitleBar is not null)
         {
@@ -1678,20 +1637,6 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         }
         _empty.TextColor = p.Secondary;
-        _findBar.BackgroundColor = p.Raised;
-        foreach (var label in _findLabels)
-        {
-            label.TextColor = p.Text;
-        }
-
-        foreach (var button in _findButtons)
-        {
-            button.TextColor = p.Text;
-            button.BackgroundColor = p.RaisedHigh;
-            button.BorderColor = p.BorderStrong;
-        }
-
-
         foreach (var line in (ReadOnlySpan<BoxView>)[_railLine, _statusLine, _titleLine])
         {
             line.Color = p.Border;
@@ -1718,93 +1663,8 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private void ShowFind(bool replace, string? query)
     {
-        _findBar.IsVisible = true;
-        _replaceRow.IsVisible = replace;
-        if (query is not null)
-        {
-            _query.Text = query;
-        }
-
-        if (_shown?.Model is { } model)
-        {
-            ApplyFind(model);
-        }
-
-        _query.Focus();
-    }
-
-    private void ApplyFind(EditorModel model)
-    {
-        model.Find.MatchCase = _matchCase.IsChecked;
-        model.Find.WholeWord = _wholeWord.IsChecked;
-        model.Find.Query = _query.Text ?? "";
-        UpdateCount();
-    }
-
-    private void OnQueryChanged(object? sender, Microsoft.Maui.Controls.TextChangedEventArgs e)
-    {
-        if (_shown?.Model is { } model)
-        {
-            ApplyFind(model);
-        }
-    }
-
-    private void OnFindOptionChanged(object? sender, CheckedChangedEventArgs e)
-    {
-        if (_shown?.Model is { } model)
-        {
-            ApplyFind(model);
-        }
-    }
-
-    private void FindNext()
-    {
-        _shown?.Model?.Find.FindNext();
-        UpdateCount();
-    }
-
-    private void FindPrevious()
-    {
-        _shown?.Model?.Find.FindPrevious();
-        UpdateCount();
-    }
-
-    private void ReplaceAll()
-    {
-        if (_shown?.Model is { } model)
-        {
-            int replaced = model.Find.ReplaceAll(_replacement.Text ?? "");
-            _status.Notice.Text = string.Create(CultureInfo.InvariantCulture, $"Replaced {replaced}");
-        }
-
-        UpdateCount();
-    }
-
-    private void CloseFind()
-    {
-        _findBar.IsVisible = false;
-        foreach (var view in _views)
-        {
-            if (view.Model is { } model)
-            {
-                model.Find.IsHighlighting = false;
-            }
-        }
-
-        _shown?.Invalidate();
-    }
-
-    private void UpdateCount()
-    {
-        if (_shown?.Model is not { } model || (_query.Text ?? "").Length == 0)
-        {
-            _matchCount.Text = "";
-            return;
-        }
-
-        var count = model.Find.CountMatches();
-        string wrapped = model.Find.LastWrapped ? ", wrapped" : "";
-        _matchCount.Text = string.Create(CultureInfo.InvariantCulture, $"{(count.Capped ? "at least " : "")}{count.Count} {(count.Count == 1 ? "match" : "matches")}{wrapped}");
+        _find.Model = _shown?.Model;
+        _find.Open(replace, query);
     }
 
     // On a caret move (a keystroke too): only the texts that changed are set; the breadcrumb's scopes come from the

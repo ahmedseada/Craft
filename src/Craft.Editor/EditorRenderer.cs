@@ -128,8 +128,7 @@ public sealed class EditorRenderer : IDisposable
         ClassifyShown(model, snapshot, visible);
         var spans = _spans.Spans;
         var find = model.Find;
-        bool findShown = find.IsHighlighting && find.Searchable;
-        int queryLength = find.Query.Length;
+        bool findShown = FindHighlightLayer.IsShown(find);
         var bracket = options.BracketHighlight ? model.MatchingBrackets : null;
         string? word = options.WordHighlight ? model.HighlightedWord : null;
         var diagnostics = model.Diagnostics;
@@ -168,15 +167,7 @@ public sealed class EditorRenderer : IDisposable
 
                 if (findShown)
                 {
-                    int from = 0;
-                    int found;
-                    while ((found = find.NextIn(text, from)) >= 0)
-                    {
-                        int start = TextReading.ColumnOf(text, found, tabSize);
-                        int end = TextReading.ColumnOf(text, found + queryLength, tabSize);
-                        canvas.FillRect(left + (start * cell), top, (end - start) * cell, height, colors.FindMatch);
-                        from = found + Math.Max(1, queryLength);
-                    }
+                    FindHighlightLayer.DrawLine(canvas, find, text, left, top, cell, height, tabSize, colors.FindMatch);
                 }
 
                 if (word is not null)

@@ -2546,3 +2546,77 @@ terminal) and every item above holds; the measured numbers are written here.
   Ctrl+J; Ctrl+G or a search into a fold; fold in the `.csproj` and an `appsettings.json`; the guides and the word
   highlight on and off in Settings › Editor › Display; with auto-close on, "(" then Backspace, and Enter in a block then "}";
   the Visual Studio keymap's Shift+Alt+. and Ctrl+M Ctrl+M.
+### X slice 3 as built (2026-10-31): inline, not modal; the welcome page; direct manipulation
+
+- **One overlay for quick open and the command palette** (`Craft.Editor.Shell.QuickOpen`, `OverlaySelection`;
+  `Craft.Maui.QuickOpenOverlay`), replacing the `CraftDialog` list (the old `CommandPalette` and the narrow layout's prompt
+  and pick are gone): Ctrl+P (files), Ctrl+Shift+P and F1 ('>' commands), Ctrl+G (':' a line, ':42:7'); the title bar's
+  search box opens it under itself (across the top when narrow or when the title bar is the window's caption) with what was
+  typed. Fuzzy matching with the matched characters drawn in the accent (`FuzzyMatch.Score(query, text, positions)` and
+  `FuzzyMatch.Runs`: the name's runs, or the folder's and the name's when the path matched); recent first
+  (`CRAFT_QUICK_OPEN_RECENT`, 20: every file opened, from anywhere, and every command picked; the recent list's files seed
+  it at start; an empty query lists them in the order used, a query ranks them a little ahead; marked "recent"); each
+  command's keys read from the bindings in effect (`EditorHost.KeysOf`: the user's, then the keymap's, then the registered,
+  then the editor's own; a remap or an unbinding shows at once); file icons by language (`Craft.Abstractions.FileIcons`, a
+  registry by extension with the library's defaults for the files a C# developer opens, a language plug-in registers its
+  own, `Plain` for the rest); Up and Down (wrapping), Page Up and Down, Ctrl+Home and Ctrl+End, Enter, Escape (the focus goes
+  back to the editor). The list is a virtualized `CollectionView` (`SelectionMode.None`, the selected row drawn by the
+  overlay, no checkbox), holding ten pages of `CRAFT_QUICK_OPEN_ROWS` and showing one. A file list longer than
+  `CRAFT_QUICK_OPEN_BACKGROUND_FILES` (2,000) is matched on the thread pool (`QueryInBackgroundAsync`), the rows made on
+  the UI thread; a newer keystroke cancels the older match, whose rows never land. The input is a `RoutedEntry`: its keys
+  go to the overlay before the text box (on Windows a PreviewKeyDown, `Platforms/Windows/EntryKeys.cs`).
+  **`@` (the current file's symbols) is left out**: no language session gives document symbols (`ILanguageSession` has
+  `ScopeAt` only, and `FindSymbolsAsync` is the workspace's); '@' is part of a file name until a document-symbols contract
+  exists.
+- **Measured** (`Inline.QuickOpenMatchesTenThousandFilesOffTheUiThread`, Linux container, Release, a 10,000-file list,
+  8 queries × 5 rounds, the background rows proven the same as the calling thread's, in order): cold (first query, the JIT)
+  8.6 to 24.5 ms; warm median 2.3 to 2.9 ms; warm worst 5.8 to 24.6 ms (one GC). Written to
+  `test-output/benches/quick-open-10k.txt`. The owner's Windows number is still to be taken.
+- **Find and replace as an overlay** (`Craft.Maui.FindOverlay` in the editor's top-right corner, over `EditorFind`; the
+  old find bar in `ShellPage` and its `_query` are gone): Ctrl+F, Ctrl+H (with the selection as the query); match case,
+  whole word and regular expression toggles (Alt+C, Alt+W, Alt+R; on in the accent's fill); "3 of 17" (`FindCount.Current`,
+  `FindCount.Text`; "No results"; "Invalid" with the parser's reason in the tooltip); previous and next (Shift+Enter and
+  Enter, F3); Replace (Enter in its box) and Replace all (Ctrl+Alt+Enter), one undo step, said in the status bar; typing
+  selects the first match from the caret; Escape closes, the highlights go and the editor takes the keyboard. A regular
+  expression (`FindPattern`, immutable, any thread) runs one line at a time on the line's span (`EnumerateMatches`, no
+  string), a match of no characters is never one, `$1`/`${name}` go into a replacement, and a line over
+  `CRAFT_FIND_REGEX_TIMEOUT_MS` (250) is stopped and said. The matches of a snapshot are listed once (up to
+  `CRAFT_FIND_COUNT_LIMIT`) and kept while the version and the pattern stay, so the count and next and previous read the
+  list (a binary search); a document over `CRAFT_FIND_BACKGROUND_CHARS` (200,000) is listed, searched and replaced off the
+  UI thread (`CountInBackgroundAsync`, `FindAsync`, `ReplaceAllInBackgroundAsync`), the result taken only if the snapshot's
+  version did not change. Every match is drawn by its own layer (`FindHighlightLayer`, one call per visible line from the
+  renderer), apart from slice 2's layers.
+- **The welcome page** (`WelcomePageModel`, `Craft.Maui.WelcomeView`, a page tab `ShellPageIds.Welcome`): Open folder…
+  and New file; the recent folders (the user's recent list; a click opens one, a gone one is taken off and said; × removes
+  it with Undo); the main shortcuts read from the bindings (a remap shows); "Show the welcome page at start"
+  (`CRAFT_WELCOME_AT_START`, declared with its toggle shape, written to the user's settings, read-only with why when the
+  environment sets it). It opens at start when nothing was asked to open and no folder is open (else a new file, as
+  before), and from Help › Welcome (`craft.welcome`). Two columns that wrap into one at narrow widths.
+- **Direct manipulation**: a document's tab dragged onto another moves there (`DocumentTabs.Move`, `MoveOnto`: after it
+  from the left, before it from the right; the active tab stays); a file's row dragged from the tree onto the window opens
+  it; a double click (double tap) on the tab strip's empty space makes a new file; files and a folder dropped from the
+  system's file manager open (`ShellModel.OpenDroppedAsync`: files in tabs, the first folder as the workspace, the rest
+  said in the status bar; the disk checks off the UI thread). The drop's paths come from
+  `IShellPlatform.DroppedPathsAsync` (Windows: the drag's storage items, under a deferral; the rest of the logic is in
+  Craft.Editor).
+- **Inline confirmations with Undo** (`UndoBar`, `Craft.Maui.UndoBarView` at the bottom of the editor area,
+  `CRAFT_UNDO_BAR_MS` 5,000): the notification centre's Clear all (`ShellModel.ClearNotifications`, also the command
+  `craft.clearNotifications`; `NotificationCenter.TakeAll`/`Restore`) and a recent folder's removal
+  (`ShellModel.RemoveRecent`, `RecentList.Restore` at its place) act at once, say so with Undo, and keep the change when
+  the time is up or × is pressed. Closing an unsaved tab keeps the `CraftDialog` question.
+- **Options added** (each with its shape, on the settings page): `CRAFT_WELCOME_AT_START`, `CRAFT_UNDO_BAR_MS`,
+  `CRAFT_FIND_BACKGROUND_CHARS`, `CRAFT_FIND_REGEX_TIMEOUT_MS`, `CRAFT_QUICK_OPEN_BACKGROUND_FILES`,
+  `CRAFT_QUICK_OPEN_RECENT`.
+- **Tests**: group `Inline` (6: fuzzy ranks and highlight runs, prefixes, recent first, keys from the bindings and a remap,
+  the list's keys; 10,000 files off the thread with the same rows; find's current match, regular expressions, groups in a
+  replacement, replace all as one undo, a large document listed, stepped and replaced off the thread; the welcome page's
+  recent folders, Undo, the shortcuts and the switch, Help › Welcome, Clear all with Undo; tab reorder and drops; the undo
+  bar's time), with `ApiGuard`, `Inventory`, `Editor`, `Design`, `Keys`, `Settings`, `Shell`, `Notifications`,
+  `LookAndFeel`, `Layout`.
+- **Not compiled here** (Windows only): `src/Craft.Maui/Platforms/Windows/EntryKeys.cs` (new), the `EntryKeys.Configure()`
+  line in `WindowsShellPlatform`'s one constructor, and `WindowsShellPlatform.DroppedPathsAsync`.
+- **Left of X after this slice**: `@` symbols (a document-symbols contract first); dragging a tab to split the editor;
+  dragging files in the tree to move them; a drop onto the chat; rename in place of symbols; the overview ruler's search
+  hits; the measured input-to-response numbers of each interaction on the owner's machine (the 10,000-file number on
+  Windows among them); the rest of X's items belong to slices 1 and 2 or are not started (sticky scroll, the minimap, the
+  chat's markdown and steps).

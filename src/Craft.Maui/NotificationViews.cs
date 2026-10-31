@@ -193,7 +193,17 @@ public sealed class NotificationCenterView : ContentView, IDisposable
         _empty = new EmptyStateView(palette);               // phase X: says what shows here
         _empty.Show(Craft.Editor.Shell.ShellEmptyStates.Notifications());
         _clear = palette.Flat("Clear all", palette.Secondary, 26, palette.SmallSize);
-        _clear.Clicked += (_, _) => _center.DismissAll();
+        _clear.Clicked += (_, _) =>
+        {
+            if (ClearAll is { } clear)
+            {
+                clear();                                         // the shell's: taken away with Undo in the inline bar
+            }
+            else
+            {
+                _center.DismissAll();
+            }
+        };
         _close = palette.Flat("✕", palette.Secondary, 26, palette.SmallSize);
         _close.Clicked += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
         var header = new Grid
@@ -227,6 +237,9 @@ public sealed class NotificationCenterView : ContentView, IDisposable
 
     /// <summary>Raised when its close button is pressed.</summary>
     public event EventHandler? CloseRequested;
+
+    /// <summary>What "Clear all" does (phase X: the shell clears with Undo in the inline bar); null dismisses every entry at once.</summary>
+    public Func<int>? ClearAll { get; set; }
 
     /// <summary>Whether it is open (or opening).</summary>
     public bool IsOpen { get; private set; }

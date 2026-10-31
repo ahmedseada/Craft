@@ -145,6 +145,30 @@ public sealed class RecentList
         return true;
     }
 
+    /// <summary>
+    /// Puts <paramref name="entry"/> back at <paramref name="index"/> (clamped to the list), as it was (an inline Undo of
+    /// <see cref="Remove"/>), in place of any entry of the same path, and saves.
+    /// </summary>
+    public void Restore(RecentEntry entry, int index)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (_limit == 0)
+        {
+            return;
+        }
+
+        int at = IndexOf(entry.Path);
+        if (at >= 0)
+        {
+            _entries.RemoveAt(at);
+        }
+
+        _entries.Insert(Math.Clamp(index, 0, _entries.Count), entry);
+        Trim();
+        SaveLater();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Removes the entries whose file or folder no longer exists; returns how many.</summary>
     public int RemoveMissing()
     {

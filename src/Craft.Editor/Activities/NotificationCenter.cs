@@ -294,6 +294,56 @@ public sealed class NotificationCenter : IDisposable
         return removed;
     }
 
+    /// <summary>
+    /// As <see cref="DismissAll"/>, returning what it took away (newest first), so an inline Undo can put it back with
+    /// <see cref="Restore"/>.
+    /// </summary>
+    public IReadOnlyList<NotificationEntry> TakeAll(string? source = null)
+    {
+        NotificationEntry[] taken;
+        lock (_gate)
+        {
+            taken = [.. _entries.Where(e => source is null || e.Source == source)];
+            _entries.RemoveAll(e => source is null || e.Source == source);
+        }
+
+        if (taken.Length > 0)
+        {
+            _frame.Request();
+        }
+
+        return taken;
+    }
+
+    /// <summary>Puts back entries <see cref="TakeAll"/> took (newer ones that came meanwhile stay; the list keeps its newest first and its limit).</summary>
+    public void Restore(IReadOnlyList<NotificationEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            foreach (var entry in entries)
+            {
+                if (!_entries.Exists(e => e.Id == entry.Id))
+                {
+                    _entries.Add(entry);
+                }
+            }
+
+            _entries.Sort(static (a, b) => b.Time != a.Time ? b.Time.CompareTo(a.Time) : b.Id.CompareTo(a.Id));
+            if (_entries.Count > Keep)
+            {
+                _entries.RemoveRange(Keep, _entries.Count - Keep);
+            }
+        }
+
+        _frame.Request();
+    }
+
     /// <summary>Takes away the status lines of <paramref name="source"/> (a plug-in that was deactivated).</summary>
     public void RemoveStatuses(string source)
     {

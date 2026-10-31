@@ -153,7 +153,19 @@ public static class ShellCommandIds
 
     /// <summary>Settings: Keyboard shortcuts (Ctrl+K Ctrl+S): the settings page's Keyboard section.</summary>
     public const string KeyboardShortcuts = "craft.keyboardShortcuts";
+
+    /// <summary>Help: Welcome: the welcome page's tab.</summary>
+    public const string Welcome = "craft.welcome";
+
+    /// <summary>View: Clear the notifications (with Undo in the inline bar).</summary>
+    public const string ClearNotifications = "craft.clearNotifications";
 }
+
+/// <summary>What a drop of paths onto the window or the editor opened (<see cref="ShellModel.OpenDroppedAsync"/>).</summary>
+/// <param name="Files">The files opened in tabs, in order.</param>
+/// <param name="Folder">The folder opened as the workspace, or null.</param>
+/// <param name="Skipped">The paths not opened (missing, a second folder, or one that could not be read), each with why.</param>
+public sealed record DropResult(IReadOnlyList<string> Files, string? Folder, IReadOnlyList<string> Skipped);
 
 /// <summary>The views a shell command asks the app to show (<see cref="ShellModel.ViewRequested"/>).</summary>
 public static class ShellViewNames
@@ -262,8 +274,114 @@ public sealed partial class ShellModel : IDisposable
             ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument
             : (Tabs.FindSuggested(path) ?? NewFile(path)).HostDocument;
         host.SetKeyBindings(Options.KeyBindings, Options.KeyMap);
+        UndoBar = new UndoBar(Options.UndoBarMilliseconds, action => host.Dispatch("shell: the undo bar's time is up", action));
         RegisterCommands();
         WatchMemory();
+    }
+
+    /// <summary>The inline bar with Undo (phase X: in place of a confirmation for a change that can be taken back).</summary>
+    public UndoBar UndoBar { get; }
+
+    /// <summary>Whether the welcome page opens at start: no folder is open and <c>CRAFT_WELCOME_AT_START</c> is on.</summary>
+    public bool WelcomeAtStart => Workspace is null && Options.WelcomeAtStart;
+
+    /// <summary>Opens the welcome page's tab (Help › Welcome).</summary>
+    public void ShowWelcome() => Pages.Open(ShellPageIds.Welcome, "Welcome");
+
+    /// <summary>
+    /// Clears the notification centre's messages and ended operations at once (running ones and status lines stay), with
+    /// Undo in the inline bar; the number taken away.
+    /// </summary>
+    public int ClearNotifications()
+    {
+        var notifications = Host.Notifications;
+        var taken = notifications.TakeAll();
+        if (taken.Count > 0)
+        {
+            UndoBar.Show(taken.Count == 1 ? "Cleared 1 notification." : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Cleared {taken.Count} notifications."),
+                () => notifications.Restore(taken));
+        }
+
+        return taken.Count;
+    }
+
+    /// <summary>
+    /// Takes the recent entry <paramref name="path"/> off the list at once, with Undo in the inline bar (it goes back at
+    /// its place); false when it was not listed.
+    /// </summary>
+    public bool RemoveRecent(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        int index = -1;
+        for (int i = 0; i < Recent.Entries.Count; i++)
+        {
+            if (PathKeys.Comparer.Equals(Recent.Entries[i].Path, full))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var entry = Recent.Entries[index];
+        Recent.Remove(full);
+        UndoBar.Show($"Removed {Path.GetFileName(full)} from the recent list.", () => Recent.Restore(entry, index));
+        return true;
+    }
+
+    /// <summary>
+    /// Opens what was dropped onto the window or the editor (from the tree, or from the system's file manager): each file
+    /// in a tab (the last active), the first folder as the workspace; the rest said in <see cref="DropResult.Skipped"/>.
+    /// </summary>
+    public async Task<DropResult> OpenDroppedAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        var files = new List<string>();
+        var skipped = new List<string>();
+        string? folder = null;
+        foreach (var path in paths)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            // The checks touch the disk: off the UI thread.
+            var (isFile, isFolder) = await Task.Run(() => (File.Exists(path), Directory.Exists(path)), cancellationToken);
+            if (isFolder)
+            {
+                if (folder is null && await OpenFolderAsync(path))
+                {
+                    folder = Workspace?.Root;
+                }
+                else
+                {
+                    skipped.Add(folder is null ? $"{path}: the folder could not be opened" : $"{path}: one folder opens at a time ({folder} did)");
+                }
+            }
+            else if (isFile)
+            {
+                if (await OpenFileAsync(path, cancellationToken: cancellationToken) is not null)
+                {
+                    files.Add(Path.GetFullPath(path));
+                }
+                else
+                {
+                    skipped.Add($"{path}: it could not be read");
+                }
+            }
+            else
+            {
+                skipped.Add($"{path}: no such file or folder");
+            }
+        }
+
+        return new DropResult(files, folder, skipped);
     }
 
     /// <summary>The prompts and pages (the shell's questions, a pick from a list).</summary>
@@ -804,6 +922,7 @@ public sealed partial class ShellModel : IDisposable
         }
 
         Recent.Limit = options.RecentLimit;
+        UndoBar.Milliseconds = options.UndoBarMilliseconds;
         Host.SetKeyBindings(options.KeyBindings, options.KeyMap);
         Layout.Options = options;
         Panels.Load(options);
@@ -826,6 +945,7 @@ public sealed partial class ShellModel : IDisposable
         }
 
         _disposed = true;
+        UndoBar.Dispose();
         foreach (var binding in _bindings)
         {
             // Only while the chord is still the shell's (a later registration, a plug-in's, keeps its own).
@@ -1082,6 +1202,8 @@ public sealed partial class ShellModel : IDisposable
         Command(ShellCommandIds.PluginGuide, "Help: Writing a plug-in", (_, _) => _ui.ShowMessageAsync("Writing a Craft plug-in",
             "The guide is docs/plugins.md in Craft's repository; the template is templates/craft-plugin (dotnet new craft-plugin). " +
             "A plug-in adds commands, key bindings, menu items (EditorMenus), rail items (EditorRailItems), status items, panels, settings, languages and themes."), null, null);
+        Command(ShellCommandIds.Welcome, "Help: Welcome", (_, _) => { ShowWelcome(); return Task.CompletedTask; }, null, null);
+        Command(ShellCommandIds.ClearNotifications, "View: Clear the notifications", (_, _) => { ClearNotifications(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.About, "Help: About Craft", (_, _) => _ui.ShowMessageAsync("Craft",
             $"A code editor on Idrak. Plug-in contracts {CraftContracts.Version}; .NET {Environment.Version}; {System.Runtime.InteropServices.RuntimeInformation.OSDescription}."), null, null);
 
@@ -1114,8 +1236,9 @@ public sealed partial class ShellModel : IDisposable
         Menu(EditorMenus.View, ShellCommandIds.ZoomOut, 4, 2);
         Menu(EditorMenus.View, ShellCommandIds.ZoomReset, 4, 3);
         Menu(EditorMenus.Plugins, ShellCommandIds.Plugins, 0, 0);
-        Menu(EditorMenus.Help, ShellCommandIds.CommandPalette, 0, 0, "Every command and its keys");
-        Menu(EditorMenus.Help, ShellCommandIds.PluginGuide, 0, 1);
+        Menu(EditorMenus.Help, ShellCommandIds.Welcome, 0, 0);
+        Menu(EditorMenus.Help, ShellCommandIds.CommandPalette, 0, 1, "Every command and its keys");
+        Menu(EditorMenus.Help, ShellCommandIds.PluginGuide, 0, 2);
         Menu(EditorMenus.Help, ShellCommandIds.About, 1, 0);
 
         // The activity rail: each item a command; one whose command is not registered (the agent before A2) does not show.

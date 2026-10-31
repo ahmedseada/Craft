@@ -102,6 +102,9 @@ public static class InventoryTests
             // Phase X: the editing surface.
             ["CRAFT_INDENT_GUIDES"] = "false", ["CRAFT_BRACKET_HIGHLIGHT"] = "false", ["CRAFT_WORD_HIGHLIGHT"] = "false", ["CRAFT_FOLDING"] = "false",
             ["CRAFT_FOLDING_DELAY_MS"] = "100", ["CRAFT_MAX_CARETS"] = "50",
+            // Phase X slice 3: inline, not modal; the welcome page.
+            ["CRAFT_WELCOME_AT_START"] = "false", ["CRAFT_UNDO_BAR_MS"] = "3000", ["CRAFT_FIND_BACKGROUND_CHARS"] = "1000", ["CRAFT_FIND_REGEX_TIMEOUT_MS"] = "100",
+            ["CRAFT_QUICK_OPEN_BACKGROUND_FILES"] = "50", ["CRAFT_QUICK_OPEN_RECENT"] = "5",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -131,6 +134,8 @@ public static class InventoryTests
             CrashRecords = "none", TerminalCtrlCCopies = false,
             ReducedMotion = true, MotionMilliseconds = 120, ScrollMilliseconds = 0, ScrollWheelLines = 4, ReferencesLimit = 77,
             IndentGuides = false, BracketHighlight = false, WordHighlight = false, Folding = false, FoldingDelayMilliseconds = 100, MaxCarets = 50,
+            WelcomeAtStart = false, UndoBarMilliseconds = 3000, FindBackgroundCharacters = 1000, FindRegexTimeoutMilliseconds = 100,
+            QuickOpenBackgroundFiles = 50, QuickOpenRecent = 5,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

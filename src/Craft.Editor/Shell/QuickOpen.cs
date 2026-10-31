@@ -34,7 +34,64 @@ public static class FuzzyMatch
             return None;
         }
 
-        return Math.Max(Walk(query, text, preferStarts: false), Walk(query, text, preferStarts: true));
+        return Math.Max(Walk(query, text, preferStarts: false, []), Walk(query, text, preferStarts: true, []));
+    }
+
+    /// <summary>
+    /// As <see cref="Score(ReadOnlySpan{char}, ReadOnlySpan{char})"/>, writing where each query character matched (the
+    /// better walk's) into <paramref name="positions"/>, which holds at least <paramref name="query"/>'s length: what a row
+    /// highlights. Untouched when there is no match.
+    /// </summary>
+    public static int Score(ReadOnlySpan<char> query, ReadOnlySpan<char> text, Span<int> positions)
+    {
+        if (positions.Length < query.Length)
+        {
+            throw new ArgumentException("The positions hold fewer places than the query has characters.", nameof(positions));
+        }
+
+        if (query.IsEmpty)
+        {
+            return 0;
+        }
+
+        if (query.Length > text.Length)
+        {
+            return None;
+        }
+
+        int first = Walk(query, text, preferStarts: false, []);
+        int second = Walk(query, text, preferStarts: true, []);
+        if (first == None && second == None)
+        {
+            return None;
+        }
+
+        return Walk(query, text, preferStarts: second > first, positions[..query.Length]);
+    }
+
+    /// <summary>
+    /// The runs of consecutive matched positions as (start, length), in order, for a highlight drawn as spans; the
+    /// positions are ascending, as <see cref="Score(ReadOnlySpan{char}, ReadOnlySpan{char}, Span{int})"/> writes them.
+    /// </summary>
+    public static IReadOnlyList<(int Start, int Length)> Runs(ReadOnlySpan<int> positions, int offset = 0)
+    {
+        var runs = new List<(int, int)>();
+        int i = 0;
+        while (i < positions.Length)
+        {
+            int start = positions[i];
+            int end = start + 1;
+            i++;
+            while (i < positions.Length && positions[i] == end)
+            {
+                end++;
+                i++;
+            }
+
+            runs.Add((start + offset, end - start));
+        }
+
+        return runs;
     }
 
     private static bool IsStart(ReadOnlySpan<char> text, int i)
@@ -48,7 +105,7 @@ public static class FuzzyMatch
         return before is '/' or '\\' or '.' or '_' or '-' or ' ' || (char.IsUpper(text[i]) && char.IsLower(before));
     }
 
-    private static int Walk(ReadOnlySpan<char> query, ReadOnlySpan<char> text, bool preferStarts)
+    private static int Walk(ReadOnlySpan<char> query, ReadOnlySpan<char> text, bool preferStarts, Span<int> positions)
     {
         int score = 0;
         int previous = -2;
@@ -105,6 +162,11 @@ public static class FuzzyMatch
             }
 
             score += gain - (Math.Max(0, at - previous - 1) / 4);
+            if (!positions.IsEmpty)
+            {
+                positions[q] = at;
+            }
+
             previous = at;
             i = at + 1;
         }
@@ -113,31 +175,66 @@ public static class FuzzyMatch
     }
 }
 
-/// <summary>A row of quick open: a file (its name, its folder, its path) or a command (its title, its chord, its id).</summary>
+/// <summary>What quick open lists for a query: files by name, commands after '&gt;', a line of the active editor after ':'.</summary>
+public enum QuickOpenMode
+{
+    /// <summary>The workspace's files by fuzzy name (no prefix).</summary>
+    Files,
+
+    /// <summary>The commands that can run, by fuzzy title ('&gt;' first: the command palette).</summary>
+    Commands,
+
+    /// <summary>A line (and column) of the active editor (':' first: go to line).</summary>
+    Line,
+}
+
+/// <summary>A row of quick open: a file (its name, its folder, its path) or a command (its title, its keys, its id).</summary>
 /// <param name="Text">What it shows first (the file's name, the command's title).</param>
-/// <param name="Detail">What it shows after, quieter (the folder, the chord), or null.</param>
+/// <param name="Detail">What it shows after, quieter (the folder), or null.</param>
 /// <param name="Path">The file's full path, or null for a command.</param>
 /// <param name="CommandId">The command's id, or null for a file.</param>
 /// <param name="Score">Its score (higher first).</param>
 /// <param name="Line">For ':' (go to line): the line, from 1; 0 for a file or a command.</param>
 /// <param name="Column">For ':': the column, from 1 (1 when none was typed).</param>
-public sealed record QuickOpenItem(string Text, string? Detail, string? Path, string? CommandId, int Score, int Line = 0, int Column = 1);
+public sealed record QuickOpenItem(string Text, string? Detail, string? Path, string? CommandId, int Score, int Line = 0, int Column = 1)
+{
+    /// <summary>The runs of <see cref="Text"/> the query matched, as (start, length): drawn highlighted.</summary>
+    public IReadOnlyList<(int Start, int Length)> TextHighlights { get; init; } = [];
+
+    /// <summary>The runs of <see cref="Detail"/> the query matched (a file found by its folder).</summary>
+    public IReadOnlyList<(int Start, int Length)> DetailHighlights { get; init; } = [];
+
+    /// <summary>Whether it was picked recently (it shows first, marked).</summary>
+    public bool IsRecent { get; init; }
+
+    /// <summary>A command's keys as they are bound now (the user's, the keymap's or the default), or null.</summary>
+    public string? Shortcut { get; init; }
+
+    /// <summary>A file's icon by its language (<see cref="FileIcons"/>), or null for a command or a line.</summary>
+    public FileIcon? Icon { get; init; }
+}
 
 /// <summary>
-/// Quick open (Ctrl+P, the title bar's search box): the workspace's files by fuzzy name, or, after a leading '&gt;', the
-/// commands that can run, by title. The files are listed once per workspace off the UI thread
-/// (<see cref="IndexAsync"/>, at most <see cref="CraftOptionsLimit"/>); <see cref="Query"/> runs on the UI thread over
-/// the list it holds, keeping only the best <c>rows</c> as it goes (no sort of the whole list).
+/// Quick open and the command palette, one list (Ctrl+P, Ctrl+Shift+P or F1, Ctrl+G, the title bar's search box): the
+/// workspace's files by fuzzy name, '&gt;' the commands that can run by fuzzy title with their keys, ':' a line of the
+/// active editor (":42", ":42:7"). Recent picks (<c>CRAFT_QUICK_OPEN_RECENT</c>) come first. The files are listed once per
+/// workspace off the UI thread (<see cref="IndexAsync"/>, at most <see cref="CraftOptionsLimit"/>); a list longer than
+/// <see cref="BackgroundFiles"/> is matched off the UI thread too (<see cref="QueryInBackgroundAsync"/>), keeping only the best
+/// <see cref="Rows"/> as it goes (no sort of the whole list). Used on the UI thread.
 /// </summary>
 public sealed class QuickOpen
 {
+    private const int StackPositions = 128;
     private readonly EditorHost _host;
+    private readonly List<string> _recentFiles = [];        // full paths, newest first
+    private readonly List<string> _recentCommands = [];     // ids, newest first
     private string? _root;
     private string[] _files = [];
-    private int _nameStarts;
     private int[] _nameStart = [];
+    private int[] _recentRank = [];                          // per file: 0, or its place in the recent files + 1
     private Task _indexing = Task.CompletedTask;
     private CancellationTokenSource? _cancel;
+    private int _recentLimit = 20;
 
     /// <summary>Quick open over <paramref name="host"/>'s commands, showing <paramref name="rows"/> rows.</summary>
     public QuickOpen(EditorHost host, int rows)
@@ -153,8 +250,30 @@ public sealed class QuickOpen
     /// <summary>The most files listed (<c>CRAFT_QUICK_OPEN_FILES</c>).</summary>
     public int CraftOptionsLimit { get; set; } = 200_000;
 
+    /// <summary>A file list longer than this is matched off the UI thread (<c>CRAFT_QUICK_OPEN_BACKGROUND_FILES</c>).</summary>
+    public int BackgroundFiles { get; set; } = 2000;
+
+    /// <summary>The recent files and commands kept (<c>CRAFT_QUICK_OPEN_RECENT</c>); 0 keeps none.</summary>
+    public int RecentLimit
+    {
+        get => _recentLimit;
+        set
+        {
+            _recentLimit = Math.Max(0, value);
+            Trim(_recentFiles);
+            Trim(_recentCommands);
+            RankRecent();
+        }
+    }
+
     /// <summary>The files listed, as paths relative to the workspace's root.</summary>
     public IReadOnlyList<string> Files => _files;
+
+    /// <summary>The recent files (full paths, newest first).</summary>
+    public IReadOnlyList<string> RecentFiles => _recentFiles;
+
+    /// <summary>The recent commands (ids, newest first).</summary>
+    public IReadOnlyList<string> RecentCommands => _recentCommands;
 
     /// <summary>Whether the listing stopped at the limit.</summary>
     public bool Capped { get; private set; }
@@ -164,6 +283,47 @@ public sealed class QuickOpen
 
     /// <summary>The workspace listed, or null.</summary>
     public string? Root => _root;
+
+    /// <summary>Whether the last query was matched off the UI thread.</summary>
+    public bool LastQueryInBackground { get; private set; }
+
+    /// <summary>The mode <paramref name="text"/> asks for, by its first character ('&gt;' commands, ':' a line, else files).</summary>
+    public static QuickOpenMode ModeOf(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return text.AsSpan().TrimStart() switch
+        {
+            ['>', ..] => QuickOpenMode.Commands,
+            [':', ..] => QuickOpenMode.Line,
+            _ => QuickOpenMode.Files,
+        };
+    }
+
+    /// <summary>Whether <paramref name="text"/> asks for a line (':' first).</summary>
+    public static bool IsLineQuery(string text) => ModeOf(text) == QuickOpenMode.Line;
+
+    /// <summary>The text that opens <paramref name="mode"/> empty ("", "&gt;", ":").</summary>
+    public static string PrefixOf(QuickOpenMode mode) => mode switch
+    {
+        QuickOpenMode.Commands => ">",
+        QuickOpenMode.Line => ":",
+        _ => "",
+    };
+
+    /// <summary>
+    /// Takes <paramref name="relativePaths"/> under <paramref name="root"/> as the files listed, in place of a listing (an
+    /// app that lists the files itself, a test); the list is sorted here.
+    /// </summary>
+    public void SetFiles(string? root, IEnumerable<string> relativePaths)
+    {
+        ArgumentNullException.ThrowIfNull(relativePaths);
+        var (files, starts) = Prepare([.. relativePaths]);
+        _root = root;
+        _files = files;
+        _nameStart = starts;
+        Capped = false;
+        RankRecent();
+    }
 
     /// <summary>
     /// Lists <paramref name="workspace"/>'s files (null: none) off the calling thread, in place of the last listing (which
@@ -183,7 +343,7 @@ public sealed class QuickOpen
             _root = null;
             _files = [];
             _nameStart = [];
-            _nameStarts = 0;
+            _recentRank = [];
             Capped = false;
             return;
         }
@@ -201,6 +361,78 @@ public sealed class QuickOpen
         }
     }
 
+    /// <summary>Notes <paramref name="item"/> as picked: it goes first among the recent ones (a line is not kept).</summary>
+    public void NoteChosen(QuickOpenItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.CommandId is { } command)
+        {
+            Remember(_recentCommands, command, StringComparer.OrdinalIgnoreCase);
+        }
+        else if (item.Path is { } path)
+        {
+            NoteFile(path);
+        }
+    }
+
+    /// <summary>Notes the file <paramref name="path"/> as opened (from the tree, a tab, quick open): it goes first among the recent files.</summary>
+    public void NoteFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        Remember(_recentFiles, Path.GetFullPath(path), PathKeys.Comparer);
+        RankRecent();
+    }
+
+    /// <summary>
+    /// The best rows for <paramref name="text"/> on the calling thread: files by fuzzy name (the name scored first, the
+    /// path after, shorter paths ahead on a tie, recent ones ahead), after '&gt;' the commands that can run by fuzzy title
+    /// with their keys (recent ones first), after ':' the line to go to.
+    /// </summary>
+    public IReadOnlyList<QuickOpenItem> Query(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        LastQueryInBackground = false;
+        var span = text.AsSpan().Trim();
+        return ModeOf(text) switch
+        {
+            QuickOpenMode.Line => GoToLine(span[1..].Trim()),
+            QuickOpenMode.Commands => Commands(span[1..].Trim()),
+            _ => FileItems(span, ScoreFiles(_files, _nameStart, _recentRank, span, Rows)),
+        };
+    }
+
+    /// <summary>
+    /// As <see cref="Query"/>, matching a file list longer than <see cref="BackgroundFiles"/> on the thread pool; the rows
+    /// are made on the calling thread's context. A cancelled query throws <see cref="OperationCanceledException"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<QuickOpenItem>> QueryInBackgroundAsync(string text, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (ModeOf(text) != QuickOpenMode.Files || _files.Length <= BackgroundFiles)
+        {
+            return Query(text);
+        }
+
+        var files = _files;
+        var starts = _nameStart;
+        var ranks = _recentRank;
+        int rows = Rows;
+        string query = text.Trim();
+        var best = await Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ScoreFiles(files, starts, ranks, query, rows, cancellationToken);
+        }, cancellationToken).ConfigureAwait(true);
+        cancellationToken.ThrowIfCancellationRequested();
+        LastQueryInBackground = true;
+        if (!ReferenceEquals(files, _files))
+        {
+            return Query(text);                                  // a new listing landed meanwhile: matched again over it
+        }
+
+        return FileItems(query, best);
+    }
+
     private async Task IndexCoreAsync(Workspace workspace, string root, int limit, CancellationToken token)
     {
         var (files, starts, capped) = await Task.Run(() => List(workspace, root, limit, token), token).ConfigureAwait(true);
@@ -212,8 +444,8 @@ public sealed class QuickOpen
         _root = root;
         _files = files;
         _nameStart = starts;
-        _nameStarts = starts.Length;
         Capped = capped;
+        RankRecent();
     }
 
     private static (string[] Files, int[] NameStarts, bool Capped) List(Workspace workspace, string root, int limit, CancellationToken token)
@@ -233,6 +465,12 @@ public sealed class QuickOpen
             files.Add(path.Length > skip ? path[skip..] : path);
         }
 
+        var (array, starts) = Prepare(files);
+        return (array, starts, capped);
+    }
+
+    private static (string[] Files, int[] NameStarts) Prepare(List<string> files)
+    {
         files.Sort(StringComparer.OrdinalIgnoreCase);
         var array = files.ToArray();
         var starts = new int[array.Length];
@@ -241,27 +479,59 @@ public sealed class QuickOpen
             starts[i] = array[i].AsSpan().LastIndexOfAny('/', '\\') + 1;
         }
 
-        return (array, starts, capped);
+        return (array, starts);
     }
 
-    /// <summary>
-    /// The best rows for <paramref name="text"/>: files by fuzzy name (the file's name scored first, its path after,
-    /// shorter paths ahead on a tie), or after '&gt;' the commands that can run by fuzzy title, with their chords.
-    /// </summary>
-    public IReadOnlyList<QuickOpenItem> Query(string text)
+    private void Remember(List<string> list, string value, StringComparer comparer)
     {
-        ArgumentNullException.ThrowIfNull(text);
-        var span = text.AsSpan().Trim();
-        if (span.Length > 0 && span[0] == ':')
+        if (_recentLimit == 0)
         {
-            return GoToLine(span[1..].Trim());
+            return;
         }
 
-        return span.Length > 0 && span[0] == '>' ? Commands(span[1..].Trim()) : FilesFor(span);
+        int at = list.FindIndex(v => comparer.Equals(v, value));
+        if (at >= 0)
+        {
+            list.RemoveAt(at);
+        }
+
+        list.Insert(0, value);
+        Trim(list);
     }
 
-    /// <summary>Whether <paramref name="text"/> asks for a line (':' first).</summary>
-    public static bool IsLineQuery(string text) => text.AsSpan().TrimStart() is [':', ..];
+    private void Trim(List<string> list)
+    {
+        if (list.Count > _recentLimit)
+        {
+            list.RemoveRange(_recentLimit, list.Count - _recentLimit);
+        }
+    }
+
+    // Each listed file's place among the recent ones (a new array: a background match keeps the one it took).
+    private void RankRecent()
+    {
+        var ranks = new int[_files.Length];
+        if (_root is { } root && _recentFiles.Count > 0)
+        {
+            var byPath = new Dictionary<string, int>(PathKeys.Comparer);
+            for (int r = 0; r < _recentFiles.Count; r++)
+            {
+                var relative = Path.GetRelativePath(root, _recentFiles[r]);
+                byPath.TryAdd(relative.Replace('\\', '/'), r + 1);
+                byPath.TryAdd(relative.Replace('/', '\\'), r + 1);
+            }
+
+            for (int i = 0; i < _files.Length; i++)
+            {
+                if (byPath.TryGetValue(_files[i], out int rank))
+                {
+                    ranks[i] = rank;
+                }
+            }
+        }
+
+        _recentRank = ranks;
+    }
 
     // ":42" or ":42:7" (":42,7" too): one row that puts the caret there; nothing for text that is not a line number.
     private static List<QuickOpenItem> GoToLine(ReadOnlySpan<char> query)
@@ -285,29 +555,91 @@ public sealed class QuickOpen
         return [new QuickOpenItem(text, "in the active editor", null, null, 0, line, column)];
     }
 
-    private List<QuickOpenItem> FilesFor(ReadOnlySpan<char> query)
+    // The best rows' (index, score): any thread (it reads only what it is given). An empty query lists the recent files
+    // first, then the rest by path.
+    private static (int Index, int Score)[] ScoreFiles(string[] files, int[] starts, int[] ranks, ReadOnlySpan<char> query, int rows, CancellationToken token = default)
     {
-        var best = new Best(Rows);
-        var files = _files;
-        var starts = _nameStart;
-        for (int i = 0; i < files.Length && i < _nameStarts; i++)
+        var best = new Best(rows);
+        bool anyRecent = ranks.Length == files.Length && ranks.AsSpan().IndexOfAnyExcept(0) >= 0;
+        for (int i = 0; i < files.Length; i++)
         {
-            var path = files[i].AsSpan();
-            int name = FuzzyMatch.Score(query, path[starts[i]..]);
-            int score = name != FuzzyMatch.None ? (name * 2) + 1000 : FuzzyMatch.Score(query, path);
-            if (score != FuzzyMatch.None)
+            if ((i & 0xFFF) == 0)
             {
-                best.Offer(i, score - (path.Length / 8));
+                token.ThrowIfCancellationRequested();
             }
+
+            var path = files[i].AsSpan();
+            int score;
+            if (query.IsEmpty)
+            {
+                score = -i;                                        // the sorted order
+            }
+            else
+            {
+                int name = FuzzyMatch.Score(query, path[starts[i]..]);
+                score = name != FuzzyMatch.None ? (name * 2) + 1000 : FuzzyMatch.Score(query, path);
+                if (score == FuzzyMatch.None)
+                {
+                    continue;
+                }
+
+                score -= path.Length / 8;
+            }
+
+            if (anyRecent && ranks[i] > 0)
+            {
+                // With no query the recent files lead in the order they were opened; with one they rank a little ahead.
+                score = query.IsEmpty ? 1_000_000_000 - ranks[i] : score + 60 - Math.Min(40, ranks[i]);
+            }
+
+            best.Offer(i, score);
         }
 
-        var items = new List<QuickOpenItem>(best.Count);
-        foreach (var (index, score) in best.Ordered())
+        return best.Ordered().ToArray();
+    }
+
+    private List<QuickOpenItem> FileItems(ReadOnlySpan<char> query, (int Index, int Score)[] best)
+    {
+        var items = new List<QuickOpenItem>(best.Length);
+        var files = _files;
+        var starts = _nameStart;
+        var ranks = _recentRank;
+        int[]? rented = query.Length > StackPositions ? new int[query.Length] : null;
+        Span<int> positions = rented ?? stackalloc int[StackPositions];
+        positions = positions[..query.Length];
+        foreach (var (index, score) in best)
         {
             var relative = files[index];
             int start = starts[index];
             string folder = start > 0 ? relative[..(start - 1)] : "";
-            items.Add(new QuickOpenItem(relative[start..], folder.Length == 0 ? null : folder, _root is null ? relative : Path.Combine(_root, relative), null, score));
+            IReadOnlyList<(int, int)> textRuns = [];
+            IReadOnlyList<(int, int)> detailRuns = [];
+            if (!query.IsEmpty)
+            {
+                if (FuzzyMatch.Score(query, relative.AsSpan(start), positions) != FuzzyMatch.None)
+                {
+                    textRuns = FuzzyMatch.Runs(positions);
+                }
+                else if (FuzzyMatch.Score(query, relative, positions) != FuzzyMatch.None)
+                {
+                    int split = positions.IndexOfAnyInRange(start, int.MaxValue);
+                    if (split < 0)
+                    {
+                        split = positions.Length;
+                    }
+
+                    detailRuns = FuzzyMatch.Runs(positions[..split]);
+                    textRuns = FuzzyMatch.Runs(positions[split..], -start);
+                }
+            }
+
+            items.Add(new QuickOpenItem(relative[start..], folder.Length == 0 ? null : folder, _root is null ? relative : Path.Combine(_root, relative), null, score)
+            {
+                TextHighlights = textRuns,
+                DetailHighlights = detailRuns,
+                IsRecent = ranks.Length == files.Length && ranks[index] > 0,
+                Icon = FileIcons.For(relative),
+            });
         }
 
         return items;
@@ -317,6 +649,9 @@ public sealed class QuickOpen
     {
         var commands = _host.Commands;
         var best = new Best(Math.Max(Rows, commands.Count));
+        int[]? rented = query.Length > StackPositions ? new int[query.Length] : null;
+        Span<int> positions = rented ?? stackalloc int[StackPositions];
+        positions = positions[..query.Length];
         for (int i = 0; i < commands.Count; i++)
         {
             bool can;
@@ -332,22 +667,39 @@ public sealed class QuickOpen
             }
 
             int score = can ? FuzzyMatch.Score(query, commands[i].Title) : FuzzyMatch.None;
-            if (score != FuzzyMatch.None)
+            if (score == FuzzyMatch.None)
             {
-                best.Offer(i, score);
+                continue;
             }
+
+            int rank = _recentCommands.FindIndex(id => id.Equals(commands[i].Name, StringComparison.OrdinalIgnoreCase));
+            if (rank >= 0)
+            {
+                score += query.IsEmpty ? 10_000_000 - rank : 60 - Math.Min(40, rank + 1);
+            }
+
+            best.Offer(i, score);
         }
 
         var items = new List<QuickOpenItem>(best.Count);
         foreach (var (index, score) in best.Ordered())
         {
             var command = commands[index];
-            items.Add(new QuickOpenItem(command.Title, ShellMenus.ChordOf(command.Name), null, command.Name, score));
+            IReadOnlyList<(int, int)> runs = !query.IsEmpty && FuzzyMatch.Score(query, command.Title, positions) != FuzzyMatch.None ? FuzzyMatch.Runs(positions) : [];
+            items.Add(new QuickOpenItem(command.Title, null, null, command.Name, score)
+            {
+                TextHighlights = runs,
+                IsRecent = _recentCommands.Exists(id => id.Equals(command.Name, StringComparison.OrdinalIgnoreCase)),
+                Shortcut = _host.KeysOf(command.Name),
+            });
         }
 
         if (query.IsEmpty)
         {
-            items.Sort(static (a, b) => string.Compare(a.Text, b.Text, StringComparison.CurrentCultureIgnoreCase));
+            // The recent ones first (as picked), then the rest by title.
+            items.Sort(static (a, b) => a.IsRecent != b.IsRecent ? (a.IsRecent ? -1 : 1)
+                : a.IsRecent ? b.Score.CompareTo(a.Score)
+                : string.Compare(a.Text, b.Text, StringComparison.CurrentCultureIgnoreCase));
         }
 
         return items;
@@ -378,5 +730,93 @@ public sealed class QuickOpen
         }
 
         public ReadOnlySpan<(int Index, int Score)> Ordered() => _items.AsSpan(0, Count);
+    }
+}
+
+/// <summary>
+/// The keyboard over a list of rows (the palette's, quick open's): the selected row, moved by the arrows (wrapping), Page
+/// Up and Down (a page of <see cref="PageRows"/>, stopping at the ends), Home and End; a new list selects its first row.
+/// </summary>
+public sealed class OverlaySelection
+{
+    /// <summary>The rows in the list.</summary>
+    public int Count { get; private set; }
+
+    /// <summary>The selected row, or -1 when the list is empty.</summary>
+    public int Selected { get; private set; } = -1;
+
+    /// <summary>The rows a page moves (the rows the list shows).</summary>
+    public int PageRows { get; set; } = 10;
+
+    /// <summary>A new list of <paramref name="count"/> rows: the first is selected.</summary>
+    public void Reset(int count)
+    {
+        Count = Math.Max(0, count);
+        Selected = Count > 0 ? 0 : -1;
+    }
+
+    /// <summary>Moves by <paramref name="step"/> rows (an arrow: 1 or -1), wrapping at the ends.</summary>
+    public int Move(int step)
+    {
+        if (Count > 0)
+        {
+            Selected = (((Selected + step) % Count) + Count) % Count;
+        }
+
+        return Selected;
+    }
+
+    /// <summary>Moves a page down (1) or up (-1), stopping at the last or the first row.</summary>
+    public int Page(int direction)
+    {
+        if (Count > 0)
+        {
+            Selected = Math.Clamp(Selected + (direction * Math.Max(1, PageRows - 1)), 0, Count - 1);
+        }
+
+        return Selected;
+    }
+
+    /// <summary>Selects <paramref name="index"/> (clamped to the list).</summary>
+    public int Select(int index)
+    {
+        if (Count > 0)
+        {
+            Selected = Math.Clamp(index, 0, Count - 1);
+        }
+
+        return Selected;
+    }
+
+    /// <summary>
+    /// The keys of an open list: Up, Down, Page Up, Page Down, Home and End (Ctrl+Home, Ctrl+End) move; true when the key
+    /// was one of them.
+    /// </summary>
+    public bool HandleKey(EditorKey key, KeyModifiers modifiers)
+    {
+        bool plain = (modifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0;
+        switch (key)
+        {
+            case EditorKey.Down when plain:
+                Move(1);
+                return true;
+            case EditorKey.Up when plain:
+                Move(-1);
+                return true;
+            case EditorKey.PageDown when plain:
+                Page(1);
+                return true;
+            case EditorKey.PageUp when plain:
+                Page(-1);
+                return true;
+            case EditorKey.End when (modifiers & KeyModifiers.Control) != 0:
+                Select(Count - 1);
+                return true;
+            case EditorKey.Home when (modifiers & KeyModifiers.Control) != 0:
+                Select(0);
+                return true;
+            default:
+                return false;
+        }
     }
 }

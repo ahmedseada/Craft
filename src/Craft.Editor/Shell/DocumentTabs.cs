@@ -167,6 +167,43 @@ public sealed class DocumentTabs : IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves <paramref name="tab"/> to <paramref name="index"/> (a tab dragged along the strip; clamped to the tabs), the
+    /// others keeping their order; false when it is not open or already there. The active tab stays active.
+    /// </summary>
+    public bool Move(DocumentTab tab, int index)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        int from = _tabs.IndexOf(tab);
+        if (from < 0)
+        {
+            return false;
+        }
+
+        int to = Math.Clamp(index, 0, _tabs.Count - 1);
+        if (to == from)
+        {
+            return false;
+        }
+
+        _tabs.RemoveAt(from);
+        _tabs.Insert(to, tab);
+        TabsChanged?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>
+    /// Moves the dragged tab <paramref name="dragged"/> onto <paramref name="target"/>'s place (a drop on a tab): after it
+    /// when it came from the left, before it when from the right, as a strip shows a dragged tab passing another.
+    /// </summary>
+    public bool MoveOnto(DocumentTab dragged, DocumentTab target)
+    {
+        ArgumentNullException.ThrowIfNull(dragged);
+        ArgumentNullException.ThrowIfNull(target);
+        int to = _tabs.IndexOf(target);
+        return to >= 0 && !ReferenceEquals(dragged, target) && Move(dragged, to);
+    }
+
     /// <summary>Activates the next tab (after the last, the first); false when there are fewer than two.</summary>
     public bool Next() => Step(1);
 

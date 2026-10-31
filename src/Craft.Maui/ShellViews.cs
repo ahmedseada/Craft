@@ -138,6 +138,12 @@ public sealed class FolderTreeView : ContentView
         }
     }
 
+    /// <summary>The key of a dragged file row's full path in the drag's properties (a drop on the window opens it).</summary>
+    public const string DragPathKey = "craft.path";
+
+    /// <summary>Whether a file's row can be dragged (onto the editor, to open it).</summary>
+    public bool DragsFiles { get; set; }
+
     /// <summary>Raised with a file's full path when its row is picked.</summary>
     public event EventHandler<string>? FileActivated;
 
@@ -189,6 +195,21 @@ public sealed class FolderTreeView : ContentView
         var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
         context.Tapped += (_, e) => ContextRequested?.Invoke(this, (row.BindingContext as FolderTreeItem, e));
         row.GestureRecognizers.Add(context);
+        // Phase X: a file's row dragged onto the editor opens it (the drop is the window's).
+        var drag = new DragGestureRecognizer { CanDrag = true };
+        drag.DragStarting += (_, e) =>
+        {
+            if (!DragsFiles || row.BindingContext is not FolderTreeItem item || _tree is not { } tree || tree.IndexOf(item.Path) is not (>= 0 and var index)
+                || tree.Rows[index].Entry.IsFolder)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            e.Data.Properties[DragPathKey] = item.Path;
+            e.Data.Text = item.Path;
+        };
+        row.GestureRecognizers.Add(drag);
         return row;
     }
 
@@ -295,6 +316,7 @@ public sealed class TabStripView : ContentView, IDisposable
     private readonly DocumentTabs _tabs;
     private readonly PageTabs? _pages;
     private readonly HorizontalStackLayout _strip = new() { Spacing = 0 };
+    private readonly Grid _row;
     private readonly ScrollView _scroll;
     private readonly Dictionary<DocumentTab, (Label Title, Ellipse Dot)> _titles = [];
     private bool _compact;
@@ -311,7 +333,15 @@ public sealed class TabStripView : ContentView, IDisposable
             pages.Changed += OnTabsChanged;
         }
 
-        _scroll = new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Default };
+        // The strip and the empty space after the tabs: a double tap there makes a new file (phase X).
+        var empty = new BoxView { Color = Colors.Transparent, MinimumWidthRequest = 48 };
+        var newFile = new TapGestureRecognizer { NumberOfTapsRequired = 2 };
+        newFile.Tapped += (_, _) => NewFileRequested?.Invoke(this, EventArgs.Empty);
+        empty.GestureRecognizers.Add(newFile);
+        _row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
+        _row.Add(_strip, 0, 0);
+        _row.Add(empty, 1, 0);
+        _scroll = new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _row, HorizontalScrollBarVisibility = ScrollBarVisibility.Default };
         Content = _scroll;
         tabs.TabsChanged += OnTabsChanged;
         tabs.ActiveChanged += OnTabsChanged;
@@ -347,6 +377,12 @@ public sealed class TabStripView : ContentView, IDisposable
 
     /// <summary>Draws the tabs again (the keys in the tooltips changed).</summary>
     public void Refresh() => Rebuild();
+
+    /// <summary>Raised on a double-click (a double tap) on the strip's empty space: a new file.</summary>
+    public event EventHandler? NewFileRequested;
+
+    /// <summary>The key of a dragged tab in the drag's properties (a drop on another tab moves it there).</summary>
+    public const string DragTabKey = "craft.tab";
 
     /// <summary>Takes <paramref name="palette"/>'s colours and fonts.</summary>
     public void Apply(ShellPalette palette)
@@ -472,6 +508,7 @@ public sealed class TabStripView : ContentView, IDisposable
             var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
             context.Tapped += (_, e) => ContextRequested?.Invoke(this, (tab, e));
             cell.GestureRecognizers.Add(context);
+            Draggable(cell, tab);
             _strip.Children.Add(cell);
         }
 
@@ -493,6 +530,25 @@ public sealed class TabStripView : ContentView, IDisposable
     }
 
     private string CloseTip() => Tooltip?.Invoke("Close", ShellCommandIds.CloseTab) ?? "Close";
+
+    // Phase X: a document's tab dragged along the strip and dropped on another moves there (DocumentTabs.MoveOnto).
+    private void Draggable(View cell, DocumentTab tab)
+    {
+        var drag = new DragGestureRecognizer { CanDrag = true };
+        drag.DragStarting += (_, e) => e.Data.Properties[DragTabKey] = tab;
+        cell.GestureRecognizers.Add(drag);
+        var drop = new DropGestureRecognizer { AllowDrop = true };
+        drop.DragOver += (_, e) => e.AcceptedOperation = DataPackageOperation.Copy;     // a file from outside may land here too (the window's drop opens it)
+        drop.Drop += (_, e) =>
+        {
+            if (e.Data.Properties.TryGetValue(DragTabKey, out var value) && value is DocumentTab dragged)
+            {
+                e.Handled = true;
+                _tabs.MoveOnto(dragged, tab);
+            }
+        };
+        cell.GestureRecognizers.Add(drop);
+    }
 
     // A tab's cell: the accent's line over the active one, on the surface; a border between the others; its hover and
     // pressed looks (phase X) from the theme, its title following them.
@@ -579,4 +635,10 @@ public interface IShellPlatform
 
     /// <summary>The system's file manager and trash (phase X's Reveal and Delete: File Explorer and the Recycle Bin on Windows), or null.</summary>
     IShellFiles? ShellFiles => null;
+
+    /// <summary>
+    /// The paths of the files and folders a drop from outside the app carries (the system's file manager), read from the
+    /// platform's drop data while the drop lasts; none when it carries none, or on a platform without the mapping.
+    /// </summary>
+    Task<IReadOnlyList<string>> DroppedPathsAsync(DropEventArgs drop) => Task.FromResult<IReadOnlyList<string>>([]);
 }

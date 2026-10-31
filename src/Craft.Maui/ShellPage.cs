@@ -265,7 +265,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         _editorStack.Add(_editorArea);
         _editorStack.Add(_find);
         _editorStack.Add(_undoBar);
-        _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested };
+        _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested, WindowKeys = _keys };
+        // The owner's note 26: Ctrl+F in Output searches its text; its right-click opens the read-only text's menu.
+        _bottom.FindRequested += (_, e) => ShowFind(false, e.InitialQuery, e.Model);
+        _bottom.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.ReadOnlyText, new ContextMenuTarget(EditorContextMenus.ReadOnlyText, null, false, e.Model), e.Where);
         _bottom.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
         _bottomSplit.Panel = _bottom;
 
@@ -888,15 +891,20 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     // A Problems row's Fix or Explain: the first action of that kind the registered providers offer for the diagnostic.
     // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
-    private void OnCodeActionRequested(EditorDiagnostic row, string kind)
+    private void OnCodeActionRequested(ProblemItem item, string kind)
     {
+        if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Tabs.Tabs.Contains(owner))
+        {
+            _shell.Tabs.Activate(owner);                    // a row of another file: its file first
+        }
+
         if (_shell.Tabs.Active is not { } active || _shown?.Model is not { } model)
         {
             return;
         }
 
         // The row was listed before the last edit: its problem is taken as the editor has it now (moved, or gone).
-        if (ShellText.CurrentProblem(model.Diagnostics, row) is not { } diagnostic)
+        if (ShellText.CurrentProblem(model.Diagnostics, item.Diagnostic) is not { } diagnostic)
         {
             _status.Notice.Text = "That problem is gone: the text changed since it was listed.";
             return;
@@ -1327,10 +1335,7 @@ public sealed class ShellPage : ContentPage, IDisposable
                 _host.SetSemanticSession(owner.HostDocument, shownModel.SemanticSession);
             }
 
-            if (ReferenceEquals(view, _shown))
-            {
-                UpdateProblems();
-            }
+            UpdateProblems();                               // every open file's problems are listed
         };
         view.DefinitionRequested += OnDefinitionRequested;
         view.ContextRequested += (_, e) =>
@@ -1341,7 +1346,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         view.SaveRequested += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.Save);
-        view.FindRequested += (_, e) => ShowFind(e.Replace, e.InitialQuery);
+        view.FindRequested += (_, e) => ShowFind(e.Replace, e.InitialQuery);   // the document's own find (not Output's)
         view.CaretMoved += (_, _) =>
         {
             if (view.Model is { } model && _shell.Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } owner)
@@ -1400,7 +1405,17 @@ public sealed class ShellPage : ContentPage, IDisposable
     private void UpdateProblems()
     {
         var model = _shown?.Model;
-        _bottom.ShowProblems(model, _shell.Tabs.Active?.Title);
+        // The owner's note 26: every open document's problems, grouped by file in the tabs' order.
+        var sources = new List<ProblemSource>();
+        foreach (var tab in _shell.Tabs.Tabs)
+        {
+            if (tab.View is EditorView { Model: { } open } && open.SemanticSession is not null)
+            {
+                sources.Add(new ProblemSource(tab.FilePath ?? tab.Title, tab.Title, open.Snapshot, open.Diagnostics.ToArray(), tab));
+            }
+        }
+
+        _bottom.ShowProblems(sources, model, _shell.Tabs.Active?.Title);
         _status.Problems.Text = model?.SemanticSession is null ? "" : ShellText.Problems(model.ErrorCount, model.WarningCount);
         _status.Problems.TextColor = model is { ErrorCount: > 0 } ? _palette.Error : _palette.Warning;
         var card = ShellText.Semantic(model);
@@ -1408,11 +1423,16 @@ public sealed class ShellPage : ContentPage, IDisposable
         _status.Semantic.Text = card?.StatusText ?? "";
     }
 
-    private void OnProblemChosen(int position)
+    private void OnProblemChosen(ProblemItem item)
     {
+        if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Tabs.Tabs.Contains(owner))
+        {
+            _shell.Tabs.Activate(owner);                    // a problem of another open file: its tab first
+        }
+
         if (_shown is { Model: { } model } view)
         {
-            position = Math.Clamp(position, 0, model.Snapshot.Length);   // a row listed before the text shrank
+            int position = Math.Clamp(item.Position, 0, model.Snapshot.Length);   // a row listed before the text shrank
             model.Select(position, position);
             model.EnsureCaretVisible();
             view.Focus();
@@ -1661,10 +1681,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         UpdateModel();
     }
 
-    private void ShowFind(bool replace, string? query)
+    private void ShowFind(bool replace, string? query, EditorModel? target = null)
     {
-        _find.Model = _shown?.Model;
-        _find.Open(replace, query);
+        // Output's Ctrl+F (the owner's note 26) searches Output's read-only text (nothing to replace there).
+        _find.Model = target ?? _shown?.Model;
+        _find.Open(replace && target is not { IsReadOnly: true }, query);
     }
 
     // On a caret move (a keystroke too): only the texts that changed are set; the breadcrumb's scopes come from the

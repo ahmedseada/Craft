@@ -419,6 +419,7 @@ static class Craft.Abstractions.EditorCommands
 static class Craft.Abstractions.EditorContextMenus
   const System.String Editor = context:editor
   const System.String Prefix = context:
+  const System.String ReadOnlyText = context:readonly-text
   const System.String Tab = context:tab
   const System.String Tree = context:tree
   static Craft.Abstractions.ContextMenuTarget Target { get; set; }

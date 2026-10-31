@@ -532,4 +532,44 @@ public static class UiTests
         var stale = Allowed.Where((_, i) => !used.Contains(i)).Select(a => $"{a.File}: {a.Code}").ToArray();
         Check.True(stale.Length == 0, "an allowed wait that is no longer there (take it off the list):\n  " + string.Join("\n  ", stale));
     }
+
+    // The owner's note 26: "the checkbox is so gross". A list in SelectionMode.Multiple draws a checkbox per row on
+    // Windows; the bottom panel's lists are drawn rows (PanelListView) and its Output a read-only editor.
+    private static readonly Regex CheckboxList = new(@"SelectionMode\s*\.\s*Multiple|SelectionMode\s*=\s*SelectionMode\.Multiple",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    [Test]
+    public static void TheShellHasNoCheckboxList()
+    {
+        string root = TestRunner.RepositoryPath();
+        var found = new List<string>();
+        int files = 0;
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src/Craft.Maui"), "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+            if (relative.Contains("/obj/", StringComparison.Ordinal) || relative.Contains("/bin/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            files++;
+            var lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string code = lines[i].TrimStart();
+                if (!code.StartsWith("//", StringComparison.Ordinal) && !code.StartsWith("///", StringComparison.Ordinal) && CheckboxList.IsMatch(code))
+                {
+                    found.Add($"{relative}:{i + 1}: {code}");
+                }
+            }
+        }
+
+        Check.True(files > 20, $"the shell's sources were read ({files} files)");
+        Check.True(found.Count == 0, "a list in SelectionMode.Multiple (a checkbox per row on Windows): draw the rows (PanelListView) or show the text read-only (EditorView.IsReadOnly):\n  "
+            + string.Join("\n  ", found));
+        string panel = File.ReadAllText(Path.Combine(root, "src/Craft.Maui/ShellChromeViews.cs"));
+        string bottom = panel[panel.IndexOf("public sealed class BottomPanelView", StringComparison.Ordinal)..panel.IndexOf("public sealed class StatusBarView", StringComparison.Ordinal)];
+        Check.True(!bottom.Contains("CollectionView", StringComparison.Ordinal) && !bottom.Contains("CheckBox", StringComparison.Ordinal) && !bottom.Contains("SelectableLabel", StringComparison.Ordinal),
+            "the bottom panel has no list of row controls, no checkbox and no one-line selectable label");
+    }
 }

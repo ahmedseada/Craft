@@ -56,11 +56,11 @@ public sealed partial class EditorModel
             EditorKey.F3 => shift ? Find.FindPrevious() || true : Find.FindNext() || true,
             EditorKey.A when control => SelectAll(),
             EditorKey.C when control => Copy(),
-            EditorKey.X when control => Cut(),
-            EditorKey.V when control => Paste(),
+            EditorKey.X when control => _readOnly ? Refuse() : Cut(),
+            EditorKey.V when control => _readOnly ? Refuse() : Paste(),
             EditorKey.Z when control => shift ? Redo() : Undo(),
             EditorKey.Y when control => Redo(),
-            EditorKey.S when control => Raise(SaveRequested),
+            EditorKey.S when control && !_readOnly => Raise(SaveRequested),
             EditorKey.F when control => RaiseFind(replace: false),
             EditorKey.H when control => RaiseFind(replace: true),
             _ => false,
@@ -83,6 +83,12 @@ public sealed partial class EditorModel
     {
         if (string.IsNullOrEmpty(text))
         {
+            return;
+        }
+
+        if (_readOnly)
+        {
+            RefusedEdits++;                                  // read-only: typed text goes nowhere (nothing to complete either)
             return;
         }
 
@@ -545,6 +551,13 @@ public sealed partial class EditorModel
         return true;
     }
 
+    // A read-only text's cut or paste: nothing copied away, nothing read from the clipboard.
+    private bool Refuse()
+    {
+        RefusedEdits++;
+        return true;
+    }
+
     private bool Raise(EventHandler? handler)
     {
         handler?.Invoke(this, EventArgs.Empty);
@@ -572,6 +585,9 @@ public sealed partial class EditorModel
         ApplyEdits(new ReadOnlySpan<TextEdit>(in edit), kind, after, keepAutoClosed);
     }
 
+    // The one place the editor's single-selection edits enter (typing, paste, cut, delete, the line commands, find's
+    // replace, formatting, the completions); the multi-caret edits enter through CommitEdits too, which a read-only
+    // editor refuses (the owner's note 26).
     internal void ApplyEdits(ReadOnlySpan<TextEdit> edits, EditKind kind, SelectionState after, bool keepAutoClosed = false) =>
         CommitEdits(edits, kind, new ReadOnlySpan<SelectionState>(in after), 0, keepAutoClosed);
 
@@ -977,6 +993,12 @@ public sealed partial class EditorModel
 
     private bool Undo()
     {
+        if (_readOnly)
+        {
+            RefusedEdits++;
+            return true;
+        }
+
         _applying = true;
         SelectionState? restored;
         try
@@ -1009,6 +1031,12 @@ public sealed partial class EditorModel
 
     private bool Redo()
     {
+        if (_readOnly)
+        {
+            RefusedEdits++;
+            return true;
+        }
+
         _applying = true;
         SelectionState? restored;
         try

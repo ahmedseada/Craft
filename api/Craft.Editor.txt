@@ -382,6 +382,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean HasMultipleCarets { get; }
   System.Boolean IndentLines()
   System.Boolean IsAnimating { get; }
+  System.Boolean IsReadOnly { get; set; }
   System.Boolean KeepSelectionForContextMenu()
   System.Boolean MoveLines(Craft.Editor.LineDirection direction)
   System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
@@ -389,6 +390,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean Overwrite { get; }
   System.Boolean SelectAllOccurrences()
   System.Boolean SelectLine()
+  System.Boolean ShowLineNumbers { get; set; }
   System.Boolean ShrinkSelection()
   System.Boolean ToggleLineComment()
   System.Boolean UncommentLines()
@@ -407,6 +409,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Int32 NextShownLine(System.Int32 line)
   System.Int32 PositionFromPoint(System.Single x, System.Single y)
   System.Int32 PrimarySelectionIndex { get; }
+  System.Int32 RefusedEdits { get; }
   System.Int32 RowCount { get; }
   System.Int32 RowOfLine(System.Int32 line)
   System.Int32 SelectionCount { get; }
@@ -450,6 +453,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Void Remeasure()
   System.Void RequestSignatureHelp()
   System.Void ResetTelemetry()
+  System.Void ScrollToOffsets(System.Single x, System.Single y, System.Boolean instant = false)
   System.Void Select(System.Int32 anchor, System.Int32 caret)
   System.Void SetSelections(System.ReadOnlySpan<Craft.Abstractions.SelectionState> selections, System.Int32 primary)
   System.Void UpdateViewport(System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight)
@@ -462,6 +466,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   event System.EventHandler Reclassified
   event System.EventHandler SaveRequested
   event System.EventHandler SemanticRequestCompleted
+  event System.EventHandler ViewportChanged
   event System.EventHandler<Craft.Editor.ClipboardFailedEventArgs> ClipboardFailed
   event System.EventHandler<Craft.Editor.DefinitionRequestedEventArgs> DefinitionRequested
   event System.EventHandler<Craft.Editor.EditorScrollEventArgs> ScrollRequested
@@ -502,6 +507,7 @@ sealed class Craft.Editor.EditorRenderer : System.IDisposable
   System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Editor.EditorModel model, System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight, System.Boolean caretVisible)
   ctor()
 sealed class Craft.Editor.EditorScrollEventArgs : System.EventArgs
+  System.Boolean Instant { get; init; }
   System.Single X { get; }
   System.Single Y { get; }
   ctor(System.Single x, System.Single y)
@@ -929,6 +935,30 @@ sealed class Craft.Editor.Shell.KeyboardModel
   const System.String Variable = CRAFT_KEY_BINDINGS
   ctor(Craft.Editor.Shell.ShellModel shell)
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> KeyMaps { get; }
+static class Craft.Editor.Shell.LogClasses
+  const System.String Error = log - error
+  const System.String Quiet = log - quiet
+  const System.String Warning = log - warning
+  static Craft.Abstractions.ITheme Theme(Craft.Abstractions.ITheme theme)
+sealed class Craft.Editor.Shell.LogSurface : System.IDisposable
+  Craft.Abstractions.ITextDocument Document { get; }
+  Craft.Abstractions.ITextDocument Shown { get; }
+  System.Boolean Following { get; set; }
+  System.Boolean Post(System.String line)
+  System.Int32 Flush()
+  System.Int32 LineCount { get; }
+  System.Int32 ShownLineCount { get; }
+  System.String Filter { get; set; }
+  System.Void Attach(Craft.Editor.EditorModel model)
+  System.Void Dispose()
+  ctor(System.Func<System.Int32> maxLines)
+  event System.EventHandler FollowingChanged
+  event System.EventHandler ShownChanged
+  static Craft.Abstractions.ILanguage Language { get; }
+static class Craft.Editor.Shell.LogText
+  const System.Int32 LevelColumn = 10
+  static Craft.Abstractions.EditorLogLevel? LevelOf(System.ReadOnlySpan<System.Char> line)
+  static System.String Line(Craft.Editor.EditorLogEntry entry)
 sealed class Craft.Editor.Shell.MenuModel : Craft.Editor.Abstractions.IEditorKeyHandler
   Craft.Abstractions.ContextMenuTarget Target { get; }
   Craft.Editor.Abstractions.IEditorKeyHandler Before(Craft.Editor.Abstractions.IEditorKeyHandler inner)
@@ -958,6 +988,50 @@ sealed class Craft.Editor.Shell.MenuRow : System.IEquatable<Craft.Editor.Shell.M
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String Chord, out System.String CommandId, out System.Boolean StartsGroup, out System.Boolean Enabled)
   ctor(System.String Title, System.String Chord, System.String CommandId, System.Boolean StartsGroup, System.Boolean Enabled)
+enum Craft.Editor.Shell.MetricColumn : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Count = 5
+  Last = 2
+  Mean = 3
+  Measure = 1
+  P95 = 4
+  Source = 0
+  Unit = 6
+sealed class Craft.Editor.Shell.MetricRow
+  System.Boolean IsSlow { get; }
+  System.Double Last { get; }
+  System.Double Mean { get; }
+  System.Double P95 { get; }
+  System.Int32 SampleCount { get; }
+  System.Int64 Count { get; }
+  System.ReadOnlySpan<System.Double> Samples { get; }
+  System.String Measure { get; }
+  System.String Source { get; }
+  System.String Text(Craft.Editor.Shell.MetricColumn column)
+  System.String Unit { get; }
+sealed class Craft.Editor.Shell.MetricsTable : Craft.Editor.Shell.PanelList, System.IDisposable
+  Craft.Editor.Shell.MetricColumn? SortColumn { get; }
+  Craft.Editor.Shell.RowSelection<Craft.Editor.Shell.MetricRow> Selection { get; }
+  System.Boolean Add(System.String source, System.String metric, System.Double value, System.String unit)
+  System.Boolean Descending { get; }
+  System.Boolean HasHeader { get; }
+  System.Boolean IsSlowValue(Craft.Editor.Shell.MetricRow row, System.Double value)
+  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Boolean Refresh()
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.MetricRow> AllRows { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.MetricRow> Rows { get; }
+  System.Int32 RowCount { get; }
+  System.String CopyAll()
+  System.String CopySelected()
+  System.String Filter { get; set; }
+  System.Void Dispose()
+  System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.FontMetrics metrics, Craft.Abstractions.EditorColors colors, System.Single scrollY, System.Single width, System.Single height)
+  System.Void Press(Craft.Abstractions.FontMetrics metrics, System.Single viewX, System.Single viewY, System.Single scrollY, System.Single width, Craft.Abstractions.KeyModifiers modifiers)
+  System.Void SortBy(Craft.Editor.Shell.MetricColumn column)
+  ctor(Craft.Editor.EditorHost host, Craft.Core.CraftOptions options = null)
+  event System.EventHandler Recorded
+  static Craft.Editor.Shell.MetricColumn? ColumnAt(Craft.Abstractions.FontMetrics metrics, System.Single viewX, System.Single width)
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<Craft.Editor.Shell.MetricColumn, System.String, System.Int32, System.Boolean>> Columns { get; }
+  static System.String Format(System.Double value)
 sealed class Craft.Editor.Shell.ModelPick : System.IEquatable<Craft.Editor.Shell.ModelPick>
   Craft.Editor.Shell.ModelPick <Clone>$()
   Craft.Editor.Shell.ModelPickKind Kind { get; init; }
@@ -1023,6 +1097,28 @@ sealed class Craft.Editor.Shell.PanelLayout
   event System.EventHandler Changed
   static System.String OpenVariable(Craft.Editor.Shell.ShellPanel panel)
   static System.String SizeVariable(Craft.Editor.Shell.ShellPanel panel)
+abstract class Craft.Editor.Shell.PanelList
+  System.Boolean HasHeader { get; }
+  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Int32 Hover { get; set; }
+  System.Int32 RowAt(Craft.Abstractions.FontMetrics metrics, System.Single viewY, System.Single scrollY)
+  System.Int32 RowCount { get; }
+  System.Single ContentHeight(Craft.Abstractions.FontMetrics metrics)
+  System.Single HeaderHeight(Craft.Abstractions.FontMetrics metrics)
+  System.String CopyAll()
+  System.String CopySelected()
+  System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.FontMetrics metrics, Craft.Abstractions.EditorColors colors, System.Single scrollY, System.Single width, System.Single height)
+  System.Void Press(Craft.Abstractions.FontMetrics metrics, System.Single viewX, System.Single viewY, System.Single scrollY, System.Single width, Craft.Abstractions.KeyModifiers modifiers)
+  event System.EventHandler Changed
+  event System.EventHandler<System.Int32> RevealRequested
+  event System.EventHandler<System.String> CopyRequested
+  protected System.Boolean Copy(System.String text)
+  protected System.ValueTuple<System.Int32, System.Int32> Visible(Craft.Abstractions.FontMetrics metrics, System.Single scrollY, System.Single height)
+  protected System.Void RaiseChanged()
+  protected System.Void Reveal(System.Int32 row)
+  protected ctor()
+  protected static System.UInt32 RowFill(Craft.Abstractions.EditorColors colors, System.Boolean hover, System.Boolean picked)
+  static System.Single RowHeight(Craft.Abstractions.FontMetrics metrics)
 enum Craft.Editor.Shell.PluginFilter : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   All = 0
   Overrides = 1
@@ -1054,6 +1150,22 @@ enum Craft.Editor.Shell.PluginState : System.IComparable, System.IConvertible, S
   Off = 3
   Outdated = 1
   Problem = 2
+sealed class Craft.Editor.Shell.ProblemGroup
+  System.Boolean Collapsed { get; }
+  System.Collections.Generic.List<Craft.Editor.Shell.ProblemItem> Items { get; }
+  System.Object Owner { get; }
+  System.String Header { get; }
+  System.String Key { get; }
+  System.String Title { get; }
+sealed class Craft.Editor.Shell.ProblemItem
+  Craft.Abstractions.EditorDiagnostic Diagnostic { get; }
+  Craft.Editor.Shell.ProblemGroup Group { get; }
+  System.Int32 Column { get; }
+  System.Int32 Line { get; }
+  System.Int32 Position { get; }
+  System.String CopyText { get; }
+  System.String Place { get; }
+  System.String Text { get; }
 sealed class Craft.Editor.Shell.ProblemReport : System.IDisposable
   System.String LastPath { get; }
   System.Threading.Tasks.Task OfferAsync()
@@ -1062,6 +1174,39 @@ sealed class Craft.Editor.Shell.ProblemReport : System.IDisposable
   System.Void Dispose()
   const System.String CommandId = craft.reportProblem
   ctor(Craft.Editor.EditorHost host, Craft.Core.Diagnostics.CrashWatch watch, System.Collections.Generic.IReadOnlyList<Craft.Core.Diagnostics.TicketPlugin> plugins, Craft.Editor.Abstractions.IEditorClipboard clipboard, System.Func<System.String, System.Threading.Tasks.Task> openFolder = null, System.Func<System.String, System.Threading.Tasks.Task> openFile = null)
+sealed class Craft.Editor.Shell.ProblemSource : System.IEquatable<Craft.Editor.Shell.ProblemSource>
+  Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
+  Craft.Editor.Shell.ProblemSource <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.ProblemSource other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.EditorDiagnostic> Diagnostics { get; init; }
+  System.Int32 GetHashCode()
+  System.Object Owner { get; init; }
+  System.String Key { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Key, out System.String Title, out Craft.Abstractions.ITextSnapshot Snapshot, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.EditorDiagnostic> Diagnostics, out System.Object Owner)
+  ctor(System.String Key, System.String Title, Craft.Abstractions.ITextSnapshot Snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.EditorDiagnostic> Diagnostics, System.Object Owner = null)
+sealed class Craft.Editor.Shell.ProblemsList : Craft.Editor.Shell.PanelList
+  Craft.Editor.Shell.RowSelection<Craft.Editor.Shell.ProblemItem> Selection { get; }
+  System.Boolean HasActions { get; }
+  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Boolean Update(System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ProblemSource> sources, System.Int32 limit, System.Boolean hasActions)
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ProblemGroup> Groups { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ProblemItem> Items { get; }
+  System.Collections.Generic.IReadOnlyList<System.Object> Rows { get; }
+  System.Int32 Count { get; }
+  System.Int32 Errors { get; }
+  System.Int32 RowCount { get; }
+  System.String CopyAll()
+  System.String CopySelected()
+  System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.FontMetrics metrics, Craft.Abstractions.EditorColors colors, System.Single scrollY, System.Single width, System.Single height)
+  System.Void Press(Craft.Abstractions.FontMetrics metrics, System.Single viewX, System.Single viewY, System.Single scrollY, System.Single width, Craft.Abstractions.KeyModifiers modifiers)
+  System.Void Toggle(Craft.Editor.Shell.ProblemGroup group)
+  ctor()
+  event System.EventHandler<Craft.Editor.Shell.ProblemItem> Chosen
+  event System.EventHandler<System.ValueTuple<Craft.Editor.Shell.ProblemItem, System.String>> ActionRequested
+  static System.String ButtonAt(Craft.Abstractions.FontMetrics metrics, System.Single viewX, System.Single width)
 sealed class Craft.Editor.Shell.QuickOpen
   System.Boolean Capped { get; }
   System.Boolean IsIndexing { get; }
@@ -1108,6 +1253,9 @@ enum Craft.Editor.Shell.QuickOpenMode : System.IComparable, System.IConvertible,
   Commands = 1
   Files = 0
   Line = 2
+sealed class Craft.Editor.Shell.ReadOnlySurfaceKeys : Craft.Editor.Abstractions.IEditorKeyHandler
+  System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
+  ctor(System.Func<Craft.Editor.Abstractions.IEditorKeyHandler> window)
 struct Craft.Editor.Shell.RowChange : System.IEquatable<Craft.Editor.Shell.RowChange>
   System.Boolean Equals(Craft.Editor.Shell.RowChange other)
   System.Boolean Equals(System.Object obj)
@@ -1120,6 +1268,19 @@ struct Craft.Editor.Shell.RowChange : System.IEquatable<Craft.Editor.Shell.RowCh
   System.Void Deconstruct(out System.Int32 Start, out System.Int32 Removed, out System.Int32 Inserted)
   ctor(System.Int32 Start, System.Int32 Removed, System.Int32 Inserted)
   static Craft.Editor.Shell.RowChange Between<T>(System.Collections.Generic.IReadOnlyList<T> old, System.Collections.Generic.IReadOnlyList<T> next, System.Collections.Generic.IEqualityComparer<T> comparer = null)
+sealed class Craft.Editor.Shell.RowSelection<T>
+  System.Boolean Contains(T row)
+  System.Boolean Move(System.Collections.Generic.IReadOnlyList<T> rows, System.Int32 delta, System.Boolean extend)
+  System.Collections.Generic.IReadOnlyList<T> InOrder(System.Collections.Generic.IReadOnlyList<T> rows)
+  System.Int32 Count { get; }
+  System.Void Add(T row, System.Boolean anchor = false, System.Boolean focus = false)
+  System.Void Clear()
+  System.Void Click(System.Collections.Generic.IReadOnlyList<T> rows, T row, Craft.Abstractions.KeyModifiers modifiers)
+  System.Void Keep(System.Collections.Generic.IReadOnlyList<T> keep)
+  System.Void SelectAll(System.Collections.Generic.IReadOnlyList<T> rows)
+  T Anchor { get; }
+  T Focus { get; }
+  ctor()
 sealed class Craft.Editor.Shell.SemanticCard : System.IEquatable<Craft.Editor.Shell.SemanticCard>
   Craft.Editor.Shell.SemanticCard <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.SemanticCard other)
@@ -1251,6 +1412,7 @@ sealed class Craft.Editor.Shell.ShellEditCommands : System.IDisposable
   System.Void Dispose()
   ctor(System.Func<Craft.Editor.EditorModel> active, Craft.Editor.Shell.ShellModel shell = null)
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.Int32, System.Int32>> EditorContextItems { get; }
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.Int32, System.Int32>> ReadOnlyTextItems { get; }
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String, Craft.Abstractions.EditorKey, Craft.Abstractions.KeyModifiers, System.String>> Keys { get; }
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String, Craft.Abstractions.EditorKey, Craft.Abstractions.KeyModifiers>> MoreKeys { get; }
 static class Craft.Editor.Shell.ShellEmptyStates
@@ -1441,27 +1603,6 @@ static class Craft.Editor.Shell.StandardShortcuts
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> Bindings { get; }
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String, System.Func<Craft.Editor.EditorModel, System.Boolean>, System.Boolean>> LineCommands { get; }
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> EditorKeys { get; }
-sealed class Craft.Editor.Shell.TelemetryLog : System.IDisposable
-  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.TelemetryRow> Rows { get; }
-  System.Void Add(System.String source, System.String metric, System.Double value, System.String unit)
-  System.Void Dispose()
-  ctor(Craft.Editor.EditorHost host)
-  event System.EventHandler Changed
-sealed class Craft.Editor.Shell.TelemetryRow : System.IEquatable<Craft.Editor.Shell.TelemetryRow>
-  Craft.Editor.Shell.TelemetryRow <Clone>$()
-  System.Boolean Equals(Craft.Editor.Shell.TelemetryRow other)
-  System.Boolean Equals(System.Object obj)
-  System.Double Last { get; init; }
-  System.Double Mean { get; init; }
-  System.Int32 Count { get; init; }
-  System.Int32 GetHashCode()
-  System.String Metric { get; init; }
-  System.String Source { get; init; }
-  System.String Text { get; }
-  System.String ToString()
-  System.String Unit { get; init; }
-  System.Void Deconstruct(out System.String Source, out System.String Metric, out System.Double Last, out System.String Unit, out System.Int32 Count, out System.Double Mean)
-  ctor(System.String Source, System.String Metric, System.Double Last, System.String Unit, System.Int32 Count, System.Double Mean)
 sealed class Craft.Editor.Shell.UndoBar : System.IDisposable
   Craft.Editor.Shell.UndoBarEntry Current { get; }
   Craft.Editor.Shell.UndoBarEntry Show(System.String text, System.Action undo)

@@ -577,9 +577,9 @@ public sealed class EditorFind
 
     private int Apply(TextEdit[] edits)
     {
-        if (edits.Length == 0)
+        if (edits.Length == 0 || _editor.IsReadOnly)
         {
-            return 0;
+            return 0;                                        // a read-only text replaces nothing (its edit is refused): none said
         }
 
         int caret = _editor.Selection.Caret;

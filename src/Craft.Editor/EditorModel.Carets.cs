@@ -412,6 +412,12 @@ public sealed partial class EditorModel
     /// </summary>
     private void CommitEdits(ReadOnlySpan<TextEdit> edits, EditKind kind, ReadOnlySpan<SelectionState> after, int primaryAfter, bool keepAutoClosed)
     {
+        if (_readOnly)
+        {
+            RefusedEdits++;                                  // read-only (the owner's note 26): refused here, the selection unmoved
+            return;
+        }
+
         _applying = true;
         _applyingAfter = after[primaryAfter];
         try

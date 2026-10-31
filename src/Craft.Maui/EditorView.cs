@@ -42,6 +42,8 @@ public sealed class EditorView : ContentView, IDisposable
     private bool _caretOn = true;
     private bool _reclassifying;
     private bool _disposed;
+    private bool _readOnly;
+    private bool _lineNumbers = true;
 
     /// <summary>An empty editor (set <see cref="Document"/> to show one).</summary>
     public EditorView()
@@ -139,6 +141,37 @@ public sealed class EditorView : ContentView, IDisposable
         }
     }
 
+    /// <summary>Whether the text is read-only (<see cref="EditorModel.IsReadOnly"/>, the bottom panel's Output); carried to each new model.</summary>
+    public bool IsReadOnly
+    {
+        get => _readOnly;
+        set
+        {
+            _readOnly = value;
+            if (_model is not null)
+            {
+                _model.IsReadOnly = value;
+            }
+        }
+    }
+
+    /// <summary>Whether the line numbers are drawn (<see cref="EditorModel.ShowLineNumbers"/>); carried to each new model.</summary>
+    public bool ShowLineNumbers
+    {
+        get => _lineNumbers;
+        set
+        {
+            _lineNumbers = value;
+            if (_model is not null)
+            {
+                _model.ShowLineNumbers = value;
+            }
+        }
+    }
+
+    /// <summary>Raised on the UI thread when a new model replaced the last (a new document, language or options).</summary>
+    public event EventHandler? ModelChanged;
+
     /// <summary>Where the document's language shows its long work (the host's activities), or null; set before <see cref="Open"/>.</summary>
     public IEditorActivities? Activities { get; set; }
 
@@ -233,7 +266,11 @@ public sealed class EditorView : ContentView, IDisposable
             return;
         }
 
-        var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities);
+        var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities)
+        {
+            IsReadOnly = _readOnly,
+            ShowLineNumbers = _lineNumbers,
+        };
         model.Dispatch = action => Dispatcher.DispatchLabelled("editor: a language's answer", action);
         model.DiagnosticsChanged += OnModelDiagnosticsChanged;
         model.DefinitionRequested += OnModelDefinitionRequested;
@@ -249,6 +286,7 @@ public sealed class EditorView : ContentView, IDisposable
         model.UpdateViewport((float)_scroll.ScrollX, (float)_scroll.ScrollY, (float)_scroll.Width, (float)_scroll.Height);
         UpdateContentSize();
         Invalidate();
+        ModelChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void DetachModel()
@@ -509,7 +547,7 @@ public sealed class EditorView : ContentView, IDisposable
         // view stays at once, so typing at the edge never lags.
         double line = _model?.Metrics.LineHeight ?? 0;
         double from = _smooth.IsMoving ? _smooth.TargetY : _scroll.ScrollY;
-        bool smooth = Motion.ScrollDuration(_options) > 0 && (Math.Abs(y - from) > line * 1.5 || Math.Abs(x - (_smooth.IsMoving ? _smooth.TargetX : _scroll.ScrollX)) > line * 8);
+        bool smooth = !e.Instant && Motion.ScrollDuration(_options) > 0 && (Math.Abs(y - from) > line * 1.5 || Math.Abs(x - (_smooth.IsMoving ? _smooth.TargetX : _scroll.ScrollX)) > line * 8);
         Dispatcher.DispatchLabelled("editor: scroll", () =>
         {
             if (smooth)

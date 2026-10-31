@@ -439,69 +439,6 @@ public static class GitBranch
     }
 }
 
-/// <summary>A measure the Idrak telemetry tab lists: the metric, where it came from, its last value and how many there were.</summary>
-/// <param name="Source">Who recorded it (a plug-in's name, or "host").</param>
-/// <param name="Metric">The metric ("ai.model.load").</param>
-/// <param name="Last">Its last value.</param>
-/// <param name="Unit">Its unit.</param>
-/// <param name="Count">How many were recorded.</param>
-/// <param name="Mean">Their mean.</param>
-public sealed record TelemetryRow(string Source, string Metric, double Last, string Unit, int Count, double Mean)
-{
-    /// <summary>"ai.model.load  4,210 ms (last), 1 recorded".</summary>
-    public string Text => string.Create(CultureInfo.InvariantCulture, $"{Source} · {Metric}  {Last:0.###} {Unit}  (mean {Mean:0.###} over {Count})");
-}
-
-/// <summary>
-/// The measures recorded through the host (<see cref="IEditorHost.Record"/>, the plug-ins' and the library's telemetry),
-/// one row per source and metric: memory grows with the metrics' names, never with the measures.
-/// </summary>
-public sealed class TelemetryLog : IDisposable
-{
-    private readonly EditorHost _host;
-    private readonly Dictionary<(string Source, string Metric), int> _index = [];
-    private readonly List<TelemetryRow> _rows = [];
-
-    /// <summary>The log of <paramref name="host"/>'s measures, from now on.</summary>
-    public TelemetryLog(EditorHost host)
-    {
-        ArgumentNullException.ThrowIfNull(host);
-        _host = host;
-        host.Recorded += OnRecorded;
-    }
-
-    /// <summary>The rows, in the order their metrics first came.</summary>
-    public IReadOnlyList<TelemetryRow> Rows => _rows;
-
-    /// <summary>Raised after a measure changed the rows (on the thread the host recorded it on).</summary>
-    public event EventHandler? Changed;
-
-    /// <summary>Adds a measure.</summary>
-    public void Add(string source, string metric, double value, string unit)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(metric);
-        if (_index.TryGetValue((source, metric), out int at))
-        {
-            var row = _rows[at];
-            int count = row.Count + 1;
-            _rows[at] = row with { Last = value, Unit = unit, Count = count, Mean = row.Mean + ((value - row.Mean) / count) };
-        }
-        else
-        {
-            _index[(source, metric)] = _rows.Count;
-            _rows.Add(new TelemetryRow(source, metric, value, unit, 1, value));
-        }
-
-        Changed?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <inheritdoc />
-    public void Dispose() => _host.Recorded -= OnRecorded;
-
-    private void OnRecorded(object? sender, EditorMeasureEventArgs e) => Add(e.Source, e.Metric, e.Value, e.Unit);
-}
-
 /// <summary>
 /// The Edit menu's commands (undo, redo, cut, copy, paste, select all, find, replace, format, go to definition), each the
 /// editor's own key sent to the active editor, so the menu and the keys do one thing; the editor's line commands and the
@@ -541,6 +478,12 @@ public sealed class ShellEditCommands : IDisposable
         ("craft.cut", 0, 0), ("craft.copy", 0, 1), ("craft.paste", 0, 2),
         ("craft.goToDefinition", 1, 0),
         ("craft.formatDocument", 2, 0), (StandardShortcuts.QuickFix, 2, 1),
+    ];
+
+    /// <summary>The read-only text's context menu items (<see cref="EditorContextMenus.ReadOnlyText"/>: Output's): copy, select all, find.</summary>
+    public static IReadOnlyList<(string Id, int Group, int Order)> ReadOnlyTextItems { get; } =
+    [
+        ("craft.copy", 0, 0), ("craft.selectAll", 0, 1), ("craft.find", 1, 0),
     ];
 
     private readonly List<string> _registered = [];
@@ -615,7 +558,14 @@ public sealed class ShellEditCommands : IDisposable
             _menus.Add((EditorContextMenus.Editor, id));
         }
 
-        if (EditorKeyMaps.Find(StandardShortcuts.VisualStudio) is null)
+        // A read-only text's menu (the owner's note 26): the commands that do not edit, on the text it was opened on.
+        foreach (var (id, group, place) in ReadOnlyTextItems)
+        {
+            EditorMenus.Register(new MenuItem(EditorContextMenus.ReadOnlyText, id, Order: place, Group: group));
+            _menus.Add((EditorContextMenus.ReadOnlyText, id));
+        }
+
+                if (EditorKeyMaps.Find(StandardShortcuts.VisualStudio) is null)
         {
             EditorKeyMaps.Register(StandardShortcuts.VisualStudioKeyMap);
             _keyMapRegistered = true;
@@ -663,17 +613,21 @@ public sealed class ShellEditCommands : IDisposable
 
     private void Register(string id, string title, Func<EditorModel, bool> run)
     {
+        bool edits = id is not ("craft.copy" or "craft.selectAll" or "craft.find" or "craft.findNext" or "craft.findPrevious");
         EditorCommands.Register(new EditorCommand(id, title, (_, _) =>
         {
-            if (_active() is { } model)
+            if (Target() is { } model)
             {
                 run(model);
             }
 
             return Task.CompletedTask;
-        }, _ => _active() is not null));
+        }, _ => Target() is { } model && (!edits || !model.IsReadOnly)));
         _registered.Add(id);
     }
+
+    // The editor a context menu was opened on (a read-only text's: Output's), else the active one.
+    private EditorModel? Target() => EditorContextMenus.Target is { Item: EditorModel model } ? model : _active();
 
     // The code actions the providers offer for the problems at the caret (or for the caret's line when there are none):
     // one runs at once, several are picked from a list; none is said so.

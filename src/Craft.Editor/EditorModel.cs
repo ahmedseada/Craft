@@ -40,6 +40,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private long _inputTimestamp;
     private bool _inputPending;
     private readonly IEditorActivities _activities;
+    private bool _readOnly;
+    private bool _lineNumbers = true;
 
     /// <summary>An editor over <paramref name="document"/>.</summary>
     /// <param name="document">The document it edits (the caller keeps owning it).</param>
@@ -159,6 +161,45 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>Whether typing replaces the character after the caret (Insert toggles it).</summary>
     public bool Overwrite { get; private set; }
 
+    /// <summary>
+    /// Whether the text is read-only (the owner's note 26: the bottom panel's Output): typing, paste, cut, delete, undo,
+    /// redo, the line commands, formatting, the completions and every other edit are refused where edits enter
+    /// (the one place every edit commits, undo and redo), so nothing the user, a key binding or a plug-in does through the editor
+    /// changes it; selecting, copying, finding and scrolling work. Its owner changes the text through the buffer itself
+    /// (<see cref="ITextBuffer.Apply"/>), outside the undo history; the selection follows such changes.
+    /// </summary>
+    public bool IsReadOnly
+    {
+        get => _readOnly;
+        set
+        {
+            if (_readOnly != value)
+            {
+                _readOnly = value;
+                InlineCompletion.Dismiss();
+                Invalidate();
+            }
+        }
+    }
+
+    /// <summary>Whether the line numbers are drawn (true by default); without them the text starts a cell from the left.</summary>
+    public bool ShowLineNumbers
+    {
+        get => _lineNumbers;
+        set
+        {
+            if (_lineNumbers != value)
+            {
+                _lineNumbers = value;
+                ContentSizeChanged?.Invoke(this, EventArgs.Empty);
+                Invalidate();
+            }
+        }
+    }
+
+    /// <summary>How many edits <see cref="IsReadOnly"/> refused (the tests and the status read it).</summary>
+    public int RefusedEdits { get; private set; }
+
     /// <summary>The horizontal scroll offset, as last drawn or requested.</summary>
     public float ScrollX { get; private set; }
 
@@ -192,6 +233,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>Raised when the caret must be scrolled into view: the host scrolls its content to the offsets.</summary>
     public event EventHandler<EditorScrollEventArgs>? ScrollRequested;
 
+    /// <summary>Raised when the viewport's offsets or size changed (<see cref="UpdateViewport"/>; inside a frame too: a handler that changes the UI dispatches it).</summary>
+    public event EventHandler? ViewportChanged;
+
     /// <summary>Raised when <see cref="ContentWidth"/>, <see cref="ContentHeight"/> or <see cref="GutterWidth"/> changed.</summary>
     public event EventHandler? ContentSizeChanged;
 
@@ -216,7 +260,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private int CaretPosition => Math.Min((_applyingAfter ?? _selection).Caret, Snapshot.Length);
 
     /// <summary>The line-number gutter's width: the line count's digits plus the padding, in cells.</summary>
-    public float GutterWidth => (TextReading.Digits(Snapshot.LineCount) + Options.GutterPaddingCells + (Folding.IsAvailable ? FoldGutterCells : 0)) * Metrics.CellWidth;
+    public float GutterWidth => _lineNumbers
+        ? (TextReading.Digits(Snapshot.LineCount) + Options.GutterPaddingCells + (Folding.IsAvailable ? FoldGutterCells : 0)) * Metrics.CellWidth
+        : (1 + (Folding.IsAvailable ? FoldGutterCells : 0)) * Metrics.CellWidth;
 
     /// <summary>Where column 0 of the text starts, in content coordinates (the gutter's right edge).</summary>
     public float TextLeft => GutterWidth;
@@ -358,10 +404,33 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>Records the viewport the host shows (the renderer calls it on every draw).</summary>
     public void UpdateViewport(float scrollX, float scrollY, float viewportWidth, float viewportHeight)
     {
-        ScrollX = Math.Max(0, scrollX);
-        ScrollY = Math.Max(0, scrollY);
-        ViewportWidth = Math.Max(0, viewportWidth);
-        ViewportHeight = Math.Max(0, viewportHeight);
+        float x = Math.Max(0, scrollX);
+        float y = Math.Max(0, scrollY);
+        float width = Math.Max(0, viewportWidth);
+        float height = Math.Max(0, viewportHeight);
+        bool changed = x != ScrollX || y != ScrollY || width != ViewportWidth || height != ViewportHeight;
+        ScrollX = x;
+        ScrollY = y;
+        ViewportWidth = width;
+        ViewportHeight = height;
+        if (changed)
+        {
+            ViewportChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Asks the host to scroll to the content offsets (clamped to the content), raising <see cref="ScrollRequested"/>; with
+    /// <paramref name="instant"/> the host jumps there (a log following its end) instead of easing.
+    /// </summary>
+    public void ScrollToOffsets(float x, float y, bool instant = false)
+    {
+        x = Math.Clamp(x, 0, Math.Max(0, ContentWidth - ViewportWidth));
+        y = Math.Clamp(y, 0, Math.Max(0, ContentHeight - ViewportHeight));
+        // The offsets stay what the host last showed (UpdateViewport): a listener of ViewportChanged sees the host's scroll
+        // land, not this request.
+        ScrollRequested?.Invoke(this, new EditorScrollEventArgs(x, y) { Instant = instant });
+        Invalidate();
     }
 
     /// <summary>Records that a drawn line spans <paramref name="columns"/> columns, growing <see cref="ContentWidth"/>.</summary>

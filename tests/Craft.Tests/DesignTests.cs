@@ -290,17 +290,6 @@ public static class DesignTests
             "Idrak's registered plug-ins follow, from its public registry");
     }
 
-    [Test]
-    public static void TelemetryKeepsOneRowPerMetric()
-    {
-        using var host = new EditorHost();
-        using var log = new TelemetryLog(host);
-        host.Record("ai.model.load", 4000, "ms");
-        host.Record("ai.model.load", 2000, "ms");
-        host.Record("ai.tokens", 41, "tok/s");
-        Check.True(log.Rows is [{ Metric: "ai.model.load", Last: 2000, Count: 2, Mean: 3000 }, { Metric: "ai.tokens", Count: 1 }], "the last value, the count and the mean per metric");
-    }
-
     private sealed class PlainSession : ILanguageSession
     {
         public void Classify(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into)

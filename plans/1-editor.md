@@ -2159,7 +2159,8 @@ the owner's machine, not only headless.
     checkbox is so gross, why didn't you add a multi-line editor and append to it"; "I can only select one line, and
     when I need more I need to check: is that the friendly, usable design I asked for?"). Note 19 made Output and
     telemetry a `CollectionView` in `SelectionMode.Multiple`, which on Windows draws a checkbox per row, and its rows
-    `SelectableLabel`s, which select within one line only. Next free slot, before note 25.
+    `SelectableLabel`s, which select within one line only. Next free slot, before note 25. **Built (2026-11-01)**: see
+    "Note 26 as built".
     - Output and Idrak telemetry are Craft's own editor surface in a read-only mode (a new `IsReadOnly` on the editor
       model: typing, paste, cut, delete and the AI never change it; the host appends through its own path, outside undo):
       drag-select across lines, Shift+click, Ctrl+A, Ctrl+C and Copy in the context menu, Ctrl+F, only visible lines
@@ -2207,6 +2208,59 @@ files showing in the tree, the side panel gone, every panel collapsible and resi
 whether voice dictation goes through the diff view (not answered yet).
 
 The held phases (M Android, L more languages, A3 remote models) stay held for the owner's word.
+
+## Note 26 as built (2026-11-01)
+
+- **Read-only editor** (`EditorModel.IsReadOnly`, carried by `EditorView.IsReadOnly`): every edit is refused where it
+  enters (slice 2's `CommitEdits`, which typing, paste, delete, Enter, Tab, the line commands, find's replace,
+  formatting, the completions and the multi-caret edits go through; undo and redo); typed text, Ctrl+X and Ctrl+V do nothing (nothing is
+  copied away or read from the clipboard), Ctrl+S goes on to the window, inline completion never asks;
+  `RefusedEdits` counts them. Selecting (drag across lines, Shift+click, Ctrl+A), Ctrl+C, Ctrl+F, F3 and scrolling work.
+  `ShowLineNumbers` (off for Output: the text a cell from the left), `ViewportChanged`, `ScrollToOffsets(x, y, instant)`
+  (a request: the offsets stay what the host showed).
+- **Output** (`Craft.Editor.Shell.LogSurface`, shown in `BottomPanelView` by Craft's own `EditorView`): one read-only
+  document over a piece-table buffer (its `Edit` throws); `Post` from any thread queues a line and says when a flush must
+  be dispatched, so one UI dispatch takes every line that came before it runs ("output: the log's new lines"), appended
+  in one buffer change outside any undo history, the oldest past `CRAFT_HOST_LOG_LINES` trimmed in the same change. The
+  editor attached keeps its selection (the append moves nothing, the trim shifts it with the text) and its place: while
+  following it scrolls to the end at once (no easing), a scroll up stops following, the end starts it again, and the
+  header's Follow toggle sets it; not following, a trim moves the view up with the text so the same lines stay in view.
+  The filter box shows only the lines holding its text (ignoring case) as a view over the same text
+  (`LineFilterBuffer`: an entry per shown line read through to the log's characters, arrays that only grow at their end
+  so every snapshot stays valid, trimmed entries skipped, a full array copied once with the live entries only). The
+  log's language (`LogSurface.Language`, `craft-log`, in no registry: no file, no tool and no picker sees it) colours an
+  error's line, a warning's line, a debug line and an information line's time; `LogClasses.Theme` draws them in the
+  theme's error, warning and secondary colours on the panel's surface (no current line's band). Code font, theme, only
+  the visible lines laid out and drawn (the editor's renderer). Its context menu is `EditorContextMenus.ReadOnlyText`
+  (Copy, Select all, Find), the Edit commands acting on the menu's target editor and the editing ones unable to run on a
+  read-only one; Ctrl+F opens slice 3's find overlay on Output's editor (`ShellPage.ShowFind` with its target; replace closed, and a
+  read-only text replaces nothing: `EditorFind` reports 0). Keys go to the
+  read-only editor first, then to the window's keys with no editor (`ReadOnlySurfaceKeys`), so Ctrl+J, Ctrl+` and the
+  palette work from it.
+- **Idrak telemetry** (`MetricsTable`, drawn by `Craft.Maui.PanelListView`): one row per source and metric with last,
+  mean, p95 (nearest rank of the last `CRAFT_TELEMETRY_SAMPLES`, default 60), count and unit, a sparkline of the recent
+  values; a stall (its name) or a value in ms at least `CRAFT_TELEMETRY_SLOW_MS` (default 100) marked in the warning
+  colour (the row's edge, the Last cell, the sparkline's segment). A header's click sorts (numbers from the largest
+  first, again the other way, ties in arrival order); the filter matches the source or the measure. Rows picked by click,
+  Shift+click, Ctrl+click, Up and Down (Shift extends), Home, End, Ctrl+A, Escape; Ctrl+C copies the picked rows (none:
+  every row) as a tab-separated table under its header line, Copy all every row shown. Measures come from any thread
+  under a short lock; one refresh per dispatch takes them; a frame allocates nothing (tested).
+- **Problems** (`ProblemsList`, drawn by `PanelListView`): every open editor's problems (the tabs with a semantic
+  layer), grouped by file in the tabs' order, a header per file with its count that folds and stays folded, errors
+  first then by place, a severity mark per row, the place at the right; a click opens the file and moves the caret there,
+  Ctrl+click and Shift+click pick several (no jump), Up, Down and Enter, Ctrl+C copies the picked rows as a build tool
+  writes them, Copy all every row; Fix and Explain on the hovered or keyboard row. An update showing the same rows
+  replaces nothing and redraws nothing (d260816's rule); the picks follow their problems to new rows. At most
+  `CRAFT_PROBLEMS_LIMIT` rows, the tab's count all of them.
+- **No checkbox list is left in the shell**: `Ui.TheShellHasNoCheckboxList` scans `src/Craft.Maui` for
+  `SelectionMode.Multiple` and the bottom panel for a CollectionView, a CheckBox or a `SelectableLabel`. `TelemetryLog`
+  and `TelemetryRow` are gone (`MetricsTable` replaces them).
+- **Tests**: groups `ReadOnly` (2), `OutputLog` (4), `Metrics` (4), `ProblemsPanel` (2) and `Ui.TheShellHasNoCheckboxList`,
+  with `Ui`, `ApiGuard`, `Inventory`, `Copy`, `Design`, `Shell`, `Editor`, `Experience`.
+- **Left**: the find overlay sits over the editor area, not over the panel, when it searches Output; a log message's
+  continuation lines are not coloured; the telemetry and Problems lists have no context menu (Ctrl+C and Copy all copy);
+  drag-to-select a range in the drawn lists is not there (click, Shift+click, Ctrl+click and the keys are); the owner's
+  Windows run checks the look, the follow and the keys.
 
 ## Notes 19-21 as built (2026-10-31)
 

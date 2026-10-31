@@ -108,6 +108,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SemanticColorsDelayMilliseconds { get; init; }
   System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 TabSize { get; init; }
+  System.Int32 TelemetrySamples { get; init; }
+  System.Int32 TelemetrySlowMilliseconds { get; init; }
   System.Int32 TerminalScrollback { get; init; }
   System.Int32 ToastMilliseconds { get; init; }
   System.Int32 UiStallMilliseconds { get; init; }

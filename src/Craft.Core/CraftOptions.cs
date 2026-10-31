@@ -279,6 +279,12 @@ public sealed record CraftOptions
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
+    /// <summary>The recent values of each metric the telemetry table keeps for its p95 and its sparkline (<c>CRAFT_TELEMETRY_SAMPLES</c>).</summary>
+    public int TelemetrySamples { get; init; } = 60;
+
+    /// <summary>A value in milliseconds at least this slow is marked in the telemetry table (<c>CRAFT_TELEMETRY_SLOW_MS</c>); a stall always is.</summary>
+    public int TelemetrySlowMilliseconds { get; init; } = 100;
+
     /// <summary>The characters of an edit's new text a proposal's confirmation shows before it cuts (<c>CRAFT_PROPOSAL_PREVIEW_CHARS</c>).</summary>
     public int ProposalPreviewCharacters { get; init; } = 200;
 
@@ -575,6 +581,8 @@ public sealed record CraftOptions
         new("CRAFT_MOTION_MS", "160", "How long a transition lasts (a panel opening, the notification centre, a toast, a menu, the completion list); 0 turns them off.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Transitions last", 0, 1000, "ms", "Motion", step: 10) },
         new("CRAFT_SCROLL_MS", "120", "How long the editor's smooth scroll takes to reach where a wheel turn or a jump asked; 0 scrolls at once.") { Shape = SettingShape.Whole(SettingSections.Editor, "Smooth scrolling takes", 0, 1000, "ms", "Scrolling", step: 10) },
         new("CRAFT_SCROLL_WHEEL_LINES", "3", "The lines one notch of the mouse wheel scrolls the editor.") { Shape = SettingShape.Whole(SettingSections.Editor, "Lines per wheel notch", 1, 100, "lines", "Scrolling") },
+        new("CRAFT_TELEMETRY_SAMPLES", "60", "The recent values of each metric the Idrak telemetry table keeps for its p95 and its sparkline.") { Shape = SettingShape.Whole(SettingSections.Plugins, "Telemetry keeps", 2, 100_000, "values a metric", "Log", step: 10) },
+        new("CRAFT_TELEMETRY_SLOW_MS", "100", "A value in milliseconds at least this slow is marked in the Idrak telemetry table (a stall always is).") { Shape = SettingShape.Whole(SettingSections.Plugins, "Telemetry marks slow from", 1, 600_000, "ms", "Log", step: 10) },
         new("CRAFT_REFERENCES_LIMIT", "1000", "The most places Find references (Shift+F12) lists.") { Shape = SettingShape.Whole(SettingSections.Editor, "Find references lists at most", 1, 1_000_000, "places", "Navigation") },
         new("CRAFT_INDENT_GUIDES", "true", "Whether the editor draws a guide at each indent level of the leading white space.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Indentation guides", "Display") },
         new("CRAFT_BRACKET_HIGHLIGHT", "true", "Whether the bracket at the caret and its partner are highlighted.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Highlight the matching bracket", "Display") },
@@ -775,6 +783,16 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_SCROLL_MS") is { } scroll)
         {
             options = options with { ScrollMilliseconds = Whole(scroll, "CRAFT_SCROLL_MS", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_TELEMETRY_SAMPLES") is { } samples)
+        {
+            options = options with { TelemetrySamples = Whole(samples, "CRAFT_TELEMETRY_SAMPLES", 2, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_TELEMETRY_SLOW_MS") is { } slow)
+        {
+            options = options with { TelemetrySlowMilliseconds = Whole(slow, "CRAFT_TELEMETRY_SLOW_MS", 1, 600_000) };
         }
 
         if (Text(read, "CRAFT_REFERENCES_LIMIT") is { } references)

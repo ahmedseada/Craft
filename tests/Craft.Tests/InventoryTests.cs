@@ -105,6 +105,8 @@ public static class InventoryTests
             // Phase X slice 3: inline, not modal; the welcome page.
             ["CRAFT_WELCOME_AT_START"] = "false", ["CRAFT_UNDO_BAR_MS"] = "3000", ["CRAFT_FIND_BACKGROUND_CHARS"] = "1000", ["CRAFT_FIND_REGEX_TIMEOUT_MS"] = "100",
             ["CRAFT_QUICK_OPEN_BACKGROUND_FILES"] = "50", ["CRAFT_QUICK_OPEN_RECENT"] = "5",
+            // The owner's note 26: the telemetry table.
+            ["CRAFT_TELEMETRY_SAMPLES"] = "30", ["CRAFT_TELEMETRY_SLOW_MS"] = "250",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -136,6 +138,7 @@ public static class InventoryTests
             IndentGuides = false, BracketHighlight = false, WordHighlight = false, Folding = false, FoldingDelayMilliseconds = 100, MaxCarets = 50,
             WelcomeAtStart = false, UndoBarMilliseconds = 3000, FindBackgroundCharacters = 1000, FindRegexTimeoutMilliseconds = 100,
             QuickOpenBackgroundFiles = 50, QuickOpenRecent = 5,
+            TelemetrySamples = 30, TelemetrySlowMilliseconds = 250,
         }, options, "options read from every variable");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");

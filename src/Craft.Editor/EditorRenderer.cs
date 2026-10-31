@@ -256,7 +256,7 @@ public sealed class EditorRenderer : IDisposable
 
         LinesDrawn = drawn;
 
-        canvas.FillRect(0, 0, gutterWidth, viewportHeight, colors.Gutter);
+        canvas.FillRect(0, 0, gutterWidth, viewportHeight, model.ShowLineNumbers ? colors.Gutter : colors.Background);
         var plainNumber = new TextStyle(colors.GutterText);
         var currentNumber = new TextStyle(colors.GutterCurrentText);
         float numbersRight = gutterWidth - (folds ? EditorModel.FoldGutterCells * cell : 0);
@@ -273,7 +273,10 @@ public sealed class EditorRenderer : IDisposable
             bool current = caretAt < _carets.Count && _carets[caretAt].Line == index;
             string number = Number(index + 1);
             float x = numbersRight - ((options.GutterPaddingCells > 0 ? 1 : 0) + number.Length) * cell;
-            canvas.DrawText(number, x, top, current ? currentNumber : plainNumber);
+            if (model.ShowLineNumbers)
+            {
+                canvas.DrawText(number, x, top, current ? currentNumber : plainNumber);
+            }
             if (folds)
             {
                 bool folded = hidden && folding.Map.IsFolded(index);

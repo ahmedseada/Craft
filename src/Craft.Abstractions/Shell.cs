@@ -150,6 +150,12 @@ public static class EditorContextMenus
     /// <summary>A document tab's menu.</summary>
     public const string Tab = "context:tab";
 
+    /// <summary>
+    /// A read-only text's menu (the bottom panel's Output): copy, select all and find, acting on the text it was opened on
+    /// (its editor is the target's <see cref="ContextMenuTarget.Item"/>); nothing that edits.
+    /// </summary>
+    public const string ReadOnlyText = "context:readonly-text";
+
     private static ContextMenuTarget? _target;
 
     /// <summary>What the context menu whose item is starting was opened on, or null (the command acts on the active document).</summary>

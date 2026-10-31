@@ -42,6 +42,9 @@ public sealed class EditorScrollEventArgs(float x, float y) : EventArgs
 
     /// <summary>The vertical offset.</summary>
     public float Y { get; } = y;
+
+    /// <summary>Whether the host jumps to the offsets at once instead of easing there (a log following its end).</summary>
+    public bool Instant { get; init; }
 }
 
 /// <summary>The user asked to find (Ctrl+F) or to replace (Ctrl+H).</summary>

@@ -264,7 +264,7 @@ public sealed class InlineCompletionController : IDisposable
     private InlineCompletionRequest? Request()
     {
         var selection = _model.Selection;
-        if (!selection.IsEmpty || string.Equals(_model.Options.InlineCompletionProvider, "none", StringComparison.OrdinalIgnoreCase))
+        if (_model.IsReadOnly || !selection.IsEmpty || string.Equals(_model.Options.InlineCompletionProvider, "none", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
-using System.Collections.ObjectModel;
 using System.Globalization;
 using Craft.Abstractions;
+using Craft.Core;
 using Craft.Editor;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
@@ -713,62 +713,48 @@ public enum BottomTab
     Telemetry,
 }
 
-/// <summary>A line of the Output or telemetry list.</summary>
-/// <param name="Text">The line.</param>
-public sealed record TextRow(string Text);
-
-/// <summary>A row of the problems list.</summary>
-/// <param name="Text">"IDE0005  Using directive is unnecessary."</param>
-/// <param name="Place">"EditorTools.cs  1:1".</param>
-/// <param name="Color">The severity's colour.</param>
-/// <param name="Mark">The severity's mark ("✕", "⚠", "ℹ").</param>
-/// <param name="Position">Where the caret goes when it is chosen.</param>
-public sealed record ProblemRow(string Text, string Place, Color Color, string Mark, int Position)
-{
-    /// <summary>The diagnostic (the row's code actions are asked for it).</summary>
-    public EditorDiagnostic Diagnostic { get; init; }
-
-    /// <summary>Whether a code action provider is registered (the row shows Fix and Explain).</summary>
-    public bool HasActions { get; init; }
-
-    /// <summary>The row as Copy puts it on the clipboard: file(line,column): severity code: message (<see cref="PanelCopy.Problem"/>).</summary>
-    public string CopyText { get; init; } = "";
-}
-
 /// <summary>
-/// The bottom panel (docs/design/Main.dc.html): the tabs Problems (with the count), Terminal (the terminals, <see cref="TerminalContent"/>), Output (the host's
-/// log, live) and Idrak telemetry (the measures recorded through the host), the active one in the text colour over the
-/// accent's line. Each list is a virtualized list (only the rows on screen are made). Phase U2: the chevron at the strip's
-/// end asks the shell to collapse it (<see cref="CollapseRequested"/>, as Ctrl+J does); its
-/// height is its <see cref="SplitPanel"/>'s (a drag of the splitter above it, kept per workspace).
+/// The bottom panel (docs/design/Main.dc.html; the owner's note 26): the tabs Problems (with the count), Terminal (the
+/// terminals, <see cref="TerminalContent"/>), Output and Idrak telemetry, the active one in the text colour over the
+/// accent's line, each tab's tools at the strip's right (a filter, Output's "Follow", Copy all). Output is one read-only
+/// text in Craft's own editor (<see cref="LogSurface"/>: a drag selects across lines, Ctrl+A, Ctrl+C, Ctrl+F and the
+/// context menu's Copy work, only the visible lines are drawn, new lines appended a batch per dispatch and followed
+/// unless the user scrolled up); the telemetry a live metrics table (<see cref="MetricsTable"/>) and Problems plain rows
+/// grouped by file (<see cref="ProblemsList"/>), both drawn on one surface each (<see cref="PanelListView"/>): no checkbox,
+/// no row chrome. Phase U2: the chevron at the strip's end asks the shell to collapse it (<see cref="CollapseRequested"/>,
+/// as Ctrl+J does); its height is its <see cref="SplitPanel"/>'s.
 /// </summary>
 public sealed class BottomPanelView : ContentView, IDisposable
 {
     private readonly EditorHost _host;
-    private readonly TelemetryLog _telemetry;
     private readonly HorizontalStackLayout _tabs = new() { Spacing = 18, Padding = new Thickness(16, 0) };
+    private readonly HorizontalStackLayout _tools = new() { Spacing = 6, Padding = new Thickness(0, 0, 4, 0), VerticalOptions = LayoutOptions.Center };
     private readonly ContentView _body = new();
     private readonly Button _collapse;
     private readonly Button _copyAll;
+    private readonly Button _follow;
+    private readonly Entry _filter;
+    private readonly CraftInput _filterField;
     private readonly EmptyStateView _problemsEmpty;
-    private readonly CollectionView _problems;
-    private readonly CollectionView _output;
-    private readonly CollectionView _measures;
-    private readonly ObservableCollection<TextRow> _outputLines = [];
+    private readonly LogSurface _log;
+    private readonly EditorView _output;
+    private readonly MetricsTable _metrics;
+    private readonly PanelListView _metricsView;
+    private readonly ProblemsList _problems;
+    private readonly PanelListView _problemsView;
+    private readonly Grid _problemsBody = new();
     private readonly Label _terminal;
-    private View? _terminalView;
     private readonly Label _noMeasures;
-    private readonly Action<int> _problemChosen;
+    private readonly Action<ProblemItem> _problemChosen;
+    private View? _terminalView;
     private ShellPalette _palette;
-    private int _problemCount;
+    private string _outputFilter = "";
+    private string _metricsFilter = "";
     private int _shownCount = -1;
-    private List<ProblemRow>? _shownRows;
-    private IReadOnlyList<ProblemRow> _problemRows = [];
-    private IReadOnlyList<TextRow> _measureRows = [];
-    private ProblemRow? _lastProblem;
+    private bool _filling;
 
-    /// <summary>The panel over <paramref name="host"/>; a problem's row moves the caret through <paramref name="problemChosen"/>.</summary>
-    public BottomPanelView(EditorHost host, ShellPalette palette, Action<int> problemChosen)
+    /// <summary>The panel over <paramref name="host"/>; a problem's row opens its file and moves the caret through <paramref name="problemChosen"/>.</summary>
+    public BottomPanelView(EditorHost host, ShellPalette palette, Action<ProblemItem> problemChosen)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(palette);
@@ -776,31 +762,55 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _host = host;
         _palette = palette;
         _problemChosen = problemChosen;
-        _telemetry = new TelemetryLog(host);
-        _problems = new CollectionView { SelectionMode = SelectionMode.Single, ItemTemplate = new DataTemplate(MakeProblemRow) };
-        _problems.SelectionChanged += OnProblemSelected;
-        // The owner's note 19: each line is selectable text (Ctrl+C or the context menu copies a part of it), rows are chosen
-        // (a click; Ctrl or Shift for more) and Ctrl+C copies them, Copy all the whole list. The lists stay virtualized
-        // (only the rows on screen are made) and bounded (CRAFT_HOST_LOG_LINES, CRAFT_PROBLEMS_LIMIT).
-        _output = new CollectionView { ItemsSource = _outputLines, ItemTemplate = new DataTemplate(MakeTextRow), ItemsUpdatingScrollMode = ItemsUpdatingScrollMode.KeepLastItemInView, SelectionMode = SelectionMode.Multiple };
-        _measures = new CollectionView { ItemTemplate = new DataTemplate(MakeTextRow), SelectionMode = SelectionMode.Multiple };
-        _terminal = palette.Label("No terminal host is available here.", palette.Secondary);
-        _terminal.Margin = new Thickness(16, 8);
-        _noMeasures = palette.Label("Nothing recorded yet: the plug-ins' and the library's measures (IEditorHost.Record) show here.", palette.Secondary);
-        _noMeasures.Margin = new Thickness(16, 8);
+
+        // Output: the log in Craft's editor, read-only, in the code font on the panel's surface, no line numbers.
+        _log = new LogSurface(() => _host.Options.HostLogLines);
+        _output = new EditorView
+        {
+            IsReadOnly = true,
+            ShowLineNumbers = false,
+            Theme = LogClasses.Theme(palette.Theme),
+            Options = OutputOptions(palette.Options),
+            KeyHandler = new ReadOnlySurfaceKeys(() => WindowKeys),
+        };
+        _output.ModelChanged += (_, _) => _log.Attach(_output.Model);
+        _output.Open(_log.Shown, LogSurface.Language);
+        _output.FindRequested += (_, e) =>
+        {
+            if (_output.Model is { } model)
+            {
+                FindRequested?.Invoke(this, new BottomFindEventArgs(model, e.InitialQuery));
+            }
+        };
+        _output.ContextRequested += (_, e) =>
+        {
+            if (_output.Model is { } model)
+            {
+                ContextRequested?.Invoke(this, new BottomContextEventArgs(model, e));
+            }
+        };
+        _log.ShownChanged += (_, _) => _output.Open(_log.Shown, LogSurface.Language);
+        _log.FollowingChanged += (_, _) => Dispatcher.DispatchLabelled("output: the follow toggle", UpdateTools);
         foreach (var entry in host.RecentLog)
         {
-            _outputLines.Add(new TextRow(LineOf(entry)));
+            _log.Post(LogText.Line(entry));
         }
 
+        _log.Flush();
         host.Logged += OnLogged;
-        _telemetry.Changed += OnMeasured;
-        _collapse = palette.Flat("⌄", palette.Secondary, 28, palette.FontSize + 2);
-        _collapse.WidthRequest = 32;
-        _collapse.Padding = new Thickness(0);
-        ToolTipProperties.SetText(_collapse, ShellTooltips.For(host, "Hide the panel", ShellCommandIds.TogglePanel));
-        host.KeyBindingsChanged += OnKeyBindingsChanged;
-        // Phase X: Problems with none says why there are none and what to do.
+
+        // Idrak telemetry: the live metrics table.
+        _metrics = new MetricsTable(host, palette.Options);
+        _metrics.Recorded += OnMeasured;
+        _metricsView = new PanelListView(_metrics, palette.Options, palette.Theme);
+        _noMeasures = palette.Label("Nothing recorded yet: the plug-ins' and the library's measures (IEditorHost.Record) show here.", palette.Secondary);
+        _noMeasures.Margin = new Thickness(16, 8);
+
+        // Problems: plain rows grouped by file.
+        _problems = new ProblemsList();
+        _problems.Chosen += (_, item) => _problemChosen(item);
+        _problems.ActionRequested += (_, request) => CodeActionRequested?.Invoke(request.Item, request.Kind);
+        _problemsView = new PanelListView(_problems, palette.Options, palette.Theme);
         _problemsEmpty = new EmptyStateView(palette);
         _problemsEmpty.ActionChosen += (_, action) =>
         {
@@ -809,18 +819,42 @@ public sealed class BottomPanelView : ContentView, IDisposable
                 _ = _host.ExecuteCommandAsync(command);
             }
         };
-        _problems.EmptyView = _problemsEmpty;
         _problemsEmpty.Show(ShellEmptyStates.Problems(null, null));
+        _problemsBody.Add(_problemsView);
+        _problemsBody.Add(_problemsEmpty);
+
+        _terminal = palette.Label("No terminal host is available here.", palette.Secondary);
+        _terminal.Margin = new Thickness(16, 8);
+
+        // The strip's tools: the filter, Output's follow toggle, Copy all, the chevron.
+        _filter = palette.Input("Filter", 24);
+        _filter.FontSize = palette.SmallSize;
+        _filter.TextChanged += OnFilterChanged;
+        _filterField = palette.Field(_filter);
+        _filterField.WidthRequest = 180;
+        _filterField.VerticalOptions = LayoutOptions.Center;
+        SemanticProperties.SetDescription(_filter, "Show only the lines that hold this text");
+        _follow = palette.Flat("Follow", palette.Secondary, 24, palette.SmallSize);
+        ToolTipProperties.SetText(_follow, "Follow the end as lines come (scrolling up stops it, the end starts it again)");
+        _follow.Clicked += (_, _) => _log.Following = !_log.Following;
+        _copyAll = palette.Flat("Copy all", palette.Secondary, 24, palette.SmallSize);
+        _copyAll.Padding = new Thickness(10, 0);
+        SemanticProperties.SetDescription(_copyAll, "Copy the whole tab to the clipboard");
+        _copyAll.Clicked += (_, _) => _ = CopyAsync(AllText());
+        _tools.Children.Add(_filterField);
+        _tools.Children.Add(_follow);
+        _tools.Children.Add(_copyAll);
+        _collapse = palette.Flat("⌄", palette.Secondary, 28, palette.FontSize + 2);
+        _collapse.WidthRequest = 32;
+        _collapse.Padding = new Thickness(0);
+        ToolTipProperties.SetText(_collapse, ShellTooltips.For(host, "Hide the panel", ShellCommandIds.TogglePanel));
         SemanticProperties.SetDescription(_collapse, "Hide the bottom panel");
         _collapse.Clicked += (_, _) => CollapseRequested?.Invoke(this, EventArgs.Empty);
-        _copyAll = palette.Flat("Copy all", palette.Secondary, 28, palette.SmallSize);
-        _copyAll.Padding = new Thickness(10, 0);
-        ToolTipProperties.SetText(_copyAll, "Copy the whole list (Ctrl+C copies the rows chosen)");
-        SemanticProperties.SetDescription(_copyAll, "Copy the whole list to the clipboard");
-        _copyAll.Clicked += (_, _) => _ = CopyAsync(AllText());
+        host.KeyBindingsChanged += OnKeyBindingsChanged;
+
         var strip = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)] };
         strip.Add(_tabs, 0, 0);
-        strip.Add(_copyAll, 1, 0);
+        strip.Add(_tools, 1, 0);
         strip.Add(_collapse, 2, 0);
         var grid = new Grid { RowDefinitions = [new RowDefinition(new GridLength(32)), new RowDefinition(GridLength.Star)] };
         grid.Add(strip, 0, 0);
@@ -833,14 +867,37 @@ public sealed class BottomPanelView : ContentView, IDisposable
     /// <summary>The tab shown.</summary>
     public BottomTab Tab { get; private set; }
 
-    /// <summary>Raised when the chevron or the active tab is clicked: the shell collapses the panel.</summary>
+    /// <summary>Where a key Output or a list does not take goes (the window's keys), or null.</summary>
+    public Craft.Editor.Abstractions.IEditorKeyHandler? WindowKeys
+    {
+        get => _metricsView.WindowKeys;
+        set
+        {
+            _metricsView.WindowKeys = value;
+            _problemsView.WindowKeys = value;
+        }
+    }
+
+    /// <summary>Output's log (the tests' and the page's way to it).</summary>
+    public LogSurface Log => _log;
+
+    /// <summary>Output's editor (read-only), or null before its first model.</summary>
+    public EditorModel? OutputModel => _output.Model;
+
+    /// <summary>Raised when the chevron is clicked: the shell collapses the panel.</summary>
     public event EventHandler? CollapseRequested;
 
+    /// <summary>Raised on Ctrl+F in Output: the page's find searches Output's text.</summary>
+    public event EventHandler<BottomFindEventArgs>? FindRequested;
+
+    /// <summary>Raised on a right-click in Output: the page opens the read-only text's menu (<see cref="EditorContextMenus.ReadOnlyText"/>).</summary>
+    public event EventHandler<BottomContextEventArgs>? ContextRequested;
+
     /// <summary>
-    /// A Problems row's Fix or Explain (the design's buttons) was pressed: its diagnostic and the code action kind
-    /// (<see cref="CodeActionKinds.Fix"/>, <see cref="CodeActionKinds.Explain"/>); the page runs the registered providers' action.
+    /// A Problems row's Fix or Explain was pressed: its problem and the code action kind (<see cref="CodeActionKinds.Fix"/>,
+    /// <see cref="CodeActionKinds.Explain"/>); the page runs the registered providers' action.
     /// </summary>
-    public Action<EditorDiagnostic, string>? CodeActionRequested { get; set; }
+    public Action<ProblemItem, string>? CodeActionRequested { get; set; }
 
     /// <summary>The Terminal tab's content (phase T's terminals); null shows that there is none.</summary>
     public View? TerminalContent
@@ -860,34 +917,33 @@ public sealed class BottomPanelView : ContentView, IDisposable
     public void Select(BottomTab tab)
     {
         Tab = tab;
-        _body.Content = tab switch
-        {
-            BottomTab.Problems => _problems,
-            BottomTab.Terminal => _terminalView ?? _terminal,
-            BottomTab.Output => _output,
-            _ => _telemetry.Rows.Count == 0 ? _noMeasures : _measures,
-        };
         if (tab == BottomTab.Telemetry)
         {
-            _measureRows = [.. _telemetry.Rows.Select(r => new TextRow(r.Text))];
-            _measures.ItemsSource = _measureRows;
+            _metrics.Refresh();
         }
 
-        _copyAll.IsVisible = tab != BottomTab.Terminal;
+        _body.Content = tab switch
+        {
+            BottomTab.Problems => _problemsBody,
+            BottomTab.Terminal => _terminalView ?? _terminal,
+            BottomTab.Output => _output,
+            _ => _metrics.AllRows.Count == 0 ? _noMeasures : _metricsView,
+        };
+        UpdateTools();
         RebuildTabs();
     }
 
     /// <summary>
-    /// Ctrl+C on the panel (a key no control took): the chosen rows of Output or the telemetry in the list's order, or the
-    /// Problems row chosen last, to the clipboard; false when the tab shown has none chosen.
+    /// Ctrl+C on the panel that no control took: Output's selection, the telemetry's or Problems' picked rows, to the
+    /// clipboard; false when the tab shown has nothing picked.
     /// </summary>
     public bool CopyChosen()
     {
         string? text = Tab switch
         {
-            BottomTab.Output => Joined(PanelCopy.InListOrder<TextRow>(_outputLines, _output.SelectedItems.OfType<TextRow>())),
-            BottomTab.Telemetry => Joined(PanelCopy.InListOrder(_measureRows, _measures.SelectedItems.OfType<TextRow>())),
-            BottomTab.Problems => _lastProblem?.CopyText,
+            BottomTab.Output => _output.Model is { Selection.IsEmpty: false } model ? model.Snapshot.GetText(model.Selection.Start, model.Selection.Length) : null,
+            BottomTab.Telemetry => _metrics.CopySelected(),
+            BottomTab.Problems => _problems.CopySelected(),
             _ => null,
         };
         if (string.IsNullOrEmpty(text))
@@ -897,16 +953,79 @@ public sealed class BottomPanelView : ContentView, IDisposable
 
         _ = CopyAsync(text);
         return true;
-
-        static string? Joined(IReadOnlyList<TextRow> rows) => rows.Count == 0 ? null : PanelCopy.Lines(rows.Select(r => r.Text));
     }
 
-    // The tab's whole list as text.
+    /// <summary>
+    /// Shows <paramref name="sources"/>' problems grouped by file (at most <c>CRAFT_PROBLEMS_LIMIT</c> rows), the empty
+    /// state from <paramref name="active"/> (the document shown, <paramref name="activeName"/>) when there are none.
+    /// Nothing is redrawn when what is shown did not change.
+    /// </summary>
+    public void ShowProblems(IReadOnlyList<ProblemSource> sources, EditorModel? active, string? activeName)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        int limit = (active?.Options ?? _palette.Options).ProblemsListLimit;
+        _problems.Update(sources, limit, CodeActionProviders.All.Count > 0);
+        bool none = _problems.Count == 0;
+        _problemsEmpty.IsVisible = none;
+        _problemsView.IsVisible = !none;
+        if (none)
+        {
+            _problemsEmpty.Show(ShellEmptyStates.Problems(active, activeName));
+        }
+
+        if (_problems.Count != _shownCount)
+        {
+            _shownCount = _problems.Count;
+            RebuildTabs();
+        }
+    }
+
+    /// <summary>Takes <paramref name="palette"/>'s colours and settings.</summary>
+    public void Apply(ShellPalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        _palette = palette;
+        BackgroundColor = palette.Surface;
+        _terminal.TextColor = palette.Secondary;
+        _noMeasures.TextColor = palette.Secondary;
+        _problemsEmpty.Apply(palette);
+        _collapse.TextColor = palette.Secondary;
+        _copyAll.TextColor = palette.Secondary;
+        _output.Theme = LogClasses.Theme(palette.Theme);
+        var options = OutputOptions(palette.Options);
+        if (options != _output.Options)
+        {
+            _output.Options = options;
+        }
+
+        _metricsView.Apply(palette.Options, palette.Theme);
+        _problemsView.Apply(palette.Options, palette.Theme);
+        UpdateTools();
+        RebuildTabs();
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _host.KeyBindingsChanged -= OnKeyBindingsChanged;
+        _host.Logged -= OnLogged;
+        _metrics.Recorded -= OnMeasured;
+        _metrics.Dispose();
+        _metricsView.Dispose();
+        _problemsView.Dispose();
+        _log.Dispose();
+        _output.Dispose();
+    }
+
+    // The editor's settings for Output: no scrolling past the end (the follow rule reads the end), no inline completion.
+    private static CraftOptions OutputOptions(CraftOptions options) => options with { BottomMarginLines = 0, InlineCompletionProvider = "none" };
+
+    // The tab's whole text.
     private string AllText() => Tab switch
     {
-        BottomTab.Output => PanelCopy.Lines(_outputLines.Select(r => r.Text)),
-        BottomTab.Telemetry => PanelCopy.Lines(_measureRows.Select(r => r.Text)),
-        BottomTab.Problems => PanelCopy.Lines(_problemRows.Select(r => r.CopyText)),
+        BottomTab.Output => _log.Shown.Buffer.Current is { } text ? text.GetText(0, text.Length) : "",
+        BottomTab.Telemetry => _metrics.CopyAll(),
+        BottomTab.Problems => _problems.CopyAll(),
         _ => "",
     };
 
@@ -930,120 +1049,56 @@ public sealed class BottomPanelView : ContentView, IDisposable
         }
     }
 
-    /// <summary>Shows <paramref name="model"/>'s problems (errors first, then by place), at most <c>CRAFT_PROBLEMS_LIMIT</c> rows.</summary>
-    public void ShowProblems(EditorModel? model, string? fileName)
+    // Each tab's tools: Output's filter and follow, the telemetry's filter, Copy all but in Terminal.
+    private void UpdateTools()
     {
-        _problemsEmpty.Show(ShellEmptyStates.Problems(model, fileName));
-        if (model is null)
+        bool output = Tab == BottomTab.Output;
+        _filterField.IsVisible = output || Tab == BottomTab.Telemetry;
+        _follow.IsVisible = output;
+        _copyAll.IsVisible = Tab != BottomTab.Terminal;
+        ToolTipProperties.SetText(_copyAll, Tab == BottomTab.Output ? "Copy every line shown (Ctrl+C copies the selection)" : "Copy every row shown (Ctrl+C copies the rows picked)");
+        _filling = true;
+        try
         {
-            _problems.ItemsSource = null;
-            _shownRows = null;
-            _problemRows = [];
-            _lastProblem = null;
-            _problemCount = 0;
-            _shownCount = 0;
-            RebuildTabs();
+            _filter.Text = output ? _outputFilter : _metricsFilter;
+        }
+        finally
+        {
+            _filling = false;
+        }
+
+        bool on = _log.Following;
+        if (InteractiveStates.Of(_follow) is { } states)
+        {
+            states.Selected = on;
+        }
+
+        _follow.TextColor = on ? _palette.Text : _palette.Secondary;
+        _follow.Text = on ? "Following" : "Follow";
+    }
+
+    private void OnFilterChanged(object? sender, Microsoft.Maui.Controls.TextChangedEventArgs e)
+    {
+        if (_filling)
+        {
             return;
         }
 
-        var snapshot = model.Snapshot;
-        var shown = new List<EditorDiagnostic>();
-        foreach (var diagnostic in model.Diagnostics)
+        string text = e.NewTextValue ?? "";
+        if (Tab == BottomTab.Output)
         {
-            if (diagnostic.Severity != DiagnosticSeverity.Hidden)
-            {
-                shown.Add(diagnostic);
-            }
+            _outputFilter = text;
+            _log.Filter = text;
         }
-
-        shown.Sort(static (a, b) => a.Severity != b.Severity ? b.Severity.CompareTo(a.Severity) : a.Start.CompareTo(b.Start));
-        _problemCount = shown.Count;
-        int limit = model.Options.ProblemsListLimit;
-        var rows = new List<ProblemRow>(Math.Min(limit, shown.Count));
-        bool actions = CodeActionProviders.All.Count > 0;
-        foreach (var diagnostic in shown.Take(limit))
+        else if (Tab == BottomTab.Telemetry)
         {
-            int start = Math.Clamp(diagnostic.Start, 0, snapshot.Length);
-            int line = snapshot.GetLineIndex(start);
-            int column = start - snapshot.GetLine(line).Start;
-            var (color, mark) = diagnostic.Severity switch
-            {
-                DiagnosticSeverity.Error => (_palette.Error, "✕"),
-                DiagnosticSeverity.Warning => (_palette.Warning, "⚠"),
-                _ => (_palette.Info, "ℹ"),
-            };
-            rows.Add(new ProblemRow($"{diagnostic.Id}  {diagnostic.Message}", string.Create(CultureInfo.InvariantCulture, $"{fileName}  {line + 1}:{column + 1}"), color, mark, start)
-            {
-                Diagnostic = diagnostic,
-                HasActions = actions,
-                CopyText = PanelCopy.Problem(fileName, line + 1, column + 1, diagnostic.Severity, diagnostic.Id, diagnostic.Message),
-            });
+            _metricsFilter = text;
+            _metrics.Filter = text;
         }
-
-        // Every keystroke moves the diagnostics: the list is replaced only when what it shows changed (a WinUI list's items
-        // replaced while a row is clicked or measured is what the owner's error run may have hit), the strip only when
-        // the count did.
-        if (!SameRows(_shownRows, rows))
-        {
-            _shownRows = rows;
-            _problemRows = rows;
-            _lastProblem = null;
-            _problems.ItemsSource = rows;
-        }
-
-        if (_problemCount != _shownCount)
-        {
-            _shownCount = _problemCount;
-            RebuildTabs();
-        }
-    }
-
-    private static bool SameRows(List<ProblemRow>? shown, List<ProblemRow> rows)
-    {
-        if (shown is null || shown.Count != rows.Count)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < rows.Count; i++)
-        {
-            if (shown[i] != rows[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
-    public void Apply(ShellPalette palette)
-    {
-        ArgumentNullException.ThrowIfNull(palette);
-        _palette = palette;
-        BackgroundColor = palette.Surface;
-        _terminal.TextColor = palette.Secondary;
-        _noMeasures.TextColor = palette.Secondary;
-        _problemsEmpty?.Apply(palette);
-        _collapse.TextColor = palette.Secondary;
-        _copyAll.TextColor = palette.Secondary;
-        RebuildTabs();
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        _host.KeyBindingsChanged -= OnKeyBindingsChanged;
-        _host.Logged -= OnLogged;
-        _telemetry.Changed -= OnMeasured;
-        _telemetry.Dispose();
     }
 
     private void OnKeyBindingsChanged(object? sender, EventArgs e) =>
         Dispatcher.DispatchLabelled("bottom panel: the keys in the tooltip", () => ToolTipProperties.SetText(_collapse, ShellTooltips.For(_host, "Hide the panel", ShellCommandIds.TogglePanel)));
-
-    private static string LineOf(EditorLogEntry entry) =>
-        string.Create(CultureInfo.InvariantCulture, $"{entry.Time.ToLocalTime():HH:mm:ss}  {entry.Level,-11}  {entry.Source}: {entry.Message}{(entry.Error is null ? "" : "  (" + entry.Error.Message + ")")}");
 
     private void RebuildTabs()
     {
@@ -1052,7 +1107,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         {
             string title = tab switch
             {
-                BottomTab.Problems => _problemCount > 0 ? string.Create(CultureInfo.InvariantCulture, $"Problems {_problemCount}") : "Problems",
+                BottomTab.Problems => _problems.Count > 0 ? string.Create(CultureInfo.InvariantCulture, $"Problems {_problems.Count}") : "Problems",
                 BottomTab.Terminal => "Terminal",
                 BottomTab.Output => "Output",
                 _ => "Idrak telemetry",
@@ -1068,7 +1123,6 @@ public sealed class BottomPanelView : ContentView, IDisposable
             var tap = new TapGestureRecognizer();
             var chosen = tab;
             // A click only selects; the active tab clicked again does nothing (the owner: a click must not hide the panel).
-            // The chevron and Ctrl+J fold it.
             tap.Tapped += (_, _) =>
             {
                 if (chosen != Tab)
@@ -1082,105 +1136,45 @@ public sealed class BottomPanelView : ContentView, IDisposable
         }
     }
 
-    private HorizontalStackLayout MakeProblemRow()
-    {
-        var mark = new Label { FontSize = _palette.FontSize, VerticalTextAlignment = TextAlignment.Center, WidthRequest = 18 };
-        mark.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Mark);
-        mark.SetBinding(Label.TextColorProperty, static (ProblemRow row) => row.Color);
-        var text = new SelectableLabel { FontFamily = _palette.Font(), FontSize = _palette.FontSize, TextColor = _palette.Text, VerticalTextAlignment = TextAlignment.Center, LineBreakMode = LineBreakMode.TailTruncation };
-        text.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Text);
-        var place = _palette.Label("", _palette.Secondary);
-        place.SetBinding(Label.TextProperty, static (ProblemRow row) => row.Place);
-        var fix = _palette.SecondaryButton("Fix", 26);
-        var explain = _palette.SecondaryButton("Explain", 26);
-        foreach (var (button, kind) in (ReadOnlySpan<(Button, string)>)[(fix, CodeActionKinds.Fix), (explain, CodeActionKinds.Explain)])
-        {
-            button.SetBinding(IsVisibleProperty, static (ProblemRow row) => row.HasActions);
-            button.Clicked += (sender, _) =>
-            {
-                if (sender is Button { BindingContext: ProblemRow row })
-                {
-                    CodeActionRequested?.Invoke(row.Diagnostic, kind);
-                }
-            };
-        }
-
-        var copy = _palette.SecondaryButton("Copy", 26);
-        ToolTipProperties.SetText(copy, "Copy the problem: file(line,column): severity code: message");
-        copy.Clicked += (sender, e) =>
-        {
-            if (sender is Button { BindingContext: ProblemRow row })
-            {
-                _lastProblem = row;
-                _ = CopyAsync(row.CopyText);
-            }
-        };
-
-        return new HorizontalStackLayout { Spacing = 10, Padding = new Thickness(16, 4), Children = { mark, text, place, copy, fix, explain } };
-    }
-
-    private SelectableLabel MakeTextRow()
-    {
-        var label = new SelectableLabel { TextColor = _palette.Text, FontSize = _palette.SmallSize, VerticalTextAlignment = TextAlignment.Center, LineBreakMode = LineBreakMode.TailTruncation };
-        label.FontFamily = _palette.Options.FontFamily;
-        label.Padding = new Thickness(16, 1);
-        label.SetBinding(Label.TextProperty, static (TextRow row) => row.Text);
-        return label;
-    }
-
-    private void OnProblemSelected(object? sender, SelectionChangedEventArgs e)
-    {
-        if (e.CurrentSelection.Count == 0 || e.CurrentSelection[0] is not ProblemRow row)
-        {
-            return;
-        }
-
-        _lastProblem = row;
-        Dispatcher.DispatchLabelled("problems: go to the problem", () =>
-        {
-            _problems.SelectedItem = null;
-            _problemChosen(row.Position);
-        });
-    }
-
+    // A log line from any thread: posted, and one flush dispatched for every line that comes before it runs.
     private void OnLogged(object? sender, EditorLogEntry entry)
     {
-        void Add()
+        if (_log.Post(LogText.Line(entry)))
         {
-            _outputLines.Add(new TextRow(LineOf(entry)));
-            int keep = Math.Max(1, _host.Options.HostLogLines);
-            while (_outputLines.Count > keep)
-            {
-                _outputLines.RemoveAt(0);
-            }
-        }
-
-        if (Dispatcher.IsDispatchRequired)
-        {
-            Dispatcher.DispatchLabelled("output: a log line", Add);
-        }
-        else
-        {
-            Add();
+            Dispatcher.DispatchLabelled("output: the log's new lines", () => _log.Flush());
         }
     }
 
-    private void OnMeasured(object? sender, EventArgs e)
+    // A measure from any thread: one refresh dispatched for every measure that comes before it runs.
+    private void OnMeasured(object? sender, EventArgs e) => Dispatcher.DispatchLabelled("telemetry: the new measures", () =>
     {
-        if (Tab != BottomTab.Telemetry)
-        {
-            return;
-        }
-
-        if (Dispatcher.IsDispatchRequired)
-        {
-            Dispatcher.DispatchLabelled("telemetry: a measure", () => Select(BottomTab.Telemetry));
-        }
-        else
+        bool first = _metrics.AllRows.Count == 0;
+        _metrics.Refresh();
+        if (first && Tab == BottomTab.Telemetry)
         {
             Select(BottomTab.Telemetry);
         }
-    }
+    });
+}
+
+/// <summary>Ctrl+F in Output: its editor (the find searches its text) and the selection's text to search for, or null.</summary>
+public sealed class BottomFindEventArgs(EditorModel model, string? initialQuery) : EventArgs
+{
+    /// <summary>Output's editor.</summary>
+    public EditorModel Model { get; } = model;
+
+    /// <summary>The text to search for, or null.</summary>
+    public string? InitialQuery { get; } = initialQuery;
+}
+
+/// <summary>A right-click in Output: its editor (the menu's target) and where.</summary>
+public sealed class BottomContextEventArgs(EditorModel model, TappedEventArgs where) : EventArgs
+{
+    /// <summary>Output's editor.</summary>
+    public EditorModel Model { get; } = model;
+
+    /// <summary>Where it was.</summary>
+    public TappedEventArgs Where { get; } = where;
 }
 
 /// <summary>

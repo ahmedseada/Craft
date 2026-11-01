@@ -2773,6 +2773,51 @@ where the text before the caret matches the primary's, the rest said.
   says "The model wrote no tool calls; nothing was changed." or how many nudges were given. Tests (`AiPlugins`): fenced
   calls end in a diff of one undo step; a run with no calls says nothing changed; the setting reaches the agent.
 
+### Note 27, Idrak part, as built (2026-11-01)
+- Cause (confirmed in the code): Idrak's "json" tool-call parser reads a call only between the template's markers
+  (`<tool_call>…</tool_call>`), and a bare answer only when it starts with `{` or `[`; the reply's markdown ```json fences
+  stayed answer text, and `CodingAgent.LoopAsync` (and the CLI's own loop in `ChatResponder`) took the first reply with no
+  call as the final answer, so the run ended after one turn with nothing written.
+- Idrak `4f394d5` on `main`: `ToolCallText.CallsInText(text, ToolCallContext)` and `ToolCallText.LooksLikeCall` (with a
+  span `JsonValueEnd`) in `Idrak.Abstraction/Generation/ToolCallParsers.cs`; `AgentOptions.CallsInText` (true),
+  `AgentOptions.Nudges` (2), `AgentOptions.Template`; `CodingAgentEnd.CallsNotRead`; `CodingAgentRun.Nudges`; the
+  after-turn helpers `CodingAgent.CallContext`, `CodingAgent.ReadCallsInText`, `CodingAgent.Correction`, shared by the
+  agent's loop and the CLI's; CLI `agent --nudges N` (2) and `--strict-calls`, its JSON output counting `nudges` and
+  `calls_not_read`. API dumps and the inventory regenerated; no version or CHANGELOG change.
+- Measured: text with no call (prose, a C# fence, a JSON example naming no offered tool) reads in 0 bytes once warm
+  (100 runs, in the test); only the calls taken are built (values checked as UTF-8 in a pooled buffer first).
+- Tests (CPU): Idrak `chat templates|coding agent|coding tools|cli run: tools|public API|inventory` 27 passed, 0 failed
+  (after the rebase onto s2's fine-tuning commit); Craft built against it, `CRAFT_FILTER="AiPlugins|Ai"` 49 passed.
+- Decisions (the recommended option each time, the owner asleep):
+  - The template comes from `AgentOptions.Template`, else the model's own when it is a `ChatGenerator`, else none (a
+    generic example); Craft wraps the model (`CountingChatModel`), so piece 1b passes the lease's template there.
+  - Nudges count in a row and start again after a reply whose calls were read; `CodingAgentRun.Nudges` is the total.
+  - Call-like means a ```json or bare fence opening with `{` or `[`, or `"name"` followed by an offered tool's name;
+    a C# fence or plain prose ends the run as answered, as before.
+  - Fences of any language are read when their body opens as a call (`{"` or `[{`); the offered names are the gate.
+  - Bare text: every call-shaped value in order, not only the first; a list not taken stays text whole; an object not
+    taken is searched inside (a call nested in a wrapper is found).
+  - Trailing commas and comments are allowed; arguments under the template's key, "arguments" or "parameters", or as a
+    JSON string.
+  - The reply keeps its text as the model wrote it, with the calls attached (the transcript stays truthful).
+  - A reply cut at the token limit gets no correction (out of budget, as before).
+  - The correction's example: in the markers for the "json" format, the bare JSON when the template's answer is the call,
+    a generic line for other formats or an unknown template; `write_file` when offered (its required arguments as
+    "..."), with the list of offered tools and how to say the task is done.
+  - `CallsNotRead` is the enum's value 3 (the others keep their numbers); the transcript's figures add `nudges` only when
+    there were any, so reinforcement transcripts are unchanged; the reinforcement environment is unchanged.
+  - The CLI's `chat` and `run` are unchanged (no text calls, no corrections); `agent` prints one line on stderr when a
+    task ends with calls not read.
+- Left for piece 1b (Craft): `agentNudges` and `agentCallsInText` into `AgentOptions` (with `Template` from the lease),
+  the end note for `CallsNotRead` and for a run with no tool calls, and its `AiPlugins` tests.
+- The owner's commands (the House run asks before `dotnet build`; MODEL is note 27's coder model, its id or folder):
+  ```powershell
+  cd D:\Projects\Idrak; git checkout main; git pull origin main
+  dotnet build -c Release tests\Idrak.Tests
+  $env:IDRAK_DEVICES="cpu"; $env:IDRAK_FILTER="chat templates|coding agent|coding tools|cli run: tools|public API|inventory"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+  New-Item -ItemType Directory -Force test-output\agent-house | Out-Null; dotnet run -c Release --no-build --project src\Idrak.Cli -- agent MODEL "Create C# class For House with float 3 props and + float price" --workspace test-output\agent-house --nudges 2
+  ```
+
 ### X part 4
 - **Document symbols**: a default member `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by default) and
   `DocumentSymbol(Name, Kind, Start, Length, NameStart, NameLength, Detail, Children)`; `ScopeKind` gains Property, Field,

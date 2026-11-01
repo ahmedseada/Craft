@@ -160,6 +160,47 @@ public static class DraftModelTests
     }
 
     [Test]
+    public static async Task ADraftThatIsTheModelItselfIsRefused()
+    {
+        var provider = new DraftProvider();
+        ModelProviders.Register(provider);
+        try
+        {
+            // The owner's run: chat, agent and completion all name one model: completion's copy is the chat's own.
+            var settings = new AiSettings { ModelProvider = ProviderName, Model = "big", CompletionModel = "big" };
+            using var models = new AiModels(() => settings);
+            const string Itself = "the draft would be the chat model itself: no gain";
+            Check.True(models.DraftOf(ModelRoleKeys.Chat) is { Model: null, State: Itself }, $"refused before anything loads ({models.DraftOf(ModelRoleKeys.Chat)})");
+            var chat = await models.ChatAsync(CancellationToken.None);
+            await chat.Chat!.ChatAsync(new ChatRequest([new ChatMessage("user", "hi")]));
+            Check.True(provider.Chats["big"].Options.Last() is { Draft: null }, "the reply goes without a draft");
+            Check.Equal(1, provider.Acquired.Count, "one copy, and no second context drafting on it");
+            Check.True(models.DraftOf(ModelRoleKeys.Agent) is { State: "the draft would be the agent model itself: no gain" }, "the agent says so too");
+
+            // Named on purpose, in another case: still the chat model itself.
+            settings = settings with { CompletionModel = "small", DraftModel = "BIG" };
+            Check.True(models.DraftOf(ModelRoleKeys.Chat) is { Model: null, State: Itself }, $"draftModel naming the chat model ({models.DraftOf(ModelRoleKeys.Chat)})");
+
+            // The same model at other weights is another copy (a quantized self-draft): it may draft.
+            settings = settings with { DraftModel = "", CompletionModel = "big", CompletionWeights = "int4" };
+            var ready = DraftChanged(models);
+            chat = await models.ChatAsync(CancellationToken.None);
+            await ready.WaitAsync(TimeSpan.FromSeconds(20));
+            Check.True(models.DraftOf(ModelRoleKeys.Chat) is { Model: "big", State: null }, $"big at int4 drafts for big at float32 ({models.DraftOf(ModelRoleKeys.Chat)})");
+            await chat.Chat!.ChatAsync(new ChatRequest([new ChatMessage("user", "hi")]));
+            Check.True(provider.Chats["big"].Options.Last() is { Draft: { } draft } && ReferenceEquals(draft, provider.Drafts["big int4"]), "with the int4 copy's draft");
+
+            var status = new ModelProviderStatus { Roles = [new ModelRole("Chat", "big", "loaded") { Key = ModelRoleKeys.Chat, DraftState = Itself }] };
+            Check.True(ShellText.ModelRolesTooltip(status).Contains("no draft: " + Itself, StringComparison.Ordinal) && !ShellText.ModelChip(status, ModelRoleKeys.Chat).Contains("draft", StringComparison.Ordinal),
+                "the tooltip says why, the chip shows no draft");
+        }
+        finally
+        {
+            ModelProviders.Unregister(ProviderName);
+        }
+    }
+
+    [Test]
     public static void TheChipAndTheStatusBarShowTheDraftAndItsAcceptance()
     {
         Check.Equal("1.5B", ShellText.ShortModelName("store:coder-1.5B"), "a size in the name");
@@ -299,7 +340,7 @@ public static class DraftModelTests
             Acquired.Enqueue(request.Model);
             var tokenizer = new CharTokenizer(request.Model.Contains("stranger", StringComparison.Ordinal) ? Letters.Replace('e', 'E') : Letters);
             var chat = Chats.GetOrAdd(request.Model, _ => new RecordingChat());
-            var draft = Drafts.GetOrAdd(request.Model, _ => new FakeDraft(tokenizer));
+            var draft = Drafts.GetOrAdd(request.Weights is { Length: > 0 } weights ? $"{request.Model} {weights}" : request.Model, _ => new FakeDraft(tokenizer));
             return Task.FromResult(new ModelLease(request.Model, chat, null, 4096, TimeSpan.FromMilliseconds(1)) { Draft = draft });
         }
     }

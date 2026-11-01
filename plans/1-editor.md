@@ -4963,6 +4963,67 @@ Item 1, slot s1. Idrak `main` 2ab9c3a, then Craft `main` (this commit and the on
   ```
   In the app: send a chat message; once the completion model has loaded the chip reads "draft: …, NN% accepted".
 
+#### KV caches that grow, and no self-draft, as built (2026-11-01, job 1a)
+The owner's Windows run (an 8 GB laptop GPU): the agent ran out of device memory on the 1.5B coder that chat, agent and
+completion all name ("33,554,432 more bytes needed, 534,773,760 of 8,546,484,224 free … in use 6.19 GiB").
+Idrak `slot/kv-grow` 92d42e7 (on Idrak `main` e3d656c), Craft `slot/kv-grow` (on Craft `main` 426fc21), built against it.
+- **Cause, verified.** The weights at float32 are about 6 GB of the 6.19 GiB in use. Every `DecodingContext` made each
+  attention layer's cache for its whole capacity at the first step: Craft asks for `NumCtx` = the lease's context (32768),
+  and a kept cache (`KeepCache`) is the whole window, so the agent's first prompt reserved 28 layers × 2 × 2 heads × 128 ×
+  4 B × 32768 = 1,879,048,192 bytes, whatever its length, in the ~0.5 GB left. The session's second suspect, a draft that
+  is the target itself, did not run there: `DraftPlan` already refused a draft named like the role's model (one name, one
+  lease); now hardened below.
+- **Idrak.** `DecodingContext.GrowCaches` (default on, `DefaultGrowCaches`, `IDRAK_KV_GROW=0` reserves the whole window as
+  before): a cache of the context's capacity is made for the first step's positions and one more, rounded up to
+  `GrowthStart` (`DefaultGrowthStart` 256), and at least doubles when a step needs more, up to the capacity it was asked
+  for (`Reserve`; `KeyValueCache.Grow`: one zeroed allocation and one `Copy2D` per tensor, so every layout grows alike:
+  float32, int8 with its scales, bfloat16, one's own). Sliding windows' caches keep their size; `Truncate`, `Reset`, kept
+  caches (they keep their grown size), row starts (batches), the draft's cache and `ReorderRows` are unchanged. The step's
+  mask spans the slots. A recorded step (CUDA graph) holds the cache's storage: `CaptureStep` reserves first, `IsCurrent`
+  says whether a growth came since, `ReplayStep` refuses a stale one, and `TextGenerator` reserves before each replay
+  and records again after a growth (about log2(n) times a reply of n tokens; never on the per-token path otherwise). A
+  prompt in pieces reserves once for the whole prompt. Telemetry `CacheGrowth` (a layer's slots and bytes);
+  `CacheSlots`, `CacheGrowths`, `SlotsFor`. CLI: `bench --num-ctx N` and two results, the memory peak and the KV caches at
+  their largest. Tests `kv cache growth` (4).
+- **Craft.** A draft that is the role's model itself is never used: the same lease key (one copy), the same name with
+  the same weights (any case), or, once loaded, the same lease, draft or copy; the role's tooltip says "no draft: the
+  draft would be the chat model itself: no gain" (the agent's likewise) and the chip shows no draft. The same model at
+  other weights (an int4 copy drafting for the float32 one) may still draft. Checked in `AiModels`: chat, agent and
+  completion with equal settings share one lease (one copy); each generation running on a copy holds its own decoding
+  context while it runs, and the copy keeps one between replies (`KeepCache`) — with growing caches each is the size of
+  its own prompt and reply. Test `DraftModel.ADraftThatIsTheModelItselfIsRefused`.
+- Decisions (recommended, one line each):
+  - Growth is on by default (it changes no token, rule 71) with `IDRAK_KV_GROW=0` to reserve as before; no layout needed the old path.
+  - Start at the first step's positions and one more, rounded up to 256, then at least double: few growths, little slack.
+  - A kept cache keeps its grown size (the next turn of a conversation reuses it without growing again); none shrinks.
+  - The prefill's room estimate counts the caches at the slots the prompt needs, not the window (larger pieces when room allows).
+  - A self-draft is refused at the plan (no load) and again after loading (a provider that lends the same copy under two keys).
+- **Measured (CPU, this container, `kv cache growth: a short prompt on a 32768-position window`).** A 28-layer model with
+  the 1.5B coder's key/value shape (2 heads × 128), a 43-token prompt and 16 tokens on a 32768-position window: the
+  caches hold 1,879,048,192 bytes reserved whole, 14,680,064 growing (256 slots, x128 less). A 1,000-token reply grows
+  them 3 times (256 → 512 → 1024 → 2048 slots, 117,440,512 bytes). Tokens identical with and without growth over three
+  models, three formats, kept caches, a batch and speculative decoding. The GPU peak is the owner's run below.
+- Filters run: Idrak `kv cache growth|speculative decoding|generation:|decoder:|sampler:|kv plugins|conformance kit|engine:|int8: quantized GPT|scoring:|abstractions: every KeyValueFormat|window kernels|image features|public API|abstraction inventory|cli measure`
+  106 passed, 2 failed (the bench tests' lists of results, updated: both pass); Craft `DraftModel|Ai.|AiPlugins|ModelLoading|ApiGuard|Inventory` 52 passed.
+- Left: a model named two ways that resolve to one folder (an alias and its id) is still two copies, and could draft for itself; the copy-level check catches only one copy lent twice.
+- **Owner's commands** (after the session merges `slot/kv-grow` into both `main`s; MODEL: the model chat, agent and
+  completion name in Craft's settings):
+  ```powershell
+  cd D:\Projects\Idrak; git checkout main; git pull origin main
+  dotnet build -c Release tests\Idrak.Tests
+  $env:IDRAK_FILTER="kv cache growth|speculative decoding|generation:|decoder:|sampler:|kv plugins|conformance kit|engine:|int8: quantized GPT|scoring:|abstractions: every KeyValueFormat|window kernels|image features|public API|abstraction inventory|cli measure"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+  $env:IDRAK_KV_GROW="0"; dotnet run -c Release --no-build --project src\Idrak.Cli -- bench MODEL -d cuda:0 --num-ctx 32768 --prompt-tokens 512 --tokens 128 > test-output\bench-kv-before.txt
+  Remove-Item Env:IDRAK_KV_GROW; dotnet run -c Release --no-build --project src\Idrak.Cli -- bench MODEL -d cuda:0 --num-ctx 32768 --prompt-tokens 512 --tokens 128 > test-output\bench-kv-after.txt
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="DraftModel|Ai.|AiPlugins|ModelLoading|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  cd D:\Projects\Idrak; git push origin --delete slot/kv-grow; cd D:\Projects\Craft; git push origin --delete slot/kv-grow
+  ```
+  The bench files give "memory peak" and "KV cache" for each (before: the whole window reserved; after: what the prompt
+  and reply need). In the app: run the agent on the test project with the one model for every role.
+
 #### Inline chat, AI review and the build fix as built (2026-11-01)
 X part 9 item 23 and X part 11 items 4 and 5, slot s2 (`slot/x-ai`). Craft only; nothing was missing in Idrak (the chat
 and the agent run on its `FakeChatModel`, `CodingAgent` and `CommandSandboxes` as they are; no cause was in the library).

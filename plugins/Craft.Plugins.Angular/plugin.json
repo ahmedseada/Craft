@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Angular",
+  "version": "0.1.0",
+  "summary": "Angular templates: an angular.json project's .html and every *.component.html (bindings, events, {{ }}, @if, @for, @switch, @defer, @let, pipes), its .ts with inline templates and styles; folding, format, icons; the version from @angular/core [EditorLanguages \"angular-html\", \"angular-typescript\", LanguageSelectors \"angular\"]",
+  "contractVersion": "1.1",
+  "capabilities": ["files"]
+}

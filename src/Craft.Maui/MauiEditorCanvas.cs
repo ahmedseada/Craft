@@ -40,7 +40,7 @@ public interface IDrawnTextSurface : ITextLayoutSurface, IDisposable
 /// <c>CRAFT_PAINT_LINE_LAYOUTS</c> off, each run is drawn with MAUI's <c>DrawString</c> as before.
 /// </para>
 /// </summary>
-public sealed class MauiEditorCanvas : IEditorCanvas, IStyledLineCanvas, IDisposable
+public sealed class MauiEditorCanvas : IEditorCanvas, IStyledLineCanvas, IIconCanvas, IDisposable
 {
     private readonly Dictionary<uint, Color> _colors = [];
     private readonly TextLayoutCache _layouts = new();
@@ -210,6 +210,10 @@ public sealed class MauiEditorCanvas : IEditorCanvas, IStyledLineCanvas, IDispos
         _surface = null;
         _surfaceFrom = null;
     }
+
+    /// <inheritdoc />
+    public bool DrawIcon(FileIcon icon, float x, float y, float size, bool open, bool dark) =>
+        Target is { } canvas && MauiFileIcons.Draw(canvas, icon, x, y, size, open, dark);
 
     /// <inheritdoc />
     public void FillRect(float x, float y, float width, float height, uint argb)

@@ -235,16 +235,14 @@ public sealed partial class EditorModel
     {
         var all = Selections;
         var edge = direction == LineDirection.Up ? all[0] : all[^1];
-        var snapshot = Snapshot;
-        int line = snapshot.GetLineIndex(edge.Caret);
-        int row = RowOfLine(line) + (direction == LineDirection.Up ? -1 : 1);
+        int row = VisualOf(edge.Caret).Row + (direction == LineDirection.Up ? -1 : 1);
         if (row < 0 || row >= RowCount)
         {
             return true;
         }
 
-        int column = ColumnOf(_selection.Caret);
-        int position = PositionAtColumn(snapshot.GetLine(LineAtRow(row)), column, nearest: false);
+        int column = VisualOf(_selection.Caret).Column;
+        int position = PositionAtVisual(row, column, nearest: false);
         return AddSelection(SelectionState.At(position)) || true;
     }
 
@@ -269,7 +267,7 @@ public sealed partial class EditorModel
                 _boxLine = LineAtRow(Math.Max(0, RowOfLine(_boxLine) - 1));
                 break;
             case EditorKey.Down:
-                _boxLine = LineAtRow(Math.Min(RowCount - 1, RowOfLine(_boxLine) + 1));
+                _boxLine = LineAtRow(Math.Min(RowCount - 1, RowOfLine(_boxLine) + RowsOfLine(_boxLine)));
                 break;
             case EditorKey.PageUp:
                 _boxLine = LineAtRow(Math.Max(0, RowOfLine(_boxLine) - PageLines()));

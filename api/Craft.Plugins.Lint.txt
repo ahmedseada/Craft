@@ -1,0 +1,171 @@
+sealed class Craft.Plugins.Lint.EslintLinter : Craft.Plugins.Lint.NodeLinter, Craft.Abstractions.ILinter, Idrak.Abstraction.IKind
+  Craft.Abstractions.LinterProject Detect(System.String path, System.String workspaceRoot)
+  System.Collections.Generic.IReadOnlyList<System.String> Command(System.String node, Craft.Abstractions.LinterProject project, System.Collections.Generic.IReadOnlyList<System.String> files, System.String output)
+  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+  System.String Name { get; }
+  System.String Title { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.LinterProject> DetectAsync(System.String path, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  const System.String LinterName = eslint
+  protected System.Boolean Succeeded(System.Int32? exitCode)
+  protected System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> Read(System.ReadOnlySpan<System.Byte> report)
+  static Craft.Plugins.Lint.EslintLinter Instance { get; }
+static class Craft.Plugins.Lint.LintJson
+  static System.Boolean HasTopLevel(System.ReadOnlySpan<System.Byte> json, System.ReadOnlySpan<System.Byte> name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> ReadEslint(System.ReadOnlySpan<System.Byte> json)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> ReadTslint(System.ReadOnlySpan<System.Byte> json)
+  static System.String TopLevelString(System.ReadOnlySpan<System.Byte> json, System.ReadOnlySpan<System.Byte> name)
+static class Craft.Plugins.Lint.LintNode
+  static Craft.Plugins.Npm.NodeInstall Install { get; }
+  static System.String DeviceProblem { get; }
+  static System.String Problem { get; }
+  static System.String Program { get; }
+  static System.Threading.Tasks.Task<Craft.Plugins.Npm.NodeInstall> FindAsync(Craft.Abstractions.IEditorHost host)
+  static System.Void Set(System.String program, System.String problem)
+sealed class Craft.Plugins.Lint.LintPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String FixFileCommand = lint.fixFile
+  const System.String ForgetCommand = lint.forget
+  const System.String LintFileCommand = lint.file
+  const System.String LintWorkspaceCommand = lint.workspace
+  const System.String ProviderName = lint
+  const System.String SetupCommand = lint.setup
+  static Craft.Plugins.Lint.LintPlugin Instance { get; }
+sealed class Craft.Plugins.Lint.LintPluginPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  const System.String PackageName = Craft.Plugins.Lint
+  ctor()
+static class Craft.Plugins.Lint.LintProjects
+  static System.Byte[] ReadBytes(System.String path)
+  static System.Collections.Generic.IEnumerable<System.String> Upward(System.String path, System.String root)
+  static System.Collections.Generic.IReadOnlyList<System.String> EslintFlat { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> EslintLegacy { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> FoldersWith(System.String root, System.Collections.Generic.IReadOnlyList<System.String> names, System.Collections.Generic.IReadOnlyList<System.String> ignore)
+  static System.Collections.Generic.IReadOnlyList<System.String> PrettierConfigs { get; }
+  static System.Int32 Major(System.String version)
+  static System.String GlobalInstall(System.String node, System.String package, System.String script)
+  static System.String LocalInstall(System.String folder, System.String root, System.String package, System.String script)
+  static System.String Nearest(System.String path, System.String root, System.Collections.Generic.IReadOnlyList<System.String> names, System.Func<System.String, System.Boolean> exists = null)
+  static System.String NearestPackageWith(System.String path, System.String root, System.ReadOnlySpan<System.Byte> key)
+  static System.String VersionOf(System.String script, System.Int32 levels = 2)
+  static System.Void Forget()
+sealed class Craft.Plugins.Lint.LintRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+sealed class Craft.Plugins.Lint.LintRunReport : System.IEquatable<Craft.Plugins.Lint.LintRunReport>
+  Craft.Plugins.Lint.LintRunReport <Clone>$()
+  System.Boolean Cancelled { get; init; }
+  System.Boolean Equals(Craft.Plugins.Lint.LintRunReport other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Files { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Problems { get; init; }
+  System.String Linter { get; init; }
+  System.String ToString()
+  System.String Why { get; init; }
+  System.Void Deconstruct(out System.String Linter, out System.Collections.Generic.IReadOnlyList<System.String> Files, out System.Int32 Problems, out System.String Why, out System.Boolean Cancelled)
+  ctor(System.String Linter, System.Collections.Generic.IReadOnlyList<System.String> Files, System.Int32 Problems, System.String Why, System.Boolean Cancelled)
+sealed class Craft.Plugins.Lint.LintSettings : System.IEquatable<Craft.Plugins.Lint.LintSettings>
+  Craft.Plugins.Lint.LintSettings <Clone>$()
+  System.Boolean AllowGlobal { get; init; }
+  System.Boolean Equals(Craft.Plugins.Lint.LintSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Picks(System.String linter)
+  System.Collections.Generic.IReadOnlyList<System.String> Allowed { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Ignore { get; init; }
+  System.Int32 DelayMilliseconds { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 TimeLimitSeconds { get; init; }
+  System.String AutoSandbox { get; init; }
+  System.String Linter { get; init; }
+  System.String RunOn { get; init; }
+  System.String Sandbox { get; init; }
+  System.String ToString()
+  System.TimeSpan TimeLimit { get; }
+  const System.String PluginName = lint
+  ctor()
+  static Craft.Plugins.Lint.LintSettings Read(Craft.Abstractions.IPluginSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+abstract class Craft.Plugins.Lint.NodeLinter : Craft.Abstractions.ILinter, Idrak.Abstraction.IKind
+  System.Boolean AllowGlobal { get; set; }
+  System.Boolean RequiresReport { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Command(System.String node, Craft.Abstractions.LinterProject project, System.Collections.Generic.IReadOnlyList<System.String> files, System.String output)
+  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String Title { get; }
+  System.String Unavailable { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.LintResult> LintAsync(Craft.Abstractions.LintRequest request, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Abstractions.LinterProject> DetectAsync(System.String path, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  protected System.Boolean Succeeded(System.Int32? exitCode)
+  protected System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> Read(System.ReadOnlySpan<System.Byte> report)
+  protected ctor()
+  protected static System.String Relative(System.String folder, System.String file)
+sealed class Craft.Plugins.Lint.PrettierFormatter : Craft.Abstractions.IDocumentFormatter, Idrak.Abstraction.IKind
+  Craft.Abstractions.DocumentFormatterFit Cached(System.String filePath)
+  System.Boolean Formats(System.String filePath, System.String languageName)
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String Title { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.DocumentFormatterFit> FitAsync(System.String filePath, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> FormatAsync(Craft.Abstractions.DocumentFormatRequest request, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Forget()
+  const System.String FormatterName = prettier
+  const System.String Script = 'use strict';
+// Craft's Prettier runner: node craft-prettier.cjs PRETTIER_FOLDER INPUT FILE_PATH OUTPUT
+const fs = require('fs');
+const [, , folder, input, filepath, output] = process.argv;
+(async () => {
+  const prettier = require(folder);
+  const text = fs.readFileSync(input, 'utf8');
+  const info = prettier.getFileInfo ? await prettier.getFileInfo(filepath, { ignorePath: undefined, resolveConfig: false }) : { ignored: false };
+  if (info && info.ignored) { fs.writeFileSync(output, text); return; }
+  const options = (await prettier.resolveConfig(filepath, { editorconfig: true })) || {};
+  const formatted = await prettier.format(text, { ...options, filepath });
+  fs.writeFileSync(output, formatted);
+})().catch(e => { process.stderr.write(String((e && e.message) || e)); process.exit(2); });
+  static Craft.Abstractions.DocumentFormatterFit Fit(System.String folder, System.String root, Craft.Plugins.Lint.PrettierSettings settings)
+  static Craft.Plugins.Lint.PrettierFormatter Instance { get; }
+sealed class Craft.Plugins.Lint.PrettierPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  static Craft.Plugins.Lint.PrettierPlugin Instance { get; }
+sealed class Craft.Plugins.Lint.PrettierRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+sealed class Craft.Plugins.Lint.PrettierSettings : System.IEquatable<Craft.Plugins.Lint.PrettierSettings>
+  Craft.Plugins.Lint.PrettierSettings <Clone>$()
+  System.Boolean AllowGlobal { get; init; }
+  System.Boolean Enabled { get; init; }
+  System.Boolean Equals(Craft.Plugins.Lint.PrettierSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Formats(System.String path)
+  System.Boolean RequireConfig { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 TimeLimitSeconds { get; init; }
+  System.String ToString()
+  const System.String PluginName = prettier
+  ctor()
+  static Craft.Plugins.Lint.PrettierSettings Read(Craft.Abstractions.IPluginSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> DefaultExtensions { get; }
+sealed class Craft.Plugins.Lint.TslintLinter : Craft.Plugins.Lint.NodeLinter, Craft.Abstractions.ILinter, Idrak.Abstraction.IKind
+  Craft.Abstractions.LinterProject Detect(System.String path, System.String workspaceRoot)
+  System.Boolean RequiresReport { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Command(System.String node, Craft.Abstractions.LinterProject project, System.Collections.Generic.IReadOnlyList<System.String> files, System.String output)
+  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+  System.String Name { get; }
+  System.String Title { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.LinterProject> DetectAsync(System.String path, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  const System.String LinterName = tslint
+  protected System.Boolean Succeeded(System.Int32? exitCode)
+  protected System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> Read(System.ReadOnlySpan<System.Byte> report)
+  static Craft.Plugins.Lint.TslintLinter Instance { get; }

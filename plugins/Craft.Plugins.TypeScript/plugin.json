@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.TypeScript",
+  "version": "0.1.0",
+  "summary": "TypeScript and TSX: colours of .ts, .mts, .cts, .tsx and .d.ts (satisfies, accessor, const and in/out type parameters, template literal types, JSX with generics), brackets, folding, Format document and Format Selection, icons; the version from node_modules/typescript or package.json [EditorLanguages \"typescript\", FoldingRangeProviders \"typescript\", LanguageSelectors \"typescript\"]",
+  "contractVersion": "1.1",
+  "capabilities": ["files"]
+}

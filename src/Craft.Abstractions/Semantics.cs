@@ -96,6 +96,12 @@ public readonly record struct EditorDiagnostic(int Start, int Length, Diagnostic
 {
     /// <summary>The end (exclusive).</summary>
     public int End => Start + Length;
+
+    /// <summary>
+    /// Who published it (W, contract 6: a plug-in's tool, "eslint", through <see cref="IEditorHost.PublishDiagnostics"/>,
+    /// whose <see cref="Id"/> then reads "eslint(no-unused-vars)"), or null for the language's own.
+    /// </summary>
+    public string? Source { get; init; }
 }
 
 /// <summary>A snapshot's diagnostics, in order of position: the snapshot they were computed for travels with them.</summary>
@@ -428,4 +434,85 @@ public interface ISemanticLanguageSession : IFormattingLanguageSession
     /// </summary>
     Task<IReadOnlyList<SymbolLocation>> FindReferencesAsync(ITextSnapshot snapshot, int position, int maxResults, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<SymbolLocation>>([]);
+
+    /// <summary>
+    /// What a rename at <paramref name="position"/> of <paramref name="snapshot"/> would rename (F2, before the name is
+    /// asked): the name's span and text, or a <see cref="RenameTarget.Refusal"/> saying why it cannot be renamed (a symbol
+    /// of a referenced assembly, a keyword). Null when there is no symbol there, or the language cannot rename (the default).
+    /// Off the calling thread (contract 1.1).
+    /// </summary>
+    Task<RenameTarget?> PrepareRenameAsync(ITextSnapshot snapshot, int position, CancellationToken cancellationToken) =>
+        Task.FromResult<RenameTarget?>(null);
+
+    /// <summary>
+    /// The edits that rename the symbol at <paramref name="position"/> of <paramref name="snapshot"/> to
+    /// <paramref name="newName"/> in every file of the session's workspace that names it (its open documents at their
+    /// unsaved text), as one <see cref="WorkspaceEdit"/>: nothing is changed here, the editor proposes it as a diff the user
+    /// accepts (<see cref="IEditorHost.ProposeWorkspaceAsync"/>). A name the language does not take, or a symbol it cannot
+    /// rename, gives an edit with its <see cref="WorkspaceEdit.Refusal"/>; the conflicts the rename would make are in
+    /// <see cref="WorkspaceEdit.Conflicts"/>. Off the calling thread; a refusal saying the language cannot rename by
+    /// default (contract 1.1).
+    /// </summary>
+    Task<WorkspaceEdit> RenameAsync(ITextSnapshot snapshot, int position, string newName, CancellationToken cancellationToken) =>
+        Task.FromResult(WorkspaceEdit.Refused("This language cannot rename symbols."));
+}
+
+/// <summary>What a rename would rename (<see cref="ISemanticLanguageSession.PrepareRenameAsync"/>): the name's place and text, or why not.</summary>
+/// <param name="Start">Where the name starts in the snapshot asked about.</param>
+/// <param name="Length">The name's characters.</param>
+/// <param name="Name">The name as written.</param>
+/// <param name="Refusal">Why the symbol cannot be renamed, in words for the user ("Console is defined in System.Console.dll"), or null when it can.</param>
+public sealed record RenameTarget(int Start, int Length, string Name, string? Refusal = null)
+{
+    /// <summary>Whether it can be renamed.</summary>
+    public bool CanRename => Refusal is null;
+}
+
+/// <summary>The edits to one file of a <see cref="WorkspaceEdit"/>.</summary>
+/// <param name="Path">The file's full path.</param>
+/// <param name="Edits">The edits, in the positions of the text they were made against, in order, not overlapping.</param>
+/// <param name="Version">
+/// For a file open in the editor whose unsaved text the edits were made against, that text's snapshot version (the editor
+/// refuses the edit when the document changed since); null when they were made against the file on disk.
+/// </param>
+public sealed record WorkspaceFileEdit(string Path, IReadOnlyList<TextEdit> Edits, int? Version = null);
+
+/// <summary>
+/// Edits to several files as one change (a rename across the workspace): what <see cref="IEditorHost.ProposeWorkspaceAsync"/>
+/// shows as one diff and applies on Accept, each open document as one undo step, each closed file opened in the background,
+/// edited and saved. Immutable; any thread.
+/// </summary>
+/// <param name="Files">The files and their edits, one entry a file.</param>
+public sealed record WorkspaceEdit(IReadOnlyList<WorkspaceFileEdit> Files)
+{
+    /// <summary>No edit.</summary>
+    public static WorkspaceEdit Empty { get; } = new([]);
+
+    /// <summary>The problems the change would make (a name that clashes, a reference bound elsewhere), in words; none when it is clean.</summary>
+    public IReadOnlyList<string> Conflicts { get; init; } = [];
+
+    /// <summary>Why no edit was made (a name the language does not take, a symbol it cannot rename), or null.</summary>
+    public string? Refusal { get; init; }
+
+    /// <summary>The edits in all.</summary>
+    public int EditCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (var file in Files)
+            {
+                count += file.Edits.Count;
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>An edit of no files that says why (<see cref="Refusal"/>).</summary>
+    public static WorkspaceEdit Refused(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        return new WorkspaceEdit([]) { Refusal = reason };
+    }
 }

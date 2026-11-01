@@ -109,6 +109,13 @@ public sealed class TerminalDrawable : IDrawable
     }
 }
 
+/// <summary>A link Ctrl+clicked in a terminal (X part 9): the path as written, the place it names (from 1), and the terminal's folder.</summary>
+/// <param name="Path">The path as written.</param>
+/// <param name="TargetLine">The line it names, from 1.</param>
+/// <param name="TargetColumn">The column it names, from 1; 0 when none.</param>
+/// <param name="Folder">The terminal's folder now (its shell's, else where it started): a relative path is read against it.</param>
+public sealed record TerminalLinkClick(string Path, int TargetLine, int TargetColumn, string? Folder);
+
 /// <summary>
 /// A terminal's surface: a <see cref="ScrollView"/> over a spacer as tall as the scrollback and the screen (the
 /// platform's scroll bar and wheel), with a <see cref="GraphicsView"/> kept over the viewport that draws the visible rows.
@@ -146,6 +153,8 @@ public sealed class TerminalView : ContentView, IDisposable
         _graphics.StartInteraction += OnStartInteraction;
         _graphics.DragInteraction += OnDragInteraction;
         _graphics.EndInteraction += OnEndInteraction;
+        _graphics.MoveHoverInteraction += OnMoveHoverInteraction;
+        _graphics.EndHoverInteraction += OnEndHoverInteraction;
         _graphics.HandlerChanged += OnGraphicsHandlerChanged;
         _graphics.Focused += (_, _) =>
         {
@@ -172,6 +181,9 @@ public sealed class TerminalView : ContentView, IDisposable
 
     /// <summary>Raised when the view took the keyboard, with its terminal (B9: the split pane clicked becomes the active one).</summary>
     public event EventHandler<TerminalInstance>? Activated;
+
+    /// <summary>Raised on Ctrl+click on a file:line link (X part 9: the page opens the file there).</summary>
+    public event EventHandler<TerminalLinkClick>? LinkActivated;
 
     /// <summary>Raised on a right-click, with its terminal and where (B9: the page opens the terminal's context menu).</summary>
     public event EventHandler<(TerminalInstance Terminal, TappedEventArgs Where)>? ContextRequested;
@@ -213,6 +225,7 @@ public sealed class TerminalView : ContentView, IDisposable
         ArgumentNullException.ThrowIfNull(options);
         _drawable.Palette = new TerminalPalette(theme);
         _drawable.Options = options;
+        _drawable.Renderer.LinksUnderline = options.LinksUnderline;
         BackgroundColor = ThemeColors.Of(_drawable.Palette.Background);
         // B9: room around the text, as an inset of the view (the ground's colour fills it; the paint is unchanged).
         Padding = new Thickness(options.TerminalPadding);
@@ -379,9 +392,78 @@ public sealed class TerminalView : ContentView, IDisposable
             return;
         }
 
+        // X part 9: Ctrl+click on a link opens it (no selection starts).
+        if (Control && LinkAt(e.Touches[0]) is { } link)
+        {
+            _anchor = null;
+            var terminal = _terminal;
+            string? folder;
+            lock (terminal.Screen.Sync)
+            {
+                folder = terminal.Screen.WorkingDirectory;
+            }
+
+            LinkActivated?.Invoke(this, new TerminalLinkClick(link.Path, link.TargetLine, link.TargetColumn, folder ?? terminal.WorkingDirectory));
+            return;
+        }
+
         _anchor = CellAt(e.Touches[0]);
         _terminal.Selection = null;
         _graphics.Invalidate();
+    }
+
+    // Whether Ctrl is held now (the platform's input connection knows; elsewhere never).
+    private bool Control => _inputConnection is IKeyModifierSource source && (source.CurrentModifiers & KeyModifiers.Control) != 0;
+
+    // The link on the cell under the point, or null (links off: none).
+    private TerminalLink? LinkAt(PointF point)
+    {
+        if (_terminal is not { } terminal || string.Equals(_drawable.Options.LinksUnderline, "off", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var metrics = _drawable.Metrics;
+        lock (terminal.Screen.Sync)
+        {
+            long line = terminal.Screen.ScreenTop - terminal.ScrollBack + (long)Math.Floor(point.Y / Math.Max(1, metrics.LineHeight));
+            int column = (int)Math.Floor(point.X / Math.Max(1, metrics.CellWidth));
+            return TerminalLinks.At(terminal.Screen, line, column);
+        }
+    }
+
+    // X part 9: the link under the pointer is underlined while Ctrl is held (the click that opens it needs Ctrl).
+    private void OnMoveHoverInteraction(object? sender, TouchEventArgs e)
+    {
+        try
+        {
+            (long, int, int)? hovered = null;
+            if (e.Touches.Length > 0 && Control && LinkAt(e.Touches[0]) is { } link)
+            {
+                hovered = (link.Line, link.StartColumn, link.EndColumn);
+            }
+
+            if (_drawable.Renderer.HoveredLink != hovered)
+            {
+                _drawable.Renderer.HoveredLink = hovered;
+                _graphics.Invalidate();
+            }
+        }
+#pragma warning disable CA1031 // Reported by the guard; the terminal goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the terminal: a hover", error);
+        }
+    }
+
+    private void OnEndHoverInteraction(object? sender, EventArgs e)
+    {
+        if (_drawable.Renderer.HoveredLink is not null)
+        {
+            _drawable.Renderer.HoveredLink = null;
+            _graphics.Invalidate();
+        }
     }
 
     // Raised from the platform's pointer callback: nothing may leave it (the owner's note 20).

@@ -17,7 +17,9 @@ public static class CraftContracts
     /// <summary>
     /// The running Craft's contract version. 1.1 (the X restart's one minor step, 2026-11-01): additions only, every 1.0
     /// member kept (<c>IConversationPanel.AcceptDropAsync</c>, <c>ContextChip.Problem</c>, <c>ModelLease.ChatTemplate</c>,
-    /// <c>ModelRole.EnabledSetting</c>, <c>FoldingRangeProviders.Changed</c>, <see cref="EditorKey.Backslash"/>, and what the restart's other slots add).
+    /// <c>ModelRole.EnabledSetting</c>, <c>FoldingRangeProviders.Changed</c>, <see cref="EditorKey.Backslash"/>, piece 3b's <see cref="ILanguageSession.GetDocumentSymbolsAsync"/>,
+    /// <see cref="ISemanticLanguageSession.PrepareRenameAsync"/>, <see cref="ISemanticLanguageSession.RenameAsync"/> and
+    /// <see cref="IEditorHost.ProposeWorkspaceAsync"/>, and what the restart's other slots add).
     /// </summary>
     public static Version Version { get; } = new(1, 1);
 
@@ -155,6 +157,32 @@ public static class EditorPlugins
     /// <summary>The plug-in of that name, or null.</summary>
     public static IEditorPlugin? Find(ReadOnlySpan<char> name) => Table.Find(name);
 
+    /// <summary>
+    /// Whether <paramref name="variable"/> (<c>CRAFT_PLUGIN_&lt;PLUGIN&gt;_&lt;KEY&gt;</c>) is a registered plug-in's
+    /// setting declared <see cref="PluginSetting.MachineOnly"/>: a workspace's settings file cannot set it. Compared
+    /// without making the variables' names (no allocation).
+    /// </summary>
+    public static bool IsMachineOnly(ReadOnlySpan<char> variable)
+    {
+        if (!variable.StartsWith(PluginSetting.VariablePrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var plugin in Table.Kinds)
+        {
+            foreach (var setting in plugin.Settings)
+            {
+                if (setting.MachineOnly && PluginSetting.IsVariable(variable, plugin.Name, setting.Key))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>The plug-in of that name.</summary>
     /// <exception cref="NotRegisteredException">None is registered under it (the message lists those that are).</exception>
     public static IEditorPlugin Get(ReadOnlySpan<char> name) => Table.Get(name);
@@ -177,6 +205,14 @@ public sealed record PluginSetting(string Key, string Default, string Descriptio
     public SettingShape? Shape { get; init; }
 
     /// <summary>
+    /// Whether only this machine may set it (W, contract 9): the environment and the user's settings, never a workspace's
+    /// <c>.craft/settings.json</c> (a folder someone else may have written). For what names a program to run, a global tool
+    /// or a path on this machine (the npm plug-in's Node, the git program). The settings page says so beside it; a value a
+    /// workspace's file holds is passed over. False by default.
+    /// </summary>
+    public bool MachineOnly { get; init; }
+
+    /// <summary>
     /// The environment variable of <paramref name="key"/> of the plug-in <paramref name="plugin"/>:
     /// <c>CRAFT_PLUGIN_</c>, the plug-in's name, <c>_</c>, the key, upper-cased, each character not a letter or a digit
     /// made <c>_</c> ("sample", "showCharacters" → <c>CRAFT_PLUGIN_SAMPLE_SHOWCHARACTERS</c>).
@@ -185,7 +221,7 @@ public sealed record PluginSetting(string Key, string Default, string Descriptio
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(plugin);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        const string Prefix = "CRAFT_PLUGIN_";
+        const string Prefix = VariablePrefix;
         return string.Create(Prefix.Length + plugin.Length + 1 + key.Length, (plugin, key), static (span, parts) =>
         {
             Prefix.CopyTo(span);
@@ -203,6 +239,36 @@ public sealed record PluginSetting(string Key, string Default, string Descriptio
             }
 
             return at;
+        }
+    }
+
+    /// <summary>What every plug-in setting's variable starts with: <c>CRAFT_PLUGIN_</c>.</summary>
+    public const string VariablePrefix = "CRAFT_PLUGIN_";
+
+    /// <summary>Whether <paramref name="variable"/> is <see cref="VariableName"/> of <paramref name="plugin"/> and <paramref name="key"/>, compared in place (nothing allocated).</summary>
+    public static bool IsVariable(ReadOnlySpan<char> variable, string plugin, string key)
+    {
+        ArgumentNullException.ThrowIfNull(plugin);
+        ArgumentNullException.ThrowIfNull(key);
+        if (variable.Length != VariablePrefix.Length + plugin.Length + 1 + key.Length || !variable.StartsWith(VariablePrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        int at = VariablePrefix.Length;
+        return Same(variable, ref at, plugin) && variable[at++] == '_' && Same(variable, ref at, key);
+
+        static bool Same(ReadOnlySpan<char> variable, ref int at, string text)
+        {
+            foreach (char c in text)
+            {
+                if (variable[at++] != (char.IsAsciiLetterOrDigit(c) ? char.ToUpperInvariant(c) : '_'))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

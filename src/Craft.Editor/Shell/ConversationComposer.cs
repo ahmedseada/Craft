@@ -483,41 +483,52 @@ public sealed class ConversationComposer
     }
 
     /// <summary>
-    /// The named scopes of <paramref name="model"/>'s text (types and members, from its language's last parse, never
-    /// waiting for one) as "@" rows: the scopes at each line's start, each name once, at most <paramref name="limit"/>
-    /// lines asked.
+    /// The symbols of <paramref name="model"/>'s text as "@" rows (its language's document symbols: types, members, enum
+    /// members, each name once, in the order of the text, at most <paramref name="limit"/>): the last version the language
+    /// answered, read without waiting. When that is older than the text, the current version is asked off the UI thread and
+    /// <paramref name="landed"/> runs on the UI thread once it is in (the picker lists again).
     /// </summary>
-    public static IReadOnlyList<ComposerSuggestion> SymbolsOf(EditorModel? model, int limit = 4000)
+    public static IReadOnlyList<ComposerSuggestion> SymbolsOf(EditorModel? model, Action? landed = null, int limit = 4000)
     {
-        if (model?.LanguageSession is not { } session)
+        if (model?.LanguageSession is null)
         {
             return [];
         }
 
-        var snapshot = model.Snapshot;
+        var index = model.Symbols;
+        if (index is null || index.Version != model.Snapshot.Version)
+        {
+            model.RequestSymbols(landed ?? (static () => { }));
+        }
+
+        if (index is null)
+        {
+            return [];
+        }
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var rows = new List<ComposerSuggestion>();
         string file = model.Document.FilePath is { } path ? Path.GetFileName(path) : "untitled";
-        IReadOnlyList<ScopeName>? last = null;
-        for (int line = 0; line < Math.Min(snapshot.LineCount, limit); line++)
+        for (int i = 0; i < index.Count && rows.Count < limit; i++)
         {
-            var scopes = session.ScopeAt(snapshot, snapshot.GetLine(line).End);
-            if (ReferenceEquals(scopes, last))
+            var symbol = index.Symbols[i];
+            if (symbol.Kind != ScopeKind.Namespace && seen.Add(symbol.Name))
             {
-                continue;
-            }
-
-            last = scopes;
-            foreach (var scope in scopes)
-            {
-                if (seen.Add(scope.Name))
-                {
-                    rows.Add(new ComposerSuggestion(ComposerSuggestionKind.Symbol, scope.Name, "@" + scope.Name + " ", $"{scope.Kind.ToString().ToLowerInvariant()} in {file}"));
-                }
+                rows.Add(new ComposerSuggestion(ComposerSuggestionKind.Symbol, symbol.Name, "@" + symbol.Name + " ", $"{SymbolKinds.Word(symbol.Kind)} in {file}"));
             }
         }
 
         return rows;
+    }
+
+    /// <summary>Lists the picker again for the "@" word at the caret (the symbols it lists landed); nothing when no "@" word is typed.</summary>
+    public void RefreshSuggestions()
+    {
+        var (start, _) = WordAtCaret();
+        if (start < Caret && Text[start] == '@')
+        {
+            Suggest();
+        }
     }
 }
 

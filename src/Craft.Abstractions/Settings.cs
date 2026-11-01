@@ -275,6 +275,9 @@ public static class SettingChoiceSources
     /// <summary>The font families known.</summary>
     public const string Fonts = "fonts";
 
+    /// <summary>The icon themes (W: <c>CRAFT_ICON_THEME</c>).</summary>
+    public const string IconThemes = "iconThemes";
+
     private static readonly KindTable<ISettingChoices> Table = MakeTable();
 
     /// <summary>Registers <paramref name="source"/> under its name (over a default of that name).</summary>
@@ -309,6 +312,7 @@ public static class SettingChoiceSources
         table.RegisterDefault(new SettingChoices(TerminalHosts, () => Craft.Abstractions.TerminalHosts.Names, "the terminal hosts"));
         table.RegisterDefault(new SettingChoices(TerminalProfiles, () => Craft.Abstractions.TerminalProfiles.LastFound, "the terminal profiles found"));
         table.RegisterDefault(new SettingChoices(KeyMaps, () => EditorKeyMaps.Names, "the keymaps"));
+        table.RegisterDefault(new SettingChoices(IconThemes, () => FileIconThemes.Names, "the icon themes"));
         table.RegisterDefault(new SettingChoices(Fonts, () => ["JetBrains Mono", "Inter"], "the bundled font families"));
         return table;
     }

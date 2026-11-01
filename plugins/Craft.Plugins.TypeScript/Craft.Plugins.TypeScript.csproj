@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    TypeScript as a pre-installed, removable plug-in (plan phase W, W-script): the language, its colours, brackets, folding,
+    Format document and Format Selection, its icons, settings and project selector. The lexers are Craft.Web's (src/Craft.Web,
+    Script/), referenced as a plain copied project so Craft.Web.dll lands in this plug-in's own folder and loads in its own
+    context (the HTML plug-in carries its own copy). Craft.Abstractions is the host's (not copied). Android and AOT: pure C#,
+    no reflection, nothing native (IsAotCompatible, trim-safe); the project's files are read with Utf8JsonReader.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.TypeScript</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\Craft.Web\Craft.Web.csproj" />
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

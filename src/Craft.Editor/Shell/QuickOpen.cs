@@ -175,7 +175,7 @@ public static class FuzzyMatch
     }
 }
 
-/// <summary>What quick open lists for a query: files by name, commands after '&gt;', a line of the active editor after ':'.</summary>
+/// <summary>What quick open lists for a query: files by name, commands after '&gt;', a line of the active editor after ':', its symbols after '@'.</summary>
 public enum QuickOpenMode
 {
     /// <summary>The workspace's files by fuzzy name (no prefix).</summary>
@@ -186,6 +186,9 @@ public enum QuickOpenMode
 
     /// <summary>A line (and column) of the active editor (':' first: go to line).</summary>
     Line,
+
+    /// <summary>The active editor's symbols by fuzzy name ('@' first, Ctrl+Shift+O; "@:" groups them by kind).</summary>
+    Symbols,
 }
 
 /// <summary>A row of quick open: a file (its name, its folder, its path) or a command (its title, its keys, its id).</summary>
@@ -210,8 +213,23 @@ public sealed record QuickOpenItem(string Text, string? Detail, string? Path, st
     /// <summary>A command's keys as they are bound now (the user's, the keymap's or the default), or null.</summary>
     public string? Shortcut { get; init; }
 
-    /// <summary>A file's icon by its language (<see cref="FileIcons"/>), or null for a command or a line.</summary>
+    /// <summary>A file's or a folder's icon (<see cref="FileIcons.For"/>, <see cref="FileIcons.ForFolder"/>: the tree's), or null for a command or a line.</summary>
     public FileIcon? Icon { get; init; }
+
+    /// <summary>For '@': the symbol's kind (its badge), or null for a row that is not a symbol.</summary>
+    public ScopeKind? SymbolKind { get; init; }
+
+    /// <summary>For '@': where the symbol's name starts in the active editor's text (a pick selects it), or -1.</summary>
+    public int SymbolStart { get; init; } = -1;
+
+    /// <summary>For '@': the name's characters.</summary>
+    public int SymbolLength { get; init; }
+
+    /// <summary>For "@:": the kind's group title ("methods (12)") on the group's first row, else null.</summary>
+    public string? Group { get; init; }
+
+    /// <summary>For a folder's listing (the breadcrumb's folder part): whether the row is a folder (a pick lists it in turn).</summary>
+    public bool IsFolder { get; init; }
 }
 
 /// <summary>
@@ -235,6 +253,8 @@ public sealed class QuickOpen
     private Task _indexing = Task.CompletedTask;
     private CancellationTokenSource? _cancel;
     private int _recentLimit = 20;
+    private SymbolIndex _symbols = SymbolIndex.Empty;
+    private (string Name, bool IsFolder)[] _entries = [];
 
     /// <summary>Quick open over <paramref name="host"/>'s commands, showing <paramref name="rows"/> rows.</summary>
     public QuickOpen(EditorHost host, int rows)
@@ -287,6 +307,54 @@ public sealed class QuickOpen
     /// <summary>Whether the last query was matched off the UI thread.</summary>
     public bool LastQueryInBackground { get; private set; }
 
+    /// <summary>
+    /// Where '@' takes the active editor's symbols from (the shell sets it: the editor's <see cref="EditorModel.DocumentSymbolsAsync"/>,
+    /// once per version); null: '@' lists what <see cref="SetSymbols"/> gave.
+    /// </summary>
+    public Func<CancellationToken, Task<SymbolIndex?>>? SymbolSource { get; set; }
+
+    /// <summary>The symbols '@' matched last (<see cref="SymbolIndex.Empty"/> before any).</summary>
+    public SymbolIndex Symbols => _symbols;
+
+    /// <summary>
+    /// Which symbols '@' lists: null every symbol (Ctrl+Shift+O), -1 the outermost ones, an index the children of that
+    /// symbol (a breadcrumb's symbol part lists its siblings).
+    /// </summary>
+    public int? SymbolsUnder { get; set; }
+
+    /// <summary>The folder whose entries a query without a prefix lists (a breadcrumb's folder part), or null for the workspace's files.</summary>
+    public string? BrowsedFolder { get; private set; }
+
+    /// <summary>The browsed folder's entries (its folders first, then its files, each by name).</summary>
+    public IReadOnlyList<(string Name, bool IsFolder)> Entries => _entries;
+
+    /// <summary>Takes <paramref name="symbols"/> as the active editor's symbols '@' lists (a test, or a source that is not an editor).</summary>
+    public void SetSymbols(SymbolIndex symbols)
+    {
+        ArgumentNullException.ThrowIfNull(symbols);
+        _symbols = symbols;
+    }
+
+    /// <summary>
+    /// Lists <paramref name="folder"/>'s entries off the calling thread and makes a query without a prefix list them (the
+    /// breadcrumb's folder part); a folder that cannot be read lists nothing.
+    /// </summary>
+    public async Task BrowseAsync(string folder, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        string full = Path.GetFullPath(folder);
+        var entries = await Task.Run(() => ListEntries(full), cancellationToken).ConfigureAwait(true);
+        BrowsedFolder = full;
+        _entries = entries;
+    }
+
+    /// <summary>Ends <see cref="BrowseAsync"/>: a query without a prefix lists the workspace's files again.</summary>
+    public void EndBrowse()
+    {
+        BrowsedFolder = null;
+        _entries = [];
+    }
+
     /// <summary>The mode <paramref name="text"/> asks for, by its first character ('&gt;' commands, ':' a line, else files).</summary>
     public static QuickOpenMode ModeOf(string text)
     {
@@ -295,6 +363,7 @@ public sealed class QuickOpen
         {
             ['>', ..] => QuickOpenMode.Commands,
             [':', ..] => QuickOpenMode.Line,
+            ['@', ..] => QuickOpenMode.Symbols,
             _ => QuickOpenMode.Files,
         };
     }
@@ -307,6 +376,7 @@ public sealed class QuickOpen
     {
         QuickOpenMode.Commands => ">",
         QuickOpenMode.Line => ":",
+        QuickOpenMode.Symbols => "@",
         _ => "",
     };
 
@@ -397,6 +467,8 @@ public sealed class QuickOpen
         {
             QuickOpenMode.Line => GoToLine(span[1..].Trim()),
             QuickOpenMode.Commands => Commands(span[1..].Trim()),
+            QuickOpenMode.Symbols => SymbolsNow(span[1..]),
+            _ when BrowsedFolder is not null => FolderItems(span),
             _ => FileItems(span, ScoreFiles(_files, _nameStart, _recentRank, span, Rows)),
         };
     }
@@ -408,7 +480,13 @@ public sealed class QuickOpen
     public async Task<IReadOnlyList<QuickOpenItem>> QueryInBackgroundAsync(string text, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
-        if (ModeOf(text) != QuickOpenMode.Files || _files.Length <= BackgroundFiles)
+        var mode = ModeOf(text);
+        if (mode == QuickOpenMode.Symbols)
+        {
+            return await QuerySymbolsAsync(text, cancellationToken).ConfigureAwait(true);
+        }
+
+        if (mode != QuickOpenMode.Files || BrowsedFolder is not null || _files.Length <= BackgroundFiles)
         {
             return Query(text);
         }
@@ -431,6 +509,212 @@ public sealed class QuickOpen
         }
 
         return FileItems(query, best);
+    }
+
+    // '@': the active editor's symbols of its current version (asked once per version), matched off the calling thread when
+    // there are more than BackgroundFiles of them; the rows made on the calling thread's context.
+    private async Task<IReadOnlyList<QuickOpenItem>> QuerySymbolsAsync(string text, CancellationToken cancellationToken)
+    {
+        if (SymbolSource is { } source && await source(cancellationToken).ConfigureAwait(true) is { } fresh)
+        {
+            _symbols = fresh;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var symbols = _symbols;
+        if (symbols.Count <= BackgroundFiles)
+        {
+            LastQueryInBackground = false;
+            return Query(text);
+        }
+
+        string typed = text.Trim()[1..];
+        int? under = SymbolsUnder;
+        int rows = Rows;
+        var (query, byKind, best) = await Task.Run(() =>
+        {
+            var (found, grouped) = SymbolQuery(symbols, typed, under, rows, out var scored, cancellationToken);
+            return (found, grouped, scored);
+        }, cancellationToken).ConfigureAwait(true);
+        cancellationToken.ThrowIfCancellationRequested();
+        LastQueryInBackground = true;
+        return SymbolItems(symbols, query, byKind, best);
+    }
+
+    // The best symbols' (index, score) for what follows '@' ("name", or ":name" grouped by kind): any thread. With no
+    // query the symbols in the order of the text; "@:" orders the best by kind (namespaces, types, methods, ...) then score.
+    private List<QuickOpenItem> SymbolsNow(ReadOnlySpan<char> typed)
+    {
+        var (query, byKind) = SymbolQuery(_symbols, typed, SymbolsUnder, Rows, out var best);
+        return SymbolItems(_symbols, query, byKind, best);
+    }
+
+    private static (string Query, bool ByKind) SymbolQuery(SymbolIndex symbols, ReadOnlySpan<char> typed, int? under, int rows, out (int Index, int Score)[] best, CancellationToken token = default)
+    {
+        typed = typed.Trim();
+        bool byKind = typed.StartsWith(':');
+        var query = byKind ? typed[1..].Trim() : typed;
+        var names = symbols.Names;
+        var keep = new Best(Math.Max(1, rows));
+        int exact = query.IsEmpty ? -1 : symbols.IndexOf(query);
+        IReadOnlyList<int>? only = under is { } parent ? symbols.ChildrenOf(parent) : null;
+        int count = only?.Count ?? names.Count;
+        for (int k = 0; k < count; k++)
+        {
+            if ((k & 0xFFF) == 0)
+            {
+                token.ThrowIfCancellationRequested();
+            }
+
+            int i = only is null ? k : only[k];
+            int score;
+            if (query.IsEmpty)
+            {
+                score = -i;                                       // the order of the text
+            }
+            else
+            {
+                score = FuzzyMatch.Score(query, names[i]);
+                if (score == FuzzyMatch.None)
+                {
+                    continue;
+                }
+
+                if (exact >= 0 && query.SequenceEqual(names[i]))
+                {
+                    score += 100;                                 // the name itself first (every overload of it)
+                }
+            }
+
+            keep.Offer(i, score);
+        }
+
+        best = keep.Ordered().ToArray();
+        if (byKind)
+        {
+            var kinds = symbols.Symbols;
+            Array.Sort(best, (a, b) =>
+            {
+                int rank = SymbolKinds.Rank(kinds[a.Index].Kind).CompareTo(SymbolKinds.Rank(kinds[b.Index].Kind));
+                return rank != 0 ? rank : b.Score != a.Score ? b.Score.CompareTo(a.Score) : a.Index.CompareTo(b.Index);
+            });
+        }
+
+        return (query.ToString(), byKind);
+    }
+
+    private static List<QuickOpenItem> SymbolItems(SymbolIndex symbols, string query, bool byKind, (int Index, int Score)[] best)
+    {
+        var items = new List<QuickOpenItem>(best.Length);
+        int[]? rented = query.Length > StackPositions ? new int[query.Length] : null;
+        Span<int> positions = rented ?? stackalloc int[StackPositions];
+        positions = positions[..query.Length];
+        var groups = new int[SymbolKinds.GroupOrder.Count];
+        if (byKind)
+        {
+            foreach (var (index, _) in best)
+            {
+                groups[SymbolKinds.Rank(symbols.Symbols[index].Kind)]++;
+            }
+        }
+
+        int lastRank = -1;
+        foreach (var (index, score) in best)
+        {
+            var symbol = symbols.Symbols[index];
+            int parent = symbols.Parents[index];
+            string? detail = parent >= 0
+                ? (symbol.Detail is { Length: > 0 } own ? own + "  ·  " : "") + symbols.Names[parent]
+                : symbol.Detail;
+            IReadOnlyList<(int, int)> runs = query.Length > 0 && FuzzyMatch.Score(query, symbol.Name, positions) != FuzzyMatch.None ? FuzzyMatch.Runs(positions) : [];
+            int rank = SymbolKinds.Rank(symbol.Kind);
+            string? group = null;
+            if (byKind && rank != lastRank)
+            {
+                group = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{SymbolKinds.Plural(symbol.Kind)} ({groups[rank]})");
+                lastRank = rank;
+            }
+
+            items.Add(new QuickOpenItem(symbol.Name, detail, null, null, score, symbols.Lines[index] + 1, symbols.Columns[index] + 1)
+            {
+                TextHighlights = runs,
+                SymbolKind = symbol.Kind,
+                SymbolStart = symbol.NameStart,
+                SymbolLength = symbol.NameLength,
+                Group = group,
+            });
+        }
+
+        return items;
+    }
+
+    // The browsed folder's entries by fuzzy name (in their order, folders first, when nothing is typed).
+    private List<QuickOpenItem> FolderItems(ReadOnlySpan<char> query)
+    {
+        var entries = _entries;
+        string folder = BrowsedFolder!;
+        var best = new Best(Math.Max(Rows, Math.Min(entries.Length, 10_000)));
+        for (int i = 0; i < entries.Length; i++)
+        {
+            int score = query.IsEmpty ? -i : FuzzyMatch.Score(query, entries[i].Name);
+            if (score != FuzzyMatch.None)
+            {
+                best.Offer(i, score);
+            }
+        }
+
+        int[]? rented = query.Length > StackPositions ? new int[query.Length] : null;
+        Span<int> positions = rented ?? stackalloc int[StackPositions];
+        positions = positions[..query.Length];
+        string shown = _root is { } root && folder.StartsWith(root, StringComparison.OrdinalIgnoreCase) && folder.Length > root.Length
+            ? Path.GetRelativePath(root, folder)
+            : folder;
+        var items = new List<QuickOpenItem>(best.Count);
+        foreach (var (index, score) in best.Ordered())
+        {
+            var (name, isFolder) = entries[index];
+            IReadOnlyList<(int, int)> runs = !query.IsEmpty && FuzzyMatch.Score(query, name, positions) != FuzzyMatch.None ? FuzzyMatch.Runs(positions) : [];
+            items.Add(new QuickOpenItem(name, shown, Path.Combine(folder, name), null, score)
+            {
+                TextHighlights = runs,
+                IsFolder = isFolder,
+                Icon = isFolder ? FileIcons.ForFolder(name) : FileIcons.For(name),
+            });
+        }
+
+        return items;
+    }
+
+    private static (string Name, bool IsFolder)[] ListEntries(string folder)
+    {
+        var folders = new List<string>();
+        var files = new List<string>();
+        try
+        {
+            foreach (var entry in new DirectoryInfo(folder).EnumerateFileSystemInfos())
+            {
+                (entry is DirectoryInfo ? folders : files).Add(entry.Name);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            // A folder that cannot be read lists nothing.
+        }
+
+        folders.Sort(StringComparer.OrdinalIgnoreCase);
+        files.Sort(StringComparer.OrdinalIgnoreCase);
+        var entries = new (string, bool)[folders.Count + files.Count];
+        for (int i = 0; i < folders.Count; i++)
+        {
+            entries[i] = (folders[i], true);
+        }
+
+        for (int i = 0; i < files.Count; i++)
+        {
+            entries[folders.Count + i] = (files[i], false);
+        }
+
+        return entries;
     }
 
     private async Task IndexCoreAsync(Workspace workspace, string root, int limit, CancellationToken token)

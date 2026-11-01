@@ -67,6 +67,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly FolderTreeView _tree = new();
     private readonly ExplorerView _explorer;
     private readonly BreadcrumbView _breadcrumb;
+    private readonly SymbolPreview _symbolPreview = new();
+    private RenameOverlay? _rename;
     private readonly EditorGroupsView _groupsView;
     private readonly List<EditorGroupPane> _panes = [];
     private readonly List<EditorView> _views = [];
@@ -121,6 +123,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private bool _keysRouted;
     private bool _closeGuarded;
     private bool _disposed;
+    private Craft.Abstractions.FileSettings? _statusSettings;
     private Window? _window;
     private EditorView? _shown;
     private bool _started;
@@ -188,6 +191,8 @@ public sealed class ShellPage : ContentPage, IDisposable
             BackgroundFiles = _shell.Options.QuickOpenBackgroundFiles,
             RecentLimit = _shell.Options.QuickOpenRecent,
         };
+        // Piece 3b: '@' lists the shown editor's symbols, asked once per version off the UI thread.
+        _quickOpen.SymbolSource = token => _shown?.Model is { } shownModel ? shownModel.DocumentSymbolsAsync(token) : Task.FromResult<SymbolIndex?>(null);
         foreach (var entry in startup.Recent.Entries.Where(e => e.Kind == Craft.Core.Workspaces.RecentKind.File).Reverse())
         {
             _quickOpen.NoteFile(entry.Path);                     // the recent list's files come first in quick open
@@ -201,7 +206,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.WindowKeys = _keys;
         _conversations.MenuRequested += (_, e) => OpenConversationMenu(e);
         _conversations.ExpandRequested += (_, _) => _ = ToggleChatExpandedAsync();
-        _conversations.SymbolsSource = () => ConversationComposer.SymbolsOf(_shown?.Model);
+        _conversations.SymbolsSource = () => ConversationComposer.SymbolsOf(_shown?.Model, () => _conversations.RefreshMentions());
         _conversations.LeaveRequested += (_, _) => _shown?.Focus();
         _chatSplit.Panel = _conversations;
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
@@ -212,6 +217,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.Notice += (_, text) => _status!.Notice.Text = text;
         _host.PanelShowRequested += OnPanelShowRequested;
         _host.PanelsChanged += OnHostPanelsChanged;
+        _host.PublishedDiagnosticsChanged += OnPublishedDiagnosticsChanged;     // W: closed files' problems from plug-ins
         _host.PendingChordChanged += OnPendingChordChanged;
         _host.SelectionRequested += OnSelectionRequested;
         // A plug-in's IEditorHost.OpenExternalAsync (the learning plug-in's folder): the system's own launcher, any platform.
@@ -257,8 +263,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         _overlay.Dismissed += (_, _) =>
         {
             _popup.Hide();
+            _symbolPreview.Restore();                            // Escape after '@' previews: back where the editor was
+            _quickOpen.EndBrowse();
             _shown?.Focus();
         };
+        _overlay.SelectionMoved += (_, item) => _symbolPreview.Show(item);
         _popup.Closed += (_, _) =>
         {
             _menu.Close();
@@ -274,7 +283,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             _status!.Branch.Text = _shell.BranchText;            // raised after the page is made
         };
         _tree.Indent = _shell.Options.TreeIndent;
-        _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
+        // X part 9: a single click previews the file (an italic tab the next preview replaces), a double click keeps it.
+        _tree.FileActivated += (_, file) => _ = _shell.OpenPreviewAsync(file);
+        _tree.FileKept += (_, file) => _ = _shell.OpenKeptAsync(file);
         _tree.DragsFiles = true;                                 // phase X: a file dragged from the tree onto the editor opens
         // The X restart: a row dragged onto a folder moves there (Ctrl copies), with Undo.
         _tree.MovesEntries = startup.Options.TreeDragMove;
@@ -287,7 +298,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             e.Item is { } item ? new ContextMenuTarget(EditorContextMenus.Tree, item.Path, item.IsFolder) : new ContextMenuTarget(EditorContextMenus.Tree), e.Where);
         _sideSplit.Panel = _explorer;
         _breadcrumb = new BreadcrumbView(_palette);
-        _emptyText = "No file is open.\nCtrl+O opens a file, Ctrl+Shift+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.";
+        _breadcrumb.PartClicked += (_, part) => _ = OnBreadcrumbAsync(part);
+        _shell.RenameRequested += (_, request) => ShowRename(request);
+        _emptyText = "No file is open.\nCtrl+O opens a file, Ctrl+K Ctrl+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.";
         // The X restart: the editor area's groups, each a pane of its own tabs and editor (the focused one has the find
         // overlay and the breadcrumb).
         _groupsView = new EditorGroupsView(_shell.Groups, PaneOf, _palette) { MinimumSize = _shell.Options.PanelMinimumSize, Pointer = startup.Platform.PointerCursor };
@@ -308,6 +321,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bottom.FindRequested += (_, e) => ShowFind(false, e.InitialQuery, e.Model);
         _bottom.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.ReadOnlyText, new ContextMenuTarget(EditorContextMenus.ReadOnlyText, null, false, e.Model), e.Where);
         _bottom.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
+        // X part 9: a file:line link clicked in Output opens the file there.
+        _bottom.LinkActivated += (_, e) => _ = _shell.OpenLinkAsync(e.Path, e.Line, e.Column);
         _bottomSplit.Panel = _bottom;
 
         // Each panel's splitter: a drag kept within what the panel and the editor share, written to the workspace's
@@ -337,6 +352,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.Terminals = _terminals;
         _terminalPanel = new TerminalPanelView(_terminals, _palette, _host);
         _terminalPanel.MenuRequested += (_, e) => OpenContextMenu(e.Menu, e.Target, e.Where);
+        // X part 9: Ctrl+click on a file:line link in a terminal opens it, resolved against the terminal's folder first.
+        _terminalPanel.LinkActivated += (_, link) => _ = _shell.OpenLinkAsync(link.Path, link.TargetLine, link.TargetColumn, link.Folder);
         _bottom.TerminalContent = _terminalPanel;
         _bottom.Todo = _shell.Todo;                                      // X part 9: the TODO list's tab
         _terminals.ViewRequested += (_, request) => OnTerminalView(request);
@@ -465,6 +482,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         _shell.ThemeChanged += (_, _) => ApplyTheme();
+        _shell.FileSettingsChanged += OnFileSettingsChanged;
         _shell.ViewRequested += (_, view) => OnViewRequested(view);
         _shell.RevealRequested += (_, path) => _tree.ScrollTo(path);
         // X part 7: names typed in place in the tree (new file, new folder, rename), checked as they are typed.
@@ -538,6 +556,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
         _host.PanelsChanged -= OnHostPanelsChanged;
+        _host.PublishedDiagnosticsChanged -= OnPublishedDiagnosticsChanged;
         _host.PendingChordChanged -= OnPendingChordChanged;
         _host.SelectionRequested -= OnSelectionRequested;
         _conversationCommands?.Dispose();
@@ -652,7 +671,11 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         if (_initialPath is not null && Directory.Exists(_initialPath))
         {
-            await _shell.OpenFolderAsync(_initialPath);
+            // X part 9: the folder's last session (its groups, tabs, carets, scroll, folds, pins), read off the UI thread.
+            if (await _shell.OpenFolderAsync(_initialPath))
+            {
+                await _shell.RestoreSessionAsync();
+            }
         }
         else if (_initialPath is not null)
         {
@@ -693,6 +716,26 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             _host.Log(EditorLogLevel.Error, $"The problem report's offer failed: {error.Message}", error);
         }
+    }
+
+    // The window's close: the unsaved tabs asked about, then the session written (awaited: its write is on the thread pool).
+    private async Task<bool> CloseAsync()
+    {
+        if (!await _shell.ConfirmCloseAllAsync())
+        {
+            return false;
+        }
+
+        try
+        {
+            await _shell.SaveSessionAsync();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _host.Log(EditorLogLevel.Warning, $"The session was not written: {error.Message}", error);
+        }
+
+        return true;
     }
 
     // Phase U: the UI watchdog (CRAFT_UI_WATCHDOG_MS, CRAFT_UI_STALL_MS); its stalls show in the status bar, Output, the
@@ -819,7 +862,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             try
             {
-                _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Groups.HasUnsaved, () => _shell.ConfirmCloseAllAsync()));
+                // X part 9: the close also writes the session (the carets and scroll as they are), once the unsaved tabs are settled.
+                _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Groups.HasUnsaved || _shell.SessionToWrite, CloseAsync));
                 _closeGuarded = true;
             }
             catch (InvalidOperationException error)
@@ -1040,6 +1084,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         return view;
     }
 
+    private void OnPublishedDiagnosticsChanged(object? sender, EventArgs e) => UpdateProblems();
+
     private void OnHostPanelsChanged(object? sender, EventArgs e)
     {
         foreach (var (id, view) in _sideViews.ToArray())
@@ -1095,6 +1141,14 @@ public sealed class ShellPage : ContentPage, IDisposable
     // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
     private void OnCodeActionRequested(ProblemItem item, string kind)
     {
+        if (item.Group.Owner is ClosedProblemFile closed)
+        {
+            // W: a closed file's row has no text to act on: the file opens at its place, its problems then on its text.
+            OnProblemChosen(item);
+            _status.Notice.Text = $"Opened {Path.GetFileName(closed.Path)}: its problems are on its text now; {kind} from its row again.";
+            return;
+        }
+
         if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Groups.GroupOf(owner) is { } ownerGroup)
         {
             ownerGroup.Tabs.Activate(owner);                // a row of another file: its file first (its group focused)
@@ -1266,8 +1320,19 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     // Phase X: the one overlay for quick open, the palette ('>') and go to line (':'), under the title bar's search box
     // (across the top in the narrow layout).
-    private void ShowOverlay(string text)
+    private void ShowOverlay(string text, bool keepScope = false)
     {
+        if (!keepScope)
+        {
+            _quickOpen.SymbolsUnder = null;                      // Ctrl+Shift+O lists every symbol; the breadcrumb a level
+            _quickOpen.EndBrowse();
+        }
+
+        if (_shown?.Model is { } previewed)
+        {
+            _symbolPreview.Begin(previewed);
+        }
+
         _menu.Close();
         _overlay.Apply(_palette);
         double width;
@@ -1291,8 +1356,24 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private async Task PickAsync(QuickOpenItem item)
     {
+        if (item.IsFolder && item.Path is { } folder)
+        {
+            await _quickOpen.BrowseAsync(folder);               // a folder of the breadcrumb's listing: its entries in turn
+            ShowOverlay("", keepScope: true);
+            return;
+        }
+
         _popup.Hide();
-        if (item.Line > 0)
+        _symbolPreview.End();
+        _quickOpen.EndBrowse();
+        if (item.SymbolStart >= 0 && _shown?.Model is { } model)
+        {
+            int length = model.Snapshot.Length;
+            int start = Math.Clamp(item.SymbolStart, 0, length);
+            model.Select(Math.Clamp(start + item.SymbolLength, start, length), start);
+            model.EnsureCaretVisible();
+        }
+        else if (item.Line > 0)
         {
             _shown?.Model?.GoToLine(item.Line, item.Column);
         }
@@ -1372,6 +1453,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             case ShellViewNames.GoToLine:
                 ShowOverlay(":");
+                break;
+            case ShellViewNames.GoToSymbol:
+                ShowOverlay("@");
                 break;
             case ShellViewNames.QuickOpen:
                 ShowOverlay(TakeSearchText());
@@ -1565,6 +1649,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         strip.ListRequested += (_, _) => _ = PickTabAsync(group);
         strip.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, e.Tab.FilePath, false, e.Tab), e.Where);
         strip.UnpinRequested += (_, tab) => _shell.Groups.GroupOf(tab)?.Tabs.SetPinned(tab, false);
+        strip.KeepRequested += (_, tab) => _shell.KeepTab(tab);           // X part 9: a double click keeps a preview
         strip.NewFileRequested += (_, _) =>
         {
             _shell.Groups.Focus(group);
@@ -1654,6 +1739,60 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private IEditorNotification? _completionStatus;
 
+    // X part 9: a file's own settings on its view: at once when its folders were read, else read off the UI thread and
+    // applied when they come back (the view's model is not made again).
+    private void ApplyFileSettings(EditorView view, string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        if (_shell.CachedFileSettings(path) is { } known)
+        {
+            view.FileSettings = known;
+            return;
+        }
+
+        _ = ApplyFileSettingsAsync(view, path);
+    }
+
+    private async Task ApplyFileSettingsAsync(EditorView view, string path)
+    {
+        try
+        {
+            var settings = await _shell.FileSettingsAsync(path);
+            if (!_disposed && _views.Contains(view))
+            {
+                view.FileSettings = settings;
+                if (ReferenceEquals(view, _shown))
+                {
+                    UpdateStatus();
+                }
+            }
+        }
+#pragma warning disable CA1031 // An unreadable .editorconfig leaves the options as they are, never a crash.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(Craft.Abstractions.EditorLogLevel.Warning, $"The settings of {path} could not be read: {error.Message}", error);
+        }
+    }
+
+    private void OnFileSettingsChanged(object? sender, Craft.Editor.Shell.FileSettingsChangedEventArgs e)
+    {
+        foreach (var tab in _shell.Groups.AllTabs)
+        {
+            if (tab.View is EditorView view && tab.FilePath is { } path
+                && (e.Path is null || string.Equals(Path.GetFullPath(e.Path), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)))
+            {
+                ApplyFileSettings(view, path);
+            }
+        }
+
+        UpdateStatus();
+    }
+
     private EditorView MakeView(DocumentTab tab)
     {
         var view = new EditorView
@@ -1668,6 +1807,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
         view.Sessions = _shell.Sessions;                    // one language session per document, shared by its views
         view.Open(tab.Document, tab.Language);
+        // X part 9: the lightbulb asks the code action providers; the file's .editorconfig applies over the options.
+        view.LightbulbProbe = ShellModel.LightbulbProbe(tab);
+        view.QuickFixRequested += (_, _) => _ = _host.ExecuteCommandAsync(Craft.Editor.Shell.StandardShortcuts.QuickFix);
+        ApplyFileSettings(view, tab.FilePath);
         view.Engaged += (_, _) =>
         {
             if (OwnerOf(view) is { } owner && _shell.Groups.GroupOf(owner) is { } group)
@@ -1687,6 +1830,18 @@ public sealed class ShellPage : ContentPage, IDisposable
             _completionStatus?.Dispose();
             _completionStatus = _shell.Host.ShowStatus("Completion", message);
         };
+        // X part 9: a tab the last session reopened gets its caret, scroll and folds when its editor is made.
+        view.ModelChanged += (_, _) =>
+        {
+            if (view.Model is { } made && OwnerOf(view) is { } owner)
+            {
+                _shell.ApplyViewState(owner, made);
+            }
+        };
+        if (view.Model is { } first)
+        {
+            _shell.ApplyViewState(tab, first);              // the model Open made, before the tab holds the view
+        }
         view.DiagnosticsChanged += (_, _) =>
         {
             // Phase A1: the plug-ins read a document's diagnostics, and the diff view checks a change, through the host.
@@ -1962,7 +2117,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         var listed = new HashSet<ITextDocument>(ReferenceEqualityComparer.Instance);
         foreach (var tab in _shell.Groups.AllTabs)
         {
-            if (tab.View is EditorView { Model: { } open } && open.SemanticSession is not null && listed.Add(tab.Document))
+            // W, contract 6: a document with plug-ins' diagnostics only (a linted .ts) is listed too.
+            if (tab.View is EditorView { Model: { } open } && (open.SemanticSession is not null || open.Diagnostics.Length > 0) && listed.Add(tab.Document))
             {
                 sources.Add(new ProblemSource(tab.FilePath ?? tab.Title, tab.Title, open.Snapshot, open.Diagnostics.ToArray(), tab));
             }
@@ -1980,15 +2136,23 @@ public sealed class ShellPage : ContentPage, IDisposable
             sources.Add(new ProblemSource(file.Path + "|tests", Path.GetFileName(file.Path) + " (tests)", file.Snapshot, [.. file.Diagnostics], file));
         }
 
+        // W, contract 6: closed files' published diagnostics, by line and column (no file read).
+        foreach (var file in _host.ClosedProblemFiles)
+        {
+            sources.Add(ProblemSource.ForClosedFile(file.Path, file.Diagnostics, file));
+        }
+
         _bottom.ShowProblems(sources, model, _shell.Tabs.Active?.Title);
-        _status.Problems.Text = model?.SemanticSession is null ? "" : ShellText.Problems(model.ErrorCount, model.WarningCount);
+        _status.Problems.Text = model is null || (model.SemanticSession is null && model.Diagnostics.Length == 0) ? "" : ShellText.Problems(model.ErrorCount, model.WarningCount);
         _status.Problems.TextColor = model is { ErrorCount: > 0 } ? _palette.Error : _palette.Warning;
         var card = ShellText.Semantic(model);
         _workspaceNotices.Observe(model);
         _status.Semantic.Text = card?.StatusBarText ?? "";
         _status.Semantic.TextColor = card is { IsFailed: true } ? _palette.Error : _palette.Secondary;
         ToolTipProperties.SetText(_status.Semantic, card is { IsFailed: true } ? card.Tooltip + " (a click shows the notification)" : card?.Tooltip ?? "");
-        ToolTipProperties.SetText(_status.Language, card is null ? "The file's language and the plug-in that brings it" : "The file's language and the plug-in that brings it · " + card.Tooltip);
+        string formatter = ShellText.FormatterTooltip(model);
+        ToolTipProperties.SetText(_status.Language, card is null ? "The file's language and the plug-in that brings it · " + formatter
+            : "The file's language and the plug-in that brings it · " + formatter + " · " + card.Tooltip);
     }
 
     private void OnProblemChosen(ProblemItem item)
@@ -1996,6 +2160,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         if (item.Group.Owner is Craft.Editor.Run.RunProblemFile built)
         {
             _ = OpenRunProblemAsync(built.Path, item.Line, item.Column);
+            return;
+        }
+
+        if (item.Group.Owner is ClosedProblemFile closed)
+        {
+            _ = OpenRunProblemAsync(closed.Path, item.Line, item.Column);  // W: a closed file's problem opens it at its line and column
             return;
         }
 
@@ -2378,6 +2548,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         Set(_status.Language, LanguageText(model, tab.FilePath));
         Set(_status.Position, ShellText.Position(model.CaretLine, model.CaretColumn));
         Set(_status.Indentation, ShellText.Indentation(model.Options));
+        if (!ReferenceEquals(model.FileSettings, _statusSettings))
+        {
+            _statusSettings = model.FileSettings;
+            ToolTipProperties.SetText(_status.Indentation, ShellText.IndentationTooltip(model));
+            ToolTipProperties.SetText(_status.LineEnding, ShellText.LineEndingTooltip(model));
+        }
         if (tab.Document is TextDocument document)
         {
             Set(_status.Encoding, ShellText.EncodingName(document.Encoding, document.HasBom));
@@ -2385,10 +2561,99 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         var scopes = model.LanguageSession?.ScopeAt(model.Snapshot, Math.Min(model.Selection.Caret, model.Snapshot.Length)) ?? [];
-        _breadcrumb.Show(ShellText.Breadcrumb(tab.FilePath, _shell.Workspace?.Root, scopes));
+        _breadcrumb.Show(BreadcrumbLayout.Parts(tab.FilePath, _shell.Workspace?.Root, scopes));
         string place = (_shell.Workspace is { } workspace ? Path.GetFileName(workspace.Root) : tab.FilePath is { } file ? Path.GetDirectoryName(file) ?? "" : "")
             + (tab.IsDirty ? " · edited" : tab.FilePath is null ? " · new" : "");
         _titleNarrow.SetNarrowTitle(tab.Title, place.TrimStart(' ', '·'));
+    }
+
+    // A breadcrumb part clicked: a folder (or the file's folder) lists its entries in the overlay; a symbol lists its
+    // siblings with '@' (the children of its parent, from the editor's symbols of this version).
+    private async Task OnBreadcrumbAsync(BreadcrumbPart part)
+    {
+        try
+        {
+            switch (part.Kind)
+            {
+                case BreadcrumbPartKind.Folder when part.Path is { } folder:
+                    await _quickOpen.BrowseAsync(folder);
+                    ShowOverlay("", keepScope: true);
+                    break;
+                case BreadcrumbPartKind.File when part.Path is { } file && Path.GetDirectoryName(file) is { } parent:
+                    await _quickOpen.BrowseAsync(parent);
+                    ShowOverlay("", keepScope: true);
+                    break;
+                case BreadcrumbPartKind.Symbol when _shown?.Model is { } model:
+                    int caret = Math.Min(model.Selection.Caret, model.Snapshot.Length);
+                    var symbols = await model.DocumentSymbolsAsync();
+                    _quickOpen.EndBrowse();
+                    _quickOpen.SymbolsUnder = symbols?.SiblingsParentAt(caret, part.Text);
+                    ShowOverlay("@", keepScope: true);
+                    break;
+            }
+        }
+#pragma warning disable CA1031 // A click's handler: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the breadcrumb: a part clicked", error);
+        }
+    }
+
+    // F2 found a name: the rename box over it in the editor it came from (the focused group's).
+    private void ShowRename(RenameRequest request)
+    {
+        CloseRename();
+        if (_panes.FirstOrDefault(p => ReferenceEquals(p.Shown?.Model, request.Editor)) is not { } pane)
+        {
+            _shell.CancelRename();
+            return;
+        }
+
+        var model = request.Editor;
+        var point = model.PointFromPosition(request.Target.Start);
+        double x = Math.Max(0, point.X - model.ScrollX - 8);
+        double y = Math.Max(0, point.Y - model.ScrollY - 6);
+        var box = new RenameOverlay(request, _palette) { Margin = new Thickness(x, y, 0, 0), ZIndex = 10 };
+        box.Committed += (_, name) =>
+        {
+            CloseRename();
+            _ = CommitRenameAsync(request, name);
+        };
+        box.Cancelled += (_, _) =>
+        {
+            CloseRename();
+            _shell.CancelRename();
+            _shown?.Focus();
+        };
+        _rename = box;
+        pane.Stack.Add(box);
+        _ = ShellMotion.ShowAsync(box, -4);
+        Dispatcher.DispatchLabelled("rename: focus the box", box.FocusInput);
+    }
+
+    private void CloseRename()
+    {
+        if (_rename is { } box)
+        {
+            _rename = null;
+            (box.Parent as Layout)?.Remove(box);
+        }
+    }
+
+    private async Task CommitRenameAsync(RenameRequest request, string name)
+    {
+        try
+        {
+            _shown?.Focus();
+            await _shell.CommitRenameAsync(request, name);
+        }
+#pragma warning disable CA1031 // A rename started from the box: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the editor: rename", error);
+        }
     }
 
     private static void Set(Label label, string text)

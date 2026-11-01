@@ -512,6 +512,12 @@ public static class RailIcons
 
     /// <summary>Refresh (a circular arrow).</summary>
     public const string Refresh = "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6";
+
+    /// <summary>A bookmark's ribbon (X part 9: the Bookmarks view).</summary>
+    public const string Bookmark = "M6 3h12v18l-6-4l-6 4z";
+
+    /// <summary>A clock turning back (X part 9: the local history's Timeline).</summary>
+    public const string History = "M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6M3 3v4h4";
 }
 
 /// <summary>

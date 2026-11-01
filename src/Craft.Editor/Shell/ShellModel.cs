@@ -56,7 +56,7 @@ public static class ShellCommandIds
     /// <summary>Opens a file (Ctrl+O).</summary>
     public const string OpenFile = "craft.openFile";
 
-    /// <summary>Opens a folder as the workspace (Ctrl+Shift+O).</summary>
+    /// <summary>Opens a folder as the workspace (Ctrl+K Ctrl+O, VS Code's; Ctrl+Shift+O goes to a symbol).</summary>
     public const string OpenFolder = "craft.openFolder";
 
     /// <summary>Opens a recent file or folder (Ctrl+R).</summary>
@@ -253,6 +253,12 @@ public static class ShellCommandIds
 
     /// <summary>Takes the tab's text back to its file's, as one undo step, with Undo.</summary>
     public const string RevertFile = "craft.revertFile";
+
+    /// <summary>Refactor: Rename the symbol at the caret (F2; Visual Studio: Ctrl+R Ctrl+R).</summary>
+    public const string RenameSymbol = "craft.renameSymbol";
+
+    /// <summary>Go: a symbol of the focused editor, quick open's '@' (Ctrl+Shift+O).</summary>
+    public const string GoToSymbol = "craft.goToSymbol";
 }
 
 /// <summary>What a drop of paths onto the window or the editor opened (<see cref="ShellModel.OpenDroppedAsync"/>).</summary>
@@ -269,6 +275,9 @@ public static class ShellViewNames
 
     /// <summary>Quick open with ':' typed (go to a line of the active editor).</summary>
     public const string GoToLine = "quickOpen.line";
+
+    /// <summary>Quick open with '@': the focused editor's symbols.</summary>
+    public const string GoToSymbol = "quickOpen.symbol";
 
     /// <summary>The bottom panel shown or hidden.</summary>
     public const string TogglePanel = "panel";
@@ -352,6 +361,7 @@ public sealed partial class ShellModel : IDisposable
         _optionsSignature = Signature();
         Recent.Limit = Options.RecentLimit;
         Theme = ThemeOf(Options);
+        UseIconTheme(Options.IconTheme);
         Groups = new EditorGroups(host, Options.EditorGroupsMax) { CloseEmpty = Options.EditorGroupsCloseEmpty };
         Layout = new ShellLayout(Options);
         Pages = new PageTabs();
@@ -395,6 +405,11 @@ public sealed partial class ShellModel : IDisposable
         RegisterCommands();
         CreateViews();
         CreateTools();
+        // X part 9: bookmarks, the local history's Timeline; a save keeps a snapshot and the bookmarks' lines.
+        CreateBookmarks();
+        CreateTimeline();
+        host.DocumentSaved += OnHistorySaved;
+        host.DocumentSaved += OnBookmarksSaved;
         WatchMemory();
         WatchSourceControl();
     }
@@ -770,7 +785,50 @@ public sealed partial class ShellModel : IDisposable
         Layout.HasFolder = true;
         Branch = branch;
         WorkspaceChanged?.Invoke(this, EventArgs.Empty);
+        _ = PrepareLanguageSelectorsAsync(Workspace.Root);
         return true;
+    }
+
+    /// <summary>
+    /// The language of <paramref name="path"/> in the open workspace (W, contract 4): a language selector's answer for the
+    /// workspace first, else by its name (<see cref="EditorLanguages.ForFile(string, string?)"/>).
+    /// </summary>
+    public ILanguage? LanguageFor(string path) => EditorLanguages.ForFile(path, Workspace?.Root);
+
+    /// <summary>
+    /// Gives every open tab the language its file has now (<see cref="LanguageFor"/>): after the language selectors learned
+    /// the workspace, or a plug-in registered a language. Only a tab whose language changed is touched.
+    /// </summary>
+    public void RepickLanguages()
+    {
+        foreach (var tab in Groups.AllTabs.ToArray())
+        {
+            if (tab.FilePath is { } path && LanguageFor(path) is var language && !ReferenceEquals(language, tab.Language))
+            {
+                Groups.SetLanguage(tab, language);
+            }
+        }
+    }
+
+    // The language selectors read what they need of the folder off the UI thread (W, contract 4); the open tabs take
+    // their languages again when they did, if the folder is still the one open.
+    private async Task PrepareLanguageSelectorsAsync(string root)
+    {
+        if (LanguageSelectors.All.Count == 0)
+        {
+            return;
+        }
+
+        var problems = await Task.Run(() => LanguageSelectors.PrepareAsync(root)).ConfigureAwait(true);
+        foreach (var problem in problems)
+        {
+            Host.Log(EditorLogLevel.Warning, $"A language selector could not read the folder: {problem}.");
+        }
+
+        if (Workspace is { } open && PathKeys.Comparer.Equals(open.Root, root))
+        {
+            RepickLanguages();
+        }
     }
 
     /// <summary>Closes the workspace folder (its settings no longer apply; the tabs stay open).</summary>
@@ -843,7 +901,7 @@ public sealed partial class ShellModel : IDisposable
             }
             else
             {
-                tab = Tabs.Add(document, EditorLanguages.ForFile(full), activate: false);
+                tab = Tabs.Add(document, LanguageFor(full), activate: false);
             }
         }
 
@@ -867,7 +925,7 @@ public sealed partial class ShellModel : IDisposable
     public DocumentTab NewFile(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return Tabs.AddFor(TextDocument.Create("", Options), path, EditorLanguages.ForFile(path));
+        return Tabs.AddFor(TextDocument.Create("", Options), path, LanguageFor(path));
     }
 
     /// <summary>
@@ -923,7 +981,7 @@ public sealed partial class ShellModel : IDisposable
             return false;
         }
 
-        var language = EditorLanguages.ForFile(path);
+        var language = LanguageFor(path);
         if (!ReferenceEquals(language, tab.Language))
         {
             Groups.SetLanguage(tab, language);
@@ -1138,6 +1196,7 @@ public sealed partial class ShellModel : IDisposable
         _optionsSignature = signature;
         bool themeChanged = !string.Equals(options.Theme, Options.Theme, StringComparison.OrdinalIgnoreCase) || options.Accent != Options.Accent;
         bool monitorChanged = !string.Equals(options.MemoryMonitor, Options.MemoryMonitor, StringComparison.OrdinalIgnoreCase);
+        bool iconsChanged = UseIconTheme(options.IconTheme);
         Options = options;
         if (monitorChanged)
         {
@@ -1156,6 +1215,25 @@ public sealed partial class ShellModel : IDisposable
         {
             SetTheme(ThemeOf(options));
         }
+        else if (iconsChanged)
+        {
+            ThemeChanged?.Invoke(this, EventArgs.Empty);      // every view draws its icons again
+        }
+    }
+
+    // W: CRAFT_ICON_THEME picks the icon theme in use; a name no plug-in registered keeps Craft's own, said in the log.
+    // True when the theme in use changed.
+    private bool UseIconTheme(string name)
+    {
+        var before = FileIconThemes.Current;
+        if (FileIconThemes.Find(name) is null)
+        {
+            Host.Log(EditorLogLevel.Warning, $"CRAFT_ICON_THEME: the icon theme '{name}' is not registered (registered: {string.Join(", ", FileIconThemes.Names)}); Craft's own is used.");
+            name = FileIconThemes.Craft;
+        }
+
+        FileIconThemes.Use(name);
+        return !string.Equals(before, FileIconThemes.Current, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Switches between the light and the dark theme for this run.</summary>
@@ -1207,9 +1285,13 @@ public sealed partial class ShellModel : IDisposable
 
         _sideViews.Clear();
         Host.DocumentSaved -= OnDocumentSaved;
+        Host.DocumentSaved -= OnHistorySaved;
+        Host.DocumentSaved -= OnBookmarksSaved;
         Host.PanelsChanged -= OnPanelsChanged;
         Host.PanelShowRequested -= OnPanelShowRequested;
         DisposeTools();
+        DisposeBookmarks();                                 // after the panels' event: their removal registers no side view again
+        DisposeTimeline();
         DisposeViews();
         DisposeContext();
         StopWatching();
@@ -1231,6 +1313,7 @@ public sealed partial class ShellModel : IDisposable
         try
         {
             _treeWatch = new FolderTreeWatch(tree, FolderWatchers.Get(Options.WorkspaceWatcher), Options.WorkspaceWatchMilliseconds, Host.Dispatch);
+            _treeWatch.EntryChanged += OnEntryChanged;
         }
         catch (NotRegisteredException e)
         {
@@ -1258,7 +1341,16 @@ public sealed partial class ShellModel : IDisposable
         }
 
         _treeWatch?.Touch(path);
-        if (Groups.AllTabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && EditorLanguages.ForFile(path) is var language && !ReferenceEquals(language, tab.Language))
+        if (IsConfigurationFile(path))
+        {
+            OnConfigurationFileChanged(path);
+        }
+        else
+        {
+            FileSettingsChanged?.Invoke(this, new FileSettingsChangedEventArgs(path));
+        }
+
+        if (Groups.AllTabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && LanguageFor(path) is var language && !ReferenceEquals(language, tab.Language))
         {
             Groups.SetLanguage(tab, language);
         }
@@ -1347,11 +1439,15 @@ public sealed partial class ShellModel : IDisposable
 
     private async Task<bool> WriteAsync(DocumentTab tab, string? path, CancellationToken cancellationToken)
     {
-        if (Options.FormatOnSave && EditorOf?.Invoke(tab) is { FormattingSession: not null } editor)
+        if (Options.FormatOnSave && EditorOf?.Invoke(tab) is { CanFormat: true } editor)
         {
             // Off the UI thread, applied on it as one undo step; a malformed file is saved as it is (the format says why).
-            await editor.FormatDocumentAsync(cancellationToken);
+            // W: the project's own formatter (Prettier) first when it applies, told the run is automatic.
+            await editor.FormatDocumentAsync(automatic: true, cancellationToken);
         }
+
+        // X part 9: the trailing white space and the final newline (the file's .editorconfig over the options), a new file's charset.
+        await ApplySaveActionsAsync(tab, path, cancellationToken);
 
         try
         {
@@ -1402,7 +1498,7 @@ public sealed partial class ShellModel : IDisposable
             {
                 await OpenFolderAsync(path);
             }
-        }, null, "Ctrl+Shift+O");
+        }, null, "Ctrl+K Ctrl+O");
         Command(ShellCommandIds.OpenRecent, "File: Open a recent file or folder", (_, token) => OpenRecentAsync(token), null, "Ctrl+R");
         Command(ShellCommandIds.CloseFolder, "File: Close the folder", (_, _) => { CloseFolder(); return Task.CompletedTask; }, _ => Workspace is not null, null);
         Command(ShellCommandIds.Save, "File: Save", (_, token) => SaveAsync(null, token), _ => Tabs.Active is not null, "Ctrl+S");
@@ -1445,6 +1541,7 @@ public sealed partial class ShellModel : IDisposable
         Command(ShellCommandIds.Welcome, "Help: Welcome", (_, _) => { ShowWelcome(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.ClearNotifications, "View: Clear the notifications", (_, _) => { ClearNotifications(); return Task.CompletedTask; }, null, null);
         RegisterGroupCommands();
+        RegisterSymbolCommands();
         Command(ShellCommandIds.About, "Help: About Craft", (_, _) => _ui.ShowMessageAsync("Craft",
             $"A code editor on Idrak. Plug-in contracts {CraftContracts.Version}; .NET {Environment.Version}; {System.Runtime.InteropServices.RuntimeInformation.OSDescription}."), null, null);
 
@@ -1494,6 +1591,9 @@ public sealed partial class ShellModel : IDisposable
         Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
         RegisterViewCommands();
         RegisterToolCommands();
+        RegisterBookmarkCommands();
+        RegisterTimelineCommands();
+        RegisterNavigationCommands();
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
         RegisterContextCommands();
     }

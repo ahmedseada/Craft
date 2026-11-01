@@ -366,8 +366,12 @@ public static class StickyScrollTests
             using var renderer = new EditorRenderer();
             var canvas = new RecordingCanvas();
             renderer.Draw(canvas, model, 0, 30 * 20, 800, 400, caretVisible: true);
-            Check.True(canvas.Texts.Any(t => t.Text == "namespace N {" && t.Top == 0) && canvas.Texts.Any(t => t.Text == "  class A {" && t.Top == 20)
-                       && canvas.Texts.Any(t => t.Text == "    void M() {" && t.Top == 40), "the headers are drawn on the top rows");
+            // X part 9: with bracket pair colours (on by default) a header's brackets are runs of their own, in their depth's colour.
+            var colors = model.Theme.Colors;
+            Check.True(canvas.Texts.Any(t => t.Text == "namespace N " && t.Top == 0) && canvas.Texts.Any(t => t.Text == "  class A " && t.Top == 20)
+                       && canvas.Texts.Any(t => t.Text == "    void M" && t.Top == 40), "the headers are drawn on the top rows");
+            Check.True(canvas.Texts.Any(t => t.Text == "{" && t.Top == 0 && t.Argb == colors.BracketDepth1) && canvas.Texts.Any(t => t.Text == "{" && t.Top == 40 && t.Argb == colors.BracketDepth3),
+                "a header's brackets in the colour of their depth");
             Check.True(canvas.Texts.Any(t => t.Text == "11" && t.Top == 20 && t.X < model.GutterWidth), "with their own line numbers");
 
             using var few = Make(Nested(), new CraftOptions { StickyScrollLines = 2 });

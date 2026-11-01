@@ -117,7 +117,46 @@ public static class LookAndFeelTests
     }
 
     // The owner's note 10: no platform message box is left; every question goes through Craft's dialog.
-    private static readonly Regex PlatformDialog = new(@"\b(DisplayAlert|DisplayActionSheet|DisplayPrompt)(Async)?\s*\(|\bMessageBox(W|A)?\s*\(|\bContentDialog\b|\bMessageDialog\b", RegexOptions.Compiled);
+    // The platform's boxes only: MAUI's DisplayAlert/DisplayActionSheet/DisplayPrompt, WinUI's ContentDialog and
+    // MessageDialog, WinForms' and WPF's MessageBox.Show, and Win32's MessageBox by its W/A name or a P/Invoke declaration
+    // (extern, a LibraryImport partial, or an EntryPoint naming it). Craft's own PanelMessageBox block and a method named
+    // MessageBox that draws it are not platform boxes.
+    private static readonly Regex PlatformDialog = new(
+        @"\b(DisplayAlert|DisplayActionSheet|DisplayPrompt)(Async)?\s*\(|\bMessageBox(W|A)\s*\(|\bMessageBox\s*\.\s*Show\s*\(|\b(extern|partial)\b[^;={]*\bMessageBox(W|A)?\s*\(|EntryPoint\s*=\s*""MessageBox|\bContentDialog\b|\bMessageDialog\b",
+        RegexOptions.Compiled);
+
+    [Test]
+    public static void ThePlatformDialogPatternCatchesOnlyThePlatformsBoxes()
+    {
+        string[] platform =
+        [
+            "await DisplayAlert(\"Title\", \"Text\", \"OK\");",
+            "string answer = await page.DisplayPromptAsync(\"Name\", \"Enter it\");",
+            "await DisplayActionSheet(\"Pick\", \"Cancel\", null, \"a\");",
+            "var dialog = new ContentDialog { Title = \"x\" };",
+            "await new MessageDialog(\"x\").ShowAsync();",
+            "System.Windows.Forms.MessageBox.Show(\"x\");",
+            "MessageBox.Show(owner, \"x\");",
+            "_ = MessageBoxW(IntPtr.Zero, text, caption, 0);",
+            "static extern int MessageBox(IntPtr hWnd, string text, string caption, uint type);",
+            "private static partial int MessageBoxW(IntPtr owner, string text, string caption, uint type);",
+            "[DllImport(\"user32.dll\", EntryPoint = \"MessageBoxW\")]",
+        ];
+        string[] craft =
+        [
+            "PanelMessageBox box => MessageBox(box),",
+            "private VerticalStackLayout MessageBox(PanelMessageBox box)",
+            "blocks.Add(MessageBox(state));",
+            "private static PanelMessageBox MessageBox(SourceControlViewState state)",
+            "return new PanelMessageBox(Message, state.Message)",
+            "public sealed record PanelMessageBox(string ActionId, string Text) : PanelBlock",
+            "await _dialog.ShowMessageAsync(title, text);",
+        ];
+        var missed = platform.Where(line => !PlatformDialog.IsMatch(line)).ToArray();
+        Check.True(missed.Length == 0, "a platform box the pattern missed:\n  " + string.Join("\n  ", missed));
+        var wrong = craft.Where(line => PlatformDialog.IsMatch(line)).ToArray();
+        Check.True(wrong.Length == 0, "Craft's own message block taken for a platform box:\n  " + string.Join("\n  ", wrong));
+    }
 
     private static readonly (string File, string Code, string Why)[] AllowedDialogs =
     [

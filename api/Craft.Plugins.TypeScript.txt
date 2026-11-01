@@ -1,0 +1,15 @@
+static class Craft.Plugins.TypeScript.TypeScriptLanguage
+  const System.String LanguageName = typescript
+  static Craft.Web.Script.ScriptEditorPlugin Editor { get; }
+  static Craft.Web.Script.ScriptFolding Folding { get; }
+  static Craft.Web.Script.ScriptLanguage Language { get; }
+  static Craft.Web.Script.ScriptProjectSelector Selector { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIcon> Icons { get; }
+sealed class Craft.Plugins.TypeScript.TypeScriptPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  const System.String PackageName = Craft.Plugins.TypeScript
+  ctor()
+sealed class Craft.Plugins.TypeScript.TypeScriptPlugin : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()

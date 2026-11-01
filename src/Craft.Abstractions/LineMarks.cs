@@ -18,6 +18,9 @@ public enum LineMarkKind
     /// <summary>A merge conflict's block (the warning colour).</summary>
     Conflict,
 
+    /// <summary>A bookmark on <see cref="LineMark.Line"/> (X part 9: the accent's tag at the gutter's left edge; not clickable).</summary>
+    Bookmark,
+
     /// <summary>A test that can run (X part 9): a ▶ in the gutter's left; a click runs it.</summary>
     TestReady,
 
@@ -38,7 +41,7 @@ public enum LineMarkKind
 public readonly record struct LineMark(int Line, int Count, LineMarkKind Kind)
 {
     /// <summary>Whether it is drawn as a glyph at the gutter's left (a test's ▶, ✓, ✗ or ○) rather than a bar in the marks' strip.</summary>
-    public bool IsGlyph => Kind >= LineMarkKind.TestReady;
+    public bool IsGlyph => Kind is LineMarkKind.TestReady or LineMarkKind.TestPassed or LineMarkKind.TestFailed or LineMarkKind.TestSkipped;
 
     /// <summary>The last line it covers (its <see cref="Line"/> for a deletion).</summary>
     public int LastLine => Kind == LineMarkKind.Deleted ? Line : Line + Math.Max(1, Count) - 1;

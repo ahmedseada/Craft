@@ -1,0 +1,134 @@
+sealed class Craft.Plugins.Npm.NodeInstall : System.IEquatable<Craft.Plugins.Npm.NodeInstall>
+  Craft.Plugins.Npm.NodeInstall <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Npm.NodeInstall other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Ready { get; }
+  System.Int32 GetHashCode()
+  System.String Node { get; init; }
+  System.String NpmCli { get; init; }
+  System.String Problem { get; init; }
+  System.String StatusText { get; }
+  System.String ToString()
+  System.String Version { get; init; }
+  System.Void Deconstruct(out System.String Node, out System.String NpmCli, out System.String Problem)
+  ctor(System.String Node, System.String NpmCli, System.String Problem)
+  static Craft.Plugins.Npm.NodeInstall Find(Craft.Plugins.Npm.NpmSettings settings, System.Func<System.String, System.String> environment, System.Boolean windows, System.Func<System.String, System.Boolean> exists = null, System.Func<System.String, System.String> link = null)
+  static System.String ParseVersion(System.ReadOnlySpan<System.Char> output)
+sealed class Craft.Plugins.Npm.NpmPackage : System.IEquatable<Craft.Plugins.Npm.NpmPackage>
+  Craft.Plugins.Npm.NpmPackage <Clone>$()
+  Craft.Plugins.Npm.NpmScript Script(System.String name)
+  System.Boolean Equals(Craft.Plugins.Npm.NpmPackage other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean HasNpmLock { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.Npm.NpmScript> Scripts { get; init; }
+  System.Int32 GetHashCode()
+  System.String File { get; init; }
+  System.String Folder { get; }
+  System.String Manager { get; init; }
+  System.String ManagerEvidence { get; init; }
+  System.String Name { get; init; }
+  System.String Problem { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String File, out System.Collections.Generic.IReadOnlyList<Craft.Plugins.Npm.NpmScript> Scripts)
+  ctor(System.String File, System.Collections.Generic.IReadOnlyList<Craft.Plugins.Npm.NpmScript> Scripts)
+static class Craft.Plugins.Npm.NpmPackages
+  const System.String FileName = package.json
+  static Craft.Plugins.Npm.NpmPackage Parse(System.ReadOnlySpan<System.Byte> json, System.String file)
+  static Craft.Plugins.Npm.NpmPackage Read(System.String root, System.String file)
+  static Craft.Plugins.Npm.NpmPackage WithLocks(Craft.Plugins.Npm.NpmPackage package, System.String root)
+  static System.Boolean IsPackageFile(System.ReadOnlySpan<System.Char> fileName)
+  static System.Boolean Matters(System.ReadOnlySpan<System.Char> fileName)
+  static System.Collections.Generic.IReadOnlyList<System.String> Find(System.String root, System.Collections.Generic.IReadOnlyList<System.String> ignore, System.Threading.CancellationToken cancellationToken = null)
+  static System.Collections.Generic.IReadOnlyList<System.String> NpmLocks { get; }
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> OtherLocks { get; }
+sealed class Craft.Plugins.Npm.NpmPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String InstallHereCommand = npm.install
+  const System.String InstallIcon = M12 4v11M7 10l5 5l5-5M5 20h14
+  const System.String RefreshCommand = npm.refresh
+  const System.String RunScriptCommand = npm.runScript
+  const System.String RunScriptInTerminalCommand = npm.runScriptInTerminal
+  const System.String RunViewCommand = craft.sideView.craft.run
+  const System.String ScriptsMenu = context:npm-scripts
+  const System.String StopCommand = npm.stop
+  const System.String TerminalMenu = context:npm-terminal
+  static Craft.Plugins.Npm.NpmPlugin Instance { get; }
+  static Craft.Plugins.Npm.NpmRunProvider Provider { get; }
+  static System.String InstallCommandId(System.String file)
+  static System.String ScriptCommandId(System.String file, System.String script)
+  static System.String TerminalCommandId(System.String file, System.String script)
+sealed class Craft.Plugins.Npm.NpmPluginPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  const System.String PackageName = Craft.Plugins.Npm
+  ctor()
+sealed class Craft.Plugins.Npm.NpmRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+enum Craft.Plugins.Npm.NpmRunEnd : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Failed = 2
+  NotRun = 0
+  Stopped = 3
+  Succeeded = 1
+  TimedOut = 4
+sealed class Craft.Plugins.Npm.NpmRunOutcome : System.IEquatable<Craft.Plugins.Npm.NpmRunOutcome>
+  Craft.Plugins.Npm.NpmRunEnd End { get; init; }
+  Craft.Plugins.Npm.NpmRunOutcome <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Npm.NpmRunOutcome other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32? ExitCode { get; init; }
+  System.String Reason { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Plugins.Npm.NpmRunEnd End, out System.Int32? ExitCode, out System.String Reason)
+  ctor(Craft.Plugins.Npm.NpmRunEnd End, System.Int32? ExitCode = null, System.String Reason = null)
+sealed class Craft.Plugins.Npm.NpmRunProvider : Craft.Abstractions.IRunProvider, Idrak.Abstraction.IKind
+  Craft.Abstractions.RunCommand Command(Craft.Abstractions.RunTarget target, Craft.Abstractions.RunActions action, Craft.Abstractions.RunConfiguration configuration, System.String root)
+  System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunTarget> Find(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String Title { get; }
+  const System.String ProviderName = npm
+  ctor()
+static class Craft.Plugins.Npm.NpmRuns
+  const System.String Requester = the npm plug-in
+  static Idrak.Abstraction.CommandLimits Limits(Craft.Plugins.Npm.NpmSettings settings, System.String root, System.String purpose, System.TimeSpan time)
+  static System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment(Craft.Plugins.Npm.NpmSettings settings)
+  static System.Collections.Generic.IReadOnlyList<System.String> Install(Craft.Plugins.Npm.NodeInstall install, System.String verb)
+  static System.Collections.Generic.IReadOnlyList<System.String> Script(Craft.Plugins.Npm.NodeInstall install, System.String script, System.String arguments = null)
+  static System.String TabName(Craft.Plugins.Npm.NpmPackage package, System.String what)
+sealed class Craft.Plugins.Npm.NpmScript : System.IEquatable<Craft.Plugins.Npm.NpmScript>
+  Craft.Plugins.Npm.NpmScript <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Npm.NpmScript other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Name { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Text)
+  ctor(System.String Name, System.String Text)
+sealed class Craft.Plugins.Npm.NpmSettings : System.IEquatable<Craft.Plugins.Npm.NpmSettings>
+  Craft.Plugins.Npm.NpmSettings <Clone>$()
+  System.Boolean Color { get; init; }
+  System.Boolean Equals(Craft.Plugins.Npm.NpmSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsLongRunning(System.String name)
+  System.Collections.Generic.IReadOnlyList<System.String> Ignore { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> LongRunning { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 ScanDelayMilliseconds { get; init; }
+  System.Int32 TimeLimitMinutes { get; init; }
+  System.String Install { get; init; }
+  System.String Node { get; init; }
+  System.String Npm { get; init; }
+  System.String Sandbox { get; init; }
+  System.String ToString()
+  System.TimeSpan TimeLimitOf(System.String name)
+  const System.String PluginName = npm
+  ctor()
+  static Craft.Plugins.Npm.NpmSettings Read(Craft.Abstractions.IPluginSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }

@@ -3,6 +3,7 @@
 
 using System.Collections.ObjectModel;
 using Craft.Abstractions;
+using Craft.Editor;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
@@ -19,7 +20,11 @@ namespace Craft.Maui;
 /// <param name="Keys">A command's keys, or "".</param>
 /// <param name="Background">Its fill (the selected row's is the selection's).</param>
 /// <param name="Recent">"recent" when it was picked recently, else "".</param>
-public sealed record QuickOpenRow(QuickOpenItem Item, FormattedString Title, FormattedString? Detail, string Badge, Color BadgeColor, string Keys, Color Background, string Recent);
+/// <param name="Icon">A file's or a folder's drawn icon (W: the tree's), or null for a command, a line or a symbol (its badge shows).</param>
+/// <param name="Dark">Whether the theme is dark (the icon's colours).</param>
+/// <param name="ShowBadge">Whether the badge shows (no drawn icon).</param>
+public sealed record QuickOpenRow(QuickOpenItem Item, FormattedString Title, FormattedString? Detail, string Badge, Color BadgeColor, string Keys, Color Background, string Recent,
+    FileIcon? Icon = null, bool Dark = true, bool ShowBadge = true);
 
 /// <summary>
 /// The command palette and quick open as one overlay (phase X: inline, not modal), under the title bar's search box: an
@@ -54,7 +59,7 @@ public sealed class QuickOpenOverlay : ContentView
         ArgumentNullException.ThrowIfNull(palette);
         _model = model;
         _palette = palette;
-        _input = new RoutedEntry { Placeholder = "Search files by name   ·   > commands   ·   : go to a line", HeightRequest = 32, FontSize = palette.FontSize, FontFamily = palette.Font() };
+        _input = new RoutedEntry { Placeholder = "Search files by name   ·   > commands   ·   @ symbols   ·   : go to a line", HeightRequest = 32, FontSize = palette.FontSize, FontFamily = palette.Font() };
         _input.RouteKey = OnKey;
         // Debounced (CRAFT_SEARCH_DELAY_MS): typing never waits on a match; a key the overlay takes runs a waiting one first.
         _typing = new TypingDebounce(this, () => _palette.Options.SearchDelayMilliseconds, () => _ = RefreshAsync(_input.Text ?? ""));
@@ -103,6 +108,9 @@ public sealed class QuickOpenOverlay : ContentView
 
     /// <summary>Raised when it closed without a pick (Escape, a click outside).</summary>
     public event EventHandler? Dismissed;
+
+    /// <summary>Raised with the row the arrows moved to ('@' previews its symbol in the editor).</summary>
+    public event EventHandler<QuickOpenItem>? SelectionMoved;
 
     /// <summary>The overlay's input (focused when it opens).</summary>
     public Entry Input => _input;
@@ -170,6 +178,7 @@ public sealed class QuickOpenOverlay : ContentView
         if (_selection.Selected >= 0 && _selection.Selected < _rows.Count)
         {
             _list.ScrollTo(_selection.Selected, position: ScrollToPosition.MakeVisible, animate: false);
+            SelectionMoved?.Invoke(this, _items[_selection.Selected]);
         }
 
         return true;
@@ -231,20 +240,25 @@ public sealed class QuickOpenOverlay : ContentView
         {
             QuickOpenMode.Commands => "Commands",
             QuickOpenMode.Line => "Go to a line of the active editor",
+            QuickOpenMode.Symbols => text.TrimStart().StartsWith("@:", StringComparison.Ordinal) ? "Symbols by kind" : "Symbols of the active editor   ·   @: groups them by kind",
+            _ when _model.BrowsedFolder is { } folder => $"In {System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(folder))}",
             _ => _model.Root is null ? "Files" : $"Files in {System.IO.Path.GetFileName(_model.Root)}",
         };
         _hint.Text = items.Count > 0 ? (_model.Capped && mode == QuickOpenMode.Files ? $"The first {_model.Files.Count:N0} files are listed (CRAFT_QUICK_OPEN_FILES)." : "")
             : mode == QuickOpenMode.Line ? "Type a line number (42, or 42:7 for a column)."
             : mode == QuickOpenMode.Commands ? "No command matches."
-            : _model.Root is null ? "Open a folder (Ctrl+Shift+O) to find its files by name; type '>' for a command."
+            : mode == QuickOpenMode.Symbols ? (_model.Symbols.Count == 0 ? "The active editor's language lists no symbols (or no file is open)." : "No symbol matches.")
+            : _model.BrowsedFolder is not null ? "Nothing in this folder matches."
+            : _model.Root is null ? "Open a folder (Ctrl+K Ctrl+O) to find its files by name; type '>' for a command."
             : _model.IsIndexing ? "Listing the folder's files…" : "No file matches; type '>' for a command or ':' for a line.";
-        if (items.Count == 0 && EmptyStateFor is { } empty)
+        bool emptyState = items.Count == 0 && EmptyStateFor is not null && mode != QuickOpenMode.Symbols && _model.BrowsedFolder is null;
+        if (emptyState)
         {
-            _empty.Show(empty(text));
+            _empty.Show(EmptyStateFor!(text));
             _hint.Text = "";
         }
 
-        _empty.IsVisible = items.Count == 0 && EmptyStateFor is not null;
+        _empty.IsVisible = emptyState;
         _hint.IsVisible = _hint.Text.Length > 0;
         Rebuild();
     }
@@ -259,8 +273,10 @@ public sealed class QuickOpenOverlay : ContentView
             var item = _items[i];
             var icon = item.Icon;
             rows[i] = new QuickOpenRow(item, Highlighted(item.Text, item.TextHighlights, palette.Text, palette), item.Detail is { } detail ? Highlighted(detail, item.DetailHighlights, palette.Secondary, palette) : null,
-                icon?.Badge ?? (item.CommandId is not null ? "›" : item.Line > 0 ? "#" : ""), icon is null ? palette.Secondary : ThemeColors.Of(icon.Argb),
-                item.Shortcut ?? "", i == _selection.Selected ? palette.Selection : Colors.Transparent, item.IsRecent ? "recent" : "");
+                icon?.Badge ?? (item.SymbolKind is { } kind ? SymbolKinds.Badge(kind) : item.IsFolder ? "▸" : item.CommandId is not null ? "›" : item.Line > 0 ? "#" : ""),
+                icon is null ? (item.SymbolKind is ScopeKind.Method ? palette.Method : item.SymbolKind is not null ? palette.Accent : palette.Secondary) : ThemeColors.Of(icon.Argb),
+                item.Shortcut ?? "", i == _selection.Selected ? palette.Selection : Colors.Transparent, item.Group ?? (item.IsRecent ? "recent" : ""),
+                icon is { Shape: not null } ? icon : null, palette.IsDark, icon?.Shape is null);
         }
 
         // Only the rows that differ are replaced (an arrow key moves two fills).
@@ -268,7 +284,7 @@ public sealed class QuickOpenOverlay : ContentView
         {
             if (i < _rows.Count)
             {
-                if (!ReferenceEquals(_rows[i].Item, rows[i].Item) || _rows[i].Background != rows[i].Background)
+                if (!ReferenceEquals(_rows[i].Item, rows[i].Item) || _rows[i].Background != rows[i].Background || _rows[i].Dark != rows[i].Dark)
                 {
                     _rows[i] = rows[i];
                 }
@@ -322,6 +338,12 @@ public sealed class QuickOpenOverlay : ContentView
         var badge = new Label { FontSize = palette.CaptionSize, FontFamily = palette.Font(FontWeight.SemiBold), WidthRequest = 22, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center };
         badge.SetBinding(Label.TextProperty, static (QuickOpenRow row) => row.Badge);
         badge.SetBinding(Label.TextColorProperty, static (QuickOpenRow row) => row.BadgeColor);
+        badge.SetBinding(IsVisibleProperty, static (QuickOpenRow row) => row.ShowBadge);
+        // W: a file's or a folder's drawn icon in the badge's place (the tree's, by the same table).
+        var icon = new FileIconView(16) { HorizontalOptions = LayoutOptions.Center };
+        icon.SetBinding(FileIconView.IconProperty, static (QuickOpenRow row) => row.Icon);
+        icon.SetBinding(FileIconView.DarkProperty, static (QuickOpenRow row) => row.Dark);
+        var lead = new Grid { WidthRequest = 22, Children = { icon, badge } };
         var title = new Label { FontSize = palette.FontSize, FontFamily = palette.Font(), LineBreakMode = LineBreakMode.TailTruncation, VerticalOptions = LayoutOptions.Center };
         title.SetBinding(Label.FormattedTextProperty, static (QuickOpenRow row) => row.Title);
         var detail = new Label { FontSize = palette.SmallSize, FontFamily = palette.Font(), LineBreakMode = LineBreakMode.HeadTruncation, VerticalOptions = LayoutOptions.Center };
@@ -337,7 +359,7 @@ public sealed class QuickOpenOverlay : ContentView
             Padding = new Thickness(8, 0),
             HeightRequest = RowHeight,
         };
-        cell.Add(badge, 0, 0);
+        cell.Add(lead, 0, 0);
         cell.Add(title, 1, 0);
         cell.Add(detail, 2, 0);
         cell.Add(recent, 3, 0);

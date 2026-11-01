@@ -246,6 +246,9 @@ public sealed class ConversationsView : ContentView, IDisposable
     /// <summary>The open documents' symbols for "@" (the shell sets it), or null.</summary>
     public Func<IReadOnlyList<ComposerSuggestion>>? SymbolsSource { get; set; }
 
+    /// <summary>Lists the composer's "@" picker again (the active editor's symbols landed).</summary>
+    public void RefreshMentions() => Controller.Composer.RefreshSuggestions();
+
     /// <summary>The window's key handler, for the transcript's keys it does not take (Ctrl+J, the palette).</summary>
     public Craft.Editor.Abstractions.IEditorKeyHandler? WindowKeys { get; set; }
 

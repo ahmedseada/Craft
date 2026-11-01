@@ -102,7 +102,7 @@ internal sealed class SplitFixture : IDisposable
     public SplitFixture(TempFolder folder, Func<string, string?>? variables = null, Func<string, CraftOptions, CancellationToken, Task<ITextDocument>>? openDocument = null)
     {
         Folder = folder;
-        var settings = new CraftSettings(variables ?? (_ => null), SettingsFile.Load(folder.File("data/settings.json")));
+        var settings = new CraftSettings(folder.Isolated(variables), SettingsFile.Load(folder.File("data/settings.json")));
         Host = new EditorHost(new CraftOptions { ActivityMinimumMilliseconds = 0 });      // every operation's activity is kept, however quick
         Shell = new ShellModel(Host, settings, RecentList.Load(folder.File("data/recent.json"), 10), new NoDialogs(), Ui, openDocument);
         Shell.EditorOf = EditorOf;

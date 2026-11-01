@@ -71,12 +71,16 @@ public sealed class Workspace : IDisposable
 
     /// <summary>
     /// The entries of one folder of the workspace (<paramref name="folder"/>, relative to the root or full; the root when
-    /// null): its folders first (ignored ones and links to folders left out), then its files, each sorted by name ignoring
-    /// case. Only that folder is read (the folder tree lists a folder when it is expanded); one it cannot read is empty.
+    /// null): its folders first (links to folders left out; ignored ones left out too, or, with
+    /// <see cref="CraftOptions.WorkspaceShowIgnored"/>, kept and marked <see cref="WorkspaceEntry.IsIgnored"/>, as is every
+    /// entry listed inside one), then its files, each sorted by name ignoring case. Only that folder is read (the folder
+    /// tree lists a folder when it is expanded); one it cannot read is empty.
     /// </summary>
     public IReadOnlyList<WorkspaceEntry> ListFolder(string? folder = null)
     {
         var full = folder is null ? Root : FullPath(folder);
+        bool showIgnored = _options.WorkspaceShowIgnored;
+        bool inIgnored = showIgnored && folder is not null && IsInIgnoredFolder(full);
         var options = new EnumerationOptions { IgnoreInaccessible = true, RecurseSubdirectories = false, AttributesToSkip = 0 };
         var folders = new List<WorkspaceEntry>();
         var files = new List<WorkspaceEntry>();
@@ -86,14 +90,20 @@ public sealed class Workspace : IDisposable
             {
                 if (entry is DirectoryInfo directory)
                 {
-                    if ((directory.Attributes & FileAttributes.ReparsePoint) == 0 && !_ignore.Contains(directory.Name))
+                    if ((directory.Attributes & FileAttributes.ReparsePoint) != 0)
                     {
-                        folders.Add(new WorkspaceEntry(directory.Name, directory.FullName, true));
+                        continue;
+                    }
+
+                    bool ignored = _ignore.Contains(directory.Name);
+                    if (!ignored || showIgnored)
+                    {
+                        folders.Add(new WorkspaceEntry(directory.Name, directory.FullName, true) { IsIgnored = ignored || inIgnored });
                     }
                 }
                 else
                 {
-                    files.Add(new WorkspaceEntry(entry.Name, entry.FullName, false));
+                    files.Add(new WorkspaceEntry(entry.Name, entry.FullName, false) { IsIgnored = inIgnored });
                 }
             }
         }
@@ -129,6 +139,32 @@ public sealed class Workspace : IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> (relative to the root or full) is an ignored folder of the workspace or lies inside
+    /// one (W: what the tree dims and nothing indexes or searches).
+    /// </summary>
+    public bool IsInIgnoredFolder(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var relative = Path.GetRelativePath(Root, FullPath(path));
+        if (relative == "." || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+        {
+            return false;
+        }
+
+        var parts = relative.AsSpan();
+        var ignored = _ignore.GetAlternateLookup<ReadOnlySpan<char>>();
+        foreach (var part in parts.SplitAny(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            if (ignored.Contains(parts[part]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>The open document of <paramref name="path"/> (relative to the root or full), or null.</summary>
@@ -191,6 +227,12 @@ public sealed class Workspace : IDisposable
 /// <param name="IsFolder">Whether it is a folder.</param>
 public sealed record WorkspaceEntry(string Name, string FullPath, bool IsFolder)
 {
+    /// <summary>
+    /// Whether it is a folder the workspace skips (<see cref="CraftOptions.WorkspaceIgnore"/>) or lies inside one: listed
+    /// only with <see cref="CraftOptions.WorkspaceShowIgnored"/>, shown dimmed, never indexed or searched (W).
+    /// </summary>
+    public bool IsIgnored { get; init; }
+
     /// <summary>By name, ignoring case, then exactly (so the order is the same on every system).</summary>
     public static Comparison<WorkspaceEntry> ByName { get; } = static (a, b) =>
     {

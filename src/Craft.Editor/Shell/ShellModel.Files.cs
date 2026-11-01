@@ -99,7 +99,7 @@ public sealed partial class ShellModel
         string? language = target.Language ?? (target.Item is DocumentTab tab ? tab.Language?.Name : null);
         if (language is null && !isFolder && path is not null)
         {
-            language = EditorLanguages.ForFile(path)?.Name;
+            language = LanguageFor(path)?.Name;
         }
 
         IReadOnlyList<string> kinds = [];
@@ -365,16 +365,16 @@ public sealed partial class ShellModel
     {
         if (EditorContextMenus.Target is { Item: DocumentTab tab } && EditorOf?.Invoke(tab) is { } editor)
         {
-            return editor.FormattingSession is not null;
+            return editor.CanFormat;
         }
 
         var file = TargetFile() ?? (TargetTab() is { } active && EditorContextMenus.Target is null ? active.FilePath : null);
         if (file is null)
         {
-            return TargetTab() is { } shown && EditorOf?.Invoke(shown)?.FormattingSession is not null;
+            return TargetTab() is { } shown && EditorOf?.Invoke(shown)?.CanFormat == true;
         }
 
-        return EditorLanguages.ForFile(file) is not null;
+        return LanguageFor(file) is not null;
     }
 
     // Format file: the file opened first when it is not (in the focused group), then formatted by its editor off the UI
@@ -400,7 +400,7 @@ public sealed partial class ShellModel
             return;
         }
 
-        if (editor.FormattingSession is null)
+        if (!editor.CanFormat)
         {
             Host.ShowStatus("Format file", $"{tab.Title}: its language has no formatter.", NotificationSeverity.Warning);
             return;
@@ -803,7 +803,7 @@ public sealed partial class ShellModel
         return Task.CompletedTask;
     }
 
-    /// <summary>Reads the tree's shown folders again off the UI thread (Refresh), then shows what changed.</summary>
+    /// <summary>Reads the tree's shown folders again off the UI thread (Refresh), then shows what changed and tells the plug-ins (<see cref="EditorHost.RefreshWorkspace"/>).</summary>
     public async Task RefreshTreeAsync(CancellationToken cancellationToken = default)
     {
         if (Tree is not { } tree)
@@ -827,6 +827,7 @@ public sealed partial class ShellModel
         if (ReferenceEquals(Tree, tree))
         {
             tree.Apply(listings);
+            Host.RefreshWorkspace();       // W: what plug-ins found in the folder is found again (IEditorHost.WorkspaceChanged)
         }
     }
 

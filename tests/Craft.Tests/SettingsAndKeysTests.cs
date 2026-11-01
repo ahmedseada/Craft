@@ -21,7 +21,7 @@ internal sealed class SettingsFixture : IDisposable
     {
         Folder = folder;
         User = SettingsFile.Load(folder.File("data/settings.json"));
-        Settings = new CraftSettings(environment ?? (_ => null), User);
+        Settings = new CraftSettings(folder.Isolated(environment), User);
         Host = new EditorHost(readVariable: Settings.Read);
         Shell = new ShellModel(Host, Settings, RecentList.Load(folder.File("data/recent.json"), 10), new NoDialogs(), new NoUi());
     }

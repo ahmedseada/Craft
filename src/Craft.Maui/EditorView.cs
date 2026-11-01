@@ -39,6 +39,8 @@ public sealed class EditorView : ContentView, IDisposable
     private ILanguage? _language;
     private ITheme? _theme;
     private CraftOptions _options = new();
+    private Craft.Abstractions.FileSettings? _fileSettings;
+    private Func<LightbulbQuery, bool>? _lightbulbProbe;
     private string? _workspaceRoot;
     private UiWorkLabels? _labels;
     private readonly SmoothScroll _smooth = new();
@@ -314,6 +316,38 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>Raised on Ctrl+S.</summary>
     public event EventHandler? SaveRequested;
 
+    /// <summary>Raised when a click on the lightbulb asks for Quick fix (X part 9).</summary>
+    public event EventHandler? QuickFixRequested;
+
+    /// <summary>The file's own settings (its .editorconfig), applied to every model the view makes; setting it applies them now.</summary>
+    public Craft.Abstractions.FileSettings? FileSettings
+    {
+        get => _fileSettings;
+        set
+        {
+            _fileSettings = value;
+            if (value is not null)
+            {
+                _model?.ApplyFileSettings(value);
+            }
+        }
+    }
+
+    /// <summary>Whether code actions exist for a lightbulb's query (the shell asks its providers); null: no lightbulb.</summary>
+    public Func<LightbulbQuery, bool>? LightbulbProbe
+    {
+        get => _lightbulbProbe;
+        set
+        {
+            _lightbulbProbe = value;
+            if (_model is { } model && (value is not null || model.LightbulbLine >= 0))
+            {
+                model.Lightbulb.Probe = value;
+                model.Lightbulb.Refresh();
+            }
+        }
+    }
+
     /// <summary>Raised on Ctrl+F and Ctrl+H.</summary>
     public event EventHandler<FindRequestedEventArgs>? FindRequested;
 
@@ -414,6 +448,17 @@ public sealed class EditorView : ContentView, IDisposable
 
         model.IsReadOnly = _readOnly;
         model.ShowLineNumbers = _lineNumbers;
+        if (_fileSettings is not null)
+        {
+            model.ApplyFileSettings(_fileSettings);
+        }
+
+        if (_lightbulbProbe is not null)
+        {
+            model.Lightbulb.Probe = _lightbulbProbe;
+        }
+
+        model.QuickFixRequested += OnModelQuickFixRequested;
         model.Dispatch = action => Dispatcher.DispatchLabelled("editor: a language's answer", action);
         model.DiagnosticsChanged += OnModelDiagnosticsChanged;
         model.DefinitionRequested += OnModelDefinitionRequested;
@@ -447,6 +492,7 @@ public sealed class EditorView : ContentView, IDisposable
         model.ScrollRequested -= OnModelScrollRequested;
         model.ContentSizeChanged -= OnModelContentSizeChanged;
         model.SaveRequested -= OnModelSaveRequested;
+        model.QuickFixRequested -= OnModelQuickFixRequested;
         model.FindRequested -= OnModelFindRequested;
         model.Reclassified -= OnModelReclassified;
         model.StatusRequested -= OnModelStatusRequested;
@@ -699,6 +745,8 @@ public sealed class EditorView : ContentView, IDisposable
 
     private void OnModelSaveRequested(object? sender, EventArgs e) => SaveRequested?.Invoke(this, EventArgs.Empty);
 
+    private void OnModelQuickFixRequested(object? sender, EventArgs e) => QuickFixRequested?.Invoke(this, EventArgs.Empty);
+
     private void OnModelFindRequested(object? sender, FindRequestedEventArgs e) => FindRequested?.Invoke(this, e);
 
     private void OnModelContentSizeChanged(object? sender, EventArgs e)
@@ -788,7 +836,8 @@ public sealed class EditorView : ContentView, IDisposable
         }
 
         var point = e.Touches[0];
-        _model.PointerHovered(point.X, point.Y);
+        // X part 9: the modifiers held, so a link shows under the pointer with Ctrl where it needs it.
+        _model.PointerHovered(point.X, point.Y, _inputConnection is IKeyModifierSource source ? source.CurrentModifiers : KeyModifiers.None);
     }
 
     private void OnEndHoverInteraction(object? sender, EventArgs e) => _model?.PointerExited();

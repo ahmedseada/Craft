@@ -149,7 +149,7 @@ public sealed partial class ShellModel
         // A closed file: its size checked, read and coloured off the UI thread; nothing semantic, no workspace.
         long limit = (long)Options.PeekMaxMegabytes * 1024 * 1024;
         var options = Options;
-        var language = EditorLanguages.ForFile(full);
+        var language = LanguageFor(full);
         try
         {
             var (document, session, problem) = await Task.Run<(ITextDocument? Document, ILanguageSession? Session, string? Problem)>(async () =>

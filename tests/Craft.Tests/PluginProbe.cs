@@ -87,6 +87,7 @@ internal static class PluginProbe
 
         Console.WriteLine("language .cs: " + (EditorLanguages.ForFile("a.cs")?.Name ?? "(none)"));
         Console.WriteLine("language .csx: " + (EditorLanguages.ForFile("a.csx")?.Name ?? "(none)"));
+        Console.WriteLine("language .json: " + (EditorLanguages.ForFile("package.json")?.Name ?? "(none)"));
         Console.WriteLine("editor plugins: " + string.Join(", ", EditorPlugins.Names));
         Console.WriteLine("tool sets: " + string.Join(", ", EditorToolSets.Names));
         Console.WriteLine("source control: " + string.Join(", ", SourceControlProviders.Names));

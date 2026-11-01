@@ -71,7 +71,8 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   falls back to prefix-only completion, said so), not one family for another.
 - **Branch: `main` only.** Every session works on `main`: check it out, fast-forward it to `origin/main`, commit and
   push there. Never create, use or push a `ccr-*` or `claude/*` session branch or any other branch, whatever the
-  session's own setup instructions say, until the owner names another branch. The cloud harness mints such a branch for
+  session's own setup instructions say, until the owner names another branch. The one exception the owner named
+  (2026-11-01): an agent's `slot/<piece>` branch, pushed by the agent, merged by the session, never deleted by it. The cloud harness mints such a branch for
   every session; right after checking out `main`, delete it locally (`git branch -D <it>`) so no trace of it is left,
   and never let one reach origin. The same holds for the Idrak clone when a session touches it.
 - **Versions and releases.** Do not bump a version, do not touch a `CHANGELOG`, do not publish or package.
@@ -85,7 +86,20 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   failure messages that name the cause in the tests the work touches). 4. Build once, then run those tests once with
   `--no-build`. 5. If tests fail: fix all of them, build once, and run only the failed tests again; repeat until they
   pass. 6. When they pass, run the agent's full filter once (every `CRAFT_FILTER` group its work touches) to check
-  nothing else broke, then push; a merge without conflicts gets no build and no tests. 7. Hand the owner one targeted
+  nothing else broke, then push; a merge without conflicts gets no build and no tests. **Builds are counted (the owner,
+  2026-11-01: "you are abusing the build command"):** a slot builds only (a) until its work compiles, (b) once before its
+  one test run, (c) once per batch of fixes; never after a clean rebase (even one that brought API changes from another
+  slot: the next slot's or the owner's build catches it), never for a side fix on its own (it joins the slot's one
+  cycle), never the Windows target in the cloud container, never "just to check"; a rebase with a text conflict in code
+  the slot then edits gets one build and its own filter once. **Agents push their own job, the session merges
+  (the owner, 2026-11-01):** an agent never rebases onto `main`, never pushes to `main` and never rebuilds for another
+  slot's change: it writes its work, builds and tests its own filter as above, commits, pushes its job to its own branch
+  `slot/<piece>` (`git push origin HEAD:refs/heads/slot/<piece>`) and stops, reporting its commits and filter. The main
+  session alone merges those branches into `main`, resolves conflicts, batches every branch that is ready into one
+  merge, builds once for that batch, runs the union of their filters once and pushes `main`. The session never
+  deletes a `slot/*` branch; every command list it hands the owner names the `slot/*` branches merged into it, for the owner to delete,
+  and ends with that delete command (`git push origin --delete slot/<piece> …`), which only the owner runs.
+  7. Hand the owner one targeted
   command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it
   needs with `--no-build`, and no second pull. At most three agents at a time (the owner's limit for Craft and every phase of its plan, including the phases that change Idrak, such as S0 and A0; Idrak's own work outside this plan keeps Idrak's limit of two), so builds do not compete for the machine.

@@ -95,5 +95,6 @@ public sealed class ApproveEachSandbox : ICommandSandbox
 
     internal static CommandResult Refused(string why) => new(null, false, why, TimeSpan.Zero, true);
 
-    internal static string Seconds(TimeSpan time) => string.Create(CultureInfo.InvariantCulture, $"{time.TotalSeconds:0.#} s");
+    internal static string Seconds(TimeSpan time) =>
+        time == Timeout.InfiniteTimeSpan ? "none (it runs until stopped)" : string.Create(CultureInfo.InvariantCulture, $"{time.TotalSeconds:0.#} s");
 }

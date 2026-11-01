@@ -661,12 +661,25 @@ public sealed class ExplorerView : ContentView
     }
 }
 
-/// <summary>The breadcrumb (docs/design/Main.dc.html): the folder, the file, the type and the member, separated by '›'; redrawn only when its parts change.</summary>
+/// <summary>
+/// The breadcrumb (docs/design/Main.dc.html; the X restart's piece 3b): the file's folders within the workspace, the file and
+/// the symbols around the caret, separated by '›', each part clickable (<see cref="PartClicked"/>: a folder lists its
+/// entries, a symbol its siblings). When the parts are wider than the bar the middle ones fold into "…"
+/// (<see cref="BreadcrumbLayout.Fold"/>) by the widths the labels measured when laid out (kept per text). Redrawn only
+/// when its parts or its width change.
+/// </summary>
 public sealed class BreadcrumbView : ContentView
 {
-    private readonly HorizontalStackLayout _parts = new() { Spacing = 6, Padding = new Thickness(16, 0), VerticalOptions = LayoutOptions.Center };
-    private IReadOnlyList<ScopeName> _shown = [];
+    private const double Gap = 6;
+    private const double SidePadding = 16;
+    private const string Separator = "›";
+    private readonly HorizontalStackLayout _parts = new() { Spacing = Gap, Padding = new Thickness(SidePadding, 0), VerticalOptions = LayoutOptions.Center };
+    private readonly Dictionary<string, double> _widths = new(StringComparer.Ordinal);
+    private readonly List<(View Label, string Key)> _labels = [];
+    private IReadOnlyList<BreadcrumbPart> _all = [];
     private ShellPalette _palette;
+    private double _width;
+    private bool _learning;
 
     /// <summary>An empty breadcrumb.</summary>
     public BreadcrumbView(ShellPalette palette)
@@ -675,19 +688,26 @@ public sealed class BreadcrumbView : ContentView
         _palette = palette;
         HeightRequest = 28;
         Content = _parts;
+        _parts.SizeChanged += (_, _) => Learn();
     }
 
+    /// <summary>Raised with the part clicked (for "…", the part it stands for: <see cref="BreadcrumbPart.Target"/>).</summary>
+    public event EventHandler<BreadcrumbPart>? PartClicked;
+
+    /// <summary>The parts on screen (folded or not).</summary>
+    public IReadOnlyList<BreadcrumbPart> Shown { get; private set; } = [];
+
     /// <summary>Shows <paramref name="parts"/> (the same parts as shown: nothing done).</summary>
-    public void Show(IReadOnlyList<ScopeName> parts)
+    public void Show(IReadOnlyList<BreadcrumbPart> parts)
     {
         ArgumentNullException.ThrowIfNull(parts);
-        if (parts.SequenceEqual(_shown))
+        if (parts.SequenceEqual(_all))
         {
             return;
         }
 
-        _shown = parts;
-        Redraw();
+        _all = parts;
+        Arrange();
     }
 
     /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
@@ -696,22 +716,144 @@ public sealed class BreadcrumbView : ContentView
         ArgumentNullException.ThrowIfNull(palette);
         _palette = palette;
         BackgroundColor = palette.Surface;
-        Redraw();
+        _widths.Clear();                                          // the font may have changed: measured again
+        Arrange();
     }
 
-    private void Redraw()
+    /// <inheritdoc />
+    protected override void OnSizeAllocated(double width, double height)
     {
+        base.OnSizeAllocated(width, height);
+        if (Math.Abs(width - _width) > 0.5)
+        {
+            _width = width;
+            Arrange();
+        }
+    }
+
+    // The parts folded to the width when every width is known; else all of them, measured once laid out (Learn).
+    private void Arrange()
+    {
+        double available = _width - (2 * SidePadding);
+        if (available > 0 && Widths() is { } widths)
+        {
+            double separator = _widths.GetValueOrDefault(Separator) + (2 * Gap);
+            double ellipsis = _widths.TryGetValue(BreadcrumbLayout.Ellipsis, out var e) ? e : _widths.GetValueOrDefault(Separator) * 2;
+            Render(BreadcrumbLayout.Fold(_all, widths, separator, ellipsis, available));
+            _learning = false;
+            return;
+        }
+
+        Render(_all);
+        _learning = true;
+    }
+
+    // Once the full set is laid out, each label's measured width is kept and the parts folded if they do not fit.
+    private void Learn()
+    {
+        if (!_learning)
+        {
+            return;
+        }
+
+        bool all = true;
+        foreach (var (label, key) in _labels)
+        {
+            if (label.Width > 0)
+            {
+                _widths[key] = label.Width;
+            }
+            else
+            {
+                all = false;
+            }
+        }
+
+        if (all && _labels.Count > 0)
+        {
+            _learning = false;
+            if (Widths() is not null)
+            {
+                Arrange();
+            }
+        }
+    }
+
+    private List<double>? Widths()
+    {
+        if (!_widths.ContainsKey(Separator) && _all.Count > 1)
+        {
+            return null;
+        }
+
+        var widths = new List<double>(_all.Count);
+        foreach (var part in _all)
+        {
+            if (!_widths.TryGetValue(part.Text, out double width))
+            {
+                return null;
+            }
+
+            widths.Add(width);
+        }
+
+        return widths;
+    }
+
+    private void Render(IReadOnlyList<BreadcrumbPart> parts)
+    {
+        if (parts.SequenceEqual(Shown) && _parts.Children.Count > 0)
+        {
+            return;
+        }
+
+        Shown = parts;
         _parts.Children.Clear();
-        for (int i = 0; i < _shown.Count; i++)
+        _labels.Clear();
+        int lastSymbol = -1;
+        for (int i = parts.Count - 1; i >= 0; i--)
+        {
+            if (parts[i].Kind == BreadcrumbPartKind.Symbol)
+            {
+                lastSymbol = i;
+                break;
+            }
+        }
+
+        for (int i = 0; i < parts.Count; i++)
         {
             if (i > 0)
             {
-                _parts.Children.Add(_palette.Label("›", _palette.Secondary, _palette.SmallSize));
+                var separator = _palette.Label(Separator, _palette.Secondary, _palette.SmallSize);
+                _labels.Add((separator, Separator));
+                _parts.Children.Add(separator);
             }
 
-            var part = _shown[i];
-            var color = i == _shown.Count - 1 && part.Kind == ScopeKind.Method ? _palette.Method : _palette.Secondary;
-            _parts.Children.Add(_palette.Label(part.Name, color, _palette.SmallSize));
+            var part = parts[i];
+            var color = part.Kind == BreadcrumbPartKind.Symbol && part.Scope == ScopeKind.Method ? _palette.Method
+                : i == lastSymbol || (lastSymbol < 0 && part.Kind == BreadcrumbPartKind.File) ? _palette.Text
+                : _palette.Secondary;
+            var label = _palette.Label(part.Text, color, _palette.SmallSize);
+            label.Padding = new Thickness(2, 1);
+            View shown = label;
+            if (part.Kind == BreadcrumbPartKind.File)
+            {
+                // W: the file's drawn icon before its name (the tree's and the tab's), measured with it.
+                var icon = FileIconView.Of(FileIcons.For(part.Path ?? part.Text), _palette, 14);
+                shown = new HorizontalStackLayout { Spacing = 4, VerticalOptions = LayoutOptions.Center, Children = { icon, label } };
+            }
+
+            _labels.Add((shown, part.Text));
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += (_, _) => PartClicked?.Invoke(this, part.Target);
+            shown.GestureRecognizers.Add(tap);
+            ToolTipProperties.SetText(label, part.Kind switch
+            {
+                BreadcrumbPartKind.Ellipsis => string.Join(" › ", part.Folded.Select(f => f.Text)),
+                BreadcrumbPartKind.Symbol => $"{SymbolKinds.Word(part.Scope)} {part.Text}: its siblings ('@')",
+                _ => part.Path is { } path ? path + ": its entries" : part.Text,
+            });
+            _parts.Children.Add(shown);
         }
     }
 }
@@ -797,7 +939,16 @@ public sealed class BottomPanelView : ContentView, IDisposable
             Options = OutputOptions(palette.Options),
             KeyHandler = new ReadOnlySurfaceKeys(() => WindowKeys),
         };
-        _output.ModelChanged += (_, _) => _log.Attach(_output.Model);
+        _output.ModelChanged += (_, _) =>
+        {
+            _log.Attach(_output.Model);
+            if (_output.Model is { } model)
+            {
+                // X part 9: file:line links in Output, a click opens the place (the page resolves and opens it).
+                model.DetectsLinks = true;
+                model.LinkActivated += (_, e) => LinkActivated?.Invoke(this, e);
+            }
+        };
         _output.Open(_log.Shown, LogSurface.Language);
         _output.FindRequested += (_, e) =>
         {
@@ -901,6 +1052,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
             _problemsView.WindowKeys = value;
         }
     }
+
+    /// <summary>Raised when a file:line link in Output was clicked (X part 9).</summary>
+    public event EventHandler<EditorLinkEventArgs>? LinkActivated;
 
     /// <summary>Output's log (the tests' and the page's way to it).</summary>
     public LogSurface Log => _log;

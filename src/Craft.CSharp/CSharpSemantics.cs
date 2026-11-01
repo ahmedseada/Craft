@@ -465,7 +465,7 @@ internal static class CSharpSemantics
         _ => symbol.Kind.ToString().ToLowerInvariant(),
     };
 
-    private static async Task<(ISymbol? Symbol, TextSpan Span)> SymbolAtAsync(Document document, int position, CancellationToken cancellationToken)
+    internal static async Task<(ISymbol? Symbol, TextSpan Span)> SymbolAtAsync(Document document, int position, CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         if (root is null)

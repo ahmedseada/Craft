@@ -7,7 +7,7 @@ using Craft.Core.Workspaces;
 namespace Craft.Editor.Shell;
 
 /// <summary>An action an empty state offers: a command to run, or a folder to open (a recent one).</summary>
-/// <param name="Label">What it shows ("Open folder… (Ctrl+Shift+O)").</param>
+/// <param name="Label">What it shows ("Open folder… (Ctrl+K Ctrl+O)").</param>
 /// <param name="CommandId">The command it runs, or null.</param>
 /// <param name="Path">The folder it opens, or null.</param>
 /// <param name="Primary">Whether it is the first thing to do (drawn as the primary button).</param>

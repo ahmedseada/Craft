@@ -222,6 +222,38 @@ public static class ShellText
         return string.Create(CultureInfo.InvariantCulture, $"{(options.InsertSpaces ? "Spaces" : "Tab size")}: {options.TabSize}");
     }
 
+    /// <summary>
+    /// The indentation item's tooltip: where the tab size and the indentation come from, a file's <c>.editorconfig</c> (which
+    /// wins over the options) or the settings.
+    /// </summary>
+    public static string IndentationTooltip(EditorModel? model)
+    {
+        if (model?.FileSettings is { } settings && (settings.TabSize is not null || settings.InsertSpaces is not null) && settings.Sources.Count > 0)
+        {
+            return $"Indentation from {settings.Sources[^1]} (.editorconfig wins over CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES)";
+        }
+
+        return "Indentation: CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES (Settings, Editor)";
+    }
+
+    /// <summary>
+    /// What formats the file, for the language item's tooltip (W, contract 8): "Formatter: Prettier 3.6.2, the project's
+    /// (.prettierrc.json)", "Formatter: the css language's own", or "No formatter for this file".
+    /// </summary>
+    public static string FormatterTooltip(EditorModel? model) =>
+        model?.FormatterDescription is { } formatter ? "Formatter: " + formatter : "No formatter for this file";
+
+    /// <summary>The line ending item's tooltip: the file's breaks are kept; new lines take a file's <c>.editorconfig</c> end_of_line, else the setting.</summary>
+    public static string LineEndingTooltip(EditorModel? model)
+    {
+        if (model?.FileSettings is { NewLine: { } newLine } settings && settings.Sources.Count > 0)
+        {
+            return $"New lines are {LineEnding(newLine)}: end_of_line in {settings.Sources[^1]} (.editorconfig wins over CRAFT_LINE_ENDING); the file's own breaks are kept";
+        }
+
+        return "The file's line breaks (kept when it is saved; CRAFT_LINE_ENDING for new files)";
+    }
+
     /// <summary>"CRLF", "LF", "CR" for a line break.</summary>
     public static string LineEnding(string lineEnding) => lineEnding switch { "\r\n" => "CRLF", "\n" => "LF", "\r" => "CR", var other => other };
 

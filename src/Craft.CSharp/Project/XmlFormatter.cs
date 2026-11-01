@@ -136,7 +136,7 @@ internal sealed class XmlFormatter : ITextFormatter
                     }
                     else if (open.Count == 0 && item.Kind == Kind.Text)
                     {
-                        throw JsonFormatter.Malformed(text, item.Start, "text outside the root element");
+                        throw ITextFormatter.Malformed(text, item.Start, "text outside the root element");
                     }
 
                     break;
@@ -144,14 +144,14 @@ internal sealed class XmlFormatter : ITextFormatter
                 {
                     if (open.Count == 0)
                     {
-                        throw JsonFormatter.Malformed(text, item.Start, $"</{text[item.NameStart..item.NameEnd].ToString()}> closes no element");
+                        throw ITextFormatter.Malformed(text, item.Start, $"</{text[item.NameStart..item.NameEnd].ToString()}> closes no element");
                     }
 
                     var (index, mixed) = open.Pop();
                     var start = items[index];
                     if (!text[start.NameStart..start.NameEnd].SequenceEqual(text[item.NameStart..item.NameEnd]))
                     {
-                        throw JsonFormatter.Malformed(text, item.Start,
+                        throw ITextFormatter.Malformed(text, item.Start,
                             $"</{text[item.NameStart..item.NameEnd].ToString()}> closes <{text[start.NameStart..start.NameEnd].ToString()}>");
                     }
 
@@ -171,7 +171,7 @@ internal sealed class XmlFormatter : ITextFormatter
         if (open.Count > 0)
         {
             var start = items[open.Peek().Index];
-            throw JsonFormatter.Malformed(text, start.Start, $"<{text[start.NameStart..start.NameEnd].ToString()}> is not closed");
+            throw ITextFormatter.Malformed(text, start.Start, $"<{text[start.NameStart..start.NameEnd].ToString()}> is not closed");
         }
 
         return kept;
@@ -239,7 +239,7 @@ internal sealed class XmlFormatter : ITextFormatter
         int found = text[i..].IndexOf(close, StringComparison.Ordinal);
         if (found < 0)
         {
-            throw JsonFormatter.Malformed(text, i, what);
+            throw ITextFormatter.Malformed(text, i, what);
         }
 
         return i + found + close.Length;
@@ -254,7 +254,7 @@ internal sealed class XmlFormatter : ITextFormatter
         int nameEnd = NameEnd(text, nameStart);
         if (nameEnd == nameStart)
         {
-            throw JsonFormatter.Malformed(text, i, "a '<' that starts no tag (write &lt; in text)");
+            throw ITextFormatter.Malformed(text, i, "a '<' that starts no tag (write &lt; in text)");
         }
 
         i = nameEnd;
@@ -270,7 +270,7 @@ internal sealed class XmlFormatter : ITextFormatter
 
             if (i >= text.Length)
             {
-                throw JsonFormatter.Malformed(text, start, $"<{text[nameStart..nameEnd].ToString()} is not closed (>)");
+                throw ITextFormatter.Malformed(text, start, $"<{text[nameStart..nameEnd].ToString()} is not closed (>)");
             }
 
             char c = text[i];
@@ -278,7 +278,7 @@ internal sealed class XmlFormatter : ITextFormatter
             {
                 if (end && c == '/')
                 {
-                    throw JsonFormatter.Malformed(text, i, "an end tag that ends with '/>'");
+                    throw ITextFormatter.Malformed(text, i, "an end tag that ends with '/>'");
                 }
 
                 i += c == '>' ? 1 : 2;
@@ -294,14 +294,14 @@ internal sealed class XmlFormatter : ITextFormatter
 
             if (end || i == gap)
             {
-                throw JsonFormatter.Malformed(text, i, $"unexpected '{c}' in <{(end ? "/" : "")}{text[nameStart..nameEnd].ToString()}>");
+                throw ITextFormatter.Malformed(text, i, $"unexpected '{c}' in <{(end ? "/" : "")}{text[nameStart..nameEnd].ToString()}>");
             }
 
             int attribute = i;
             int attributeEnd = NameEnd(text, i);
             if (attributeEnd == i)
             {
-                throw JsonFormatter.Malformed(text, i, $"unexpected '{c}' in <{text[nameStart..nameEnd].ToString()}>");
+                throw ITextFormatter.Malformed(text, i, $"unexpected '{c}' in <{text[nameStart..nameEnd].ToString()}>");
             }
 
             i = attributeEnd;
@@ -312,7 +312,7 @@ internal sealed class XmlFormatter : ITextFormatter
 
             if (i >= text.Length || text[i] != '=')
             {
-                throw JsonFormatter.Malformed(text, attribute, $"the attribute {text[attribute..attributeEnd].ToString()} has no value (=\"...\")");
+                throw ITextFormatter.Malformed(text, attribute, $"the attribute {text[attribute..attributeEnd].ToString()} has no value (=\"...\")");
             }
 
             i++;
@@ -323,14 +323,14 @@ internal sealed class XmlFormatter : ITextFormatter
 
             if (i >= text.Length || text[i] is not ('"' or '\''))
             {
-                throw JsonFormatter.Malformed(text, attribute, $"the value of {text[attribute..attributeEnd].ToString()} is not in quotes");
+                throw ITextFormatter.Malformed(text, attribute, $"the value of {text[attribute..attributeEnd].ToString()} is not in quotes");
             }
 
             char quote = text[i];
             int close = text[(i + 1)..].IndexOf(quote);
             if (close < 0)
             {
-                throw JsonFormatter.Malformed(text, i, $"the value of {text[attribute..attributeEnd].ToString()} is not closed ({quote})");
+                throw ITextFormatter.Malformed(text, i, $"the value of {text[attribute..attributeEnd].ToString()} is not closed ({quote})");
             }
 
             var value = text[(i + 1)..(i + 1 + close)];

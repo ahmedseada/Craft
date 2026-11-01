@@ -13,7 +13,11 @@ namespace Craft.Editor;
 /// The edits to its text (in that text's positions, in order, not overlapping), given the text: the open document's
 /// current text, or the file's when it is not open. Called off the UI thread; none: the file is left out.
 /// </param>
-public sealed record FileChange(string Path, Func<ITextSnapshot, IReadOnlyList<TextEdit>> Edits);
+public sealed record FileChange(string Path, Func<ITextSnapshot, IReadOnlyList<TextEdit>> Edits)
+{
+    /// <summary>What the review says the change came from ("Search", "Rename"), before where its text was read.</summary>
+    public string Origin { get; init; } = "Search";
+}
 
 /// <summary>What a review across files applied, and how to take it back.</summary>
 public sealed class FilesEditResult
@@ -162,6 +166,86 @@ public sealed partial class EditorHost
         }
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// <see cref="ProposeWorkspaceEditAsync"/>, then the shell's Undo bar for the whole change ("{title}: N files changed");
+    /// without a bar the change is kept at once.
+    /// </remarks>
+    public async Task<bool> ProposeWorkspaceAsync(WorkspaceEdit edit, string title, CancellationToken cancellationToken = default)
+    {
+        var result = await ProposeWorkspaceEditAsync(edit, title, cancellationToken).ConfigureAwait(true);
+        if (result is not { Files: > 0 } applied)
+        {
+            return false;
+        }
+
+        string text = applied.Files == 1 ? $"{title}: 1 file changed." : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{title}: {applied.Files} files changed.");
+        if (!ShowUndo(text, () => _ = applied.UndoAsync(), applied.Keep))
+        {
+            applied.Keep();
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Proposes <paramref name="edit"/> (edits to several files: a rename) as one review titled <paramref name="title"/>
+    /// (<see cref="ProposeFilesAsync"/>: every file's diff together, Accept all; each open document one undo step; a file
+    /// that is not open read off the UI thread, edited and saved on accept). Refused before the user is asked, and said in
+    /// the log, when an open document changed since the edit was made (its <see cref="WorkspaceFileEdit.Version"/>), when a
+    /// file the edit made against unsaved text is no longer open, or when an open document has unsaved changes the edit
+    /// was not made against. Null when nothing was proposed, refused, or accepted.
+    /// </summary>
+    public async Task<FilesEditResult?> ProposeWorkspaceEditAsync(WorkspaceEdit edit, string title, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        if (edit.Refusal is { } refusal)
+        {
+            Log(HostSource, EditorLogLevel.Information, $"'{title}': {refusal}", null);
+            return null;
+        }
+
+        var changes = new List<FileChange>(edit.Files.Count);
+        foreach (var file in edit.Files)
+        {
+            string path = Path.GetFullPath(file.Path);
+            var open = _documents.FirstOrDefault(d => !d.IsClosed && d.FilePath is { } p && PathKeys.Comparer.Equals(Path.GetFullPath(p), path));
+            string? stale = (open, file.Version) switch
+            {
+                (null, not null) => "was closed since the change was made",
+                ({ } doc, { } version) when doc.Document.Buffer.Current.Version != version => "changed since the change was made",
+                ({ } doc, null) when doc.Document.IsDirty => "has unsaved changes the change was not made against",
+                _ => null,
+            };
+            if (stale is not null)
+            {
+                Log(HostSource, EditorLogLevel.Warning, $"'{title}': {Path.GetFileName(path)} {stale}; nothing was proposed (run it again).", null);
+                LastWorkspaceEditRefusal = $"{Path.GetFileName(path)} {stale}; run it again.";
+                return null;
+            }
+
+            var edits = file.Edits;
+            changes.Add(new FileChange(path, _ => edits) { Origin = title });
+        }
+
+        LastWorkspaceEditRefusal = null;
+        try
+        {
+            return await ProposeFilesAsync(changes, title, cancellationToken).ConfigureAwait(true);
+        }
+        catch (ArgumentException error)
+        {
+            // An edit outside a file's text: the file on disk changed since the edit was made.
+            Log(HostSource, EditorLogLevel.Warning, $"'{title}': {error.Message} Nothing was changed.", error);
+            LastWorkspaceEditRefusal = "A file changed on disk since the change was made; run it again.";
+            return null;
+        }
+    }
+
+    /// <summary>Why the last <see cref="ProposeWorkspaceEditAsync"/> refused before asking the user, or null when it did not.</summary>
+    public string? LastWorkspaceEditRefusal { get; private set; }
+
     // A file's proposal: its open document, or its text read into a document of its own (off the UI thread).
     private async Task<FileProposal?> PrepareAsync(FileChange change, string title, CancellationToken cancellationToken)
     {
@@ -209,7 +293,7 @@ public sealed partial class EditorHost
         {
             Diff = diff,
             HunkOfEdit = EditProposal.HunksOf(snapshot, edits, diff),
-            Origin = open is null ? "Search: the file on disk (not open)" : "Search: the open document",
+            Origin = change.Origin + (open is null ? ": the file on disk (not open)" : ": the open document"),
         };
         return new FileProposal(path, proposal, open, background, read);
     }

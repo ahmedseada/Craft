@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B8: hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view) | Part 6 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus) | Parts 6 and 7 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -2866,13 +2866,45 @@ The owner: "the search icon on the left side bar only opens the search command; 
   `.craft/run.json` round trip).
 - Slot: X part 6 runs in slot 3 right after the split editor (3a), before 3b.
 
+### X part 7: rich context menus in the explorer and on the open tabs (the owner, 2026-11-01)
+The owner: "I want a rich context menu both in the file explorer and the opened file item". Today (X slice 1) the tree's
+menu has New file, New folder, Reveal in File Explorer, Open in terminal, Copy path, Copy relative path, Rename, Delete,
+and the tab's has Close, Close others, Close to the right, Copy path, Copy relative path, Reveal in the explorer, Reveal
+in File Explorer: plain text rows.
+- **The menu itself**: each row with its icon (the icon theme's file and folder icons, and command icons drawn in the
+  design's style), its keys in effect, a disabled row with the reason as its tooltip, groups with separators,
+  submenus (hover or Right opens, Left closes), type to jump, and the modern look of the design (raised card, motion,
+  no box inside a box). `EditorMenus` items gain an optional icon, a submenu and a "when" over the target (a file, a
+  folder, a language, a project kind), so plug-ins add rich items the same way.
+- **Explorer (file)**: Open, Open to the side (the split editor), Open with (a language picked), Reveal in File
+  Explorer, Open in terminal; Find in folder (the Search view scoped there); Run and Build (the Run view's providers for
+  a `.csproj`, `.sln`, `package.json` script, `.ps1`); Format file; Add to chat context, Ask the agent about it; Cut,
+  Copy, Paste (files, off the UI thread, with Undo), Duplicate; Compare with selected (a diff of two files); Copy
+  name, Copy path, Copy relative path; Rename in place (inline in the tree), Delete with Undo (Recycle Bin on Windows).
+- **Explorer (folder)**: New file, New folder (inline names), Find in folder, Open in terminal, Collapse all inside,
+  Run the folder's runners, Paste, Rename in place, Delete with Undo, Copy path.
+- **Explorer (empty area and the workspace root)**: New file, New folder, Paste, Collapse all, Refresh, Open folder.
+- **Open tab**: Close, Close others, Close to the right, Close saved, Close all, Reopen closed (Ctrl+Shift+T); Pin and
+  Unpin (a pinned tab stays at the left and is not closed by Close others); Split right, Split down, Move to the other
+  group; Copy name, Copy path, Copy relative path; Reveal in the explorer, Reveal in File Explorer, Open in terminal;
+  Format file; Compare with saved (a dirty file's diff); Revert file (with Undo); Run and Build when the file has a
+  runner; Add to chat context.
+- Every action that touches the disk runs off the UI thread and shows as an activity when it lasts; every destructive
+  one is undoable (the Undo bar) instead of a dialog where it can be.
+- Decisions (recommended, noted): no git items until a git plug-in exists; Compare uses the existing diff view; Reopen
+  closed keeps the last `CRAFT_TABS_REOPEN_LIMIT` (20) closed tabs with their carets.
+- Tests: `ContextMenus` (each target's rows and their enabled state, submenus and keys, a plug-in's rich item with its
+  "when", paste, duplicate and delete with Undo, inline rename, pin and close-others, reopen closed, compare with
+  saved).
+- Slot: slot 3 after X part 6.
+
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; 1c (last) the interaction
   times.
 - Slot 2, the surface: 2a batched build, hover cards and fold preview, ruler, sticky scroll; 2b minimap, completion at
   several carets.
 - Slot 3, language and shell: 3a split editor first (the owner asked for it directly, 2026-11-01: "I need to split the
-  editor screen"), then tree move and peek; then X part 6 (the Search view, the Run view); 3b symbols, `@`, breadcrumb,
+  editor screen"), then tree move and peek; then X part 6 (the Search view, the Run view), then X part 7 (rich context menus); 3b symbols, `@`, breadcrumb,
   F2 rename.
 - Merge: 1a, then 2a, 3a (the split editor), 1b as they finish, then 2b and 3b, then 1c; 3a's `EditorModel.cs` change
   (a shared language session) rebases on 2a's. Shared files (`CraftOptions.cs`, the API dumps,

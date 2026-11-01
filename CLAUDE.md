@@ -122,7 +122,9 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
   ```
   Every test run shows the live progress line and saves only the failed lines (each FAIL line with its message lines
-  and the summary) into `test-output\` for the owner to paste.
+  and the summary) into `test-output\` for the owner to paste. **One block to copy (the owner, 2026-11-01: "put all
+  command in one block to copy"):** the whole list is one PowerShell code block, one command a line; the `slot/*`
+  branch delete commands go in one more block after it.
   Whenever a new version is ready to rebuild (an agent's work merged), the owner gets this list at once, unasked, with
   one pull of each repository that changed since the last list: Idrak's first (`cd D:\Projects\Idrak; git checkout
   main; git pull origin main`, because Craft builds against the clone), then Craft's; a repository with nothing new is

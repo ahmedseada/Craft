@@ -94,6 +94,14 @@ sealed class Craft.CSharp.JsonFolding : Craft.Abstractions.IFoldingRangeProvider
   const System.String ProviderName = json
   ctor()
   static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.CSharp.MarkdownFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
+  const System.String ProviderName = markdown
+  ctor()
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.CSharp.MarkupFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
   System.String Name { get; }
@@ -105,6 +113,7 @@ sealed class Craft.CSharp.MarkupFolding : Craft.Abstractions.IFoldingRangeProvid
 static class Craft.CSharp.ProjectLanguages
   const System.String EditorConfig = editorconfig
   const System.String Json = json
+  const System.String Markdown = markdown
   const System.String MsBuild = msbuild
   const System.String Razor = razor
   const System.String Solution = sln
@@ -145,6 +154,18 @@ sealed class Craft.CSharp.Run.DotnetRunProvider.ProjectFacts : System.IEquatable
   System.String ToString()
   System.Void Deconstruct(out System.String OutputType, out System.Collections.Generic.IReadOnlyList<System.String> Frameworks, out System.Boolean Runs, out System.Boolean Tests)
   ctor(System.String OutputType, System.Collections.Generic.IReadOnlyList<System.String> Frameworks, System.Boolean Runs, System.Boolean Tests)
+sealed class Craft.CSharp.Run.DotnetTestProvider : Craft.Abstractions.ITestProvider, Idrak.Abstraction.IKind
+  Craft.Abstractions.RunCommand Command(Craft.Abstractions.TestRunRequest request)
+  System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> Discover(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestResult> ReadResults(Craft.Abstractions.TestRunRequest request, System.String output, System.Threading.CancellationToken cancellationToken = null)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String Title { get; }
+  const System.String ProviderName = dotnet
+  ctor()
+  static System.Collections.Generic.List<Craft.Abstractions.TestItem> InText(System.String text, System.String project, System.String file, System.Threading.CancellationToken cancellationToken = null)
+  static System.String Filter(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> tests)
 sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.SourceText
   Craft.Abstractions.ITextSnapshot Snapshot { get; }
   System.Char Item[System.Int32] { get; }

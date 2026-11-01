@@ -14,7 +14,7 @@ namespace Craft.CSharp;
 /// brackets; MSBuild, XML, XAML and JSON also format (Format document, format on save). Registered through
 /// <see cref="EditorLanguages"/> only, as any plug-in's language is.
 /// </summary>
-public static class ProjectLanguages
+public static partial class ProjectLanguages
 {
     /// <summary>MSBuild's project files: .csproj, .props, .targets.</summary>
     public const string MsBuild = "msbuild";

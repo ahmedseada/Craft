@@ -209,6 +209,11 @@ public sealed class OverviewRuler : IDisposable
         int lines = snapshot.LineCount;
         foreach (ref readonly var mark in model.LineMarks)
         {
+            if (mark.IsGlyph)
+            {
+                continue;                                    // a test's ▶, ✓ or ✗ stays in the gutter (X part 9)
+            }
+
             byte kind = mark.Kind switch
             {
                 LineMarkKind.Added => Added,

@@ -730,6 +730,9 @@ public enum BottomTab
 
     /// <summary>The measures recorded through the host.</summary>
     Telemetry,
+
+    /// <summary>The TODO list (X part 9): the tags in the workspace's comments.</summary>
+    Todo,
 }
 
 /// <summary>
@@ -766,6 +769,8 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly Label _noMeasures;
     private readonly Action<ProblemItem> _problemChosen;
     private View? _terminalView;
+    private PanelView? _todoView;
+    private Craft.Editor.Tools.TodoListView? _todo;
     private ShellPalette _palette;
     private string _outputFilter = "";
     private string _metricsFilter = "";
@@ -932,6 +937,36 @@ public sealed class BottomPanelView : ContentView, IDisposable
         }
     }
 
+    /// <summary>The TODO tab's list (X part 9): drawn from its blocks; its count in the tab's title.</summary>
+    public Craft.Editor.Tools.TodoListView? Todo
+    {
+        get => _todo;
+        set
+        {
+            if (_todo is not null)
+            {
+                _todo.Changed -= OnTodoChanged;
+            }
+
+            _todoView?.Dispose();
+            _todo = value;
+            _todoView = null;
+            if (value is not null)
+            {
+                _todoView = new PanelView(_host, value);
+                _todoView.SetPalette(_palette);
+                value.Changed += OnTodoChanged;
+            }
+
+            if (Tab == BottomTab.Todo)
+            {
+                Select(BottomTab.Todo);
+            }
+
+            RebuildTabs();
+        }
+    }
+
     /// <summary>Shows <paramref name="tab"/>.</summary>
     public void Select(BottomTab tab)
     {
@@ -946,6 +981,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
             BottomTab.Problems => _problemsBody,
             BottomTab.Terminal => _terminalView ?? _terminal,
             BottomTab.Output => _output,
+            BottomTab.Todo => _todoView ?? (View)_noMeasures,
             _ => _metrics.AllRows.Count == 0 ? _noMeasures : _metricsView,
         };
         UpdateTools();
@@ -1019,6 +1055,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
 
         _metricsView.Apply(palette.Options, palette.Theme);
         _problemsView.Apply(palette.Options, palette.Theme);
+        _todoView?.SetPalette(palette);
         UpdateTools();
         RebuildTabs();
     }
@@ -1028,6 +1065,12 @@ public sealed class BottomPanelView : ContentView, IDisposable
     {
         _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.Logged -= OnLogged;
+        if (_todo is not null)
+        {
+            _todo.Changed -= OnTodoChanged;
+        }
+
+        _todoView?.Dispose();
         _metrics.Recorded -= OnMeasured;
         _metrics.Dispose();
         _metricsView.Dispose();
@@ -1074,7 +1117,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         bool output = Tab == BottomTab.Output;
         _filterField.IsVisible = output || Tab == BottomTab.Telemetry;
         _follow.IsVisible = output;
-        _copyAll.IsVisible = Tab != BottomTab.Terminal;
+        _copyAll.IsVisible = Tab is not (BottomTab.Terminal or BottomTab.Todo);
         ToolTipProperties.SetText(_copyAll, Tab == BottomTab.Output ? "Copy every line shown (Ctrl+C copies the selection)" : "Copy every row shown (Ctrl+C copies the rows picked)");
         _filling = true;
         try
@@ -1122,13 +1165,19 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private void RebuildTabs()
     {
         _tabs.Children.Clear();
-        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Telemetry])
+        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Todo, BottomTab.Telemetry])
         {
+            if (tab == BottomTab.Todo && _todo is null)
+            {
+                continue;
+            }
+
             string title = tab switch
             {
                 BottomTab.Problems => _problems.Count > 0 ? string.Create(CultureInfo.InvariantCulture, $"Problems {_problems.Count}") : "Problems",
                 BottomTab.Terminal => "Terminal",
                 BottomTab.Output => "Output",
+                BottomTab.Todo => _todo is { Count: > 0 } todo ? string.Create(CultureInfo.InvariantCulture, $"TODO {todo.Count}") : "TODO",
                 _ => "Idrak telemetry",
             };
             bool active = tab == Tab;
@@ -1152,6 +1201,19 @@ public sealed class BottomPanelView : ContentView, IDisposable
             cell.GestureRecognizers.Add(tap);
             ToolTipProperties.SetText(cell, title);
             _tabs.Children.Add(cell);
+        }
+    }
+
+    // The TODO list changed: its count in the tab's title (on the UI thread; the list raises it there).
+    private void OnTodoChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.IsDispatchRequired)
+        {
+            Dispatcher.DispatchLabelled("todo: the tab's count", RebuildTabs);
+        }
+        else
+        {
+            RebuildTabs();
         }
     }
 

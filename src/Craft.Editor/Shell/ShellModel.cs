@@ -284,6 +284,9 @@ public static class ShellViewNames
 
     /// <summary>The bottom panel's Idrak telemetry tab.</summary>
     public const string Telemetry = "panel.telemetry";
+
+    /// <summary>The bottom panel's TODO tab (X part 9).</summary>
+    public const string Todo = "panel.todo";
 }
 
 /// <summary>
@@ -377,7 +380,7 @@ public sealed partial class ShellModel : IDisposable
         // The new document keeps the path, so Save writes it there (the owner's Windows run: Save on the agent's new file
         // did nothing); a second proposal for the same new file goes to the same tab.
         host.OpenFile = async (path, token) => File.Exists(path)
-            ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument
+            ? (await OpenAsTextAsync(path, token).ConfigureAwait(true))?.HostDocument
             : (Groups.FindSuggested(path) ?? NewFile(path)).HostDocument;
         host.SetKeyBindings(Options.KeyBindings, Options.KeyMap);
         UndoBar = new UndoBar(Options.UndoBarMilliseconds, action => host.Dispatch("shell: the undo bar's time is up", action));
@@ -391,6 +394,7 @@ public sealed partial class ShellModel : IDisposable
         host.SettingWriter = StoreSettingAsync;
         RegisterCommands();
         CreateViews();
+        CreateTools();
         WatchMemory();
         WatchSourceControl();
     }
@@ -800,6 +804,13 @@ public sealed partial class ShellModel : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var full = Path.GetFullPath(path);
         var tab = Tabs.Find(full);
+        if (tab is null && Groups.FindOpen(full) is null && OpensAsImage(full))
+        {
+            // X part 9: an image opens in its preview tab (Image: Open as text opens an SVG's source).
+            await OpenImageAsync(full);
+            return null;
+        }
+
         if (tab is null && Groups.FindOpen(full) is { } elsewhere)
         {
             // Open in another group: shown here too, one document (the split editor).
@@ -1198,6 +1209,7 @@ public sealed partial class ShellModel : IDisposable
         Host.DocumentSaved -= OnDocumentSaved;
         Host.PanelsChanged -= OnPanelsChanged;
         Host.PanelShowRequested -= OnPanelShowRequested;
+        DisposeTools();
         DisposeViews();
         DisposeContext();
         StopWatching();
@@ -1481,6 +1493,7 @@ public sealed partial class ShellModel : IDisposable
         Rail(new RailItem("craft.agent", "Agent", ShellCommandIds.Agent, RailIcons.Agent, 30));
         Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
         RegisterViewCommands();
+        RegisterToolCommands();
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
         RegisterContextCommands();
     }

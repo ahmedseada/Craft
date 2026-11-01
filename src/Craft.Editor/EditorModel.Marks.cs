@@ -42,7 +42,8 @@ public sealed partial class EditorModel
 
         var (left, width) = LineMarkStrip();
         float cell = Metrics.CellWidth;
-        if (viewX < left - (cell * 0.25f) || viewX > left + width + (cell * 0.25f))
+        bool glyph = viewX >= 0 && viewX < cell * 1.2f;
+        if (!glyph && (viewX < left - (cell * 0.25f) || viewX > left + width + (cell * 0.25f)))
         {
             return null;
         }
@@ -53,7 +54,7 @@ public sealed partial class EditorModel
             return null;
         }
 
-        int index = marks.IndexAt(LineAtRow(row));
+        int index = glyph ? marks.GlyphIndexAt(LineAtRow(row)) : marks.IndexAt(LineAtRow(row));
         return index >= 0 ? index : null;
     }
 

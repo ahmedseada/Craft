@@ -344,6 +344,45 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="command"/> (another view's: the Test explorer's <c>dotnet test</c>) as a run named
+    /// <paramref name="name"/>: approved by the user, through the registered sandbox, its output in its own terminal tab
+    /// ("Test: NAME"), an activity whose Cancel (and Stop) ends its tree, its compilers' problems in Problems; each output
+    /// line also handed to <paramref name="tap"/> (on the sandbox's thread). It never takes the keyboard.
+    /// </summary>
+    public async Task<RunOutcome> RunCommandAsync(string name, RunCommand command, RunActions action, Action<string>? tap = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(command);
+        if (_root() is not { } root)
+        {
+            return NotStarted("Open a folder to run what it holds.");
+        }
+
+        if (_running.ContainsKey(name))
+        {
+            string why = $"'{name}' runs already: stop it first (Shift+F5).";
+            Say(why, NotificationSeverity.Information);
+            return NotStarted(why);
+        }
+
+        var item = new RunningItem(name);
+        _running[name] = item;
+        Changed2();
+        try
+        {
+            var target = new RunTarget(CommandOnly.ProviderName, name, name, "", action);
+            var configuration = new RunConfiguration(name, CommandOnly.ProviderName, name) { Action = action, Interactive = RunInteractive.Off };
+            return await StepAsync(item, CommandOnly.Instance, target, action, configuration, root, cancellationToken, command, tap).ConfigureAwait(true);
+        }
+        finally
+        {
+            _running.Remove(name);
+            item.Dispose();
+            Changed2();
+        }
+    }
+
     /// <summary>Stops the run named <paramref name="name"/> (every run when null), with its process tree; false when none ran.</summary>
     public bool Stop(string? name = null)
     {
@@ -527,10 +566,11 @@ public sealed class RunView : IEditorViewPanel, IDisposable
 
     // ---- one step of a run: approve, sandbox, terminal, activity, problems ----
 
-    private async Task<RunOutcome> StepAsync(RunningItem item, IRunProvider provider, RunTarget target, RunActions action, RunConfiguration configuration, string root, CancellationToken cancellationToken)
+    private async Task<RunOutcome> StepAsync(RunningItem item, IRunProvider provider, RunTarget target, RunActions action, RunConfiguration configuration, string root, CancellationToken cancellationToken,
+        RunCommand? given = null, Action<string>? tap = null)
     {
         var options = _options();
-        var command = provider.Command(target, action, configuration, root);
+        var command = given ?? provider.Command(target, action, configuration, root);
         if (command.Problem is { } cannot || command.Command.Count == 0)
         {
             string why = command.Problem ?? "The provider gave no command.";
@@ -616,6 +656,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 }
 
                 output.Line(text, error);
+                tap?.Invoke(text);
                 item.Activity?.Report(null, text.Length <= 80 ? text.Trim() : string.Concat(text.AsSpan(0, 79), "…").Trim());
             },
         };
@@ -1350,6 +1391,27 @@ public sealed class RunView : IEditorViewPanel, IDisposable
 
     // A configuration being edited in the view (Original: the name it had, null for a new one).
     private sealed record Draft(string? Original, string Name, string Target, string Action, string Arguments, string Environment, string Folder, bool BuildFirst, string Interactive);
+
+    // The provider of a command another view hands over (RunCommandAsync): its problems read as MSBuild's, its command given.
+    private sealed class CommandOnly : IRunProvider
+    {
+        public const string ProviderName = "command";
+
+        public static readonly CommandOnly Instance = new();
+
+        public string Name => ProviderName;
+
+        public string Title => "Command";
+
+        public string Summary => "a command another view hands to the Run view";
+
+        public bool Watches(ReadOnlySpan<char> fileName) => false;
+
+        public IReadOnlyList<RunTarget> Find(RunWorkspace workspace, CancellationToken cancellationToken = default) => [];
+
+        public RunCommand Command(RunTarget target, RunActions action, RunConfiguration? configuration, string root) =>
+            RunCommand.Unavailable("A handed command has no command of its own.", root);
+    }
 
     // A run under way: its stop and its activity.
     private sealed class RunningItem(string name) : IDisposable

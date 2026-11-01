@@ -348,8 +348,10 @@ public static class ConversationTests
             var waiting = panel.Entries.First(e => e.Role == ConversationRole.Approval);
             Check.True(waiting.Text == "git status" && waiting.Actions[0] is { Label: "Allow once", Primary: true } && waiting.Details == "Program: git",
                 "the step shows the command, its facts and the sandbox's answers (no dialog)");
-            string text = controller.Transcript.Document.Buffer.Current.GetText(0, controller.Transcript.Document.Buffer.Current.Length);
-            Check.True(text.Contains("● Waiting for you: git status", StringComparison.Ordinal) && text.Contains("Allow once", StringComparison.Ordinal), $"the transcript shows it waiting ({text})");
+            string Shown() => controller.Transcript.Document.Buffer.Current.GetText(0, controller.Transcript.Document.Buffer.Current.Length);
+            await Piece1b.Until(() => Shown() is var shown && shown.Contains("● Waiting for you: git status", StringComparison.Ordinal) && shown.Contains("Allow once", StringComparison.Ordinal),
+                "the transcript shows the command waiting with its answers");
+            string text;
             await waiting.Actions[0].RunAsync(CancellationToken.None);
             await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
             Check.True(sandbox.Ran.SequenceEqual(["git status"]), "approved inline, the command ran");
@@ -473,9 +475,14 @@ public static class ConversationTests
         Check.True(!layout.IsChatExpanded(false, layout.MinimumSize - 1) && !layout.ChatExpanded, "restored for this run, nothing written");
         layout.Load(new CraftOptions { ChatExpanded = true });
         Check.True(layout.ChatExpanded, "CRAFT_CHAT_EXPANDED read back");
-        var binding = StandardShortcuts.Bindings.Single(b => b.CommandId == ConversationCommandIds.Expand);
-        Check.Equal("Ctrl+Shift+Alt+M", binding.Chord.ToString(), "Chat: Expand on Ctrl+Shift+Alt+M");
-        Check.True(!StandardShortcuts.VisualStudioKeyMap.Bindings.Any(b => b.Chord.ToString() == "Ctrl+Shift+Alt+M"), "the Visual Studio keymap keeps it (both keymaps)");
+        using (var commands = new ConversationCommands(expand: () => Task.CompletedTask))
+        {
+            var binding = EditorKeyBindings.Find(ConversationCommands.ExpandBinding.Chord);
+            Check.True(binding is { CommandId: ConversationCommandIds.Expand, When: KeyContext.Anywhere } && binding.Chord.ToString() == "Ctrl+Shift+Alt+M", "Chat: Expand on Ctrl+Shift+Alt+M, anywhere, registered with its command");
+            Check.True(!StandardShortcuts.VisualStudioKeyMap.Bindings.Any(b => b.Chord.ToString() == "Ctrl+Shift+Alt+M"), "the Visual Studio keymap keeps it (both keymaps)");
+        }
+
+        Check.True(EditorKeyBindings.Find(ConversationCommands.ExpandBinding.Chord) is null, "it goes with its command");
         var read = CraftOptions.FromVariables(n => n switch
         {
             "CRAFT_CHAT_EXPANDED" => "true", "CRAFT_CHAT_COPY_FORMAT" => "plain", "CRAFT_CHAT_FOLD_CODE_LINES" => "5", "CRAFT_CHAT_SHOW_METRICS" => "false", _ => null,

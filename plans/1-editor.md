@@ -3525,6 +3525,115 @@ It takes in Phase X's bullet "The chat and the agent feel like a conversation". 
   and the widths, conversations list with Undo; only visible messages laid out, 0 bytes per warm frame).
 - Slot: slot s4 right after piece 1b (it changes the same chat files), before X part 8.
 
+### X part 10 as built (2026-11-01)
+
+Slot s4, Craft only (nothing was missing in Idrak: the chat and the agent use its `FakeChatModel`, `CodingAgent`,
+`CommandSandboxes` as they are). The spec above, built as one conversation view for the chat and the agent; its logic
+headless in `Craft.Editor.Shell`, the MAUI view only draws it.
+- **One selectable transcript** (`ConversationTranscript`): the panel's entries written once each into one read-only
+  document shown by Craft's own editor surface (note 26's read-only `EditorModel`, B1's line cache: only the shown lines
+  laid out and drawn). A streamed piece rewrites only its message (one buffer change; `MessagesWritten` counts them);
+  the selection keeps its place. Drag across messages, Shift+click, Ctrl+A (the editor's own); Ctrl+C copies the
+  selection as `CRAFT_CHAT_COPY_FORMAT` (markdown: each whole message as written, a part as shown with code fenced, the
+  speakers named "**You:**", "**Assistant (model · device):**" when it spans messages), Ctrl+Shift+C the other format;
+  the chrome (speakers, actions, code headers, folds, metrics) is never copied. Its own language (`craft-conversation`,
+  in no registry) colours the speakers, Markdown, actions and steps; a code block is coloured by the language plug-ins'
+  tokenizers (the fence's name, else a file of that extension) once the reply finished, lazily when first drawn.
+  `ILineBackdrop` (new, `EditorModel.LineBackdrop`, one call in `EditorRenderer`) draws the user's soft bubble at the
+  right, the code blocks' fill and the streaming caret; `EditorModel.PointerActivity` (new: hover, exit, a click that
+  dragged nothing) gives the message under the pointer (its Copy, Edit and ⋯ show on hover) and the clicked action.
+- **Messages** (`TranscriptWriter`, `ChatMarkdown.cs`): headings, lists, quotes, tables (aligned columns, bold header),
+  rules, links (clickable), inline code, bold, italic; code blocks with a header (language, Copy, Insert at caret, the
+  entry's Apply as diff, Run in terminal for sh/bash/powershell/cmd blocks), folded past `CRAFT_CHAT_FOLD_CODE_LINES` (30)
+  with Show all / Fold; the model's message full width under "model · device" (`ConversationEntry.Header`, the provider's
+  role device); tokens, rate and time under a finished reply (`ConversationEntry.Metrics`, `CRAFT_CHAT_SHOW_METRICS`);
+  a streaming reply (`ConversationEntry.IsStreaming`) followed unless the user scrolled up, then "Jump to latest".
+- **The message menu** (`EditorContextMenus.Conversation`, commands `craft.chat.*` in `ConversationCommands`): Copy, Copy
+  as Markdown, Quote in reply, Retry from here, Edit and resend (the user's only), Delete from here; right-click or the
+  message's ⋯. The panel menu (`EditorContextMenus.ConversationPanel`, the header's ⋯): Copy conversation, Export
+  conversation… (a Markdown file through the save dialog, written off the UI thread), New conversation, Past
+  conversations, Expand. Contract (additive, 1.1): `ConversationCapabilities`, `IConversationPanel.Capabilities`,
+  `RetryFromAsync`, `EditAndResendAsync`, `DeleteFrom`, `ShowsTimeline`, `SlashCommands`, `AskInline`; the chat
+  implements retry, edit-and-resend and delete by its exchanges (`Turn`: what was sent, the reply).
+- **The agent's timeline** (`AiAgentPanel.ShowsTimeline`): the model's text as "Thinking" / "Answer" steps (open by
+  default), each tool call a step (✓ ✗ ⋯, its summary; ▸ opens its arguments and output, `ConversationEntry.Details`),
+  a command waiting with its answers inline (`EditorQuestion.Kind` = `EditorQuestionKinds.Command`, set by the
+  approve-each sandbox; `EditorHost.AskAsync` offers such a question to the conversation panels first, and the agent
+  shows the sandbox's own choices as buttons on the command's step; no dialog), the files changed with +/− and Review,
+  the end in plain words (note 27's "nothing was changed" kept).
+- **The composer** (`ConversationComposer`): grows to `CRAFT_COMPOSER_MAX_LINES` (12) then scrolls; the context chips
+  (incl. dropped files and images, as piece 1b); "/" lists the panel's slash commands (chat: /explain /fix /doc /refactor
+  /tests /clear; agent: /clear), "@" the workspace's files (listed once per folder on the thread pool, the ignored
+  folders skipped) and the open document's symbols (its language's scopes); Up/Down/Tab/Enter/Escape in the picker; the
+  sent history with Up and Down while the box is empty; Send, Stop beside it while busy ("Add note" for the agent), the
+  model chip; Edit and resend puts the message back and Send replaces it.
+- **Expand** (`PanelLayout.ChatExpanded`, `IsChatExpanded`, `ToggleChatExpandedAsync`, `ExpandedArea`): the header's ⤢,
+  "Chat: Expand" (Ctrl+Shift+Alt+M, registered with its command so both keymaps have it) and Escape (transcript or
+  composer) toggle; expanded, the chat takes the editor area's grid rows (the editor groups hidden, the bottom panel
+  below), so it sits between the rail plus side view and the window's edge and follows their widths; restored, the
+  column at its kept width. `CRAFT_CHAT_EXPANDED` per workspace; expanded by default on a narrow window, and when the
+  editor would have less than `CRAFT_PANEL_MIN_SIZE` beside the column (restored for the run by the toggle).
+- **Past conversations** (`IConversationHistory`, `ConversationList`): the chat keeps every conversation of the
+  workspace in `.craft/chat.json` (version 2: id, title from the first message, time, exchanges, entries; version 1 read
+  as one), read off the UI thread; a list in place of the transcript (search, New, open, Rename in place, Delete with
+  Undo on the shell's undo bar). New chat and /clear start a new one (the old stays listed).
+- **Options** (each with its shape, Settings › Chat › Conversation): `CRAFT_CHAT_EXPANDED` (false),
+  `CRAFT_COMPOSER_MAX_LINES` (12), `CRAFT_CHAT_COPY_FORMAT` (markdown), `CRAFT_CHAT_FOLD_CODE_LINES` (30),
+  `CRAFT_CHAT_SHOW_METRICS` (true).
+- **Measured** (headless, Linux container, Release, fixed metrics 10 × 20, 800 × 400): a conversation of 900 entries
+  (4,801 lines): only the ~20 shown lines drawn and laid out; warm frame median 5.7-6.2 µs, p99 13-33 µs, **0 B a frame**
+  (found on the way, rule 90 by type: a lambda capturing a parameter in the code block's colour lookup made its closure
+  at every call, 40 B a frame; moved to a cold method); a hover lays nothing out off its message.
+- **Decisions (the recommended option each time, the owner asleep):**
+  - The transcript is Craft's editor surface in monospace with drawn fills, not MAUI labels: one selection across messages.
+  - The bubble is right-aligned by padding inside the text (the padding is decoration, never copied).
+  - Code in a reply is coloured once the reply has finished (its text still grows while streaming).
+  - A partial selection of a message copies what is shown of it; a whole message copies its Markdown as written.
+  - Plain copy names no speakers; Markdown names them when the selection spans messages.
+  - Retry from here asks the exchange's message again with the context of now; the dropped replies are not sent back.
+  - Delete from a reply keeps its question unanswered (to retry); from a question drops the whole exchange.
+  - The approval is shown inline by routing questions of a known kind (`EditorQuestion.Kind`) to the panels, the sandbox unchanged otherwise; without a waiting agent it stays a dialog.
+  - Expand covers the editor groups only (tab strips, breadcrumbs, editors); the rail, side view and bottom panel stay.
+  - Ctrl+Shift+Alt+M is registered with Chat: Expand (not in `StandardShortcuts`, whose commands are all headless).
+  - The past conversations are the chat's (the agent's run is tied to its working copy).
+  - New chat keeps the old conversation in the list (deletable with Undo) instead of erasing it.
+  - "@" symbols come from the active document's language scopes (no symbol contract exists yet; X part 9's would replace it).
+  - Run in terminal types the shell block into the active terminal and runs it: the user's click is the approval.
+  - `SelectableLabel` and its Windows mapping are gone: the transcript is the selectable surface.
+- **Windows-only lines (not compiled here; the rest of Craft.Maui compiled for net10.0):**
+  `Platforms/Windows/ComposerKeys.cs` routes Up, Down and Tab too (the picker, the history);
+  `Platforms/Windows/WindowsShellPlatform.cs` no longer configures `SelectableText` (file removed). The owner's run checks
+  the look (bubble, code fills, fonts), the hover actions, the expand placement and the keys.
+- **Tests** (group `Conversation`, 9): selection across messages and Ctrl+A with Markdown and plain copy; the message
+  menu's rows and actions and a click on Copy; retry, edit-and-resend and delete in the chat (fake model); streaming
+  follows unless scrolled up and Jump to latest; the agent's timeline from a scripted run (read_file, run_command
+  approved inline through a sandbox that asks, write_file) with a step opened and closed; the composer's chips, history,
+  slash commands and mentions; expand and restore keep the rail, the side view and the widths; past conversations with
+  Undo, read back; only visible lines laid out and 0 B a warm frame. Updated: `AiPlugins` (New chat keeps the old
+  conversation), `Inventory.OptionsReadEveryVariable` (the five options). After the rebase onto 2a and 3a, the filter
+  `Conversation|AiPlugins|Ai.|ChatDrop|ModelsPage|ModelLoading|Settings|Keys|Layout|Shell|Ui|Experience|LookAndFeel|Paint|ApiGuard|Inventory|TheUiSideHasNoSynchronousWait`:
+  157 of 158 passed; the one left, `Paint.AWarmFrame…` (88 B in a few frames), fails only in a long run after the
+  `Shell|Ui|Experience` groups, also without this slot's group, and passes with `DOTNET_TieredCompilation=0` (rule 90
+  step 3: unoptimized code's boxing, B1's earlier symptom; not this change's, left for the paint slot to trace). API
+  dumps (`Craft.Abstractions`, its contract list, `Craft.Ai`, `Craft.Core`, `Craft.Editor`) regenerated, lines added only.
+- **Left:** the bubble's corners are square (`IEditorCanvas` has no rounded fill); the transcript's code font is the
+  editor's (no proportional text); a conversation's own context menu has no keyboard opening (Shift+F10) yet; the
+  agent's past runs are not listed.
+- **The owner's commands** (Craft only; Idrak is unchanged since the last list):
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="Conversation|AiPlugins|Ai.|ChatDrop|ModelsPage|ModelLoading|Settings|Keys|Layout|Shell|Ui|Experience|LookAndFeel|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app: ask the chat about `Program.cs`; drag across several messages and Ctrl+C, paste (Markdown, speakers named);
+  Ctrl+Shift+C (plain); hover a message (Copy, ⋯) and right-click it (Retry, Edit and resend, Delete from here); a long
+  code block (Show all), its Insert at caret (a diff) and Copy; scroll up while it streams ("Jump to latest"); type "/"
+  and "@Pro" in the composer, Up in the empty box; the header's ⤢ or Ctrl+Shift+Alt+M (the chat over the editors, the
+  explorer and rail still there; resize the explorer; Escape restores); ☰ (the past conversations: New, Rename, Delete
+  then Undo); run the agent on "Create C# class House…" and approve a command on its step.
+
 ### X part 11: AI features on Idrak (the owner, 2026-11-01: "go with your pick" of five proposed)
 Each runs on the models already loaded with their roles' settings (note 25's leases, one copy; a load only when asked,
 note 23), every model change to a document is a diff the user accepts (no silent edit), every command through the

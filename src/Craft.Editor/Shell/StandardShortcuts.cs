@@ -174,7 +174,6 @@ public static class StandardShortcuts
         Anywhere("Ctrl+F4", ShellCommandIds.CloseTab),
         Anywhere("Ctrl+PageDown", ShellCommandIds.NextTab),
         Anywhere("Ctrl+PageUp", ShellCommandIds.PreviousTab),
-        Anywhere("Ctrl+Shift+Alt+M", ConversationCommandIds.Expand),
         InComposer("Enter", ComposerCommandIds.Send),
         InComposer("Shift+Enter", ComposerCommandIds.NewLine),
         InComposer("Escape", ComposerCommandIds.Leave),

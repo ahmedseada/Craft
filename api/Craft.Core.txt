@@ -40,7 +40,9 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean AutoCloseBrackets { get; init; }
   System.Boolean BottomPanelOpen { get; init; }
   System.Boolean BracketHighlight { get; init; }
+  System.Boolean ChatExpanded { get; init; }
   System.Boolean ChatOpen { get; init; }
+  System.Boolean ChatShowMetrics { get; init; }
   System.Boolean CrashTicketOffer { get; init; }
   System.Boolean CrashTrail { get; init; }
   System.Boolean DiffCheck { get; init; }
@@ -80,8 +82,10 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 BracketScanLines { get; init; }
   System.Int32 BufferChunkCharacters { get; init; }
   System.Int32 CaretBlinkMilliseconds { get; init; }
+  System.Int32 ChatFoldCodeLines { get; init; }
   System.Int32 CompletionDelayMilliseconds { get; init; }
   System.Int32 CompletionRows { get; init; }
+  System.Int32 ComposerMaxLines { get; init; }
   System.Int32 CrashRunsKept { get; init; }
   System.Int32 CrashTicketTrailLines { get; init; }
   System.Int32 CrashTrailExceptionsPerSecond { get; init; }
@@ -166,6 +170,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Single TreeIndent { get; init; }
   System.Single TreeWidth { get; init; }
   System.Single ZoomStep { get; init; }
+  System.String ChatCopyFormat { get; init; }
   System.String CrashFolder { get; init; }
   System.String CrashRecords { get; init; }
   System.String DataFolder { get; init; }

@@ -123,6 +123,9 @@ public static class InventoryTests
             // X part 6: the Search view and the Run view.
             ["CRAFT_SEARCH_MAX_RESULTS"] = "500", ["CRAFT_SEARCH_MAX_FILE_MB"] = "3", ["CRAFT_SEARCH_THREADS"] = "2", ["CRAFT_SEARCH_IGNORE_FILES"] = "false",
             ["CRAFT_SEARCH_PROVIDER"] = "code", ["CRAFT_RUN_SANDBOX"] = "approve-each", ["CRAFT_RUN_TIME_LIMIT_MINUTES"] = "30", ["CRAFT_RUN_APPROVAL"] = "each",
+            // X part 10: the chat and the agent redesigned.
+            ["CRAFT_CHAT_EXPANDED"] = "true", ["CRAFT_COMPOSER_MAX_LINES"] = "6", ["CRAFT_CHAT_COPY_FORMAT"] = "plain", ["CRAFT_CHAT_FOLD_CODE_LINES"] = "10",
+            ["CRAFT_CHAT_SHOW_METRICS"] = "false",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -165,6 +168,7 @@ public static class InventoryTests
             LoaderDelayMilliseconds = 100, LoaderKinds = options.LoaderKinds, LoaderCycleMilliseconds = 900,
             SearchMaxResults = 500, SearchMaxFileMegabytes = 3, SearchThreads = 2, SearchIgnoreFiles = false, SearchProvider = "code",
             RunSandbox = "approve-each", RunTimeLimitMinutes = 30, RunApproval = "each",
+            ChatExpanded = true, ComposerMaxLines = 6, ChatCopyFormat = "plain", ChatFoldCodeLines = 10, ChatShowMetrics = false,
         }, options, "options read from every variable");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");
         Check.True(Equals(new CraftOptions(), new CraftOptions()), "two default options compare equal (no list made per instance)");

@@ -535,7 +535,18 @@ public sealed class ConversationCommands : IDisposable
         Item(EditorContextMenus.ConversationPanel, ConversationCommandIds.NewConversation, 1, 0);
         Item(EditorContextMenus.ConversationPanel, ConversationCommandIds.Conversations, 1, 1);
         Item(EditorContextMenus.ConversationPanel, ConversationCommandIds.Expand, 2, 0);
+        if (expand is not null)
+        {
+            // Not a keymap's key: registered with its command, so Visual Studio's keymap and VS Code's both have it.
+            EditorKeyBindings.Register(ExpandBinding);
+            _binding = true;
+        }
     }
+
+    /// <summary>"Chat: Expand" on Ctrl+Shift+Alt+M, anywhere (both keymaps).</summary>
+    public static KeyBinding ExpandBinding { get; } = StandardShortcuts.Anywhere("Ctrl+Shift+Alt+M", ConversationCommandIds.Expand);
+
+    private readonly bool _binding;
 
     /// <summary>The message the running menu was opened on, else null.</summary>
     public static ConversationMessage? Target => EditorContextMenus.Target?.Item as ConversationMessage;
@@ -573,5 +584,9 @@ public sealed class ConversationCommands : IDisposable
 
         _commands.Clear();
         _items.Clear();
+        if (_binding)
+        {
+            EditorKeyBindings.Unregister(ExpandBinding);
+        }
     }
 }

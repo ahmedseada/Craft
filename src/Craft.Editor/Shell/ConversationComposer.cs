@@ -353,22 +353,7 @@ public sealed class ConversationComposer
         {
             _filesRoot = root;
             _files = null;
-            var listed = Task.Run(() => ListFiles(root, Settings.IgnoredFolders, Settings.MentionFileLimit));
-            Listing = listed.ContinueWith(t =>
-            {
-                Post(() =>
-                {
-                    if (t.IsCompletedSuccessfully && string.Equals(root, _filesRoot, StringComparison.Ordinal))
-                    {
-                        _files = t.Result;
-                        var (start, _) = WordAtCaret();
-                        if (Caret > start && Text[start] == '@')
-                        {
-                            Suggest();                // still typing a mention: the files join the rows
-                        }
-                    }
-                });
-            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+            Listing = ListAsync(root);
         }
 
         var rows = new List<(int Score, ComposerSuggestion Row)>();
@@ -391,6 +376,39 @@ public sealed class ConversationComposer
         }
 
         Show([.. rows.OrderBy(r => r.Score).ThenBy(r => r.Row.Label, StringComparer.OrdinalIgnoreCase).Take(Math.Max(1, Settings.MentionRows)).Select(r => r.Row)]);
+    }
+
+    // The workspace's files listed on the thread pool, then taken on the UI thread (the rows follow while "@" is typed).
+    private async Task ListAsync(string root)
+    {
+        IReadOnlyList<string> files;
+        try
+        {
+            var ignored = Settings.IgnoredFolders;
+            int limit = Settings.MentionFileLimit;
+            files = await Task.Run(() => ListFiles(root, ignored, limit)).ConfigureAwait(false);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var taken = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Post(() =>
+        {
+            if (string.Equals(root, _filesRoot, StringComparison.Ordinal))
+            {
+                _files = files;
+                var (start, _) = WordAtCaret();
+                if (Caret > start && Text[start] == '@')
+                {
+                    Suggest();                // still typing a mention: the files join the rows
+                }
+            }
+
+            taken.TrySetResult();
+        });
+        await taken.Task.ConfigureAwait(false);
     }
 
     // How well `text` matches `query`: 0 a prefix, 1 a substring, 2 the letters in order; null none. Ignoring case.

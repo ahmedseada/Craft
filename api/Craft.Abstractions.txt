@@ -262,6 +262,11 @@ enum Craft.Abstractions.ContractFit : System.IComparable, System.IConvertible, S
   Current = 0
   Newer = 2
   Outdated = 1
+enum Craft.Abstractions.ConversationCapabilities : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  DeleteFrom = 4
+  EditAndResend = 2
+  None = 0
+  Retry = 1
 enum Craft.Abstractions.ConversationChange : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   EntryAdded = 0
   EntryUpdated = 1
@@ -270,17 +275,31 @@ sealed class Craft.Abstractions.ConversationChangedEventArgs : System.EventArgs
   Craft.Abstractions.ConversationChange Change { get; }
   System.Int32 Index { get; }
   ctor(Craft.Abstractions.ConversationChange change, System.Int32 index = -1)
+sealed class Craft.Abstractions.ConversationCommand : System.IEquatable<Craft.Abstractions.ConversationCommand>
+  Craft.Abstractions.ConversationCommand <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.ConversationCommand other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Description { get; init; }
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Description)
+  ctor(System.String Name, System.String Description)
 sealed class Craft.Abstractions.ConversationEntry : System.IEquatable<Craft.Abstractions.ConversationEntry>
   Craft.Abstractions.ConversationEntry <Clone>$()
   Craft.Abstractions.ConversationRole Role { get; init; }
   System.Boolean Equals(Craft.Abstractions.ConversationEntry other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean IsStreaming { get; init; }
   System.Boolean? Succeeded { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> Actions { get; init; }
   System.Int32 GetHashCode()
   System.String CopyText { get; init; }
   System.String Detail { get; init; }
+  System.String Details { get; init; }
+  System.String Header { get; init; }
   System.String Language { get; init; }
+  System.String Metrics { get; init; }
   System.String Text { get; init; }
   System.String ToString()
   System.Void Deconstruct(out Craft.Abstractions.ConversationRole Role, out System.String Text)
@@ -295,6 +314,18 @@ enum Craft.Abstractions.ConversationRole : System.IComparable, System.IConvertib
   Section = 7
   Tool = 2
   User = 0
+sealed class Craft.Abstractions.ConversationSummary : System.IEquatable<Craft.Abstractions.ConversationSummary>
+  Craft.Abstractions.ConversationSummary <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.ConversationSummary other)
+  System.Boolean Equals(System.Object obj)
+  System.DateTimeOffset Time { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Messages { get; init; }
+  System.String Id { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Id, out System.String Title, out System.DateTimeOffset Time, out System.Int32 Messages)
+  ctor(System.String Id, System.String Title, System.DateTimeOffset Time, System.Int32 Messages)
 static class Craft.Abstractions.CraftContracts
   static Craft.Abstractions.ContractFit Fit(System.Version builtAgainst)
   static System.Version Parse(System.ReadOnlySpan<System.Char> text)
@@ -425,6 +456,8 @@ static class Craft.Abstractions.EditorCommands
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.IEditorCommand command)
 static class Craft.Abstractions.EditorContextMenus
+  const System.String Conversation = context:conversation
+  const System.String ConversationPanel = context:conversation-panel
   const System.String Editor = context:editor
   const System.String Prefix = context:
   const System.String ReadOnlyText = context:readonly-text
@@ -602,11 +635,14 @@ sealed class Craft.Abstractions.EditorQuestion : System.IEquatable<Craft.Abstrac
   System.Collections.Generic.IReadOnlyList<System.String> Details { get; init; }
   System.Int32 Dismissed { get; init; }
   System.Int32 GetHashCode()
+  System.String Kind { get; init; }
   System.String Message { get; init; }
   System.String Title { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String Message, out System.Collections.Generic.IReadOnlyList<System.String> Choices)
   ctor(System.String Title, System.String Message, System.Collections.Generic.IReadOnlyList<System.String> Choices)
+static class Craft.Abstractions.EditorQuestionKinds
+  const System.String Command = command
 static class Craft.Abstractions.EditorRailItems
   event System.EventHandler Changed
   static Craft.Abstractions.RailItem Find(System.ReadOnlySpan<System.Char> id)
@@ -770,9 +806,21 @@ interface Craft.Abstractions.IAiEventSink : Idrak.Abstraction.IKind
   System.Void Judged(Craft.Abstractions.AiVerdict verdict)
 interface Craft.Abstractions.ICodeActionProvider : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeAction> ActionsFor(Craft.Abstractions.CodeActionContext context)
+interface Craft.Abstractions.IConversationHistory
+  System.Boolean DeleteConversation(System.String id)
+  System.Boolean OpenConversation(System.String id)
+  System.Boolean RestoreConversation(System.String id)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationSummary> Conversations { get; }
+  System.String CurrentConversation { get; }
+  System.Void NewConversation()
+  System.Void RenameConversation(System.String id, System.String title)
+  event System.EventHandler ConversationsChanged
 interface Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPanel
+  Craft.Abstractions.ConversationCapabilities Capabilities { get; }
   System.Boolean IsBusy { get; }
+  System.Boolean ShowsTimeline { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ContextChip> Chips { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationCommand> SlashCommands { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationEntry> Entries { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
   System.String EmptyText { get; }
@@ -780,8 +828,12 @@ interface Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPane
   System.String Placeholder { get; }
   System.String Status { get; }
   System.String Subtitle { get; }
+  System.Threading.Tasks.Task EditAndResendAsync(System.Int32 index, System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task RetryFromAsync(System.Int32 index, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> AskInline(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken)
+  System.Void DeleteFrom(System.Int32 index)
   System.Void RemoveChip(System.String id)
   event System.EventHandler<Craft.Abstractions.ConversationChangedEventArgs> ConversationChanged
 interface Craft.Abstractions.IEditorActivities

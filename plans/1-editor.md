@@ -20,8 +20,8 @@ Windows run (2026-11-01)" at the end.
 | 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test) | Built (46d6e17) |
 | 8b | The recovery prompt at start, X part 9's look group 24-26 | Stopped for W, just begun; for later, after W |
 | 9 | Phase W, the web languages | Running: W0, W-files and W-npm first (the owner, 2026-11-01: "start Web now", "stop all") |
-| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times) | Planned, later; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
-| 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned, after W |
+| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
+| 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned; starts only on the owner's word |
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
 
@@ -30,7 +30,8 @@ before the above enhancements." From here W runs to its end before any other wor
 leftover or a new enhancement while a W piece is ready. What a W slot leaves undone goes into one "Left, for later"
 line in its "as built" section and into row 10 above, never into a follow-up slot of its own; a failing test on
 `main` is the only thing that may interrupt W. New asks from the owner are written into the plan and queued after W
-unless the owner says otherwise.
+unless the owner says otherwise. **When W is done, the work stops** (the owner, 2026-11-01: "finish W and don't start new
+phases"): the "later" items of row 10, P batch 2 and every held phase wait for the owner's word; no agent starts them.
 
 ## The original status (2026-10-31)
 

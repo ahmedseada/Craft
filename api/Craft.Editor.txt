@@ -2262,11 +2262,14 @@ sealed class Craft.Editor.Shell.PageTabs
   event System.EventHandler Changed
   event System.EventHandler<Craft.Editor.Shell.PageTab> Closed
 static class Craft.Editor.Shell.PanelBlockLayout
+  const System.Double QueryTextMinimum = 140
+  static System.Boolean QueryOnOneRow(System.Double width, System.Double controls, System.Double textMinimum = 140)
   static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.PanelResultLine> ResultLines(Craft.Abstractions.PanelResults results)
   static System.Collections.Generic.IReadOnlyList<System.Int32> Changed(System.Collections.Generic.IReadOnlyList<System.String> before, System.Collections.Generic.IReadOnlyList<System.String> after)
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, Craft.Editor.Shell.PanelSegmentKind>> Segments(System.String text, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelSpan> highlights)
   static System.Single MeterWidth(System.Double fraction, System.Single width)
   static System.String Signature(Craft.Abstractions.PanelBlock block)
+  static System.ValueTuple<Craft.Editor.Shell.PanelPlace[], System.Double, System.Double> Wrap(System.ReadOnlySpan<System.ValueTuple<System.Double, System.Double>> sizes, System.Double width, System.Double gap = 8, System.Double rowGap = 6)
   static System.ValueTuple<System.Single, System.Single>[] ChartPoints(System.Collections.Generic.IReadOnlyList<System.Double> values, System.Single width, System.Single height, System.Single inset = 3)
 static class Craft.Editor.Shell.PanelCopy
   static System.Collections.Generic.IReadOnlyList<T> InListOrder<T>(System.Collections.Generic.IReadOnlyList<T> rows, System.Collections.Generic.IEnumerable<T> chosen)
@@ -2321,6 +2324,17 @@ abstract class Craft.Editor.Shell.PanelList
   protected ctor()
   protected static System.UInt32 RowFill(Craft.Abstractions.EditorColors colors, System.Boolean hover, System.Boolean picked)
   static System.Single RowHeight(Craft.Abstractions.FontMetrics metrics)
+struct Craft.Editor.Shell.PanelPlace : System.IEquatable<Craft.Editor.Shell.PanelPlace>
+  System.Boolean Equals(Craft.Editor.Shell.PanelPlace other)
+  System.Boolean Equals(System.Object obj)
+  System.Double Height { get; init; }
+  System.Double Width { get; init; }
+  System.Double X { get; init; }
+  System.Double Y { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out System.Double X, out System.Double Y, out System.Double Width, out System.Double Height)
+  ctor(System.Double X, System.Double Y, System.Double Width, System.Double Height)
 sealed class Craft.Editor.Shell.PanelResultLine : System.IEquatable<Craft.Editor.Shell.PanelResultLine>
   Craft.Abstractions.PanelResultGroup Group { get; init; }
   Craft.Abstractions.PanelResultRow Row { get; init; }

@@ -113,6 +113,69 @@ public static class PanelBlockLayout
         return points;
     }
 
+    /// <summary>
+    /// The width a query field keeps for its text before its toggles and buttons move to the row under it (the owner's
+    /// Windows run: toggles drawn inside a narrow box clipped the typed text).
+    /// </summary>
+    public const double QueryTextMinimum = 140;
+
+    /// <summary>
+    /// Whether a query field's toggles and buttons (<paramref name="controls"/> wide, spacing included) fit beside its box in
+    /// <paramref name="width"/> while the box keeps <paramref name="textMinimum"/> for the text; else they go on the row
+    /// under the box, so the row fits the side view's measured width at any width. A width not known yet (0 or less) is
+    /// laid out on one row until it is measured; a field with no controls is always one row.
+    /// </summary>
+    public static bool QueryOnOneRow(double width, double controls, double textMinimum = QueryTextMinimum) =>
+        controls <= 0 || width <= 0 || width - controls >= textMinimum;
+
+    /// <summary>
+    /// Items of <paramref name="sizes"/> placed left to right in rows no wider than <paramref name="width"/> (a wrapping
+    /// row of buttons): <paramref name="gap"/> between items, <paramref name="rowGap"/> between rows, a new row when the next
+    /// item does not fit (an item wider than the width alone on its row), each row as tall as its tallest item with its items
+    /// centred in it. Every item's place, the widest row and the height of all the rows: the block takes this height, so
+    /// nothing under it is drawn over it. An infinite width keeps one row.
+    /// </summary>
+    public static (PanelPlace[] Places, double Width, double Height) Wrap(ReadOnlySpan<(double Width, double Height)> sizes, double width, double gap = 8, double rowGap = 6)
+    {
+        var places = new PanelPlace[sizes.Length];
+        double x = 0, y = 0, rowHeight = 0, widest = 0;
+        int rowStart = 0;
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            var (w, h) = (Math.Max(0, sizes[i].Width), Math.Max(0, sizes[i].Height));
+            if (i > rowStart && x + gap + w > width)
+            {
+                Center(places, rowStart, i, rowHeight);
+                y += rowHeight + rowGap;
+                x = 0;
+                rowHeight = 0;
+                rowStart = i;
+            }
+
+            double left = i == rowStart ? 0 : x + gap;
+            places[i] = new PanelPlace(left, y, w, h);
+            x = left + w;
+            rowHeight = Math.Max(rowHeight, h);
+            widest = Math.Max(widest, x);
+        }
+
+        if (sizes.Length == 0)
+        {
+            return (places, 0, 0);
+        }
+
+        Center(places, rowStart, sizes.Length, rowHeight);
+        return (places, widest, y + rowHeight);
+
+        static void Center(PanelPlace[] places, int start, int end, double height)
+        {
+            for (int j = start; j < end; j++)
+            {
+                places[j] = places[j] with { Y = places[j].Y + ((height - places[j].Height) / 2) };
+            }
+        }
+    }
+
     /// <summary>A meter's filled width in a bar of <paramref name="width"/>: the fraction held from 0 to 1 (a fraction below 0 is work without a known end: a third of the bar).</summary>
     public static float MeterWidth(double fraction, float width) =>
         fraction < 0 ? width / 3 : (float)(Math.Clamp(double.IsFinite(fraction) ? fraction : 0, 0, 1) * Math.Max(0, width));
@@ -210,6 +273,13 @@ public static class PanelBlockLayout
         return segments;
     }
 }
+
+/// <summary>Where an item of a wrapping row is placed (<see cref="PanelBlockLayout.Wrap"/>): its left, its top and its size.</summary>
+/// <param name="X">Its left.</param>
+/// <param name="Y">Its top.</param>
+/// <param name="Width">Its width.</param>
+/// <param name="Height">Its height.</param>
+public readonly record struct PanelPlace(double X, double Y, double Width, double Height);
 
 /// <summary>How a part of a result row's text is drawn.</summary>
 public enum PanelSegmentKind

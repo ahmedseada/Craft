@@ -6812,3 +6812,48 @@ In the app: the rail's cap opens Learning: the header's three steps, Getting sta
 consent), What is recorded?, the switches, Delete with Undo at the window's bottom, the model picker listing the
 loaded model, Train now with its progress and Cancel, after a round the two sparklines and the adapter card; the view
 on the light and dark themes.
+
+## The panel views' layout as built (2026-11-01, the owner's Windows run of main 4514c32)
+
+Slot s4. The owner's screenshots: in the Search view the hint's second line and "0 results in 0 files" were drawn under the
+"Collapse all / Refresh / Clear" row (its buttons cut at their top), and Aa, ab, .* sat inside a narrow query box
+clipping the text; in the Outline and Call hierarchy views a choice read as a text input with a second input inside it
+("Order" half covered by the filter row, a full-width bordered "Position ⌄", the variable `CRAFT_OUTLINE_SORT` printed
+under it). Fixed once in the renderer (`Craft.Maui/PanelBlocksView*.cs`), so every view on the blocks (Search, Outline,
+hierarchy, Run, Learning, Source Control, Test explorer, TODO, Timeline, Bookmarks) takes it; no view changed.
+- **Every block takes its measured height**: a row of buttons is a `WrapLayout` (new, `Craft.Maui/WrapLayout.cs`) whose
+  measure and arrange are `PanelBlockLayout.Wrap` (headless: each child at its measured size, rows at the measured width,
+  the block as tall as its rows), in place of a wrapping `FlexLayout` that reported less height than it drew; buttons,
+  entries and fields in a panel keep their design height as a minimum and grow to what they measure (`Grown`: no fixed
+  `HeightRequest` clipping a button's text or letting a field draw over the row under it); wrapping labels lose their
+  1.25 line-height multiplier (measured a line short on Windows).
+- **The query row fits the side view at any width**: the box holds only the text; its toggles and icon buttons sit
+  beside it while the measured width leaves the text `PanelBlockLayout.QueryTextMinimum` (140), else on the row under it
+  (toggles at the left, buttons at the right; `QueryOnOneRow`, decided again on each size change).
+- **A choice is one compact dropdown**, as the settings page draws its choices: the title inline at its left, the
+  platform's own picker on the raised fill (one border, its own chevron), as wide as its choices (at least 96); the
+  chosen option's detail in caption text under it. No setting variable is printed in a view any more: a block's
+  variable joins its tooltip (also when it has no tooltip of its own); the settings page shows variables.
+- Decisions on the recommendation: the renderer, not the views, carries every fix; the controls leave the box at every
+  width (beside it or under it), not only when narrow; the dropdown copies the settings page's look (the design has no
+  panel dropdown of its own); a results list inside a card keeps its 320-unit scrolling viewport (a list needs a bounded
+  height; it is not a row drawn over another).
+- **Tests**: new group `PanelLayout` (2: a wrapping row's places and height, centring, an item wider than the row, no
+  width limit, no items; the query's controls under the box at 260 units and beside it at 480, no controls, not measured
+  yet, a larger text minimum). The filter `PanelLayout|Search|Outline|Hierarchy|RunView|Learning|SourceControl|TestExplorer|TodoList|Shell|Settings|Layout|Design|LookAndFeel|Experience|ApiGuard|Inventory`:
+  156 passed, 0 failed. The API dump of Craft.Editor regenerated (additions only).
+- **Windows-only lines**: none (Craft.Maui's views compile here for net10.0); not run here.
+- **Left, for later**: the dropdown is the platform's ComboBox (a Craft-drawn menu like the title bar's would match the
+  design's menus exactly).
+- **The owner's check** on `test-output\CarftTestPOC`: the rail's Search at its narrow width (the toggles and the
+  replace and filter icons under the box, the typed text unclipped), search a word and see the hint, the status line and
+  the Collapse all / Refresh / Clear row stacked with nothing drawn over another; widen the side view (the controls move
+  beside the box); the Outline view's Order and the bottom panel's Call hierarchy Show as one compact dropdown with no
+  variable under it (hover: the tooltip names it); the Run, Learning, Source Control, Test explorer and TODO views.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="PanelLayout|Search|Outline|Hierarchy|RunView|Learning|SourceControl|TestExplorer|TodoList|Shell|Settings|Layout|Design|LookAndFeel|Experience|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```

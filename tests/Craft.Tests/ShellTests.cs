@@ -286,11 +286,14 @@ public static class ShellTests
                 Check.True(EditorCommands.Find(id) is not null, $"{id} is a registered command");
             }
 
-            foreach (var (chord, id) in (ReadOnlySpan<(string, string)>)[("Ctrl+O", ShellCommandIds.OpenFile), ("Ctrl+Shift+O", ShellCommandIds.OpenFolder), ("Ctrl+W", ShellCommandIds.CloseTab),
+            foreach (var (chord, id) in (ReadOnlySpan<(string, string)>)[("Ctrl+O", ShellCommandIds.OpenFile), ("Ctrl+Shift+O", ShellCommandIds.GoToSymbol), ("F2", ShellCommandIds.RenameSymbol), ("Ctrl+W", ShellCommandIds.CloseTab),
                 ("Ctrl+Tab", ShellCommandIds.NextTab), ("Ctrl+Shift+Tab", ShellCommandIds.PreviousTab), ("Ctrl+Comma", ShellCommandIds.Settings), ("Ctrl+B", ShellCommandIds.ToggleTree)])
             {
                 Check.Equal(id, EditorKeyBindings.Find(KeyChord.Parse(chord))?.CommandId, $"{chord} runs {id}");
             }
+
+            Check.Equal(ShellCommandIds.OpenFolder, EditorKeyBindings.Find(KeyChord.Parse("Ctrl+K"), KeyChord.Parse("Ctrl+O"))?.CommandId,
+                "Ctrl+K Ctrl+O opens a folder (VS Code's; Ctrl+Shift+O goes to a symbol, piece 3b)");
 
             Check.True(!host.Commands.First(c => c.Name == ShellCommandIds.CloseTab).CanExecute(host), "no tab: Close cannot run");
             Check.True(await host.ExecuteCommandAsync(ShellCommandIds.OpenFolder), "Open folder ran");

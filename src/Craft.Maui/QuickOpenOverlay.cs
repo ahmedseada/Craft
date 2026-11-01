@@ -3,6 +3,7 @@
 
 using System.Collections.ObjectModel;
 using Craft.Abstractions;
+using Craft.Editor;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
@@ -54,7 +55,7 @@ public sealed class QuickOpenOverlay : ContentView
         ArgumentNullException.ThrowIfNull(palette);
         _model = model;
         _palette = palette;
-        _input = new RoutedEntry { Placeholder = "Search files by name   ·   > commands   ·   : go to a line", HeightRequest = 32, FontSize = palette.FontSize, FontFamily = palette.Font() };
+        _input = new RoutedEntry { Placeholder = "Search files by name   ·   > commands   ·   @ symbols   ·   : go to a line", HeightRequest = 32, FontSize = palette.FontSize, FontFamily = palette.Font() };
         _input.RouteKey = OnKey;
         // Debounced (CRAFT_SEARCH_DELAY_MS): typing never waits on a match; a key the overlay takes runs a waiting one first.
         _typing = new TypingDebounce(this, () => _palette.Options.SearchDelayMilliseconds, () => _ = RefreshAsync(_input.Text ?? ""));
@@ -103,6 +104,9 @@ public sealed class QuickOpenOverlay : ContentView
 
     /// <summary>Raised when it closed without a pick (Escape, a click outside).</summary>
     public event EventHandler? Dismissed;
+
+    /// <summary>Raised with the row the arrows moved to ('@' previews its symbol in the editor).</summary>
+    public event EventHandler<QuickOpenItem>? SelectionMoved;
 
     /// <summary>The overlay's input (focused when it opens).</summary>
     public Entry Input => _input;
@@ -170,6 +174,7 @@ public sealed class QuickOpenOverlay : ContentView
         if (_selection.Selected >= 0 && _selection.Selected < _rows.Count)
         {
             _list.ScrollTo(_selection.Selected, position: ScrollToPosition.MakeVisible, animate: false);
+            SelectionMoved?.Invoke(this, _items[_selection.Selected]);
         }
 
         return true;
@@ -231,20 +236,25 @@ public sealed class QuickOpenOverlay : ContentView
         {
             QuickOpenMode.Commands => "Commands",
             QuickOpenMode.Line => "Go to a line of the active editor",
+            QuickOpenMode.Symbols => text.TrimStart().StartsWith("@:", StringComparison.Ordinal) ? "Symbols by kind" : "Symbols of the active editor   ·   @: groups them by kind",
+            _ when _model.BrowsedFolder is { } folder => $"In {System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(folder))}",
             _ => _model.Root is null ? "Files" : $"Files in {System.IO.Path.GetFileName(_model.Root)}",
         };
         _hint.Text = items.Count > 0 ? (_model.Capped && mode == QuickOpenMode.Files ? $"The first {_model.Files.Count:N0} files are listed (CRAFT_QUICK_OPEN_FILES)." : "")
             : mode == QuickOpenMode.Line ? "Type a line number (42, or 42:7 for a column)."
             : mode == QuickOpenMode.Commands ? "No command matches."
-            : _model.Root is null ? "Open a folder (Ctrl+Shift+O) to find its files by name; type '>' for a command."
+            : mode == QuickOpenMode.Symbols ? (_model.Symbols.Count == 0 ? "The active editor's language lists no symbols (or no file is open)." : "No symbol matches.")
+            : _model.BrowsedFolder is not null ? "Nothing in this folder matches."
+            : _model.Root is null ? "Open a folder (Ctrl+K Ctrl+O) to find its files by name; type '>' for a command."
             : _model.IsIndexing ? "Listing the folder's files…" : "No file matches; type '>' for a command or ':' for a line.";
-        if (items.Count == 0 && EmptyStateFor is { } empty)
+        bool emptyState = items.Count == 0 && EmptyStateFor is not null && mode != QuickOpenMode.Symbols && _model.BrowsedFolder is null;
+        if (emptyState)
         {
-            _empty.Show(empty(text));
+            _empty.Show(EmptyStateFor!(text));
             _hint.Text = "";
         }
 
-        _empty.IsVisible = items.Count == 0 && EmptyStateFor is not null;
+        _empty.IsVisible = emptyState;
         _hint.IsVisible = _hint.Text.Length > 0;
         Rebuild();
     }
@@ -259,8 +269,9 @@ public sealed class QuickOpenOverlay : ContentView
             var item = _items[i];
             var icon = item.Icon;
             rows[i] = new QuickOpenRow(item, Highlighted(item.Text, item.TextHighlights, palette.Text, palette), item.Detail is { } detail ? Highlighted(detail, item.DetailHighlights, palette.Secondary, palette) : null,
-                icon?.Badge ?? (item.CommandId is not null ? "›" : item.Line > 0 ? "#" : ""), icon is null ? palette.Secondary : ThemeColors.Of(icon.Argb),
-                item.Shortcut ?? "", i == _selection.Selected ? palette.Selection : Colors.Transparent, item.IsRecent ? "recent" : "");
+                icon?.Badge ?? (item.SymbolKind is { } kind ? SymbolKinds.Badge(kind) : item.IsFolder ? "▸" : item.CommandId is not null ? "›" : item.Line > 0 ? "#" : ""),
+                icon is null ? (item.SymbolKind is ScopeKind.Method ? palette.Method : item.SymbolKind is not null ? palette.Accent : palette.Secondary) : ThemeColors.Of(icon.Argb),
+                item.Shortcut ?? "", i == _selection.Selected ? palette.Selection : Colors.Transparent, item.Group ?? (item.IsRecent ? "recent" : ""));
         }
 
         // Only the rows that differ are replaced (an arrow key moves two fills).

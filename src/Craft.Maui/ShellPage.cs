@@ -67,6 +67,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly FolderTreeView _tree = new();
     private readonly ExplorerView _explorer;
     private readonly BreadcrumbView _breadcrumb;
+    private readonly SymbolPreview _symbolPreview = new();
+    private RenameOverlay? _rename;
     private readonly EditorGroupsView _groupsView;
     private readonly List<EditorGroupPane> _panes = [];
     private readonly List<EditorView> _views = [];
@@ -188,6 +190,8 @@ public sealed class ShellPage : ContentPage, IDisposable
             BackgroundFiles = _shell.Options.QuickOpenBackgroundFiles,
             RecentLimit = _shell.Options.QuickOpenRecent,
         };
+        // Piece 3b: '@' lists the shown editor's symbols, asked once per version off the UI thread.
+        _quickOpen.SymbolSource = token => _shown?.Model is { } shownModel ? shownModel.DocumentSymbolsAsync(token) : Task.FromResult<SymbolIndex?>(null);
         foreach (var entry in startup.Recent.Entries.Where(e => e.Kind == Craft.Core.Workspaces.RecentKind.File).Reverse())
         {
             _quickOpen.NoteFile(entry.Path);                     // the recent list's files come first in quick open
@@ -201,7 +205,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.WindowKeys = _keys;
         _conversations.MenuRequested += (_, e) => OpenConversationMenu(e);
         _conversations.ExpandRequested += (_, _) => _ = ToggleChatExpandedAsync();
-        _conversations.SymbolsSource = () => ConversationComposer.SymbolsOf(_shown?.Model);
+        _conversations.SymbolsSource = () => ConversationComposer.SymbolsOf(_shown?.Model, () => _conversations.RefreshMentions());
         _conversations.LeaveRequested += (_, _) => _shown?.Focus();
         _chatSplit.Panel = _conversations;
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
@@ -257,8 +261,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         _overlay.Dismissed += (_, _) =>
         {
             _popup.Hide();
+            _symbolPreview.Restore();                            // Escape after '@' previews: back where the editor was
+            _quickOpen.EndBrowse();
             _shown?.Focus();
         };
+        _overlay.SelectionMoved += (_, item) => _symbolPreview.Show(item);
         _popup.Closed += (_, _) =>
         {
             _menu.Close();
@@ -287,7 +294,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             e.Item is { } item ? new ContextMenuTarget(EditorContextMenus.Tree, item.Path, item.IsFolder) : new ContextMenuTarget(EditorContextMenus.Tree), e.Where);
         _sideSplit.Panel = _explorer;
         _breadcrumb = new BreadcrumbView(_palette);
-        _emptyText = "No file is open.\nCtrl+O opens a file, Ctrl+Shift+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.";
+        _breadcrumb.PartClicked += (_, part) => _ = OnBreadcrumbAsync(part);
+        _shell.RenameRequested += (_, request) => ShowRename(request);
+        _emptyText = "No file is open.\nCtrl+O opens a file, Ctrl+K Ctrl+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.";
         // The X restart: the editor area's groups, each a pane of its own tabs and editor (the focused one has the find
         // overlay and the breadcrumb).
         _groupsView = new EditorGroupsView(_shell.Groups, PaneOf, _palette) { MinimumSize = _shell.Options.PanelMinimumSize, Pointer = startup.Platform.PointerCursor };
@@ -1261,8 +1270,19 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     // Phase X: the one overlay for quick open, the palette ('>') and go to line (':'), under the title bar's search box
     // (across the top in the narrow layout).
-    private void ShowOverlay(string text)
+    private void ShowOverlay(string text, bool keepScope = false)
     {
+        if (!keepScope)
+        {
+            _quickOpen.SymbolsUnder = null;                      // Ctrl+Shift+O lists every symbol; the breadcrumb a level
+            _quickOpen.EndBrowse();
+        }
+
+        if (_shown?.Model is { } previewed)
+        {
+            _symbolPreview.Begin(previewed);
+        }
+
         _menu.Close();
         _overlay.Apply(_palette);
         double width;
@@ -1286,8 +1306,24 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private async Task PickAsync(QuickOpenItem item)
     {
+        if (item.IsFolder && item.Path is { } folder)
+        {
+            await _quickOpen.BrowseAsync(folder);               // a folder of the breadcrumb's listing: its entries in turn
+            ShowOverlay("", keepScope: true);
+            return;
+        }
+
         _popup.Hide();
-        if (item.Line > 0)
+        _symbolPreview.End();
+        _quickOpen.EndBrowse();
+        if (item.SymbolStart >= 0 && _shown?.Model is { } model)
+        {
+            int length = model.Snapshot.Length;
+            int start = Math.Clamp(item.SymbolStart, 0, length);
+            model.Select(Math.Clamp(start + item.SymbolLength, start, length), start);
+            model.EnsureCaretVisible();
+        }
+        else if (item.Line > 0)
         {
             _shown?.Model?.GoToLine(item.Line, item.Column);
         }
@@ -1367,6 +1403,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             case ShellViewNames.GoToLine:
                 ShowOverlay(":");
+                break;
+            case ShellViewNames.GoToSymbol:
+                ShowOverlay("@");
                 break;
             case ShellViewNames.QuickOpen:
                 ShowOverlay(TakeSearchText());
@@ -2365,10 +2404,99 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         var scopes = model.LanguageSession?.ScopeAt(model.Snapshot, Math.Min(model.Selection.Caret, model.Snapshot.Length)) ?? [];
-        _breadcrumb.Show(ShellText.Breadcrumb(tab.FilePath, _shell.Workspace?.Root, scopes));
+        _breadcrumb.Show(BreadcrumbLayout.Parts(tab.FilePath, _shell.Workspace?.Root, scopes));
         string place = (_shell.Workspace is { } workspace ? Path.GetFileName(workspace.Root) : tab.FilePath is { } file ? Path.GetDirectoryName(file) ?? "" : "")
             + (tab.IsDirty ? " · edited" : tab.FilePath is null ? " · new" : "");
         _titleNarrow.SetNarrowTitle(tab.Title, place.TrimStart(' ', '·'));
+    }
+
+    // A breadcrumb part clicked: a folder (or the file's folder) lists its entries in the overlay; a symbol lists its
+    // siblings with '@' (the children of its parent, from the editor's symbols of this version).
+    private async Task OnBreadcrumbAsync(BreadcrumbPart part)
+    {
+        try
+        {
+            switch (part.Kind)
+            {
+                case BreadcrumbPartKind.Folder when part.Path is { } folder:
+                    await _quickOpen.BrowseAsync(folder);
+                    ShowOverlay("", keepScope: true);
+                    break;
+                case BreadcrumbPartKind.File when part.Path is { } file && Path.GetDirectoryName(file) is { } parent:
+                    await _quickOpen.BrowseAsync(parent);
+                    ShowOverlay("", keepScope: true);
+                    break;
+                case BreadcrumbPartKind.Symbol when _shown?.Model is { } model:
+                    int caret = Math.Min(model.Selection.Caret, model.Snapshot.Length);
+                    var symbols = await model.DocumentSymbolsAsync();
+                    _quickOpen.EndBrowse();
+                    _quickOpen.SymbolsUnder = symbols?.SiblingsParentAt(caret, part.Text);
+                    ShowOverlay("@", keepScope: true);
+                    break;
+            }
+        }
+#pragma warning disable CA1031 // A click's handler: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the breadcrumb: a part clicked", error);
+        }
+    }
+
+    // F2 found a name: the rename box over it in the editor it came from (the focused group's).
+    private void ShowRename(RenameRequest request)
+    {
+        CloseRename();
+        if (_panes.FirstOrDefault(p => ReferenceEquals(p.Shown?.Model, request.Editor)) is not { } pane)
+        {
+            _shell.CancelRename();
+            return;
+        }
+
+        var model = request.Editor;
+        var point = model.PointFromPosition(request.Target.Start);
+        double x = Math.Max(0, point.X - model.ScrollX - 8);
+        double y = Math.Max(0, point.Y - model.ScrollY - 6);
+        var box = new RenameOverlay(request, _palette) { Margin = new Thickness(x, y, 0, 0), ZIndex = 10 };
+        box.Committed += (_, name) =>
+        {
+            CloseRename();
+            _ = CommitRenameAsync(request, name);
+        };
+        box.Cancelled += (_, _) =>
+        {
+            CloseRename();
+            _shell.CancelRename();
+            _shown?.Focus();
+        };
+        _rename = box;
+        pane.Stack.Add(box);
+        _ = ShellMotion.ShowAsync(box, -4);
+        Dispatcher.DispatchLabelled("rename: focus the box", box.FocusInput);
+    }
+
+    private void CloseRename()
+    {
+        if (_rename is { } box)
+        {
+            _rename = null;
+            (box.Parent as Layout)?.Remove(box);
+        }
+    }
+
+    private async Task CommitRenameAsync(RenameRequest request, string name)
+    {
+        try
+        {
+            _shown?.Focus();
+            await _shell.CommitRenameAsync(request, name);
+        }
+#pragma warning disable CA1031 // A rename started from the box: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the editor: rename", error);
+        }
     }
 
     private static void Set(Label label, string text)

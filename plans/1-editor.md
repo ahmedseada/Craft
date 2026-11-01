@@ -3010,6 +3010,108 @@ only; nothing was needed in Idrak.
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
 
+### Main's health and X restart piece 3b as built (2026-11-01)
+
+Slot s3. Craft only: nothing was missing in Idrak (the outline, the index and the rename are Craft's and Roslyn's).
+- **Main's health (pushed first, two commits).** The two `PhaseP` tests read each plug-in's `plugin.json` contract version
+  from its source (`PhasePTests.StatedContractVersion`, checked to be one this Craft loads) instead of a fixed "1.0": the
+  Sandbox plug-in is at 1.1 by right (X part 10). `Ui.TheUiSideHasNoSynchronousWait`: `CopyGate.TryEnter`'s
+  `_door.Wait(0)` (speculative decoding) is a zero-timeout try-enter that never blocks: on the scan's allowed list with
+  that reason. `main` built once and `ApiGuard|Inventory|PhaseP|PluginKit|Plugins|Ai.|DraftModel|SourceControl` ran
+  once: 76 passed (the dumps after X part 8 and speculative decoding were current; nothing to regenerate).
+- **Document symbols** (contract 1.1, additions only): `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by
+  default), `DocumentSymbol(Name, Kind, Start, Length, NameStart, NameLength, Detail, Children)` with `End` and
+  `Contains`; `ScopeKind` gained `Property`, `Field`, `Event`, `EnumMember`. C# (`CSharpLanguageSession.Symbols.cs`): one
+  walk of the last parse's declarations on the thread pool, kept with the parse (the same version gives the same list; an
+  older snapshot is parsed for its answer only): namespaces, types (their keyword as the detail, generics with their
+  parameters), fields and constants (a symbol per variable), properties, indexers, events, constructors, destructors,
+  operators, conversions, methods (parameters and type as the detail), enum members (their values), delegates, top-level
+  local functions. `SyntacticLanguageSession` forwards it. `Craft.Editor.SymbolIndex`: the tree flattened once per version
+  into arrays (names, parents, depths, lines, columns), `IndexOf(ReadOnlySpan<char>)` through an alternate lookup (rule
+  15), `PathAt`, `ChildrenOf`, `SiblingsParentAt`; `SymbolKinds` (words, plurals, badges, the groups' order).
+  `EditorModel.DocumentSymbolsAsync` (one request a version, shared by every caller; the newest index kept in `Symbols`)
+  and `RequestSymbols(landed)`.
+- **`@` in quick open**: `QuickOpenMode.Symbols` ('@'), Go to symbol `craft.goToSymbol` (Ctrl+Shift+O; Visual Studio's
+  keymap also Alt+\); fuzzy over the index's names, the exact name first; "@:" orders the best rows by kind, the group's
+  title with its count ("methods (7)") on its first row; `SymbolsUnder` lists one level (the breadcrumb's siblings); over
+  `CRAFT_QUICK_OPEN_BACKGROUND_FILES` symbols the match runs on the thread pool (the rows proven the same as the calling
+  thread's). Rows carry the kind's badge, the detail and the container. `SymbolPreview`: Up and Down select each symbol's
+  name in the editor and scroll to it, Escape puts the selection and the scroll back, a pick keeps it. The chat's
+  composer "@" symbols (X part 10) now come from this contract (`ConversationComposer.SymbolsOf(model, landed)`: the last
+  version's at once, the current one asked off the UI thread, the picker relisted when it lands).
+- **Breadcrumb** (`Craft.Editor.Shell.BreadcrumbLayout`, `BreadcrumbPart`; `Craft.Maui.BreadcrumbView`): every folder from
+  the workspace's root to the file (the whole folder for a file outside it), the file, the scopes at the caret; each part
+  clickable: a folder (and the file) lists its entries in the overlay (`QuickOpen.BrowseAsync`, folders first, a picked
+  folder lists its own), a symbol lists its siblings with '@'. When the parts are wider than the bar, the fewest middle
+  parts fold into "…" (`BreadcrumbLayout.Fold`, by the labels' laid-out widths kept per text): never the first, the file
+  or the last symbol; "…" acts as its last folded part, its tooltip names them. It follows the focused group (3a's).
+- **F2 rename**: `ISemanticLanguageSession.PrepareRenameAsync` (`RenameTarget`: the name's span and text, or a `Refusal`)
+  and `RenameAsync` (a `WorkspaceEdit`: per file `WorkspaceFileEdit(Path, Edits, Version)`, the open documents' versions,
+  `Conflicts`, `Refusal`, `EditCount`; defaults: none, and a refusal). C# (`CSharpLanguageSession.Rename.cs`): the name
+  checked (`SyntaxFacts.IsValidIdentifier`; a keyword asks for '@'), a metadata, keyword or compiler-declared symbol
+  refused with why, Roslyn's `Renamer.RenameSymbolAsync` over the workspace's solution (open documents at their unsaved
+  text), each changed file's text changes as edits, and the conflicts: the errors a changed file has that it did not
+  have. `IEditorHost.ProposeWorkspaceAsync(edit, title)` (default false; the plug-ins' scope forwards it):
+  `EditorHost.ProposeWorkspaceEditAsync` refuses before asking when an open document's version moved, a file the edit
+  made against unsaved text was closed, or unsaved text was not in the edit, then X part 6's review across files (every
+  file's diff together, Accept all; each open document one undo step; a closed file read off the UI thread, edited and
+  saved). `ShellModel.Rename.cs`: `craft.renameSymbol` (F2; Visual Studio: Ctrl+R Ctrl+R) asks the target off the UI
+  thread and raises `RenameRequested`; `Craft.Maui.RenameOverlay` (a raised box over the name, the name selected; Enter
+  commits, Escape or leaving cancels); `CommitRenameAsync` computes the edit as the activity "Rename" (cancellable),
+  conflicts in the diff's title and a warning notification, then the Undo bar "Renamed in N files" takes all of it back.
+- **Decisions (the recommended option each time, the owner asleep):**
+  - '@' first in quick open now means symbols (VS Code's); a file whose name starts with '@' is found without typing it.
+  - Ctrl+Shift+O goes to a symbol (VS Code's); Open folder moves to Ctrl+K Ctrl+O (VS Code's); the hints, the welcome page and the empty state say so.
+  - Visual Studio keymap: Ctrl+R Ctrl+R renames and Alt+\ goes to a symbol; Ctrl+R in the editor becomes that chord's first key there (Open recent stays in the File menu and the palette).
+  - The outline is syntactic (the last parse), no workspace needed: it works before the workspace builds and in a closed file's peek.
+  - Namespaces are in the outline (the breadcrumb leaves them to the path); local functions inside members are not (VS Code's C# outline).
+  - A symbol's span starts at its attributes and modifiers, not its documentation comment; a field of several variables gives a symbol each.
+  - `ScopeAt` keeps `Member` for the breadcrumb's scopes (its callers unchanged); the new kinds are the outline's.
+  - '@' goes off the UI thread over the files' threshold (`CRAFT_QUICK_OPEN_BACKGROUND_FILES`): no new option.
+  - "@:" groups the best rows by kind (then score), the group's title on the row's right where "recent" sits.
+  - The preview keeps the primary selection and the scroll for Escape (extra carets are not kept); a text change meanwhile leaves the editor where it is.
+  - Breadcrumb: every folder from the workspace's root (VS Code's), not only the last; "…" stands for its last folded part.
+  - The breadcrumb learns its parts' widths from the first layout of a new set (kept per text, cleared with the theme or font), then folds.
+  - A symbol part lists its siblings (its parent's children); the file part lists its folder.
+  - Conflicts are the new errors in the renamed files (Roslyn's public `Renamer` reports none); said, and the user may still accept.
+  - A stale document refuses the whole rename before the user is asked ("run it again"), never a partial one.
+  - The rename box cancels when it loses the keyboard.
+  - `FileChange.Origin` (added) names the review's source, so a rename's diff says "Rename A to B: the open document".
+  - `ConversationComposer.SymbolsOf` takes the `landed` callback (Craft.Editor's dump: that one line changed; not a plug-in contract).
+  - Only the rename's own status line is kept (`ShowStatus` lines otherwise pile up; others' calls left as they are).
+- **Measured** (Linux container, Release, `test-output/benches/piece-3b.txt`): C# symbols of a 5,123-line file (2,481
+  symbols, after its parse landed): the call returned in 0.03-0.04 ms, the walk 2.0-2.4 ms cold, a new version 2.25-2.82
+  ms median (2.92-3.54 worst; two runs), the same version again under 0.01 ms. '@' over those 2,481 symbols per key (15 keys × 6 rounds, 120 rows kept):
+  median 0.12-0.13 ms, worst 0.20-0.21 ms, 38 KB a key (the rows made), off the UI thread with the same rows. A rename of a symbol
+  used 600 times in 31 files (one open), on a test UI thread with the watchdog (20 ms ticks, 250 ms stall): 1.9 s from
+  Enter to applied in the first run, 0.8 s in the full filter's (the workspace built, Roslyn's rename, the review, 30
+  files saved), worst tick 3-5 ms, 0 stalls.
+- **Tests**: groups `DocSymbols` (3), `Inline` (+3: '@' with groups, a level and the preview; 2,481 symbols off the thread;
+  a folder's entries), `Breadcrumb` (3), `SymbolRename` (4: F2 across two files with one review, one undo step and Undo of
+  all; names, refusals, versions and a conflict; a stale document refused and the contract's undo bar; the watchdog
+  measure), `Conversation` (+1: the composer's '@' from the contract). Updated: `Inline.QuickOpenRanks…` ('@' is now
+  symbols), `Shell` (Ctrl+Shift+O, F2, Ctrl+K Ctrl+O). API dumps of Craft.Abstractions, its contract list, Craft.CSharp and
+  Craft.Editor regenerated. After the rebase onto X part 6b (and Idrak's interactive sandbox start), the full filter
+  `DocSymbols|Inline|Breadcrumb|SymbolRename|Conversation|Semantic|CSharp|EditorGroups|Shell|Keys|Settings|Ui|Experience|ApiGuard|Inventory|PhaseP`:
+  168 passed, 0 failed.
+- **Windows-only (not compiled here)**: nothing new under `Platforms/`; the rename box's Enter and Escape go through
+  `RoutedEntry`'s Windows hook (`EntryKeys`). **Not run here**: the window (the box's place over the name, the
+  breadcrumb's folding and clicks, the '@' preview).
+- **Left**: renaming the file with its type (Roslyn's `RenameFile`), in comments and strings (off); the breadcrumb takes no
+  keyboard focus yet (VS Code's Ctrl+Shift+.); other languages give no outline until they implement the member.
+- **The owner's commands** (Craft only; Idrak is unchanged):
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="DocSymbols|Inline|Breadcrumb|SymbolRename|Conversation|Semantic|CSharp|EditorGroups|Shell|Keys|Settings|Ui|Experience|ApiGuard|Inventory|PhaseP"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app, on `Program.cs`: Ctrl+Shift+O, type a name, Up and Down (the editor follows), Escape (back), "@:" (by
+  kind), Enter on one; click the breadcrumb's folder (its entries), its member (the siblings), narrow the window (the
+  middle folds to "…"); F2 on a method used in two files, type a new name, Enter (one diff of both files, Accept all),
+  then Undo on the bar; Ctrl+K Ctrl+O opens a folder; in the chat's box type "@" (the file's symbols).
+
 ### X restart piece 2a as built (2026-11-01)
 
 Slot s3: X part 4's **Faster typing at many carets**, **Hover cards that stay**, **Overview ruler** and **Sticky scroll**.

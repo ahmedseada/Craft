@@ -118,6 +118,15 @@ public interface ILanguageSession : IDisposable
     /// from what it holds and returns the same list while the scopes are the same. None by default.
     /// </summary>
     IReadOnlyList<ScopeName> ScopeAt(ITextSnapshot snapshot, int position) => [];
+
+    /// <summary>
+    /// The symbols <paramref name="snapshot"/> declares (namespaces, types, members, enum members), outermost first and in
+    /// the order of the text, each with its children: the outline that quick open's '@' (Ctrl+Shift+O), the breadcrumb's
+    /// symbol parts and the chat's '@' mentions list. Off the calling thread; a session answers each version once and keeps
+    /// the answer (asked again for the same version, it gives the same list). None by default (a language without symbols).
+    /// </summary>
+    Task<IReadOnlyList<DocumentSymbol>> GetDocumentSymbolsAsync(ITextSnapshot snapshot, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<DocumentSymbol>>([]);
 }
 
 /// <summary>
@@ -157,8 +166,41 @@ public enum ScopeKind
     /// <summary>A method, constructor, operator or local function.</summary>
     Method,
 
-    /// <summary>A property, indexer, event or field.</summary>
+    /// <summary>A property, indexer, event or field (a scope that does not say which; <see cref="DocumentSymbol"/>s do).</summary>
     Member,
+
+    /// <summary>A property or an indexer (contract 1.1).</summary>
+    Property,
+
+    /// <summary>A field or a constant (contract 1.1).</summary>
+    Field,
+
+    /// <summary>An event (contract 1.1).</summary>
+    Event,
+
+    /// <summary>A member of an enum (contract 1.1).</summary>
+    EnumMember,
+}
+
+/// <summary>
+/// A symbol a document declares (<see cref="ILanguageSession.GetDocumentSymbolsAsync"/>): its name, what it is, the text it
+/// spans and its name's place, in the positions of the snapshot it was asked for. Immutable; any thread.
+/// </summary>
+/// <param name="Name">The name as the outline shows it ("EditorTools", "GetDiagnosticsAsync", "this[]").</param>
+/// <param name="Kind">What it is.</param>
+/// <param name="Start">Where its declaration starts (its attributes and modifiers included, its leading comments not).</param>
+/// <param name="Length">The declaration's characters.</param>
+/// <param name="NameStart">Where its name starts (what a pick selects); <paramref name="Start"/> when it has no name of its own.</param>
+/// <param name="NameLength">The name's characters (0 when it has none).</param>
+/// <param name="Detail">What the outline shows after the name, quieter: a method's parameters "(int line, int column)", a property's or a field's type, or null.</param>
+/// <param name="Children">The symbols it declares, in the order of the text (none for a member).</param>
+public sealed record DocumentSymbol(string Name, ScopeKind Kind, int Start, int Length, int NameStart, int NameLength, string? Detail, IReadOnlyList<DocumentSymbol> Children)
+{
+    /// <summary>The position after the declaration.</summary>
+    public int End => Start + Length;
+
+    /// <summary>Whether <paramref name="position"/> is inside the declaration (its end included: a caret just after a closing brace).</summary>
+    public bool Contains(int position) => position >= Start && position <= End;
 }
 
 /// <summary>

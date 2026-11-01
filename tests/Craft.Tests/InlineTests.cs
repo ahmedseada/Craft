@@ -56,7 +56,7 @@ public static class InlineTests
         // The prefixes.
         Check.Equal(QuickOpenMode.Commands, QuickOpen.ModeOf(" >fmt"), "'>' asks for the commands");
         Check.Equal(QuickOpenMode.Line, QuickOpen.ModeOf(":42:7"), "':' a line");
-        Check.Equal(QuickOpenMode.Files, QuickOpen.ModeOf("@Main"), "'@' is a file name: no language gives document symbols yet");
+        Check.Equal(QuickOpenMode.Symbols, QuickOpen.ModeOf("@Main"), "'@' asks for the active editor's symbols (piece 3b's document-symbols contract)");
         Check.True(QuickOpen.PrefixOf(QuickOpenMode.Commands) == ">" && QuickOpen.PrefixOf(QuickOpenMode.Line) == ":" && QuickOpen.PrefixOf(QuickOpenMode.Files).Length == 0,
             "each mode's prefix");
         Check.True(quick.Query(":12:3") is [{ Line: 12, Column: 3 }], "a line and a column");

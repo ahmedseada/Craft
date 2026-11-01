@@ -501,6 +501,25 @@ Craft.Abstractions.DiffLineKind : System.IComparable
 Craft.Abstractions.DiffLineKind : System.IConvertible
 Craft.Abstractions.DiffLineKind : System.IFormattable
 Craft.Abstractions.DiffLineKind : System.ISpanFormattable
+Craft.Abstractions.DocumentSymbol
+Craft.Abstractions.DocumentSymbol  Craft.Abstractions.DocumentSymbol <Clone>$()
+Craft.Abstractions.DocumentSymbol  Craft.Abstractions.ScopeKind Kind { get; init; }
+Craft.Abstractions.DocumentSymbol  System.Boolean Contains(System.Int32 position)
+Craft.Abstractions.DocumentSymbol  System.Boolean Equals(Craft.Abstractions.DocumentSymbol other)
+Craft.Abstractions.DocumentSymbol  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.DocumentSymbol  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol> Children { get; init; }
+Craft.Abstractions.DocumentSymbol  System.Int32 End { get; }
+Craft.Abstractions.DocumentSymbol  System.Int32 GetHashCode()
+Craft.Abstractions.DocumentSymbol  System.Int32 Length { get; init; }
+Craft.Abstractions.DocumentSymbol  System.Int32 NameLength { get; init; }
+Craft.Abstractions.DocumentSymbol  System.Int32 NameStart { get; init; }
+Craft.Abstractions.DocumentSymbol  System.Int32 Start { get; init; }
+Craft.Abstractions.DocumentSymbol  System.String Detail { get; init; }
+Craft.Abstractions.DocumentSymbol  System.String Name { get; init; }
+Craft.Abstractions.DocumentSymbol  System.String ToString()
+Craft.Abstractions.DocumentSymbol  System.Void Deconstruct(out System.String Name, out Craft.Abstractions.ScopeKind Kind, out System.Int32 Start, out System.Int32 Length, out System.Int32 NameStart, out System.Int32 NameLength, out System.String Detail, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol> Children)
+Craft.Abstractions.DocumentSymbol  ctor(System.String Name, Craft.Abstractions.ScopeKind Kind, System.Int32 Start, System.Int32 Length, System.Int32 NameStart, System.Int32 NameLength, System.String Detail, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol> Children)
+Craft.Abstractions.DocumentSymbol : System.IEquatable<Craft.Abstractions.DocumentSymbol>
 Craft.Abstractions.EditKind
 Craft.Abstractions.EditKind  Command = 3
 Craft.Abstractions.EditKind  Deleting = 1
@@ -1079,6 +1098,7 @@ Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> Exec
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> OpenExternalAsync(System.String path)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeWorkspaceAsync(Craft.Abstractions.WorkspaceEdit edit, System.String title, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
@@ -1179,6 +1199,7 @@ Craft.Abstractions.ILanguage : Idrak.Abstraction.IKind
 Craft.Abstractions.ILanguageSession
 Craft.Abstractions.ILanguageSession  System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
 Craft.Abstractions.ILanguageSession  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> ScopeAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
+Craft.Abstractions.ILanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol>> GetDocumentSymbolsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ILanguageSession  System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.ILanguageSession  System.Void ClassifySyntactic(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.ILanguageSession  event System.EventHandler Reclassified
@@ -1220,7 +1241,9 @@ Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.A
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.DefinitionLocation> GetDefinitionAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.DiagnosticSet> DiagnoseEditsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.HoverInfo> GetHoverAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.RenameTarget> PrepareRenameAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.SignatureHelp> GetSignatureHelpAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.WorkspaceEdit> RenameAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.String newName, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindReferencesAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxResults, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindSymbolsAsync(System.String query, System.Int32 maxResults, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Void EnableSemantics()
@@ -2460,6 +2483,20 @@ Craft.Abstractions.RailItem  System.Void Deconstruct(out System.String Id, out S
 Craft.Abstractions.RailItem  ctor(System.String Id, System.String Title, System.String CommandId, System.String Icon, System.Int32 Order = 0, System.Boolean AtBottom = false)
 Craft.Abstractions.RailItem : Idrak.Abstraction.IKind
 Craft.Abstractions.RailItem : System.IEquatable<Craft.Abstractions.RailItem>
+Craft.Abstractions.RenameTarget
+Craft.Abstractions.RenameTarget  Craft.Abstractions.RenameTarget <Clone>$()
+Craft.Abstractions.RenameTarget  System.Boolean CanRename { get; }
+Craft.Abstractions.RenameTarget  System.Boolean Equals(Craft.Abstractions.RenameTarget other)
+Craft.Abstractions.RenameTarget  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.RenameTarget  System.Int32 GetHashCode()
+Craft.Abstractions.RenameTarget  System.Int32 Length { get; init; }
+Craft.Abstractions.RenameTarget  System.Int32 Start { get; init; }
+Craft.Abstractions.RenameTarget  System.String Name { get; init; }
+Craft.Abstractions.RenameTarget  System.String Refusal { get; init; }
+Craft.Abstractions.RenameTarget  System.String ToString()
+Craft.Abstractions.RenameTarget  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out System.String Name, out System.String Refusal)
+Craft.Abstractions.RenameTarget  ctor(System.Int32 Start, System.Int32 Length, System.String Name, System.String Refusal = null)
+Craft.Abstractions.RenameTarget : System.IEquatable<Craft.Abstractions.RenameTarget>
 Craft.Abstractions.RunActions
 Craft.Abstractions.RunActions  Build = 2
 Craft.Abstractions.RunActions  None = 0
@@ -2576,9 +2613,13 @@ Craft.Abstractions.RunWorkspace  System.Void Deconstruct(out System.String Root,
 Craft.Abstractions.RunWorkspace  ctor(System.String Root, System.Collections.Generic.IReadOnlyList<System.String> Files)
 Craft.Abstractions.RunWorkspace : System.IEquatable<Craft.Abstractions.RunWorkspace>
 Craft.Abstractions.ScopeKind
+Craft.Abstractions.ScopeKind  EnumMember = 7
+Craft.Abstractions.ScopeKind  Event = 6
+Craft.Abstractions.ScopeKind  Field = 5
 Craft.Abstractions.ScopeKind  Member = 3
 Craft.Abstractions.ScopeKind  Method = 2
 Craft.Abstractions.ScopeKind  Namespace = 0
+Craft.Abstractions.ScopeKind  Property = 4
 Craft.Abstractions.ScopeKind  Type = 1
 Craft.Abstractions.ScopeKind : System.IComparable
 Craft.Abstractions.ScopeKind : System.IConvertible
@@ -3187,6 +3228,33 @@ Craft.Abstractions.ViewPanel  ctor(System.String id, System.String title, System
 Craft.Abstractions.ViewPanel  event System.EventHandler Changed
 Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorPanel
 Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorViewPanel
+Craft.Abstractions.WorkspaceEdit
+Craft.Abstractions.WorkspaceEdit  Craft.Abstractions.WorkspaceEdit <Clone>$()
+Craft.Abstractions.WorkspaceEdit  System.Boolean Equals(Craft.Abstractions.WorkspaceEdit other)
+Craft.Abstractions.WorkspaceEdit  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceEdit  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceFileEdit> Files { get; init; }
+Craft.Abstractions.WorkspaceEdit  System.Collections.Generic.IReadOnlyList<System.String> Conflicts { get; init; }
+Craft.Abstractions.WorkspaceEdit  System.Int32 EditCount { get; }
+Craft.Abstractions.WorkspaceEdit  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceEdit  System.String Refusal { get; init; }
+Craft.Abstractions.WorkspaceEdit  System.String ToString()
+Craft.Abstractions.WorkspaceEdit  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceFileEdit> Files)
+Craft.Abstractions.WorkspaceEdit  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceFileEdit> Files)
+Craft.Abstractions.WorkspaceEdit  static Craft.Abstractions.WorkspaceEdit Empty { get; }
+Craft.Abstractions.WorkspaceEdit  static Craft.Abstractions.WorkspaceEdit Refused(System.String reason)
+Craft.Abstractions.WorkspaceEdit : System.IEquatable<Craft.Abstractions.WorkspaceEdit>
+Craft.Abstractions.WorkspaceFileEdit
+Craft.Abstractions.WorkspaceFileEdit  Craft.Abstractions.WorkspaceFileEdit <Clone>$()
+Craft.Abstractions.WorkspaceFileEdit  System.Boolean Equals(Craft.Abstractions.WorkspaceFileEdit other)
+Craft.Abstractions.WorkspaceFileEdit  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceFileEdit  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits { get; init; }
+Craft.Abstractions.WorkspaceFileEdit  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceFileEdit  System.Int32? Version { get; init; }
+Craft.Abstractions.WorkspaceFileEdit  System.String Path { get; init; }
+Craft.Abstractions.WorkspaceFileEdit  System.String ToString()
+Craft.Abstractions.WorkspaceFileEdit  System.Void Deconstruct(out System.String Path, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits, out System.Int32? Version)
+Craft.Abstractions.WorkspaceFileEdit  ctor(System.String Path, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits, System.Int32? Version = null)
+Craft.Abstractions.WorkspaceFileEdit : System.IEquatable<Craft.Abstractions.WorkspaceFileEdit>
 Craft.Abstractions.WorkspaceFiles
 Craft.Abstractions.WorkspaceFiles  static System.Collections.Generic.IEnumerable<System.String> Enumerate(System.String root, System.Collections.Generic.IReadOnlyList<System.String> ignoredFolders, System.Boolean useIgnoreFiles, Craft.Abstractions.WorkspaceGlob include, Craft.Abstractions.WorkspaceGlob exclude, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.WorkspaceFiles  static System.String Relative(System.String root, System.String path)

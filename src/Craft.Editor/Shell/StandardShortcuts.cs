@@ -218,6 +218,8 @@ public static class StandardShortcuts
         Anywhere("Ctrl+Shift+.", ShellCommandIds.ZoomIn),
         Anywhere("Ctrl+Shift+,", ShellCommandIds.ZoomOut),
         Anywhere("Alt+Enter", QuickFix),
+        Editor("Ctrl+R Ctrl+R", ShellCommandIds.RenameSymbol),
+        Editor("Alt+\\", ShellCommandIds.GoToSymbol),
     ]);
 
     /// <summary>A binding of <paramref name="keys"/> to <paramref name="commandId"/> in the text editor only.</summary>

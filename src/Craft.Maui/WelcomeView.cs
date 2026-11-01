@@ -125,7 +125,7 @@ public sealed class WelcomeView : ContentView, IDisposable
         var folders = _model.RecentFolders;
         if (folders.Count == 0)
         {
-            var none = p.Label("No folder opened yet: Open folder (Ctrl+Shift+O) puts one here.", p.Secondary, p.SmallSize);
+            var none = p.Label("No folder opened yet: Open folder (Ctrl+K Ctrl+O) puts one here.", p.Secondary, p.SmallSize);
             none.LineBreakMode = LineBreakMode.WordWrap;
             _recent.Children.Add(none);
         }

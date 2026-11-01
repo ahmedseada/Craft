@@ -17,7 +17,9 @@ public static class CraftContracts
     /// <summary>
     /// The running Craft's contract version. 1.1 (the X restart's one minor step, 2026-11-01): additions only, every 1.0
     /// member kept (<c>IConversationPanel.AcceptDropAsync</c>, <c>ContextChip.Problem</c>, <c>ModelLease.ChatTemplate</c>,
-    /// <c>ModelRole.EnabledSetting</c>, <c>FoldingRangeProviders.Changed</c>, <see cref="EditorKey.Backslash"/>, and what the restart's other slots add).
+    /// <c>ModelRole.EnabledSetting</c>, <c>FoldingRangeProviders.Changed</c>, <see cref="EditorKey.Backslash"/>, piece 3b's <see cref="ILanguageSession.GetDocumentSymbolsAsync"/>,
+    /// <see cref="ISemanticLanguageSession.PrepareRenameAsync"/>, <see cref="ISemanticLanguageSession.RenameAsync"/> and
+    /// <see cref="IEditorHost.ProposeWorkspaceAsync"/>, and what the restart's other slots add).
     /// </summary>
     public static Version Version { get; } = new(1, 1);
 

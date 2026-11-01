@@ -56,7 +56,7 @@ public static class ShellCommandIds
     /// <summary>Opens a file (Ctrl+O).</summary>
     public const string OpenFile = "craft.openFile";
 
-    /// <summary>Opens a folder as the workspace (Ctrl+Shift+O).</summary>
+    /// <summary>Opens a folder as the workspace (Ctrl+K Ctrl+O, VS Code's; Ctrl+Shift+O goes to a symbol).</summary>
     public const string OpenFolder = "craft.openFolder";
 
     /// <summary>Opens a recent file or folder (Ctrl+R).</summary>
@@ -253,6 +253,12 @@ public static class ShellCommandIds
 
     /// <summary>Takes the tab's text back to its file's, as one undo step, with Undo.</summary>
     public const string RevertFile = "craft.revertFile";
+
+    /// <summary>Refactor: Rename the symbol at the caret (F2; Visual Studio: Ctrl+R Ctrl+R).</summary>
+    public const string RenameSymbol = "craft.renameSymbol";
+
+    /// <summary>Go: a symbol of the focused editor, quick open's '@' (Ctrl+Shift+O).</summary>
+    public const string GoToSymbol = "craft.goToSymbol";
 }
 
 /// <summary>What a drop of paths onto the window or the editor opened (<see cref="ShellModel.OpenDroppedAsync"/>).</summary>
@@ -269,6 +275,9 @@ public static class ShellViewNames
 
     /// <summary>Quick open with ':' typed (go to a line of the active editor).</summary>
     public const string GoToLine = "quickOpen.line";
+
+    /// <summary>Quick open with '@': the focused editor's symbols.</summary>
+    public const string GoToSymbol = "quickOpen.symbol";
 
     /// <summary>The bottom panel shown or hidden.</summary>
     public const string TogglePanel = "panel";
@@ -1390,7 +1399,7 @@ public sealed partial class ShellModel : IDisposable
             {
                 await OpenFolderAsync(path);
             }
-        }, null, "Ctrl+Shift+O");
+        }, null, "Ctrl+K Ctrl+O");
         Command(ShellCommandIds.OpenRecent, "File: Open a recent file or folder", (_, token) => OpenRecentAsync(token), null, "Ctrl+R");
         Command(ShellCommandIds.CloseFolder, "File: Close the folder", (_, _) => { CloseFolder(); return Task.CompletedTask; }, _ => Workspace is not null, null);
         Command(ShellCommandIds.Save, "File: Save", (_, token) => SaveAsync(null, token), _ => Tabs.Active is not null, "Ctrl+S");
@@ -1433,6 +1442,7 @@ public sealed partial class ShellModel : IDisposable
         Command(ShellCommandIds.Welcome, "Help: Welcome", (_, _) => { ShowWelcome(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.ClearNotifications, "View: Clear the notifications", (_, _) => { ClearNotifications(); return Task.CompletedTask; }, null, null);
         RegisterGroupCommands();
+        RegisterSymbolCommands();
         Command(ShellCommandIds.About, "Help: About Craft", (_, _) => _ui.ShowMessageAsync("Craft",
             $"A code editor on Idrak. Plug-in contracts {CraftContracts.Version}; .NET {Environment.Version}; {System.Runtime.InteropServices.RuntimeInformation.OSDescription}."), null, null);
 

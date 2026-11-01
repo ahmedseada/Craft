@@ -180,6 +180,16 @@ public interface IEditorHost
         ProposeEditsAsync(document, (proposal ?? throw new ArgumentNullException(nameof(proposal))).Edits, proposal.Title, cancellationToken);
 
     /// <summary>
+    /// Proposes <paramref name="edit"/> (edits to several files: a rename across the workspace) under
+    /// <paramref name="title"/> as one diff that lists every file, with Accept all. Accepted, each open document takes its
+    /// edits as one undo step, and each file that is not open is opened in the background, edited and saved; the shell then
+    /// offers Undo for the whole change. True when the user accepted and it was applied; false when rejected, when an open
+    /// document changed since the edit was made (<see cref="WorkspaceFileEdit.Version"/>), when the edit has a
+    /// <see cref="WorkspaceEdit.Refusal"/> or no file, or when the host cannot ask the user (the default). Contract 1.1.
+    /// </summary>
+    Task<bool> ProposeWorkspaceAsync(WorkspaceEdit edit, string title, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <summary>
     /// The open document of the file <paramref name="path"/>, opening it in the editor when it is not open (a path with no
     /// file yet opens a new, empty document the user saves there); null when the host cannot open documents or the file
     /// cannot be read. A plug-in that proposes edits to a closed file (the agent's) opens it this way first.

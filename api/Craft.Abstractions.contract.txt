@@ -1761,6 +1761,7 @@ Craft.Abstractions.ITerminalSession  System.Void Write(System.ReadOnlySpan<Syste
 Craft.Abstractions.ITerminalSession : System.IDisposable
 Craft.Abstractions.ITestProvider
 Craft.Abstractions.ITestProvider  Craft.Abstractions.RunCommand Command(Craft.Abstractions.TestRunRequest request)
+Craft.Abstractions.ITestProvider  System.Boolean IsResultLine(System.ReadOnlySpan<System.Char> line)
 Craft.Abstractions.ITestProvider  System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
 Craft.Abstractions.ITestProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> Discover(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.ITestProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestResult> ReadResults(Craft.Abstractions.TestRunRequest request, System.String output, System.Threading.CancellationToken cancellationToken = null)
@@ -4341,6 +4342,18 @@ Craft.Abstractions.WorkspaceSearchHit  System.String ToString()
 Craft.Abstractions.WorkspaceSearchHit  System.Void Deconstruct(out System.Int32 Line, out System.Int32 Column, out System.Int32 Length, out System.String Preview, out System.Int32 PreviewColumn)
 Craft.Abstractions.WorkspaceSearchHit  ctor(System.Int32 Line, System.Int32 Column, System.Int32 Length, System.String Preview, System.Int32 PreviewColumn)
 Craft.Abstractions.WorkspaceSearchHit : System.IEquatable<Craft.Abstractions.WorkspaceSearchHit>
+Craft.Abstractions.WorkspaceSearchProgress
+Craft.Abstractions.WorkspaceSearchProgress  Craft.Abstractions.WorkspaceSearchProgress <Clone>$()
+Craft.Abstractions.WorkspaceSearchProgress  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchProgress other)
+Craft.Abstractions.WorkspaceSearchProgress  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceSearchProgress  System.Double? Fraction { get; }
+Craft.Abstractions.WorkspaceSearchProgress  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceSearchProgress  System.Int32 Searched { get; init; }
+Craft.Abstractions.WorkspaceSearchProgress  System.Int32? Total { get; init; }
+Craft.Abstractions.WorkspaceSearchProgress  System.String ToString()
+Craft.Abstractions.WorkspaceSearchProgress  System.Void Deconstruct(out System.Int32 Searched, out System.Int32? Total)
+Craft.Abstractions.WorkspaceSearchProgress  ctor(System.Int32 Searched, System.Int32? Total)
+Craft.Abstractions.WorkspaceSearchProgress : System.IEquatable<Craft.Abstractions.WorkspaceSearchProgress>
 Craft.Abstractions.WorkspaceSearchProviders
 Craft.Abstractions.WorkspaceSearchProviders  const System.String Text = text
 Craft.Abstractions.WorkspaceSearchProviders  static Craft.Abstractions.IWorkspaceSearchProvider Find(System.ReadOnlySpan<System.Char> name)
@@ -4369,6 +4382,7 @@ Craft.Abstractions.WorkspaceSearchQuery : System.IEquatable<Craft.Abstractions.W
 Craft.Abstractions.WorkspaceSearchRequest
 Craft.Abstractions.WorkspaceSearchRequest  Craft.Abstractions.WorkspaceSearchQuery Query { get; init; }
 Craft.Abstractions.WorkspaceSearchRequest  Craft.Abstractions.WorkspaceSearchRequest <Clone>$()
+Craft.Abstractions.WorkspaceSearchRequest  System.Action<Craft.Abstractions.WorkspaceSearchProgress> Progress { get; init; }
 Craft.Abstractions.WorkspaceSearchRequest  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchRequest other)
 Craft.Abstractions.WorkspaceSearchRequest  System.Boolean Equals(System.Object obj)
 Craft.Abstractions.WorkspaceSearchRequest  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceSearchDocument> OpenDocuments { get; init; }

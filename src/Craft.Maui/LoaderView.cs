@@ -13,21 +13,19 @@ namespace Craft.Maui;
 /// <summary>
 /// The window's global loader (B10): a thin progress line under the title bar, across the window, while a workspace's
 /// work runs (<see cref="GlobalLoader"/>: a folder opening, a language building its workspace, any activity a plug-in
-/// marks global), shown only after <c>CRAFT_LOADER_DELAY_MS</c>. Determinate when the work it follows reports a fraction
-/// (the line grows), else a segment crosses the window every <c>CRAFT_LOADER_CYCLE_MS</c>; with reduced motion the
-/// segment stands still at half strength and the line jumps. Its tooltip names the work and its percent; a click opens
-/// the notification centre's activities (<see cref="Tapped"/>).
+/// marks global), shown only after <c>CRAFT_LOADER_DELAY_MS</c>. Drawn by Craft's progress bar (<see cref="ProgressBarView"/>,
+/// no track): determinate when the work it follows reports a fraction (the line grows), else a segment crosses the window
+/// every <c>CRAFT_LOADER_CYCLE_MS</c>; with reduced motion the segment stands still at half strength and the line jumps.
+/// Its tooltip names the work and its percent; a click opens the notification centre's activities (<see cref="Tapped"/>).
 /// </summary>
 public sealed class LoaderView : Grid
 {
-    private const string MotionName = "craft-loader";
     private const double LineHeight = 2;
     private readonly ActivityCenter _activities;
-    private readonly BoxView _bar = new() { HeightRequest = LineHeight, HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Start };
+    private readonly ProgressBarView _bar = new(LineHeight) { VerticalOptions = LayoutOptions.Start, HorizontalOptions = LayoutOptions.Fill, Track = Colors.Transparent };
     private IDispatcherTimer? _due;
     private CraftOptions _options;
     private LoaderState _shown = LoaderState.Hidden;
-    private bool _moving;
 
     /// <summary>The loader over <paramref name="activities"/>, with <paramref name="options"/>' delay, kinds and motion.</summary>
     public LoaderView(ActivityCenter activities, CraftOptions options)
@@ -44,7 +42,6 @@ public sealed class LoaderView : Grid
         var tap = new TapGestureRecognizer();
         tap.Tapped += (_, _) => Tapped?.Invoke(this, EventArgs.Empty);
         GestureRecognizers.Add(tap);
-        SizeChanged += (_, _) => Place(animate: false);
         activities.Changed += (_, _) => Refresh();
         SemanticProperties.SetDescription(this, "Workspace loading");
     }
@@ -61,8 +58,9 @@ public sealed class LoaderView : Grid
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(accent);
         _options = options;
-        _bar.Color = accent;
-        StopMoving();
+        _bar.Fill = accent;
+        _bar.CycleMilliseconds = options.LoaderCycleMilliseconds;
+        _bar.ReducedMotion = options.ReducedMotion || Craft.Editor.Motion.Duration(options) == 0;
         Refresh();
     }
 
@@ -77,72 +75,11 @@ public sealed class LoaderView : Grid
             return;
         }
 
-        bool fractionKind = state.Fraction is null != _shown.Fraction is null;
         _shown = state;
         ToolTipProperties.SetText(this, state.Tooltip);
         IsVisible = state.Visible;
-        if (!state.Visible)
-        {
-            StopMoving();
-            return;
-        }
-
-        Place(animate: !fractionKind);
-    }
-
-    private void Place(bool animate)
-    {
-        if (!_shown.Visible || Width <= 0)
-        {
-            return;
-        }
-
-        bool reduced = _options.ReducedMotion || Craft.Editor.Motion.Duration(_options) == 0;
-        if (_shown.Fraction is { } fraction)
-        {
-            StopMoving();
-            _bar.Opacity = 1;
-            _bar.TranslationX = 0;
-            double target = Math.Max(LineHeight, Width * fraction);
-            if (!animate || reduced)
-            {
-                _bar.WidthRequest = target;
-                return;
-            }
-
-            double from = _bar.WidthRequest > 0 ? _bar.WidthRequest : 0;
-            new Animation(w => _bar.WidthRequest = w, from, target, Easing.CubicOut).Commit(_bar, MotionName + "-grow", 16, (uint)Craft.Editor.Motion.Duration(_options));
-            return;
-        }
-
-        // Nothing reported: a segment a third of the window wide crosses it, again and again (still, with reduced motion).
-        double segment = Math.Max(24, Width / 3);
-        _bar.WidthRequest = segment;
-        if (reduced)
-        {
-            StopMoving();
-            _bar.WidthRequest = Width;
-            _bar.Opacity = 0.5;
-            _bar.TranslationX = 0;
-            return;
-        }
-
-        _bar.Opacity = 1;
-        if (_moving)
-        {
-            return;
-        }
-
-        _moving = true;
-        new Animation(x => _bar.TranslationX = x, -segment, Width, Easing.Linear)
-            .Commit(_bar, MotionName, 16, (uint)Math.Max(200, _options.LoaderCycleMilliseconds), repeat: () => _moving && _shown is { Visible: true, Fraction: null });
-    }
-
-    private void StopMoving()
-    {
-        _moving = false;
-        _bar.AbortAnimation(MotionName);
-        _bar.AbortAnimation(MotionName + "-grow");
+        _bar.IsVisible = state.Visible;                   // hidden: its frame timer stops
+        _bar.Fraction = state.Visible ? state.Fraction : null;
     }
 
     private void ScheduleDue(TimeSpan? due)

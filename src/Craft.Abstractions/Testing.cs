@@ -107,6 +107,12 @@ public interface ITestProvider : IKind
     /// <paramref name="output"/> (the console's lines). Called off the UI thread.
     /// </summary>
     IReadOnlyList<TestResult> ReadResults(TestRunRequest request, string output, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether <paramref name="line"/> of a run's output says one test's result (a passed, failed or skipped test), so the
+    /// run's progress counts the results seen of the tests run; false by default (the run shows no share: none is invented).
+    /// </summary>
+    bool IsResultLine(ReadOnlySpan<char> line) => false;
 }
 
 /// <summary>

@@ -199,6 +199,14 @@ public sealed class DotnetTestProvider : ITestProvider
     }
 
     /// <inheritdoc />
+    public bool IsResultLine(ReadOnlySpan<char> line)
+    {
+        // The console logger at normal verbosity: "  Passed Name [12 ms]", "  Failed Name [3 ms]", "  Skipped Name".
+        var text = line.TrimStart();
+        return text.StartsWith("Passed ", StringComparison.Ordinal) || text.StartsWith("Failed ", StringComparison.Ordinal) || text.StartsWith("Skipped ", StringComparison.Ordinal);
+    }
+
+    /// <inheritdoc />
     public IReadOnlyList<TestResult> ReadResults(TestRunRequest request, string output, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

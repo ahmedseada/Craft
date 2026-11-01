@@ -460,8 +460,14 @@ public sealed partial class PanelBlocksView : ContentView
         var p = _palette;
         var stack = new VerticalStackLayout { Spacing = 6 };
         stack.Children.Add(TitleRow(meter.Title, meter.Detail));
-        var drawable = new MeterDrawable { Fraction = meter.Fraction, Track = p.RaisedHigh, Fill = ToneColor(meter.Tone, p.Accent) };
-        stack.Children.Add(new GraphicsView { Drawable = drawable, HeightRequest = 6, InputTransparent = true });
+        // Craft's progress bar (the owner, 2026-11-01): a fraction below 0 is work without a known end, the moving segment.
+        stack.Children.Add(new ProgressBarView(6, p.Options.LoaderCycleMilliseconds)
+        {
+            Fraction = meter.Fraction >= 0 ? meter.Fraction : null,
+            Track = p.RaisedHigh,
+            Fill = ToneColor(meter.Tone, p.Accent),
+            ReducedMotion = p.Options.ReducedMotion || Craft.Editor.Motion.Duration(p.Options) == 0,
+        });
         return stack;
     }
 
@@ -984,29 +990,6 @@ public sealed partial class PanelBlocksView : ContentView
 #pragma warning restore CA1031
         {
             _failed(actionId, error);
-        }
-    }
-
-    /// <summary>A meter's bar: the track, and the fraction filled (a third for work without a known end).</summary>
-    private sealed class MeterDrawable : IDrawable
-    {
-        public double Fraction { get; set; }
-
-        public Color Track { get; set; } = Colors.Gray;
-
-        public Color Fill { get; set; } = Colors.Orange;
-
-        public void Draw(ICanvas canvas, RectF dirtyRect)
-        {
-            float radius = dirtyRect.Height / 2;
-            canvas.FillColor = Track;
-            canvas.FillRoundedRectangle(dirtyRect, radius);
-            float width = PanelBlockLayout.MeterWidth(Fraction, dirtyRect.Width);
-            if (width > 0)
-            {
-                canvas.FillColor = Fill;
-                canvas.FillRoundedRectangle(new RectF(dirtyRect.X, dirtyRect.Y, Math.Max(width, dirtyRect.Height), dirtyRect.Height), radius);
-            }
         }
     }
 

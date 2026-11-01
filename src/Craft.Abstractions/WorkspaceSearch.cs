@@ -57,6 +57,22 @@ public sealed record WorkspaceSearchRequest(string Root, WorkspaceSearchQuery Qu
 
     /// <summary>The characters of a line a result shows around its match.</summary>
     public int PreviewCharacters { get; init; } = 240;
+
+    /// <summary>
+    /// Told how far the search is (the owner, 2026-11-01: the status bar's bar): the files searched, and the files to search
+    /// once the folder's listing has ended (null before: no share is known yet); every few files and once at the end, on
+    /// the searching threads. Null for none.
+    /// </summary>
+    public Action<WorkspaceSearchProgress>? Progress { get; init; }
+}
+
+/// <summary>How far a workspace search is: the files searched and, once the listing has ended, the files to search.</summary>
+/// <param name="Searched">The files (and open documents) searched so far.</param>
+/// <param name="Total">The files (and open documents) to search, or null while the folder is still being listed.</param>
+public sealed record WorkspaceSearchProgress(int Searched, int? Total)
+{
+    /// <summary>The share searched, from 0 to 1, or null while the total is not known.</summary>
+    public double? Fraction => Total is > 0 and int total ? Math.Min(1, (double)Searched / total) : null;
 }
 
 /// <summary>One match: its place (from 0) and the line it is on.</summary>
@@ -753,7 +769,8 @@ internal sealed class TextWorkspaceSearch : IWorkspaceSearchProvider
             }
         }
 
-        var files = WorkspaceFiles.Enumerate(root, request.IgnoredFolders, query.UseIgnoreFiles, include, exclude, cancellationToken).Where(path => !open.Contains(path));
+        state.Opened = Volatile.Read(ref state.Searched);
+        var files = state.Counted(WorkspaceFiles.Enumerate(root, request.IgnoredFolders, query.UseIgnoreFiles, include, exclude, cancellationToken).Where(path => !open.Contains(path)));
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         state.Stop = stop;
         var parallel = new ParallelOptions
@@ -775,6 +792,7 @@ internal sealed class TextWorkspaceSearch : IWorkspaceSearchProvider
             // Stopped at the cap: the summary says so.
         }
 
+        state.Told(final: true);
         return state.Summary(Stopwatch.GetElapsedTime(started));
     }
 
@@ -819,7 +837,7 @@ internal sealed class TextWorkspaceSearch : IWorkspaceSearchProvider
                 return;
             }
 
-            Interlocked.Increment(ref state.Searched);
+            state.Told(Interlocked.Increment(ref state.Searched));
             var bytes = _bytes.AsSpan(0, length);
             Encoding encoding = Encoding.UTF8;
             int mark = 0;
@@ -875,6 +893,8 @@ internal sealed class TextWorkspaceSearch : IWorkspaceSearchProvider
         private volatile bool _capped;
 
         public int Searched;
+        public int Listed;
+        public int ListingEnded;
         public int Matched;
         public int Matches;
         public int SkippedLarge;
@@ -891,6 +911,35 @@ internal sealed class TextWorkspaceSearch : IWorkspaceSearchProvider
         public CancellationTokenSource? Stop { get; set; }
 
         public bool Capped => _capped;
+
+        // The files to search as they are listed (the partitioner takes them one at a time, under its lock): counted, and
+        // the total known once the listing ends.
+        public IEnumerable<string> Counted(IEnumerable<string> files)
+        {
+            foreach (var file in files)
+            {
+                Interlocked.Increment(ref Listed);
+                yield return file;
+            }
+
+            Volatile.Write(ref ListingEnded, 1);
+        }
+
+        // The progress every 32 files searched, and at the end: the files searched, and the total once the listing ended.
+        public void Told(int searched = 0, bool final = false)
+        {
+            if (Request.Progress is not { } progress || (!final && (searched & 31) != 0))
+            {
+                return;
+            }
+
+            int done = Volatile.Read(ref Searched) + Volatile.Read(ref SkippedLarge) + Volatile.Read(ref Unreadable);   // passed over counts as done
+            int? total = Volatile.Read(ref ListingEnded) == 1 || final ? Volatile.Read(ref Listed) + Opened : null;
+            progress(new WorkspaceSearchProgress(done, total is { } t ? Math.Max(t, done) : null));
+        }
+
+        // The open documents searched first, in their current text (part of the total).
+        public int Opened { get; set; }
 
         // The matches of one text into the caller's reused list; a copy of them is reported (nothing is made for a text without a match).
         public void Report(string path, ReadOnlySpan<char> text, List<WorkspaceSearchHit> hits, bool fromOpenDocument)

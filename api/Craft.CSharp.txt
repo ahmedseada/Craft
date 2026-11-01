@@ -168,6 +168,7 @@ sealed class Craft.CSharp.Run.DotnetRunProvider.ProjectFacts : System.IEquatable
   ctor(System.String OutputType, System.Collections.Generic.IReadOnlyList<System.String> Frameworks, System.Boolean Runs, System.Boolean Tests)
 sealed class Craft.CSharp.Run.DotnetTestProvider : Craft.Abstractions.ITestProvider, Idrak.Abstraction.IKind
   Craft.Abstractions.RunCommand Command(Craft.Abstractions.TestRunRequest request)
+  System.Boolean IsResultLine(System.ReadOnlySpan<System.Char> line)
   System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> Discover(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestResult> ReadResults(Craft.Abstractions.TestRunRequest request, System.String output, System.Threading.CancellationToken cancellationToken = null)

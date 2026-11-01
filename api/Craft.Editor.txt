@@ -60,11 +60,15 @@ sealed class Craft.Editor.Activities.ActivityCenter : Craft.Abstractions.IEditor
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> Visible { get; }
   System.Int32 ChangedCount { get; }
   System.Int32 Keep { get; }
+  System.Int64? Pinned { get; }
   System.TimeSpan Minimum { get; }
   System.Void EndAll(System.String source, System.String why)
+  System.Void Pin(System.Int64? id)
   ctor(System.Action<System.Action> dispatch = null, Craft.Core.CraftOptions options = null, System.TimeProvider time = null)
   event System.EventHandler Changed
   event System.EventHandler<Craft.Abstractions.ActivitySnapshot> Ended
+static class Craft.Editor.Activities.ActivityStatus
+  static System.Int32 Chosen(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running, System.Int64? pinned)
 static class Craft.Editor.Activities.ActivityText
   const System.String Cancel = Cancel
   const System.String OpenLog = Open log
@@ -74,6 +78,7 @@ static class Craft.Editor.Activities.ActivityText
   static System.String Progress(Craft.Abstractions.ActivitySnapshot activity)
   static System.String Stall(System.TimeSpan duration, System.String label)
   static System.String StatusLine(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running)
+  static System.String StatusLine(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running, System.Int32 chosen)
 static class Craft.Editor.Activities.GlobalLoader
   static Craft.Editor.Activities.LoaderState Of(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running, Craft.Core.CraftOptions options)
   static System.Boolean Counts(Craft.Abstractions.ActivitySnapshot activity, Craft.Core.CraftOptions options)
@@ -148,6 +153,31 @@ enum Craft.Editor.Activities.NotificationKind : System.IComparable, System.IConv
   Activity = 0
   Message = 1
   Status = 2
+struct Craft.Editor.Activities.ProgressBarGeometry : System.IEquatable<Craft.Editor.Activities.ProgressBarGeometry>
+  System.Boolean Equals(Craft.Editor.Activities.ProgressBarGeometry other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Single FillWidth { get; init; }
+  System.Single FillX { get; init; }
+  System.Single Opacity { get; init; }
+  System.Single Radius { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Single FillX, out System.Single FillWidth, out System.Single Radius, out System.Single Opacity)
+  ctor(System.Single FillX, System.Single FillWidth, System.Single Radius, System.Single Opacity)
+sealed class Craft.Editor.Activities.ProgressBarModel
+  Craft.Editor.Activities.ProgressBarGeometry Geometry(System.Single width, System.Single height)
+  System.Boolean Advance(System.Double milliseconds)
+  System.Boolean Animating { get; }
+  System.Boolean Reduced { get; set; }
+  System.Boolean Set(System.Double? fraction)
+  System.Double CycleMilliseconds { get; set; }
+  System.Double EaseMilliseconds { get; set; }
+  System.Double Phase { get; }
+  System.Double Shown { get; }
+  System.Double? Fraction { get; }
+  const System.Double SegmentShare = 0.3
+  const System.Double Settled = 0.002
+  ctor(System.Double cycleMilliseconds = 1400)
 sealed class Craft.Editor.Activities.UiStall : System.IEquatable<Craft.Editor.Activities.UiStall>
   Craft.Editor.Activities.UiStall <Clone>$()
   System.Boolean Equals(Craft.Editor.Activities.UiStall other)
@@ -1320,6 +1350,7 @@ sealed class Craft.Editor.Run.RunView : Craft.Abstractions.IEditorPanel, Craft.A
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunAgainAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunAsync(Craft.Abstractions.RunConfiguration configuration, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunCommandAsync(System.String name, Craft.Abstractions.RunCommand command, Craft.Abstractions.RunActions action, System.Action<System.String> tap = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunCommandAsync(System.String name, Craft.Abstractions.RunCommand command, Craft.Abstractions.RunActions action, System.Action<System.String> tap, System.Func<System.Double?> progress, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunDefaultAsync(Craft.Abstractions.RunActions action, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunTestAsync(System.String filePath, System.String testName, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispose()

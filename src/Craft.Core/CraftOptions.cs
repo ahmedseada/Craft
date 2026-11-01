@@ -724,6 +724,15 @@ public sealed record CraftOptions
     /// <summary>Milliseconds the loader's moving segment takes to cross the window when no fraction is known (<c>CRAFT_LOADER_CYCLE_MS</c>).</summary>
     public int LoaderCycleMilliseconds { get; init; } = 1400;
 
+    /// <summary>
+    /// Whether the status bar's activity draws Craft's progress bar (<c>CRAFT_STATUS_PROGRESS</c>): determinate with a
+    /// fraction, a moving segment without one; off, the text alone.
+    /// </summary>
+    public bool StatusProgress { get; init; } = true;
+
+    /// <summary>The status bar's progress bar's width, in units (<c>CRAFT_STATUS_PROGRESS_WIDTH</c>).</summary>
+    public int StatusProgressWidth { get; init; } = 72;
+
     // Phase X slice 3: inline, not modal; the welcome page.
 
     /// <summary>Whether the welcome page opens at start when no folder is open (<c>CRAFT_WELCOME_AT_START</c>; its "Show at start" switch writes it).</summary>
@@ -1006,6 +1015,8 @@ public sealed record CraftOptions
         new("CRAFT_LOADER_DELAY_MS", "300", "Milliseconds a workspace's work (a folder opening, a language building its workspace) runs before the thin loader under the title bar shows.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Loader shows after", 0, 60_000, "ms", "Notifications", step: 50) },
         new("CRAFT_LOADER_KINDS", "workspace", "The activity kinds the loader under the title bar shows besides the ones a plug-in marks global, separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Appearance, "Loader shows", "Notifications") },
         new("CRAFT_LOADER_CYCLE_MS", "1400", "Milliseconds the loader's moving segment takes to cross the window when the work reports no fraction.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Loader cycle", 200, 20_000, "ms", "Notifications", step: 100) },
+        new("CRAFT_STATUS_PROGRESS", "true", "Whether the status bar's running activity shows Craft's progress bar: filled to its share when the work reports one (with its percent and time left), a moving segment when it does not.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Progress bar in the status bar", "Notifications") },
+        new("CRAFT_STATUS_PROGRESS_WIDTH", "72", "The status bar's progress bar's width, in units.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Status bar progress width", 24, 400, "units", "Notifications", step: 8) },
         new("CRAFT_ACTIVITY_FRAME_MS", "16", "The fewest milliseconds between two updates of the running operations and notifications on screen.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Activity updates at most every", 1, 1000, "ms", "Notifications") },
         new("CRAFT_KEYMAP", "vscode", "The default shortcuts: vscode (VS Code's), visualstudio (Visual Studio's where the two differ), or a registered keymap; your own bindings come first.") { Shape = SettingShape.From(SettingSections.Keyboard, "Keymap", SettingChoiceSources.KeyMaps, null, false, null) },
         new("CRAFT_ZOOM_STEP", "1", "What Ctrl+= and Ctrl+- add to or take from the code font's size (written to your settings; Ctrl+0 takes it back).") { Shape = SettingShape.Number(SettingSections.Appearance, "Zoom step (Ctrl+= and Ctrl+-)", 0.5, 10, 0.5, "units", "Fonts") },
@@ -2027,6 +2038,16 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_LOADER_CYCLE_MS") is { } loaderCycle)
         {
             options = options with { LoaderCycleMilliseconds = Whole(loaderCycle, "CRAFT_LOADER_CYCLE_MS", 200, 20_000) };
+        }
+
+        if (Text(read, "CRAFT_STATUS_PROGRESS") is { } statusProgress)
+        {
+            options = options with { StatusProgress = Flag(statusProgress, "CRAFT_STATUS_PROGRESS") };
+        }
+
+        if (Text(read, "CRAFT_STATUS_PROGRESS_WIDTH") is { } statusProgressWidth)
+        {
+            options = options with { StatusProgressWidth = Whole(statusProgressWidth, "CRAFT_STATUS_PROGRESS_WIDTH", 24, 400) };
         }
 
         if (Text(read, "CRAFT_WELCOME_AT_START") is { } welcome)

@@ -346,6 +346,7 @@ public sealed class ModelsPage : ContentView, IDisposable
     private readonly VerticalStackLayout _main = new() { Spacing = 24, Padding = new Thickness(32, 24) };
     private readonly VerticalStackLayout _side = new() { Spacing = 16, Padding = new Thickness(24) };
     private readonly Label _notice;
+    private readonly ActivityBarsView _loads;
     private IModelProvider? _provider;
 
     /// <summary>The page in <paramref name="shell"/>'s theme, a tab of the editor area; a section other than this one opens the settings tab.</summary>
@@ -358,6 +359,8 @@ public sealed class ModelsPage : ContentView, IDisposable
         BackgroundColor = p.Ground;
         _notice = p.Label("", p.Secondary, p.SmallSize);
         _notice.LineBreakMode = LineBreakMode.WordWrap;
+        // The owner, 2026-11-01: each model's download and load with Craft's progress bar, its share, rate and time left.
+        _loads = new ActivityBarsView(shell.Host.ActivityCenter, p, ActivityKinds.Download, ActivityKinds.ModelLoad);
         var nav = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(10, 16) };
         foreach (var (section, sectionTitle) in Sections)
         {
@@ -409,6 +412,7 @@ public sealed class ModelsPage : ContentView, IDisposable
         }
 
         _shell.Host.ProgressChanged -= OnProgress;
+        _loads.Dispose();
     }
 
     // The provider whose status the page shows (the first one; a plug-in that registered later is taken on the next refresh).
@@ -493,6 +497,12 @@ public sealed class ModelsPage : ContentView, IDisposable
                 previous.Children.Remove(_notice);
             }
 
+            if (_loads.Parent is Layout loadsBefore)
+            {
+                loadsBefore.Children.Remove(_loads);
+            }
+
+            add.Children.Add(_loads);
             add.Children.Add(_notice);
             _main.Children.Add(Section("Add a model", add));
         }
@@ -681,12 +691,14 @@ public sealed class ModelsPage : ContentView, IDisposable
         var line = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)] };
         line.Add(p.Label(progress.Title, size: p.SmallSize), 0, 0);
         line.Add(p.Label(progress.Message ?? "", p.Secondary, p.SmallSize), 1, 0);
-        var track = new Grid { HeightRequest = 6, BackgroundColor = p.Selection };
-        if (progress.Fraction is { } fraction)
+        // Craft's progress bar (the owner, 2026-11-01): filled to the share, or the moving segment when none is known.
+        var track = new ProgressBarView(5, p.Options.LoaderCycleMilliseconds)
         {
-            track.ColumnDefinitions = [new ColumnDefinition(new GridLength(Math.Clamp(fraction, 0, 1), GridUnitType.Star)), new ColumnDefinition(new GridLength(Math.Clamp(1 - fraction, 0, 1), GridUnitType.Star))];
-            track.Add(new BoxView { Color = p.Accent, HeightRequest = 6 }, 0, 0);
-        }
+            Fraction = progress.Fraction,
+            Fill = p.Accent,
+            Track = p.RaisedHigh,
+            ReducedMotion = p.Options.ReducedMotion || Craft.Editor.Motion.Duration(p.Options) == 0,
+        };
 
         return new VerticalStackLayout { Spacing = 6, Children = { line, track } };
     }

@@ -2818,6 +2818,103 @@ where the text before the caret matches the primary's, the rest said.
   New-Item -ItemType Directory -Force test-output\agent-house | Out-Null; dotnet run -c Release --no-build --project src\Idrak.Cli -- agent MODEL "Create C# class For House with float 3 props and + float price" --workspace test-output\agent-house --nudges 2
   ```
 
+### X restart piece 1b as built (2026-11-01)
+
+Slot s4: Craft's side of note 27, the drop onto the chat, the Models page per role and more folding (X part 5's three
+bullets). Craft only; nothing was needed in Idrak (its note 27 part, `4f394d5`, had every hook).
+- **Note 27 in Craft.** New settings in the Agent section: `agentNudges` (2, 0-20, `CRAFT_PLUGIN_AI_AGENTNUDGES`) and
+  `agentCallsInText` (on, `CRAFT_PLUGIN_AI_AGENTCALLSINTEXT`), each with its shape; `AiAgentPanel.RunAgentAsync` passes
+  them to `AgentOptions.Nudges`/`CallsInText`, and `AgentOptions.Template` from the lease: new `ModelLease.ChatTemplate`
+  (additive), filled by `LocalModelProvider` with the model's own template, so the correction is worded in its markers
+  although the panel wraps the model (`CountingChatModel`). The end note (`AiAgentPanel.EndNote`): "The model wrote no tool
+  calls; nothing was changed." for a run with no call and no file written, whatever the model claimed; `CallsNotRead`
+  says "…after N corrections (agentNudges M); nothing from its last reply was run." (and "Nothing was changed." when so);
+  any run that was corrected says how many times.
+- **Drop onto the chat.** `IConversationPanel.AcceptDropAsync(paths, ct)` (default: takes none) and
+  `ContextChip.Problem` (greyed with the reason) in `Craft.Abstractions`; `ConversationDrops` (Craft.Editor) hands the
+  paths over and words what the host says ("Notes takes no files: nothing was added.", or "took 2 of the 5"). The chat
+  column (`ConversationsView`) is a drop target: the tree's drag key (`FolderTreeView.DragPathKey`), else the system's
+  drop (`IShellPlatform.DroppedPathsAsync`); the composer takes the selection colour while a drag is over it; the window's
+  own drop leaves a drop on the column to it (`ConversationsView.Holds`). `AiChatPanel`: a text file becomes a `path:`
+  chip, an image an `image:` chip (.png .jpg .jpeg .gif .bmp .webp .tif .tiff, its bytes read on the thread pool up to
+  the new `chatImageMaxMb`, 20, Chat section); a folder, a missing file, a binary one (a NUL in its first 512 bytes) or a
+  larger image is not taken, said in one note. An image for a model whose part kinds have no "image" is greyed with the
+  reason (at the drop when the model's kinds are known from its last load, else when the message goes: the chips come
+  back greyed and nothing reaches the model); nothing is sent while a greyed chip is there (the composer keeps the text
+  and says why). `AiAgentPanel` takes files and folders of the open folder as `@path` chips, sent with the next task or
+  note ("The files this is about (paths in the folder): @a, @b."); one outside the folder is not taken, said.
+- **Fix found (the restart's decision line):** `AskAsync` → `BuildContext` → `ExtraFiles` → `File.ReadAllText` ran on the
+  UI thread. Now the context is gathered on the UI thread (the active document's text, an open file's immutable
+  snapshot, the images read at the drop) and a file that is not open is read on the thread pool when the message goes,
+  only its first `chatFileLines` lines (`File.ReadLines(…).Take`).
+- **Models page per role.** `ModelRole.EnabledSetting` (additive), filled by `LocalModelProvider` (`chatEnabled`,
+  `agentEnabled`, `completion`). `ModelRoleCards` (Craft.Editor, headless) says what each card shows and what each
+  control writes; `ModelsPage` draws a card per role: title and switch, the model (shown, "same as chat: NAME" while
+  inherited; a field whose Enter or "Use and load" writes the role's own setting and runs its own load command), the
+  device as a segmented choice of the measured devices, "Same as chat" for the agent (clears `agentModel` and
+  `agentDevice`), the state, "Open its settings". One box per card, plain rows inside it, the palette's buttons (hover and
+  focus states); an off role's card dimmed.
+- **More folding** (`Craft.CSharp/Project/ProjectFolding.cs`, registered by the C# plug-in and `ProjectLanguages`, one
+  part each): `RazorFolding` (elements matched by name, a hash of the name's span, HTML's void elements never waiting;
+  long start tags; `@code`, `@{ }`, `@if (…) { }` and every brace in them, C# strings, chars and comments skipped there;
+  script and style bodies' braces; `@* *@`, `<!-- -->`, `/* */`), `SolutionFolding` (Project, ProjectSection, Global,
+  GlobalSection, comment runs), `EditorConfigFolding` (sections, comment runs): each one pass over the lines with its
+  state carried, no copy of the text. `FoldingRangeProviders.Changed` (raised on register and unregister):
+  `EditorFolding` takes its language's providers again on the UI thread and asks at once (not after the typing delay);
+  with none left, its ranges and folds go (`EditorFolding.ProvidersChanged`).
+- **Contract:** `CraftContracts.Version` 1.1, the restart's one minor step (the first addition to merge; B8-B11's
+  additions had joined the list under 1.0). The guard writes the running version as the list's header on a minor step
+  (`contract 1.1`); Craft.Ai's `plugin.json` says 1.1 (it uses 1.1's members); the C# plug-in and the samples stay 1.0
+  (an older minor is current). API dumps regenerated: `Craft.Abstractions`, `Craft.Ai`, `Craft.CSharp`, `Craft.Editor`,
+  and the contract list.
+- **Decisions (the recommended option each time, the owner asleep):**
+  - The lease carries the template (`ModelLease.ChatTemplate`) rather than the panel unwrapping the model: a remote
+    provider can give one too.
+  - "Nothing was changed" means no tool call in the run and no file written in the copy.
+  - An image's bytes are read at the drop (the size checked first); a text file's text when the message goes.
+  - Whether the model takes images is known from its last load; before that the check is at send, and the chips come back greyed.
+  - A binary file other than an image is not taken (a NUL byte in its first 512 bytes).
+  - The agent takes files and folders inside the open folder only (it works on a copy of it).
+  - The enabled switch writes "true" or "false" explicitly into the user's settings, so a workspace value cannot hide it.
+  - Razor: a brace opens C# after `@code`, `@functions`, `@{`, `@if`, `@for(each)`, `@while`, `@do`, `@switch`, `@try`,
+    `@lock` (not `@using`, `@section`); in C# a `<` after a name, `)` or `]` is a comparison or a generic, not a tag.
+  - .editorconfig: comments right above a header belong to the next section.
+  - The chat column's drop is kept apart from the window's by the drop's position over the column.
+- **Tests** (groups `AiPlugins`, `ChatDrop`, `ModelsPage`, `MoreFolding`; 11 new):
+  `AiPlugins.FencedCallsEndInADiffOfOneUndoStep`, `AiPlugins.ARunWithNoToolCallsSaysNothingChangedAndCallsNotReadCountTheNudges`,
+  `AiPlugins.TheSettingsReachTheAgent`, `AiPlugins.TheLeasesTemplateReachesTheCorrection` (through Idrak's `FakeChatModel`);
+  `ChatDrop.FilesBecomePathChipsAndImagesImageChipsAndTheAgentTakesThemAsMentions`,
+  `ChatDrop.AnImageForAModelWithoutImagesIsGreyedAndNothingIsSentUntilRemoved`,
+  `ChatDrop.DroppedFilesAndAChipsFileAreReadOffTheUiThread` (the read held 5 s by a test hook: the drop's call and
+  `AskAsync` return at once); `ModelsPage.EachCardWritesItsOwnRolesSettingsAndTheAgentInherits`;
+  `MoreFolding.RazorSolutionAndEditorConfigFoldTheirBlocks`, `MoreFolding.RandomEditsEqualAFreshFold` (60 random edits
+  each, the ranges equal a fresh editor's), `MoreFolding.AProviderRegisteredAfterADocumentOpenedFoldsItWithoutReopening`;
+  `Ai.TheSettingsReadEveryVariable` extended. First run: 14 of 17 passed (the dumps, and one thread-id check that proved
+  nothing after an await, replaced by the 5 s hold); after the rebase onto B1-B11 the full filter (`AiPlugins`, `Ai`,
+  `ChatDrop`, `ModelsPage`, `MoreFolding`, `Folding`, `ModelLoading`, `Settings`, `ProjectLanguages`, `Plugins`,
+  `ApiGuard`, `Inventory`, `Ui.TheUiSideHasNoSynchronousWait`): 87 passed, 0 failed.
+- **Windows only (not run here; compiled here for net10.0):** the drop on the chat column (`ConversationsView`'s
+  `DropGestureRecognizer`, the system's paths through `WindowsShellPlatform.DroppedPathsAsync`, whether the window's own
+  drop also fires: kept apart by position), the greyed chip's look, the Models page's cards. No file under
+  `Platforms/Windows` changed.
+- **Left:** X part 5's split editor and tree move (other slots); X part 10 redraws the chat column, so the drop target
+  and chips move with it.
+- **The owner's commands** (Idrak's pull first: note 27's Idrak part is new since the last list):
+  ```powershell
+  cd D:\Projects\Idrak; git checkout main; git pull origin main
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="AiPlugins.|Ai.|ChatDrop.|ModelsPage.|MoreFolding.|Folding.|ModelLoading.|Settings.|ProjectLanguages.|ApiGuard.|Inventory."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app: ask the agent "Create C# class For House with float 3 props and + float price" (the House run): it
+  writes the file through the diff, or its end note says it wrote no tool calls and nothing changed; drag `Program.cs`
+  from the tree onto the chat (a `Program.cs` chip), drop a PNG from File Explorer (an image chip, greyed with the reason
+  for the 7B coder, which takes no images; the message is not sent until it is removed); drop a file on the Agent tab (an
+  `@Program.cs` chip); Settings › Models and devices: turn the agent off and on, set its model, "Same as chat", each
+  card's "Open its settings"; open a `.razor`, a `.sln` and the `.editorconfig` and fold them.
+
 ### X part 4
 - **Document symbols**: a default member `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by default) and
   `DocumentSymbol(Name, Kind, Start, Length, NameStart, NameLength, Detail, Children)`; `ScopeKind` gains Property, Field,

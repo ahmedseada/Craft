@@ -1459,6 +1459,7 @@ class Craft.Abstractions.LineStateLanguage : Craft.Abstractions.ILanguage, Idrak
   System.String Name { get; }
   System.String Summary { get; }
   ctor(System.String name, System.String summary, System.Collections.Generic.IReadOnlyList<System.String> extensions, Craft.Abstractions.LanguageRules rules, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter = null)
+  protected Craft.Abstractions.LineStateSession OpenSession(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
   protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
 sealed class Craft.Abstractions.LineStateSession : Craft.Abstractions.IFormattingLanguageSession, Craft.Abstractions.ILanguageSession, System.IDisposable
   Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)

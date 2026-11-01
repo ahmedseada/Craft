@@ -450,6 +450,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean DetectsLinks { get; set; }
   System.Boolean DuplicateLines()
   System.Boolean ExpandSelection()
+  System.Boolean FormatSelection()
   System.Boolean GoToLine(System.Int32 line, System.Int32 column = 1)
   System.Boolean HasMultipleCarets { get; }
   System.Boolean IndentLines()
@@ -524,6 +525,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.String WorkspaceRoot { get; }
   System.Threading.Tasks.Task<Craft.Editor.SymbolIndex> DocumentSymbolsAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> FormatDocumentAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> FormatSelectionAsync(System.Threading.CancellationToken cancellationToken = null)
   System.ValueTuple<System.Int32, Craft.Abstractions.OutputLink>? HoveredLink { get; }
   System.ValueTuple<System.Int32, Craft.Abstractions.OutputLink>? LinkAt(System.Single viewX, System.Single viewY)
   System.ValueTuple<System.Int32, System.Int32> VisualOf(System.Int32 position)
@@ -2660,6 +2662,7 @@ static class Craft.Editor.Shell.StandardShortcuts
   const System.String ExpandSelection = craft.editor.expandSelection
   const System.String Fold = craft.editor.fold
   const System.String FoldAll = craft.editor.foldAll
+  const System.String FormatSelection = craft.editor.formatSelection
   const System.String IndentLines = craft.editor.indentLines
   const System.String MoveLinesDown = craft.editor.moveLinesDown
   const System.String MoveLinesUp = craft.editor.moveLinesUp

@@ -107,6 +107,9 @@ public static class StandardShortcuts
     /// <summary>Edit: Trim the trailing white space (one undo step).</summary>
     public const string TrimTrailingWhitespace = "craft.editor.trimTrailingWhitespace";
 
+    /// <summary>Edit: Format the selection's lines (Ctrl+K Ctrl+F, in VS Code and Visual Studio alike).</summary>
+    public const string FormatSelection = "craft.editor.formatSelection";
+
     /// <summary>Edit: Quick fix (the code actions at the caret).</summary>
     public const string QuickFix = "craft.quickFix";
 
@@ -143,6 +146,7 @@ public static class StandardShortcuts
         (UnfoldAll, "Fold: Unfold all", static m => m.Folding.UnfoldAll() || true, true),
         (ToggleWordWrap, "View: Toggle word wrap", static m => m.ToggleWordWrap(), false),
         (TrimTrailingWhitespace, "Edit: Trim trailing white space", static m => m.TrimTrailingWhitespace() || true, false),
+        (FormatSelection, "Edit: Format selection", static m => m.FormatSelection(), true),
     ];
 
     /// <summary>
@@ -165,6 +169,7 @@ public static class StandardShortcuts
         Editor("Shift+Alt+Right", ExpandSelection),
         Editor("Shift+Alt+Left", ShrinkSelection),
         Editor("Ctrl+K Ctrl+D", "craft.formatDocument"),
+        Editor("Ctrl+K Ctrl+F", FormatSelection),
         Editor("Ctrl+D", AddNextOccurrence),
         Editor("Ctrl+Shift+L", SelectAllOccurrences),
         Editor("Ctrl+Alt+Up", AddCaretAbove),

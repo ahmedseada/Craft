@@ -13,6 +13,7 @@ using Craft.CSharp;
 using Craft.Editor;
 using Craft.Editor.Abstractions;
 using Craft.Editor.Shell;
+using Craft.Plugins.Css;
 using Craft.Plugins.Json;
 using Craft.Tests.Editor;
 using Craft.Tests.Runner;
@@ -239,6 +240,89 @@ public static class WebPluginTests
         }
     }
 
+    [Test]
+    public static void TheCssPluginLoadsFromItsFolderWithItsOwnCraftWebAndRemovedOrDisabledItsFilesOpenPlain()
+    {
+        string[] files = ["site.css", "app.component.scss", "legacy.sass", "theme.less"];
+        using var temp = new TempFolder();
+        var plugins = Path.Combine(temp.Path, "plugins");
+        var folder = Path.Combine(plugins, CssPackage.PackageName);
+        CopyPlugin(CssPackage.PackageName, folder);
+        IdrakPlugins.Unregister(CssPlugin.PluginName);
+        foreach (var file in files)
+        {
+            Check.True(EditorLanguages.ForFile(file) is null, $"without the CSS plug-in {file} is plain text");
+        }
+
+        try
+        {
+            var result = CraftPlugins.LoadFolder(folder);
+            Check.True(result.Loaded, $"the CSS plug-in loads from its folder ({result.Error})");
+            Check.True(result is { Name: CssPackage.PackageName, Outdated: false, Manifest.ContractVersion: "1.1" }, $"its plugin.json is read: contract 1.1 ({result.Name}, {result.Manifest?.ContractVersion})");
+            Check.True(File.Exists(Path.Combine(folder, "Craft.Web.dll")) && !File.Exists(Path.Combine(folder, "Craft.Abstractions.dll"))
+                && File.ReadAllText(Path.Combine(folder, CssPackage.PackageName + ".deps.json")).Contains("Craft.Web", StringComparison.Ordinal),
+                "it carries its own copy of Craft.Web (the lexers) and names it in its deps.json, never the shared contracts");
+            foreach (var (file, name) in new[] { ("site.css", "css"), ("app.component.scss", "scss"), ("legacy.sass", "scss"), ("theme.less", "less") })
+            {
+                var language = EditorLanguages.ForFile(file);
+                // The plug-in's context shares a Craft.* assembly the host carries beside itself (this test host references
+                // Craft.Web); the app carries none, so there the plug-in's own copy in its folder is the one loaded.
+                bool hostCarriesWeb = File.Exists(Path.Combine(AppContext.BaseDirectory, "Craft.Web.dll"));
+                Check.True(language is LineStateLanguage { Tokenizer: var tokenizer } && language.Name == name
+                    && AssemblyLoadContext.GetLoadContext(language.GetType().Assembly) != AssemblyLoadContext.Default
+                    && tokenizer.GetType().Assembly.GetName().Name == "Craft.Web"
+                    && (hostCarriesWeb || tokenizer.GetType().Assembly.Location.StartsWith(folder, StringComparison.Ordinal)),
+                    $"{file} opens as {name} from the plug-in's own context, its tokenizer Craft.Web's ({language?.Name})");
+            }
+
+            var css = EditorLanguages.ForFile("site.css")!;
+            const string text = ".card {\n  color: oklch(70% 0.1 250);\n  &:hover { --x: 1; }\n}\n";
+            var buffer = new PieceTableBuffer(text);
+            using (var session = css.Open(buffer))
+            using (var spans = new TokenSpanBuffer())
+            {
+                session.Classify(buffer.Current, 0, buffer.Current.Length, spans);
+                string? ClassOf(string token)
+                {
+                    int at = text.IndexOf(token, StringComparison.Ordinal);
+                    return spans.Spans.ToArray().FirstOrDefault(s => s.Start == at && s.Length == token.Length).Class;
+                }
+
+                Check.Equal(TokenClasses.ClassName, ClassOf(".card"), "the loaded plug-in colours a class");
+                Check.Equal(TokenClasses.PropertyName, ClassOf("color"), "a property");
+                Check.Equal(TokenClasses.MethodName, ClassOf("oklch"), "a function");
+                Check.Equal(TokenClasses.LocalName, ClassOf("--x"), "a custom property in a nested rule");
+            }
+
+            Check.True(FoldingRangeProviders.Find(CssFolding.ProviderName) is { } folding && folding.Languages.Contains("less"), "its folding provider is registered");
+            Check.True(EditorPlugins.Find(CssPlugin.PluginName) is { } plugin && plugin.Settings.Count == 3, "its editor plug-in carries its three settings");
+            Check.Equal("SCSS", FileIcons.For("app.component.scss").Language, "its icons are registered");
+            Check.Equal("LESS", FileIcons.For("theme.less").Language, "LESS's icon");
+
+            Check.True(IdrakPlugins.Unregister(CssPlugin.PluginName), "the plug-in unregisters");
+            Check.True(files.All(f => EditorLanguages.ForFile(f) is null), "removed, its files open as plain text");
+            Check.True(FoldingRangeProviders.Find(CssFolding.ProviderName) is null && EditorPlugins.Find(CssPlugin.PluginName) is null && FileIcons.Find(".less") is null,
+                "its folding, settings and icons go with it");
+            Check.Equal("#", FileIcons.For("a.css").Badge, "the library's own .css icon answers again");
+
+            var options = CraftOptions.FromVariables(n => n switch
+            {
+                "CRAFT_PLUGIN_FOLDERS" => plugins,
+                _ => null,
+            });
+            Check.True(CraftPlugins.LoadInstalled(options).Single(r => r.Name == CssPackage.PackageName).Loaded, "installed, it loads");
+            Check.Equal("css", EditorLanguages.ForFile("site.css")?.Name, "and .css is CSS");
+            IdrakPlugins.Unregister(CssPlugin.PluginName);
+            var disabled = CraftPlugins.LoadInstalled(options with { DisabledPlugins = [CssPackage.PackageName] });
+            Check.True(disabled.Single(r => r.Name == CssPackage.PackageName) is { Loaded: false } off && off.Error!.Contains("disabled", StringComparison.Ordinal), "disabled, it is skipped and said so");
+            Check.True(files.All(f => EditorLanguages.ForFile(f) is null), "disabled, its files open as plain text");
+        }
+        finally
+        {
+            IdrakPlugins.Unregister(CssPlugin.PluginName);
+        }
+    }
+
     // A package.json's colours from whichever copy of the language is registered (the plug-in's own context).
     private static void CheckPackageJsonColours(ILanguage language)
     {
@@ -261,11 +345,14 @@ public static class WebPluginTests
     }
 
     // plugins/Craft.Plugins.Json/bin/<Configuration>/net10.0/ copied whole, the host's contracts left out, as the app's targets do.
-    private static void CopyJsonPlugin(string folder)
+    private static void CopyJsonPlugin(string folder) => CopyPlugin(JsonPackage.PackageName, folder);
+
+    // plugins/<name>/bin/<Configuration>/net10.0/ copied whole, the host's contracts left out, as the app's targets do.
+    private static void CopyPlugin(string package, string folder)
     {
         var testOutput = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var output = TestRunner.RepositoryPath("plugins", JsonPackage.PackageName, "bin", testOutput.Parent!.Name, testOutput.Name);
-        Check.True(File.Exists(Path.Combine(output, JsonPackage.PackageName + ".dll")) && File.Exists(Path.Combine(output, "plugin.json")), $"the JSON plug-in's build output, with its plugin.json, is at {output}");
+        var output = TestRunner.RepositoryPath("plugins", package, "bin", testOutput.Parent!.Name, testOutput.Name);
+        Check.True(File.Exists(Path.Combine(output, package + ".dll")) && File.Exists(Path.Combine(output, "plugin.json")), $"the plug-in's build output, with its plugin.json, is at {output}");
         Directory.CreateDirectory(folder);
         foreach (var file in Directory.GetFiles(output))
         {

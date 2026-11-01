@@ -43,6 +43,19 @@ the session), each pushed to its `slot/<piece>` branch and merged by the session
   (`slot/x-completion`, its agent had found that P6 is not built and that Idrak's BM25 indexes and encoders are to be
   used, not reimplemented); waits for the owner's word.
 
+**The owner's Windows run fixes (2026-11-01, after XL1), in this order, one agent at a time:** done: the start-up crash
+(the terminal panel's first view), the Learning view's icon (Win2D's double BeginFigure), the window maximized
+(`CRAFT_WINDOW_STATE`), the explorer's empty-space menu, the panels' overlapping rows and compact dropdowns
+(`slot/x-panels-ui`), Cascadia Mono as the default code font (the bundled JetBrains Mono, read by Win2D from its file,
+drew a warm frame in 172 ms against 0.8 ms), Enter asks for ghost text (the code under a comment). Next ("1a 3a"):
+1. **The agent out of device memory** (`slot/kv-grow`): Idrak's decoding cache grows on demand instead of reserving the
+   whole window (NumCtx 32768: about 1.9 GB a context for Qwen2.5-Coder-1.5B in float32), and Craft never drafts with the
+   target itself (chat and completion naming the same model made a second full cache for no gain).
+2. **HTML and CSS completion, built in** (no Node): tags, attributes and their values, closing tags, CSS properties and
+   values, Angular's blocks; W-semantic (the language servers) still waits for the owner's word.
+Open: the device switch crash (its report wanted), "Ambiguity between 'TestClass.MyProperty' and 'TestClass.MyProperty'"
+(Program.cs twice in the workspace, to trace), the lint plug-in's 1.5 s start on the UI thread.
+
 **The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
 before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a
 leftover or a new enhancement while a W piece is ready. What a W slot leaves undone goes into one "Left, for later"

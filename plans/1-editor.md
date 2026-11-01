@@ -2920,9 +2920,14 @@ in File Explorer: plain text rows.
   the AI plug-in's public contract (a new `ICommitMessageProvider : IKind` registry in `Craft.Abstractions`, the AI
   plug-in registers "ai"; the git plug-in never names a model). The message streams into the box as an editable draft
   (never committed by itself), in the repository's own style (its recent `git log` subjects as examples,
-  `_COMMITSTYLE`: auto, conventional, plain), with Stop while it writes; with no model loaded it loads the chat role's
-  model as an activity (note 23's rule: only when asked), and with none set it says what to do. Settings: the role
-  (a fourth role "commit" in note 25's roles, empty: the chat's), the prompt (`_COMMITPROMPT`), the style. Tests in
+  `_COMMITSTYLE`: auto, conventional, plain), with Stop while it writes. **It uses a model already loaded, with that
+  model's own settings** (the owner, 2026-11-01: "using the current loaded models with settings"): by default
+  (`_COMMITMODEL` = loaded) the first loaded of the chat, the agent, then the completion role's model, through its
+  existing lease (never a second copy) and that role's temperature, context and reply limit; the button's menu lists
+  the loaded models to pick one, and shows which it will use in its tooltip. Only when no model is loaded does it say
+  so, offering "Load the chat model" (note 23's rule: a load only when asked). Settings (Source Control section):
+  `_COMMITMODEL` (loaded, chat, agent, completion, or a model name), `_COMMITPROMPT`, `_COMMITSTYLE`,
+  `_COMMITMAXTOKENS`. Tests in
   `SourceControl`: a fake model's message streams into the box from a fixture diff, the budget trims by file, Stop,
   no model said, nothing commits by itself.
 - **In the editor**: gutter marks for added, changed and deleted lines against the index (from `git diff` of the open

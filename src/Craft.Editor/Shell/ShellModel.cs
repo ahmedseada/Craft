@@ -400,6 +400,11 @@ public sealed partial class ShellModel : IDisposable
         host.SettingWriter = StoreSettingAsync;
         RegisterCommands();
         CreateViews();
+        // X part 9: bookmarks, the local history's Timeline; a save keeps a snapshot and the bookmarks' lines.
+        CreateBookmarks();
+        CreateTimeline();
+        host.DocumentSaved += OnHistorySaved;
+        host.DocumentSaved += OnBookmarksSaved;
         WatchMemory();
         WatchSourceControl();
     }
@@ -1205,8 +1210,12 @@ public sealed partial class ShellModel : IDisposable
 
         _sideViews.Clear();
         Host.DocumentSaved -= OnDocumentSaved;
+        Host.DocumentSaved -= OnHistorySaved;
+        Host.DocumentSaved -= OnBookmarksSaved;
         Host.PanelsChanged -= OnPanelsChanged;
         Host.PanelShowRequested -= OnPanelShowRequested;
+        DisposeBookmarks();                                 // after the panels' event: their removal registers no side view again
+        DisposeTimeline();
         DisposeViews();
         DisposeContext();
         StopWatching();
@@ -1504,6 +1513,9 @@ public sealed partial class ShellModel : IDisposable
         Rail(new RailItem("craft.agent", "Agent", ShellCommandIds.Agent, RailIcons.Agent, 30));
         Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
         RegisterViewCommands();
+        RegisterBookmarkCommands();
+        RegisterTimelineCommands();
+        RegisterNavigationCommands();
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
         RegisterContextCommands();
     }

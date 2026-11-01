@@ -261,7 +261,7 @@ public static class RunViewTests
     public static async Task TheKeysAndTheRailInBothKeymaps()
     {
         using var folder = new TempFolder();
-        var settings = new CraftSettings(_ => null, SettingsFile.Load(folder.File("data/settings.json")));
+        var settings = new CraftSettings(folder.Isolated(), SettingsFile.Load(folder.File("data/settings.json")));
         var recent = RecentList.Load(folder.File("data/recent.json"), 10);
         using var host = new EditorHost();
         using var shell = new ShellModel(host, settings, recent, new NoDialogs(), new NoUi());

@@ -60,6 +60,18 @@ public sealed class DocumentTab
     /// </summary>
     public bool IsPinned { get; internal set; }
 
+    /// <summary>
+    /// Whether it is a preview (X part 9): opened by a single click in the explorer, drawn in italics, replaced by the next
+    /// preview of its group; an edit, a double click, a pin or <see cref="DocumentTabs.Keep"/> keeps it.
+    /// </summary>
+    public bool IsPreview { get; internal set; }
+
+    /// <summary>
+    /// The view state the last session left for it (its caret, scroll and folds), applied when its editor is made
+    /// (<see cref="ShellModel.ApplyViewState"/>) and then dropped; null for any other tab.
+    /// </summary>
+    public EditorTabState? PendingView { get; internal set; }
+
     internal bool WasDirty { get; set; }
 
     internal string? LastPath { get; set; }
@@ -114,6 +126,70 @@ public sealed class DocumentTabs : IDisposable
 
     /// <summary>Whether any tab has unsaved changes.</summary>
     public bool HasUnsaved => _tabs.Exists(t => t.IsDirty);
+
+    /// <summary>The group's preview tab (X part 9: at most one), or null.</summary>
+    public DocumentTab? Preview => _tabs.Find(t => t.IsPreview);
+
+    /// <summary>Keeps <paramref name="tab"/>: no longer a preview (a double click, an edit, a pin); false when it was not one.</summary>
+    public bool Keep(DocumentTab tab)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        if (!tab.IsPreview || !_tabs.Contains(tab))
+        {
+            return false;
+        }
+
+        tab.IsPreview = false;
+        TabChanged?.Invoke(this, tab);
+        return true;
+    }
+
+    /// <summary>
+    /// Opens <paramref name="document"/> as the group's preview (X part 9): in place of the preview tab there is (closed,
+    /// its document disposed with it unless another group shows it), else after the others; active.
+    /// </summary>
+    public DocumentTab AddPreview(ITextDocument document, ILanguage? language)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        int index = -1;
+        if (Preview is { } old)
+        {
+            index = _tabs.IndexOf(old);
+            Remove(old);
+        }
+
+        var tab = Add(document, language, null, activate: false, suggestedPath: null);
+        tab.IsPreview = true;
+        if (index >= 0 && index < _tabs.Count - 1)
+        {
+            Move(tab, index);
+        }
+
+        Activate(tab);
+        TabChanged?.Invoke(this, tab);
+        return tab;
+    }
+
+    /// <summary>
+    /// Shows another group's tab <paramref name="source"/> here as the group's preview (in place of its preview tab, as
+    /// <see cref="AddPreview"/> does), sharing its document.
+    /// </summary>
+    internal DocumentTab AddSharedPreview(DocumentTab source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        int index = -1;
+        if (Preview is { } old)
+        {
+            index = _tabs.IndexOf(old);
+            Remove(old);
+        }
+
+        var tab = AddShared(source, activate: false, takeView: false, index);
+        tab.IsPreview = true;
+        Activate(tab);
+        TabChanged?.Invoke(this, tab);
+        return tab;
+    }
 
     /// <summary>Raised when a tab was added or removed (the list changed).</summary>
     public event EventHandler? TabsChanged;
@@ -303,6 +379,7 @@ public sealed class DocumentTabs : IDisposable
         _tabs.RemoveAt(from);
         int place = PinnedCount;
         tab.IsPinned = pinned;
+        tab.IsPreview &= !pinned;                            // a pinned tab is kept
         _tabs.Insert(place, tab);
         TabsChanged?.Invoke(this, EventArgs.Empty);
         TabChanged?.Invoke(this, tab);
@@ -448,6 +525,12 @@ public sealed class DocumentTabs : IDisposable
     private void OnStateChanged(DocumentTab tab)
     {
         bool dirty = tab.IsDirty;
+        if (dirty && tab.IsPreview)
+        {
+            tab.IsPreview = false;                           // an edit keeps a preview
+            TabChanged?.Invoke(this, tab);
+        }
+
         var path = tab.FilePath;
         if (dirty == tab.WasDirty && string.Equals(path, tab.LastPath, StringComparison.Ordinal))
         {

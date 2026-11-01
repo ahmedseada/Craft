@@ -27,6 +27,13 @@ internal sealed class TempFolder : IDisposable
 
     public string File(string name) => System.IO.Path.Combine(Path, name);
 
+    /// <summary>
+    /// <paramref name="variables"/> with <c>CRAFT_DATA_FOLDER</c> in this folder's "obj/craft-data" (a folder the tree ignores) unless they set it (X part 9): a
+    /// shell under test keeps its sessions and local history here, never in the machine's data folder.
+    /// </summary>
+    public Func<string, string?> Isolated(Func<string, string?>? variables = null) =>
+        name => variables?.Invoke(name) ?? (name == "CRAFT_DATA_FOLDER" ? File("obj/craft-data") : null);
+
     public void Dispose() => TryDelete(Path);
 
     // A file still open or loaded (Windows locks a loaded assembly: UnauthorizedAccessException; another holder:

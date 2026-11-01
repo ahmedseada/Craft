@@ -128,6 +128,18 @@ public sealed class TerminalRenderer
     /// <summary>Rows drawn in the last frame.</summary>
     public int RowsDrawn { get; private set; }
 
+    /// <summary>How links show (<c>CRAFT_LINKS_UNDERLINE</c>: "hover", "always", "off"); X part 9.</summary>
+    public string LinksUnderline { get; set; } = "hover";
+
+    /// <summary>The link to underline (the view's hover with Ctrl held): its line and cells, or null.</summary>
+    public (long Line, int StartColumn, int EndColumn)? HoveredLink { get; set; }
+
+    /// <summary>The links the last frame underlined.</summary>
+    public int LinksDrawn { get; private set; }
+
+    private char[] _linkChars = [];
+    private readonly OutputLink[] _links = new OutputLink[32];
+
     /// <summary>
     /// Draws <paramref name="screen"/> into <paramref name="width"/> by <paramref name="height"/>, its view
     /// <paramref name="scrollBack"/> lines above the bottom, with cells of <paramref name="metrics"/>.
@@ -147,6 +159,9 @@ public sealed class TerminalRenderer
         int rows = Math.Min(screen.Rows, (int)Math.Ceiling(height / line));
         var ordered = selection?.Ordered();
         _drawing.Clear();
+        LinksDrawn = 0;
+        bool allLinks = string.Equals(LinksUnderline, "always", StringComparison.Ordinal);
+        var hovered = string.Equals(LinksUnderline, "off", StringComparison.Ordinal) ? null : HoveredLink;
         for (int r = 0; r < rows; r++)
         {
             long number = top + r;
@@ -185,6 +200,16 @@ public sealed class TerminalRenderer
                 {
                     canvas.DrawLine(x, y + (line / 2), x + (run.Cells * cell), y + (line / 2), run.Argb, 1);
                 }
+            }
+
+            if (allLinks)
+            {
+                DrawLinks(canvas, row, y, cell, line, palette.Foreground);
+            }
+            else if (hovered is { } link && link.Line == number)
+            {
+                canvas.DrawLine(link.StartColumn * cell, y + line - 1.5f, link.EndColumn * cell, y + line - 1.5f, palette.Foreground, 1);
+                LinksDrawn++;
             }
 
             row.DrawnFrame = _frame;
@@ -443,6 +468,24 @@ public sealed class TerminalRenderer
     }
 
     private readonly record struct FillRun(int Column, int Cells, uint Argb);
+
+    // X part 9: every link of a row underlined (CRAFT_LINKS_UNDERLINE "always"): the row's cells as characters in a buffer
+    // kept between frames, the detectors' span scan; nothing allocated once the buffer fits the widest row.
+    private void DrawLinks(IEditorCanvas canvas, TerminalRow row, float y, float cell, float line, uint color)
+    {
+        if (_linkChars.Length < row.Length)
+        {
+            _linkChars = new char[Math.Max(row.Length, 256)];
+        }
+
+        int length = TerminalLinks.CharsOf(row, _linkChars);
+        int count = OutputLinkDetectors.FindAll(_linkChars.AsSpan(0, length), _links);
+        for (int i = 0; i < count; i++)
+        {
+            canvas.DrawLine(_links[i].Start * cell, y + line - 1.5f, _links[i].End * cell, y + line - 1.5f, color, 1);
+            LinksDrawn++;
+        }
+    }
 
     private readonly record struct TextRun(int Column, int Cells, string Text, uint Argb, bool Bold, bool Italic, bool Underline, bool Strike);
 

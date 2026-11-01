@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps; items 1, 2, 6-9 built 2026-11-01: "X part 9, editing helpers 1, 2, 6-9, as built"), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps; items 1, 2, 6-9 built 2026-11-01: "X part 9, editing helpers 1, 2, 6-9, as built"; items 13-17 built 2026-11-01: "X part 9, navigation 13-17, as built"), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
 | 5 | X rest: minimap, completion at several carets (both built 2026-11-01, "X restart piece 2b as built"), peek (built in piece 3a), measured response times on Windows | Response times left |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -4079,6 +4079,142 @@ Idrak (no cause there).
   dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
+
+### X part 9, navigation 13-17, as built (2026-11-01)
+
+Slot s4: bookmarks, preview tabs, the last session restored, local history with its Timeline, links in the terminal and
+Output. Craft only; Idrak unchanged (nothing in the library was needed: the links' registry is Craft's, on Idrak's
+`KindTable`).
+- **13 Bookmarks** (`Craft.Editor.Shell.BookmarkList`, `BookmarksFile`, `ShellModel.Bookmarks.cs`): Toggle at the caret
+  (Ctrl+K Ctrl+K; Visual Studio's keymap Ctrl+F2 too), Next and Previous across files (Ctrl+K Ctrl+N, Ctrl+K Ctrl+P; past
+  the last the first, `CRAFT_BOOKMARKS_WRAP`), Label (asked through the shell's prompt), Clear all with Undo (Visual
+  Studio's Ctrl+K Ctrl+L), the Bookmarks side view (rail item with its count; Visual Studio's Ctrl+K Ctrl+W): a group per
+  file, a row per bookmark (line, text, label; Label and Remove on hover; a click goes there). An open document's
+  bookmarks move with its edits (each bookmark's line start mapped through the change's edits: an insertion at a line's
+  start moves it down with its text, a removal around it takes it to where the removal began, two that meet become one).
+  Drawn through X part 8's line marks: a new `LineMarkKind.Bookmark` (contract 1.1, at the enum's end), the accent's tag
+  at the gutter's left edge; not clickable (the change bar's click keeps going to git), not on the overview ruler (its
+  eight lanes are taken). Kept in `.craft/bookmarks.json` (relative paths, lines from 1, the line's text and label) on
+  the thread pool, latest wins: at each toggle, label and clear, and when a document with bookmarks is saved; read off
+  the UI thread when the folder opens. The editor's context menu has Toggle bookmark, the View menu Bookmarks.
+- **14 Preview tabs** (`DocumentTab.IsPreview`, `DocumentTabs.Preview`, `AddPreview`, `Keep`, `ShellModel.OpenPreviewAsync`,
+  `OpenKeptAsync`, `KeepTab`): a single click on a file in the explorer opens it in the focused group's preview tab
+  (italic title, its tooltip says so), which the next preview replaces in its place (its document closed unless another
+  group shows it; a file open in another group previews as a shared tab); an edit, a double click on the tab or on the
+  file in the explorer, a pin, or Tab: Keep open (Ctrl+K Enter; the tab's menu shows it on a preview only) keeps it.
+  Quick open, Ctrl+O, links, bookmarks and every other way open a kept tab. `CRAFT_PREVIEW_TABS` (on).
+- **15 The last session** (`ShellModel.Session.cs`): the groups (piece 3a's layout), their tabs, active tabs, the focus,
+  and each tab's pin, selection, scroll and folds (`EditorTabState`, beside its file in `EditorLayoutNodeState.Tabs`)
+  written per workspace to the data folder (`sessions/<hash of the folder>.json`, `ShellModel.SessionPathOf`; the same
+  format as `.craft/editor-layout.json` through `EditorLayoutFile(root, path)`) on the thread pool, latest wins, at every
+  change of the groups, tabs, focus or shares, when another folder opens, and when the window closes (the close guard
+  asks about unsaved tabs, then awaits the write; carets and scroll are as they are then). At start with a folder
+  (`RestoreSessionAsync`, `CRAFT_RESTORE_SESSION`, on): read off the UI thread with the recovery folder's sidecars
+  (`RecoveryStore.RecoveredFiles`) and which files exist; the groups shaped (`EditorGroups.Shape`), the files opened in
+  order, pins and the active tabs and focus as they were; each tab's caret, scroll and folds applied when its editor is
+  made (`ApplyViewState`: the selection at once, the scroll once the view knows its viewport, the folds once the fold
+  ranges arrive, then the scroll again). Files that are gone are skipped and said once (one status line); a file with a
+  recovery copy is not reopened (said: "left for the recovery"). No session kept: the workspace's
+  `.craft/editor-layout.json` (piece 3a) reopens the groups. File: Reopen the last session runs it by hand.
+- **16 Local history** (`Craft.Core.Documents.LocalHistory`, `ShellModel.History.cs`): every save through the host keeps a
+  snapshot of the saved text in the data folder's `history` (never the workspace), a folder per file (a hash of its path,
+  `source.txt` naming it), each snapshot a UTF-8 file named by its time and the first 64 bits of its SHA-256, written in
+  16 K blocks from a pooled buffer while hashed (rule 74), one write at a time on the thread pool. Deduplicated by hash:
+  the newest snapshot's text again writes nothing; an older one's moves that file to now. Bounds: past
+  `CRAFT_LOCAL_HISTORY_DAYS` (30) the snapshots go (the saved file's folder at each write, all at most once an hour),
+  past `CRAFT_LOCAL_HISTORY_MAX_MB` (256; 0 turns it off) the oldest go, a file over `CRAFT_LOCAL_HISTORY_FILE_MB` (16)
+  is not kept; the history holds one number in memory (the bytes kept), nothing per snapshot. The Timeline side view
+  (rail item; View › Timeline; the tab's menu Open timeline) lists the active file's snapshots (time, size; Compare with
+  now and Restore on hover): a click shows the diff of the snapshot with the text now (`ShowDiffAsync`), Restore takes the
+  text back as one undo step (not saved) with Undo in the inline bar.
+- **17 Links** (`Craft.Abstractions.OutputLinkDetectors`, `IOutputLinkDetector`, `OutputLink`, the library's
+  `FileLineLinks` "file-line"): `a.cs(12,5)` and MSBuild's `(l,c,l,c)`, `a.cs:12:5`, `a.cs:12`, .NET's `a.cs:line 12`,
+  drive letters (`C:\`, `C:/`), UNC paths; the markers found with `SearchValues`, the path's start with `LastIndexOfAny`,
+  no regular expression, nothing allocated; a path must end in a file name whose extension holds a letter (so `10:30`,
+  `Main(1)`, `http://host:80`, `1.2:3` are no links). A plug-in adds a format by registering a detector. Output's
+  read-only editor (`EditorModel.DetectsLinks`, `LinkAt`, `LinkActivated`; `LinkUnderlineLayer`, wrap-aware) underlines the
+  link under the pointer and opens it on a click without a drag; the terminal (`TerminalLinks`, the row read one character
+  per cell; `TerminalRenderer.HoveredLink`, `LinksUnderline`) underlines it while Ctrl is held and opens it on Ctrl+click.
+  `CRAFT_LINKS_UNDERLINE`: hover (default), always (every link on screen), off. The path is resolved off the UI thread
+  (`ShellModel.ResolveLink`): as it is when absolute, else against the terminal's folder (its shell's reported folder,
+  else where it started), then the workspace; a missing file is said in the status bar.
+- **Settings page**: `CRAFT_BOOKMARKS_WRAP` (Editor › Bookmarks), `CRAFT_PREVIEW_TABS` (Files › Tabs),
+  `CRAFT_RESTORE_SESSION` (Files › Session), `CRAFT_LOCAL_HISTORY_MAX_MB`, `_DAYS`, `_FILE_MB` (Files › Local history),
+  `CRAFT_LINKS_UNDERLINE` (Terminal › Links); each with its variable and a workspace's `.craft/settings.json`.
+- **Decisions on the recommendation (the owner asleep; one line each)**:
+  - Bookmarks' keys: Ctrl+K Ctrl+K, Ctrl+K Ctrl+N, Ctrl+K Ctrl+P in both keymaps (Visual Studio's chords, free in Craft's VS Code keymap); Visual Studio's keymap adds Ctrl+F2, Ctrl+K Ctrl+W (the list) and Ctrl+K Ctrl+L (clear).
+  - The Bookmarks list is a side view of the rail (the Search and Run views' blocks), not a bottom-panel tab.
+  - Bookmarks are drawn through the line marks (X part 8's host API) as a new kind, not a layer of their own.
+  - Bookmarks are not on the overview ruler: its byte of lanes is full (git's four, find, the diagnostics, the carets).
+  - A bookmark's line moves are written when its document is saved (the file's lines are then the document's), toggles at once.
+  - Two bookmarks that meet after a deletion become one, keeping the first one's label (else the second's).
+  - Labels are asked with the shell's prompt; an empty label takes it away.
+  - A preview is replaced in its place (VS Code's); only the explorer's single click previews (quick open does not).
+  - A file already open is shown as it is by a single click (a kept tab is never turned into a preview).
+  - The session lives in the user's data folder, not the workspace (a single group adds no file to the user's folder, piece 3a's rule); the workspace's layout file stands in when no session is kept.
+  - The session is written at each change of tabs and groups and at the close (not at every caret move): a crash keeps the carets of the last tab change.
+  - A restored preview tab comes back kept (the session keeps pins, not previews).
+  - A file with a recovery copy is left out of the restore and said (the recovery prompt is not in the app yet; the session never opens a file past it).
+  - The restore runs only into an empty editor area (a file named on the command line opens alone).
+  - Local history dedups per file (a snapshot of the same text moves to now), not across files.
+  - Snapshots are UTF-8 text (the file's encoding and line endings are not kept); Restore restores the text, unsaved.
+  - The Timeline is a side view following the active file (VS Code's is in the explorer), not a tab.
+  - 0 MB turns the local history off; no separate on/off setting.
+  - Links: a regular expression was not used anywhere; detectors are a registry (`OutputLinkDetectors`, "not registered" for an unknown name), so a plug-in adds a format.
+  - A link's path must end in a name with an extension holding a letter (fewer false links than accepting any word).
+  - Paths with spaces are not links (a space ends a path walking back); a quoted path with spaces is not either (said here).
+  - Output opens a link on a plain click (its click selects nothing worth keeping); the terminal needs Ctrl (its click selects).
+  - `CRAFT_LINKS_UNDERLINE` "hover" underlines the link under the pointer in Output and, with Ctrl held, in the terminal; "always" every link on screen; "off" no links.
+  - No disk access while drawing: a link is underlined when it parses; its file is looked for only when it is followed.
+  - The shell fixtures of the tests keep `CRAFT_DATA_FOLDER` in their temp folder (`TempFolder.Isolated`, under `obj/`, which the tree ignores), so no test writes sessions or snapshots into the machine's data folder.
+- **Found and fixed**: none outside this work. **Seen, not this work's**: `Ui.TheUiSideHasNoSynchronousWait` flags
+  `src/Craft.Editor/Lightbulb.cs:169` (`done.Result` on a completed task, s2's editing helpers; fails on `main` too);
+  `Terminal.TheManagerReplacesAnEndedTabGivesItTheKeyboardAndStopsAProgramWhoseTabCloses` is timing-dependent (it types
+  before the program's prompt reached the screen; 1 of 3 runs failed on a clean `main`, 0 of 3 here).
+- **Tests**: new groups `Bookmarks` (4: toggle, gutter tag, moved with edits and merged, both keymaps' keys; next and previous
+  across files with wrap; the view, labels, a row's click, Clear with Undo, the file written and read back by a new shell;
+  Visual Studio's keymap), `PreviewTabs` (3: replaced in place, kept by an edit, a double click, a pin, Keep open; off;
+  shared with another group), `SessionRestore` (3: two groups, pins, focus, active tabs, caret, scroll once the viewport is
+  known, folds once the ranges arrive, a gone file said once, the file in the data folder; a recovery copy left out;
+  off, and the workspace's layout standing in), `LocalHistory` (4: dedup by hash and the move to now, UTF-8; the size,
+  days and file-size bounds and 0 MB off; the heap within 256 KB over 500 more saves; a save's snapshot, the Timeline's
+  rows, Restore as one undo step and Undo), `OutputLinks` (6: the formats, drive letters, UNC, .NET's frames, seven
+  lookalikes that are not links; 1,000 scans 0 B and a plug-in's detector; resolution against the run's folder and the
+  workspace, open at the place, a missing file said; Output's hover underline, click, a drag that opens nothing, Ctrl where
+  needed; 200 warm frames underlining two links a line under 1 KB; the terminal's link under a cell after a wide
+  character, the Ctrl underline, off, always, 200 warm frames under 1 KB). Updated: `Inventory.OptionsReadEveryVariable`
+  (the seven options), `Experience` (the tab's menu has Open timeline), the shell fixtures' data folder. First run: 23 of
+  26 passed (the keymap test read the host's keys without the Visual Studio keymap registered, as only the app's edit
+  commands register it; the inventory's new registry; the Timeline's refresh raced a dispatched one, made one awaited
+  task); then all passed, and a leak they showed fixed (the shell's new panels were disposed while it still listened to
+  panel changes, registering the Search and Run side views again). After the rebase onto s1's piece 2b, s2's editing
+  helpers and s3's piece 3b (one build: the link underline follows s2's wrapped rows, the hit test goes through the
+  model's own point-to-position), the full filter (`Bookmarks|PreviewTabs|SessionRestore|LocalHistory|OutputLinks|
+  EditorGroups|PeekDefinition|TreeMove|ContextMenus|Shell|Terminal|Recovery|Workspace|Document|Settings|Keys|Ui|Design|
+  Layout|Experience|SourceControl|RunView|Diagnostics|ProjectLanguages|Paint|OverviewRuler|Editor|ApiGuard|Inventory`,
+  289 tests): 286 passed; the tab menu's expectation (fixed, passed), and the two above that are not this work's. API dumps
+  of Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and `plans/inventory.md` regenerated
+  (additions only).
+- **Not compiled here**: Craft.Maui's Windows target (nothing under `Platforms/` changed; the views compiled on net10.0).
+  **Not run here** (the owner's run): the italic preview tab and double clicks in the explorer and the strip, the
+  bookmark's tag in the gutter, the Bookmarks and Timeline views, the restore at start and the write at close, Ctrl+hover
+  and Ctrl+click in the terminal (the Windows input connection's modifiers), a click in Output.
+- **Left**: bookmarks on the overview ruler; a session's preview tab kept as a preview; the recovery prompt at start (the
+  store is still not used by the app; the restore leaves those files closed); quoted paths with spaces as links.
+- **The owner's commands**:
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="Bookmarks|PreviewTabs|SessionRestore|LocalHistory|OutputLinks|EditorGroups|ContextMenus|Shell|Terminal|Recovery|Workspace|Document|Settings|Keys|Ui|Experience|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app: click files in the explorer (one italic tab replaced), double-click one, type in a preview; Ctrl+K Ctrl+K on
+  a few lines of `Program.cs`, Enter above them (the tags move), Ctrl+K Ctrl+N and Ctrl+K Ctrl+P, the rail's Bookmarks
+  view; save `Program.cs` a few times, open the rail's Timeline, click a row (the diff), Restore, then Undo; in the
+  terminal run `dotnet build` with an error in `Program.cs`, hold Ctrl over `Program.cs(…)` (underlined) and Ctrl+click it;
+  the same line in Output by a click; split the editor, fold a block, close the window and start it again on the same
+  folder (the groups, tabs, carets, folds and pins back); `$env:CRAFT_LINKS_UNDERLINE="always"` underlines every link.
 
 ### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
 good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow

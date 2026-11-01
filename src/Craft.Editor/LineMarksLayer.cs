@@ -130,9 +130,9 @@ public sealed class DocumentLineMarks
             }
         }
 
-        for (int i = found; i >= 0 && i > found - 4; i--)
+        for (int i = found; i >= 0 && i > found - 5; i--)
         {
-            if (marks[i].Line <= line && marks[i].LastLine >= line)
+            if (marks[i].Line <= line && marks[i].LastLine >= line && marks[i].Kind != LineMarkKind.Bookmark)
             {
                 return i;
             }

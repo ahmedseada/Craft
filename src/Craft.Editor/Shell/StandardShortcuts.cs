@@ -230,6 +230,9 @@ public static class StandardShortcuts
         Anywhere("Alt+Enter", QuickFix),
         Editor("Ctrl+R Ctrl+R", ShellCommandIds.RenameSymbol),
         Editor("Alt+\\", ShellCommandIds.GoToSymbol),
+        Anywhere("Ctrl+F2", BookmarkCommands.Toggle),
+        Anywhere("Ctrl+K Ctrl+W", BookmarkCommands.Show),
+        Anywhere("Ctrl+K Ctrl+L", BookmarkCommands.Clear),
     ]);
 
     /// <summary>A binding of <paramref name="keys"/> to <paramref name="commandId"/> in the text editor only.</summary>

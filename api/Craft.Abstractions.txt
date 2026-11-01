@@ -816,6 +816,11 @@ static class Craft.Abstractions.FileIcons
   static System.Boolean Unregister(System.String extension)
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.FileIcon icon)
+sealed class Craft.Abstractions.FileLineLinks : Craft.Abstractions.IOutputLinkDetector, Idrak.Abstraction.IKind
+  System.Int32 Find(System.ReadOnlySpan<System.Char> line, System.Span<Craft.Abstractions.OutputLink> into)
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor()
 sealed class Craft.Abstractions.FileSettings : System.IEquatable<Craft.Abstractions.FileSettings>
   Craft.Abstractions.FileSettings <Clone>$()
   Craft.Abstractions.FileSettings Over(Craft.Abstractions.FileSettings under)
@@ -1141,6 +1146,8 @@ interface Craft.Abstractions.IMultiSelectionDocument : Craft.Abstractions.ITextD
   Craft.Abstractions.ITextSnapshot Edit(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.EditKind kind, System.ReadOnlySpan<Craft.Abstractions.SelectionState> before, System.Int32 primaryBefore, System.ReadOnlySpan<Craft.Abstractions.SelectionState> after, System.Int32 primaryAfter)
   System.Int32 RestoredPrimary { get; }
   System.ReadOnlySpan<Craft.Abstractions.SelectionState> RestoredSelections { get; }
+interface Craft.Abstractions.IOutputLinkDetector : Idrak.Abstraction.IKind
+  System.Int32 Find(System.ReadOnlySpan<System.Char> line, System.Span<Craft.Abstractions.OutputLink> into)
 interface Craft.Abstractions.IPluginSettings
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
   System.String Get(System.String plugin, System.String key)
@@ -1421,6 +1428,7 @@ sealed class Craft.Abstractions.LineMarkEventArgs : System.EventArgs
   ctor(Craft.Abstractions.IEditorDocument document, System.String source, Craft.Abstractions.LineMark mark)
 enum Craft.Abstractions.LineMarkKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Added = 0
+  Bookmark = 4
   Changed = 1
   Conflict = 3
   Deleted = 2
@@ -1703,6 +1711,31 @@ enum Craft.Abstractions.NotificationSeverity : System.IComparable, System.IConve
   Question = 4
   Success = 1
   Warning = 2
+struct Craft.Abstractions.OutputLink : System.IEquatable<Craft.Abstractions.OutputLink>
+  System.Boolean Contains(System.Int32 offset)
+  System.Boolean Equals(Craft.Abstractions.OutputLink other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Column { get; init; }
+  System.Int32 End { get; }
+  System.Int32 GetHashCode()
+  System.Int32 Length { get; init; }
+  System.Int32 Line { get; init; }
+  System.Int32 PathLength { get; init; }
+  System.Int32 PathStart { get; init; }
+  System.Int32 Start { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out System.Int32 PathStart, out System.Int32 PathLength, out System.Int32 Line, out System.Int32 Column)
+  ctor(System.Int32 Start, System.Int32 Length, System.Int32 PathStart, System.Int32 PathLength, System.Int32 Line, System.Int32 Column)
+static class Craft.Abstractions.OutputLinkDetectors
+  const System.String FileLine = file-line
+  static Craft.Abstractions.IOutputLinkDetector Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IOutputLinkDetector Get(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.OutputLink? At(System.ReadOnlySpan<System.Char> line, System.Int32 offset)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IOutputLinkDetector> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Int32 FindAll(System.ReadOnlySpan<System.Char> line, System.Span<Craft.Abstractions.OutputLink> into)
+  static System.Void Register(Craft.Abstractions.IOutputLinkDetector detector)
 sealed class Craft.Abstractions.PanelAction : System.IEquatable<Craft.Abstractions.PanelAction>
   Craft.Abstractions.PanelAction <Clone>$()
   System.Boolean Equals(Craft.Abstractions.PanelAction other)
@@ -2220,11 +2253,13 @@ sealed class Craft.Abstractions.ProposedEdits : System.IEquatable<Craft.Abstract
 static class Craft.Abstractions.RailIcons
   const System.String Add = M12 5v14M5 12h14
   const System.String Agent = M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z
+  const System.String Bookmark = M6 3h12v18l-6-4l-6 4z
   const System.String Build = M14 6l4 4M4 20l9-9M12 4l8 8l-2 2l-8-8z
   const System.String Close = M6 6l12 12M18 6L6 18
   const System.String Collapse = M4 6h16M8 12h8M10 18h4
   const System.String Edit = M4 20h4L19 9l-4-4L4 16zM14 6l4 4
   const System.String Explorer = M4 4h6l2 2h8v13H4z
+  const System.String History = M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6M3 3v4h4
   const System.String Panel = M4 6h16M4 12h16M4 18h10
   const System.String Plugins = M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4
   const System.String Refresh = M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6

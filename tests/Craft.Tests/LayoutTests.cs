@@ -247,7 +247,7 @@ public static class LayoutTests
         public ShellFixture(TempFolder folder, int watchMilliseconds = 150)
         {
             var user = SettingsFile.Load(folder.File("data/settings.json"));
-            var settings = new CraftSettings(name => name == "CRAFT_WORKSPACE_WATCH_MS" ? watchMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture) : null, user);
+            var settings = new CraftSettings(folder.Isolated(name => name == "CRAFT_WORKSPACE_WATCH_MS" ? watchMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture) : null), user);
             var recent = RecentList.Load(folder.File("data/recent.json"), 10);
             Host = new EditorHost(dispatch: _ui.Enqueue);
             Shell = new ShellModel(Host, settings, recent, Dialogs, new QuietUi());

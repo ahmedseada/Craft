@@ -488,6 +488,7 @@ public sealed partial class EditorModel
     public void PointerExited()
     {
         NoteExit();
+        ClearLinkHover();
         _hoverTimer?.Cancel();
         _hoverRequest?.Cancel();
         _hoverPosition = -1;

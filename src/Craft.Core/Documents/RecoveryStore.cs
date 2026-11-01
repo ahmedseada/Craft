@@ -126,6 +126,46 @@ public sealed class RecoveryStore : IDisposable
         return TextDocument.FromRecovery(chars, entry.OriginalPath, encoding, entry.HasBom, entry.LineEnding, _options);
     }
 
+    /// <summary>
+    /// The files that have a recovery copy in <paramref name="folder"/> (a crash left unsaved changes of them), read from the
+    /// sidecars without starting a store (X part 9: the last session's restore leaves these to the recovery); empty when
+    /// the folder does not exist. Reads the disk: call it off the UI thread.
+    /// </summary>
+    public static IReadOnlyList<string> RecoveredFiles(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        var files = new List<string>();
+        try
+        {
+            if (!Directory.Exists(folder))
+            {
+                return files;
+            }
+
+            foreach (var sidecar in Directory.EnumerateFiles(folder, "*" + SidecarExtension))
+            {
+                var id = Path.GetFileNameWithoutExtension(sidecar);
+                if (File.Exists(Path.Combine(folder, id + CopyExtension)) && ReadSidecar(id, sidecar) is { OriginalPath: { } original })
+                {
+                    files.Add(Path.GetFullPath(original));
+                }
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return files;
+        }
+
+        return files;
+    }
+
+    /// <summary>The recovery folder <paramref name="options"/> name (<see cref="CraftOptions.RecoveryFolder"/>, else the local application data's).</summary>
+    public static string FolderOf(CraftOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return Path.GetFullPath(options.RecoveryFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft", "recovery"));
+    }
+
     /// <summary>Deletes <paramref name="entry"/>'s copy and sidecar.</summary>
     public void Discard(RecoveryEntry entry)
     {

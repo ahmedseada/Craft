@@ -55,7 +55,7 @@ public static class CSharpErrorTests
 
         using var ui = new UiThread();
         var options = new CraftOptions { DiagnosticsDelayMilliseconds = 0, SemanticColorsDelayMilliseconds = 0, HoverDelayMilliseconds = 0, CompletionDelayMilliseconds = 0, NewLine = "\n" };
-        var settings = new CraftSettings(_ => null, SettingsFile.Load(folder.File("data/settings.json")));
+        var settings = new CraftSettings(folder.Isolated(), SettingsFile.Load(folder.File("data/settings.json")));
         var recent = RecentList.Load(folder.File("data/recent.json"), 10);
         var host = await ui.Invoke(() => new EditorHost(options, dispatch: ui.Post));
         var shell = await ui.Invoke(() => new ShellModel(host, settings, recent, new NoDialogs(), new QuietShellUi()));

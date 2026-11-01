@@ -392,7 +392,7 @@ public static class ProjectLanguageTests
                 using var folder = new TempFolder();
                 string file = folder.File("appsettings.json");
                 await File.WriteAllTextAsync(file, "{\"a\":1}");
-                var settings = new CraftSettings(name => name == "CRAFT_FORMAT_ON_SAVE" ? (on ? "true" : "false") : null, SettingsFile.Load(folder.File("data/settings.json")));
+                var settings = new CraftSettings(folder.Isolated(name => name == "CRAFT_FORMAT_ON_SAVE" ? (on ? "true" : "false") : null), SettingsFile.Load(folder.File("data/settings.json")));
                 var recent = RecentList.Load(folder.File("data/recent.json"), 10);
                 using var host = new EditorHost();
                 using var shell = new ShellModel(host, settings, recent, new NoDialogs(), new SilentUi());

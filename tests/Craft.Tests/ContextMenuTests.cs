@@ -522,7 +522,7 @@ public static class ContextMenuTests
     {
         public Fixture(TempFolder folder, IEditorPresenter? presenter = null)
         {
-            var settings = new CraftSettings(_ => null, SettingsFile.Load(folder.File("data/settings.json")));
+            var settings = new CraftSettings(folder.Isolated(), SettingsFile.Load(folder.File("data/settings.json")));
             Host = new EditorHost(null, null, presenter);
             Shell = new ShellModel(Host, settings, RecentList.Load(folder.File("data/recent.json"), 10), new NoDialogs(), Ui, null, Files, Clipboard);
         }

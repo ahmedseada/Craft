@@ -233,6 +233,9 @@ public sealed class FolderTreeView : ContentView
     /// <summary>Raised with a file's full path when its row is picked.</summary>
     public event EventHandler<string>? FileActivated;
 
+    /// <summary>Raised with a file's full path when its row is double-clicked (X part 9: its tab kept, not a preview).</summary>
+    public event EventHandler<string>? FileKept;
+
     /// <summary>
     /// Raised when a row is right-clicked (its item, null for the tree's empty space) with where: the page opens the tree's
     /// context menu (<see cref="EditorContextMenus.Tree"/>) on it.
@@ -355,6 +358,16 @@ public sealed class FolderTreeView : ContentView
             }
         };
         row.GestureRecognizers.Add(open);
+        // X part 9: a double click on a file keeps its tab (a single click previews it).
+        var keep = new TapGestureRecognizer { Buttons = ButtonsMask.Primary, NumberOfTapsRequired = 2 };
+        keep.Tapped += (_, _) =>
+        {
+            if (row.BindingContext is FolderTreeItem { IsFolder: false } item)
+            {
+                FileKept?.Invoke(this, item.Path);
+            }
+        };
+        row.GestureRecognizers.Add(keep);
         var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
         context.Tapped += (_, e) => ContextRequested?.Invoke(this, (row.BindingContext as FolderTreeItem, e));
         row.GestureRecognizers.Add(context);
@@ -667,6 +680,9 @@ public sealed class TabStripView : ContentView, IDisposable
     /// <summary>Raised when a pinned tab's pin is clicked (X part 7: the page unpins it).</summary>
     public event EventHandler<DocumentTab>? UnpinRequested;
 
+    /// <summary>Raised when a preview tab is double-clicked (X part 9: the page keeps it).</summary>
+    public event EventHandler<DocumentTab>? KeepRequested;
+
     /// <summary>Raised when the compact switcher's title is clicked (the page lists the tabs).</summary>
     public event EventHandler? ListRequested;
 
@@ -723,6 +739,7 @@ public sealed class TabStripView : ContentView, IDisposable
         else if (_titles.TryGetValue(tab, out var shown))
         {
             shown.Title.Text = tab.Title;
+            shown.Title.FontAttributes = tab.IsPreview ? FontAttributes.Italic : FontAttributes.None;
             shown.Dot.IsVisible = tab.IsDirty;
         }
     }
@@ -791,6 +808,7 @@ public sealed class TabStripView : ContentView, IDisposable
         {
             bool isActive = page is null && ReferenceEquals(tab, _tabs.Active);
             var title = palette.Label(tab.Title, isActive ? palette.Text : palette.Secondary);
+            title.FontAttributes = tab.IsPreview ? FontAttributes.Italic : FontAttributes.None;   // X part 9: a preview tab's title is italic
             var dot = new Ellipse { WidthRequest = 8, HeightRequest = 8, Fill = new SolidColorBrush(palette.Text), IsVisible = tab.IsDirty, VerticalOptions = LayoutOptions.Center };
             View close;
             if (tab.IsPinned)
@@ -826,6 +844,13 @@ public sealed class TabStripView : ContentView, IDisposable
             var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
             context.Tapped += (_, e) => ContextRequested?.Invoke(this, (tab, e));
             cell.GestureRecognizers.Add(context);
+            var keep = new TapGestureRecognizer { NumberOfTapsRequired = 2 };
+            keep.Tapped += (_, _) => KeepRequested?.Invoke(this, tab);
+            cell.GestureRecognizers.Add(keep);
+            if (tab.IsPreview)
+            {
+                ToolTipProperties.SetText(cell, (tab.FilePath ?? tab.Title) + "\nPreview: the next file opened from the explorer takes its place; double-click or edit to keep it");
+            }
             Draggable(cell, tab);
             _strip.Children.Add(cell);
         }

@@ -380,6 +380,8 @@ public sealed class EditorRenderer : IDisposable
                     endX += 4 * cell;
                 }
 
+                LinkUnderlineLayer.DrawLine(canvas, model, index, text, wrapped, left, top, cell, height, tabSize, colors.Info);     // X part 9: links in output
+
                 for (int d = firstDiagnostic; d < diagnostics.Length && diagnostics[d].Start <= line.End; d++)
                 {
                     DrawSquiggle(canvas, diagnostics[d], line, text, wrapped, left, top, metrics, tabSize, textLeft, viewportWidth, colors);
@@ -642,6 +644,7 @@ public sealed class EditorRenderer : IDisposable
             LineMarkKind.Added => colors.Success,
             LineMarkKind.Changed => colors.Info,
             LineMarkKind.Deleted => colors.Error,
+            LineMarkKind.Bookmark => colors.Accent,
             _ => colors.Warning,
         };
     }
@@ -684,6 +687,20 @@ public sealed class EditorRenderer : IDisposable
         {
             var mark = marks[i];
             uint color = LineMarkColor(mark.Kind, colors);
+            if (mark.Kind == LineMarkKind.Bookmark)
+            {
+                // X part 9: a bookmark is the accent's tag at the gutter's left edge (clear of the numbers and the change bar).
+                if (mark.Line >= visible.First && mark.Line <= visible.Last && !(hidden && map.IsHidden(mark.Line)))
+                {
+                    float cell = model.Metrics.CellWidth;
+                    float top = (model.RowOfLine(mark.Line) * height) - scrollY;
+                    canvas.FillRect(1, top + (height * 0.2f), Math.Max(3, cell * 0.4f), height * 0.6f, color);
+                    LineMarksDrawn++;
+                }
+
+                continue;
+            }
+
             if (mark.Kind == LineMarkKind.Deleted)
             {
                 int at = Math.Clamp(mark.Line, 0, Math.Max(0, model.Snapshot.LineCount - 1));

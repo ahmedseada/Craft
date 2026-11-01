@@ -229,6 +229,7 @@ public sealed partial class ShellModel
     // its groups, tabs, focus or shares, on the thread pool.
     private void KeepLayout()
     {
+        KeepSession();                                      // X part 9: the session follows the same changes
         if (_disposed || _layoutFile is not { } file || (Groups.Groups.Count < 2 && !_layoutKept))
         {
             return;
@@ -247,5 +248,7 @@ public sealed partial class ShellModel
     {
         _layoutFile = root is null ? null : new EditorLayoutFile(root);
         _layoutKept = kept;
+        UseSessionFile(root);                               // X part 9: the last session and the bookmarks of the folder
+        LoadBookmarks(root);
     }
 }

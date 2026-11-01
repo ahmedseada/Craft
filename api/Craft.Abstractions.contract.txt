@@ -905,6 +905,13 @@ Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon Plain { get; }
 Craft.Abstractions.FileIcons  static System.Boolean Unregister(System.String extension)
 Craft.Abstractions.FileIcons  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.FileIcons  static System.Void Register(Craft.Abstractions.FileIcon icon)
+Craft.Abstractions.FileLineLinks
+Craft.Abstractions.FileLineLinks  System.Int32 Find(System.ReadOnlySpan<System.Char> line, System.Span<Craft.Abstractions.OutputLink> into)
+Craft.Abstractions.FileLineLinks  System.String Name { get; }
+Craft.Abstractions.FileLineLinks  System.String Summary { get; }
+Craft.Abstractions.FileLineLinks  ctor()
+Craft.Abstractions.FileLineLinks : Craft.Abstractions.IOutputLinkDetector
+Craft.Abstractions.FileLineLinks : Idrak.Abstraction.IKind
 Craft.Abstractions.FileSettings
 Craft.Abstractions.FileSettings  Craft.Abstractions.FileSettings <Clone>$()
 Craft.Abstractions.FileSettings  Craft.Abstractions.FileSettings Over(Craft.Abstractions.FileSettings under)
@@ -1270,6 +1277,9 @@ Craft.Abstractions.IMultiSelectionDocument  System.Int32 RestoredPrimary { get; 
 Craft.Abstractions.IMultiSelectionDocument  System.ReadOnlySpan<Craft.Abstractions.SelectionState> RestoredSelections { get; }
 Craft.Abstractions.IMultiSelectionDocument : Craft.Abstractions.ITextDocument
 Craft.Abstractions.IMultiSelectionDocument : System.IDisposable
+Craft.Abstractions.IOutputLinkDetector
+Craft.Abstractions.IOutputLinkDetector  System.Int32 Find(System.ReadOnlySpan<System.Char> line, System.Span<Craft.Abstractions.OutputLink> into)
+Craft.Abstractions.IOutputLinkDetector : Idrak.Abstraction.IKind
 Craft.Abstractions.IPluginSettings
 Craft.Abstractions.IPluginSettings  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
 Craft.Abstractions.IPluginSettings  System.String Get(System.String plugin, System.String key)
@@ -1586,6 +1596,7 @@ Craft.Abstractions.LineMarkEventArgs  ctor(Craft.Abstractions.IEditorDocument do
 Craft.Abstractions.LineMarkEventArgs : System.EventArgs
 Craft.Abstractions.LineMarkKind
 Craft.Abstractions.LineMarkKind  Added = 0
+Craft.Abstractions.LineMarkKind  Bookmark = 4
 Craft.Abstractions.LineMarkKind  Changed = 1
 Craft.Abstractions.LineMarkKind  Conflict = 3
 Craft.Abstractions.LineMarkKind  Deleted = 2
@@ -1903,6 +1914,32 @@ Craft.Abstractions.NotificationSeverity : System.IComparable
 Craft.Abstractions.NotificationSeverity : System.IConvertible
 Craft.Abstractions.NotificationSeverity : System.IFormattable
 Craft.Abstractions.NotificationSeverity : System.ISpanFormattable
+Craft.Abstractions.OutputLink
+Craft.Abstractions.OutputLink  System.Boolean Contains(System.Int32 offset)
+Craft.Abstractions.OutputLink  System.Boolean Equals(Craft.Abstractions.OutputLink other)
+Craft.Abstractions.OutputLink  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.OutputLink  System.Int32 Column { get; init; }
+Craft.Abstractions.OutputLink  System.Int32 End { get; }
+Craft.Abstractions.OutputLink  System.Int32 GetHashCode()
+Craft.Abstractions.OutputLink  System.Int32 Length { get; init; }
+Craft.Abstractions.OutputLink  System.Int32 Line { get; init; }
+Craft.Abstractions.OutputLink  System.Int32 PathLength { get; init; }
+Craft.Abstractions.OutputLink  System.Int32 PathStart { get; init; }
+Craft.Abstractions.OutputLink  System.Int32 Start { get; init; }
+Craft.Abstractions.OutputLink  System.String ToString()
+Craft.Abstractions.OutputLink  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out System.Int32 PathStart, out System.Int32 PathLength, out System.Int32 Line, out System.Int32 Column)
+Craft.Abstractions.OutputLink  ctor(System.Int32 Start, System.Int32 Length, System.Int32 PathStart, System.Int32 PathLength, System.Int32 Line, System.Int32 Column)
+Craft.Abstractions.OutputLink : System.IEquatable<Craft.Abstractions.OutputLink>
+Craft.Abstractions.OutputLinkDetectors
+Craft.Abstractions.OutputLinkDetectors  const System.String FileLine = file-line
+Craft.Abstractions.OutputLinkDetectors  static Craft.Abstractions.IOutputLinkDetector Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.OutputLinkDetectors  static Craft.Abstractions.IOutputLinkDetector Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.OutputLinkDetectors  static Craft.Abstractions.OutputLink? At(System.ReadOnlySpan<System.Char> line, System.Int32 offset)
+Craft.Abstractions.OutputLinkDetectors  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.OutputLinkDetectors  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IOutputLinkDetector> All { get; }
+Craft.Abstractions.OutputLinkDetectors  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.OutputLinkDetectors  static System.Int32 FindAll(System.ReadOnlySpan<System.Char> line, System.Span<Craft.Abstractions.OutputLink> into)
+Craft.Abstractions.OutputLinkDetectors  static System.Void Register(Craft.Abstractions.IOutputLinkDetector detector)
 Craft.Abstractions.PanelAction
 Craft.Abstractions.PanelAction  Craft.Abstractions.PanelAction <Clone>$()
 Craft.Abstractions.PanelAction  System.Boolean Equals(Craft.Abstractions.PanelAction other)
@@ -2501,11 +2538,13 @@ Craft.Abstractions.ProposedEdits : System.IEquatable<Craft.Abstractions.Proposed
 Craft.Abstractions.RailIcons
 Craft.Abstractions.RailIcons  const System.String Add = M12 5v14M5 12h14
 Craft.Abstractions.RailIcons  const System.String Agent = M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z
+Craft.Abstractions.RailIcons  const System.String Bookmark = M6 3h12v18l-6-4l-6 4z
 Craft.Abstractions.RailIcons  const System.String Build = M14 6l4 4M4 20l9-9M12 4l8 8l-2 2l-8-8z
 Craft.Abstractions.RailIcons  const System.String Close = M6 6l12 12M18 6L6 18
 Craft.Abstractions.RailIcons  const System.String Collapse = M4 6h16M8 12h8M10 18h4
 Craft.Abstractions.RailIcons  const System.String Edit = M4 20h4L19 9l-4-4L4 16zM14 6l4 4
 Craft.Abstractions.RailIcons  const System.String Explorer = M4 4h6l2 2h8v13H4z
+Craft.Abstractions.RailIcons  const System.String History = M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6M3 3v4h4
 Craft.Abstractions.RailIcons  const System.String Panel = M4 6h16M4 12h16M4 18h10
 Craft.Abstractions.RailIcons  const System.String Plugins = M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4
 Craft.Abstractions.RailIcons  const System.String Refresh = M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6

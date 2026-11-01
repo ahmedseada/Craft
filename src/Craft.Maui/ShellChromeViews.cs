@@ -926,7 +926,16 @@ public sealed class BottomPanelView : ContentView, IDisposable
             Options = OutputOptions(palette.Options),
             KeyHandler = new ReadOnlySurfaceKeys(() => WindowKeys),
         };
-        _output.ModelChanged += (_, _) => _log.Attach(_output.Model);
+        _output.ModelChanged += (_, _) =>
+        {
+            _log.Attach(_output.Model);
+            if (_output.Model is { } model)
+            {
+                // X part 9: file:line links in Output, a click opens the place (the page resolves and opens it).
+                model.DetectsLinks = true;
+                model.LinkActivated += (_, e) => LinkActivated?.Invoke(this, e);
+            }
+        };
         _output.Open(_log.Shown, LogSurface.Language);
         _output.FindRequested += (_, e) =>
         {
@@ -1030,6 +1039,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
             _problemsView.WindowKeys = value;
         }
     }
+
+    /// <summary>Raised when a file:line link in Output was clicked (X part 9).</summary>
+    public event EventHandler<EditorLinkEventArgs>? LinkActivated;
 
     /// <summary>Output's log (the tests' and the page's way to it).</summary>
     public LogSurface Log => _log;

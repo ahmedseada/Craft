@@ -152,6 +152,7 @@ public sealed partial class EditorModel
         _pointerDown = true;
         _selectionBeforePress = _selection;
         NotePress(viewX, viewY, modifiers);
+        NoteLinkPress(viewX, viewY, modifiers);
         InlineCompletion.Dismiss();
 
         if (PopupRowAt(viewX, viewY) is { } row)
@@ -237,6 +238,7 @@ public sealed partial class EditorModel
     {
         _pointerX = viewX;
         _pointerY = viewY;
+        NoteLinkMove(viewX, viewY);
         if (!_pointerDown || _clickCount != 1)
         {
             return;
@@ -270,6 +272,7 @@ public sealed partial class EditorModel
         _pointerMode = PointerMode.Select;
         _cardSelecting = false;
         NoteRelease();
+        NoteLinkRelease();
     }
 
     private int PositionFromView(float viewX, float viewY)

@@ -282,7 +282,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             _status!.Branch.Text = _shell.BranchText;            // raised after the page is made
         };
         _tree.Indent = _shell.Options.TreeIndent;
-        _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
+        // X part 9: a single click previews the file (an italic tab the next preview replaces), a double click keeps it.
+        _tree.FileActivated += (_, file) => _ = _shell.OpenPreviewAsync(file);
+        _tree.FileKept += (_, file) => _ = _shell.OpenKeptAsync(file);
         _tree.DragsFiles = true;                                 // phase X: a file dragged from the tree onto the editor opens
         // The X restart: a row dragged onto a folder moves there (Ctrl copies), with Undo.
         _tree.MovesEntries = startup.Options.TreeDragMove;
@@ -318,6 +320,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bottom.FindRequested += (_, e) => ShowFind(false, e.InitialQuery, e.Model);
         _bottom.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.ReadOnlyText, new ContextMenuTarget(EditorContextMenus.ReadOnlyText, null, false, e.Model), e.Where);
         _bottom.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
+        // X part 9: a file:line link clicked in Output opens the file there.
+        _bottom.LinkActivated += (_, e) => _ = _shell.OpenLinkAsync(e.Path, e.Line, e.Column);
         _bottomSplit.Panel = _bottom;
 
         // Each panel's splitter: a drag kept within what the panel and the editor share, written to the workspace's
@@ -347,6 +351,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.Terminals = _terminals;
         _terminalPanel = new TerminalPanelView(_terminals, _palette, _host);
         _terminalPanel.MenuRequested += (_, e) => OpenContextMenu(e.Menu, e.Target, e.Where);
+        // X part 9: Ctrl+click on a file:line link in a terminal opens it, resolved against the terminal's folder first.
+        _terminalPanel.LinkActivated += (_, link) => _ = _shell.OpenLinkAsync(link.Path, link.TargetLine, link.TargetColumn, link.Folder);
         _bottom.TerminalContent = _terminalPanel;
         _terminals.ViewRequested += (_, request) => OnTerminalView(request);
         // Phase U: the running operations in the status bar, the bell, the notification centre and its toasts.
@@ -661,7 +667,11 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         if (_initialPath is not null && Directory.Exists(_initialPath))
         {
-            await _shell.OpenFolderAsync(_initialPath);
+            // X part 9: the folder's last session (its groups, tabs, carets, scroll, folds, pins), read off the UI thread.
+            if (await _shell.OpenFolderAsync(_initialPath))
+            {
+                await _shell.RestoreSessionAsync();
+            }
         }
         else if (_initialPath is not null)
         {
@@ -702,6 +712,26 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             _host.Log(EditorLogLevel.Error, $"The problem report's offer failed: {error.Message}", error);
         }
+    }
+
+    // The window's close: the unsaved tabs asked about, then the session written (awaited: its write is on the thread pool).
+    private async Task<bool> CloseAsync()
+    {
+        if (!await _shell.ConfirmCloseAllAsync())
+        {
+            return false;
+        }
+
+        try
+        {
+            await _shell.SaveSessionAsync();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _host.Log(EditorLogLevel.Warning, $"The session was not written: {error.Message}", error);
+        }
+
+        return true;
     }
 
     // Phase U: the UI watchdog (CRAFT_UI_WATCHDOG_MS, CRAFT_UI_STALL_MS); its stalls show in the status bar, Output, the
@@ -828,7 +858,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             try
             {
-                _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Groups.HasUnsaved, () => _shell.ConfirmCloseAllAsync()));
+                // X part 9: the close also writes the session (the carets and scroll as they are), once the unsaved tabs are settled.
+                _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Groups.HasUnsaved || _shell.SessionToWrite, CloseAsync));
                 _closeGuarded = true;
             }
             catch (InvalidOperationException error)
@@ -1598,6 +1629,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         strip.ListRequested += (_, _) => _ = PickTabAsync(group);
         strip.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, e.Tab.FilePath, false, e.Tab), e.Where);
         strip.UnpinRequested += (_, tab) => _shell.Groups.GroupOf(tab)?.Tabs.SetPinned(tab, false);
+        strip.KeepRequested += (_, tab) => _shell.KeepTab(tab);           // X part 9: a double click keeps a preview
         strip.NewFileRequested += (_, _) =>
         {
             _shell.Groups.Focus(group);
@@ -1778,6 +1810,18 @@ public sealed class ShellPage : ContentPage, IDisposable
             _completionStatus?.Dispose();
             _completionStatus = _shell.Host.ShowStatus("Completion", message);
         };
+        // X part 9: a tab the last session reopened gets its caret, scroll and folds when its editor is made.
+        view.ModelChanged += (_, _) =>
+        {
+            if (view.Model is { } made && OwnerOf(view) is { } owner)
+            {
+                _shell.ApplyViewState(owner, made);
+            }
+        };
+        if (view.Model is { } first)
+        {
+            _shell.ApplyViewState(tab, first);              // the model Open made, before the tab holds the view
+        }
         view.DiagnosticsChanged += (_, _) =>
         {
             // Phase A1: the plug-ins read a document's diagnostics, and the diff view checks a change, through the host.

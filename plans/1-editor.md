@@ -88,8 +88,16 @@ Ti 16 GB) drove each fix, all made in Idrak where they were Idrak's:
   statement) and its ask run correct (`using static Calculator`); deepseek-coder 6.7B 0/2 (code blocks, no call), then
   tools used and out of device memory (int4 weights with an 8192-token float32 cache of 32 KV heads), fixed by the
   cache format. Auto apply applies a broken file when the model writes one, by design; ask mode shows the diff first.
-- Left, for later: the bench rerun with every fix in (running when the work stopped); Craft's `WeightsAuto` in place of
-  Idrak's `AutoWeights` if they agree; the chat's overhead; int8 against int4 speed.
+- Measured with every fix in (Craft ca00376, Idrak a81e5773, the bench running the program for 42): Qwen2.5-Coder-7B
+  2/2; Qwen2.5-7B-Instruct 1/2 (the other run's edit was refused as written with its read, it read again and stopped
+  with Program.cs unchanged: no reminder fires once another file was written); Llama 3.1 8B 1/2 auto (the other run
+  ended on "An item with the same key has already been added. Key: new_text": a call with a repeated JSON key throws
+  out of the run instead of coming back as the call's error, an Idrak gap) and 1/1 ask; deepseek-coder 6.7B 0/2, out of
+  device memory at the first step even at int8 weights with a bfloat16 cache of 8192 (the words now right: the model,
+  what it loaded, `agentWeights int4`), so the estimate misses the prompt's own working memory (32 full heads).
+- Left, for later (no agent started, the owner, 2026-11-02): a repeated key in a call's JSON as the call's error
+  (Idrak); a reminder when a file the task names is left unchanged; the estimate counting the prefill's working memory;
+  Craft's `WeightsAuto` in place of Idrak's `AutoWeights` if they agree; the chat's overhead; int8 against int4 speed.
 
 **The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
 before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a

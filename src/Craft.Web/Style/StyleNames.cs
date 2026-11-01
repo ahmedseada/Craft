@@ -197,6 +197,9 @@ public static class StyleNames
     /// <summary>The pseudo-classes and pseudo-elements known, without their colons.</summary>
     public static IReadOnlyCollection<string> AllPseudos => PseudoTable.Keys;
 
+    /// <summary>The named colours (completion's list).</summary>
+    public static IReadOnlyCollection<string> AllColors => ColorSet;
+
     /// <summary>The year <paramref name="name"/> (a property, a vendor prefix dropped) became Baseline (0: long established); -1 when it is not known.</summary>
     public static int PropertyYear(ReadOnlySpan<char> name) => Year(Properties, WithoutVendor(name));
 

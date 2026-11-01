@@ -1264,6 +1264,11 @@ interface Craft.Abstractions.ICommitMessageProvider : Idrak.Abstraction.IKind
   Craft.Abstractions.CommitModelPlan Plan(System.String choice)
   System.Collections.Generic.IAsyncEnumerable<System.String> WriteAsync(Craft.Abstractions.CommitMessageRequest request, System.Threading.CancellationToken cancellationToken)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CommitModelChoice> Models()
+interface Craft.Abstractions.ICompletingLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
+  System.Boolean CanComplete { get; }
+  System.Boolean IsTriggerCharacter(System.Char c)
+  System.Boolean IsWordCharacter(System.Char c)
+  System.Threading.Tasks.Task<Craft.Abstractions.CompletionList> GetCompletionsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.CompletionTrigger trigger, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.IConversationHistory
   System.Boolean DeleteConversation(System.String id)
   System.Boolean OpenConversation(System.String id)
@@ -1471,6 +1476,10 @@ interface Craft.Abstractions.ILanguageSession : System.IDisposable
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   System.Void ClassifySyntactic(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   event System.EventHandler Reclassified
+interface Craft.Abstractions.ILineCompletion
+  Craft.Abstractions.CompletionList Complete(Craft.Abstractions.LineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
+  System.Boolean IsTriggerCharacter(System.Char c)
+  System.Boolean IsWordCharacter(System.Char c)
 interface Craft.Abstractions.ILinter : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
   System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
@@ -1848,6 +1857,19 @@ sealed class Craft.Abstractions.LanguageSettings : System.IEquatable<Craft.Abstr
   System.String ToString()
   ctor()
   static Craft.Abstractions.LanguageSettings Default { get; }
+sealed class Craft.Abstractions.LineCompletionRequest : System.IEquatable<Craft.Abstractions.LineCompletionRequest>
+  Craft.Abstractions.CompletionTrigger Trigger { get; init; }
+  Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
+  Craft.Abstractions.LineCompletionRequest <Clone>$()
+  Craft.Abstractions.LineTokenizer Tokenizer { get; init; }
+  System.Boolean Equals(Craft.Abstractions.LineCompletionRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Position { get; init; }
+  System.String ToString()
+  System.UInt64 LineState { get; init; }
+  System.Void Deconstruct(out Craft.Abstractions.ITextSnapshot Snapshot, out System.Int32 Position, out Craft.Abstractions.CompletionTrigger Trigger, out Craft.Abstractions.LineTokenizer Tokenizer, out System.UInt64 LineState)
+  ctor(Craft.Abstractions.ITextSnapshot Snapshot, System.Int32 Position, Craft.Abstractions.CompletionTrigger Trigger, Craft.Abstractions.LineTokenizer Tokenizer, System.UInt64 LineState)
 struct Craft.Abstractions.LineMark : System.IEquatable<Craft.Abstractions.LineMark>
   Craft.Abstractions.LineMarkKind Kind { get; init; }
   System.Boolean Equals(Craft.Abstractions.LineMark other)
@@ -1889,17 +1911,22 @@ class Craft.Abstractions.LineStateLanguage : Craft.Abstractions.ILanguage, Idrak
   ctor(System.String name, System.String summary, System.Collections.Generic.IReadOnlyList<System.String> extensions, Craft.Abstractions.LanguageRules rules, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter = null)
   protected Craft.Abstractions.LineStateSession OpenSession(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
   protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
-sealed class Craft.Abstractions.LineStateSession : Craft.Abstractions.IFormattingLanguageSession, Craft.Abstractions.ILanguageSession, System.IDisposable
+sealed class Craft.Abstractions.LineStateSession : Craft.Abstractions.ICompletingLanguageSession, Craft.Abstractions.IFormattingLanguageSession, Craft.Abstractions.ILanguageSession, System.IDisposable
   Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
   Craft.Abstractions.LineTokenizer Tokenizer { get; }
   Craft.Abstractions.LinkedEditingRanges GetLinkedEditingRanges(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxLines)
+  System.Boolean CanComplete { get; }
   System.Boolean ChangeDialect(Craft.Abstractions.LineTokenizer tokenizer)
+  System.Boolean IsTriggerCharacter(System.Char c)
+  System.Boolean IsWordCharacter(System.Char c)
   System.Int32 KnownLines { get; }
   System.Int64 LinesScanned { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.CompletionList> GetCompletionsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.CompletionTrigger trigger, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   System.Void Dispose()
   ctor(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter, Craft.Abstractions.LanguageSettings settings)
+  ctor(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter, Craft.Abstractions.LanguageSettings settings, Craft.Abstractions.ILineCompletion completion)
   event System.EventHandler Reclassified
 sealed class Craft.Abstractions.LineStates
   System.Boolean TryIntern(System.ReadOnlySpan<System.UInt64> frames, out System.UInt64 state)

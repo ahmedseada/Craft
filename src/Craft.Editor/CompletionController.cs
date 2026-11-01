@@ -252,9 +252,10 @@ public sealed class CompletionController : IDisposable
     /// <summary>After typed text: an identifier character filters an open list or (after the delay) asks for one; '.' asks for one; anything else closes it.</summary>
     internal void OnTyped(string text)
     {
-        if (_model.SemanticSession is null && (!_model.OffersSnippets || SnippetProviders.For(_model.Language?.Name).Count == 0))
+        var completing = _model.SemanticSession is null ? _model.CompletingSession : null;
+        if (_model.SemanticSession is null && completing is null && (!_model.OffersSnippets || SnippetProviders.For(_model.Language?.Name).Count == 0))
         {
-            return;                                          // no semantic layer and no snippet of this language: nothing to complete
+            return;                                          // no semantic layer, no completing session and no snippet of this language: nothing to complete
         }
 
         if (_choices)
@@ -263,7 +264,8 @@ public sealed class CompletionController : IDisposable
         }
 
         char last = text[^1];
-        bool identifier = IsIdentifierPart(last);
+        bool identifier = IsIdentifierPart(last) || completing?.IsWordCharacter(last) == true;
+        bool trigger = text.Length == 1 && completing?.IsTriggerCharacter(last) == true;   // W: '<', '&', ':', '@' ask the language
         if (IsOpen || _list is not null)
         {
             if (identifier && Refilter())
@@ -274,13 +276,13 @@ public sealed class CompletionController : IDisposable
             Close();
         }
 
-        if (identifier && _request is not null && last != '.')
+        if (identifier && !trigger && _request is not null && last != '.')
         {
             // A request is in flight for this word: its answer is filtered by what is typed meanwhile.
             return;
         }
 
-        if ((identifier && text.Length == 1) || last == '.')
+        if ((identifier && text.Length == 1) || last == '.' || trigger)
         {
             ScheduleRequest(CompletionTrigger.Typed(last));
         }
@@ -344,7 +346,8 @@ public sealed class CompletionController : IDisposable
         }
 
         var session = _model.SemanticSession;
-        if (session is null && !_model.OffersSnippets)
+        var completing = session is null ? _model.CompletingSession : null;
+        if (session is null && completing is null && !_model.OffersSnippets)
         {
             return;
         }
@@ -354,7 +357,7 @@ public sealed class CompletionController : IDisposable
         var snapshot = _model.Snapshot;
         int caret = _model.Selection.Caret;
         Requests++;
-        if (session is null)
+        if (session is null && completing is null)
         {
             // X part 9: a language without a semantic layer still completes snippets (made here, on the UI thread: a list of names).
             _request = null;
@@ -364,7 +367,8 @@ public sealed class CompletionController : IDisposable
 
         var cancel = new CancellationTokenSource();
         _request = cancel;
-        _model.Track(session.GetCompletionsAsync(snapshot, caret, trigger, cancel.Token), list => Apply(id, WithSnippets(list, snapshot, caret, trigger)));
+        var asked = session is not null ? session.GetCompletionsAsync(snapshot, caret, trigger, cancel.Token) : completing!.GetCompletionsAsync(snapshot, caret, trigger, cancel.Token);
+        _model.Track(asked, list => Apply(id, WithSnippets(list, snapshot, caret, trigger)));
     }
 
     /// <summary>
@@ -504,9 +508,10 @@ public sealed class CompletionController : IDisposable
 
         Span<char> typed = caret - start <= 256 ? stackalloc char[caret - start] : new char[caret - start];
         snapshot.CopyTo(start, typed);
+        var completing = _model.SemanticSession is null ? _model.CompletingSession : null;
         foreach (char c in typed)
         {
-            if (!IsIdentifierPart(c))
+            if (!IsIdentifierPart(c) && completing?.IsWordCharacter(c) != true)
             {
                 return false;
             }

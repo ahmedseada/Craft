@@ -54,6 +54,12 @@ public sealed partial class EditorModel
     /// <summary>The language's semantic layer, or null (plain text, or a language with none).</summary>
     public ISemanticLanguageSession? SemanticSession => _session as ISemanticLanguageSession;
 
+    /// <summary>
+    /// The session that completes without a semantic layer (W: HTML, CSS), when there is no <see cref="SemanticSession"/>
+    /// and it completes now; null otherwise.
+    /// </summary>
+    public ICompletingLanguageSession? CompletingSession => _session is ICompletingLanguageSession { CanComplete: true } session and not ISemanticLanguageSession ? session : null;
+
     /// <summary>The completion list's state.</summary>
     public CompletionController Completion => _completion ??= new CompletionController(this);
 

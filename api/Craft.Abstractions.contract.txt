@@ -1405,6 +1405,13 @@ Craft.Abstractions.ICommitMessageProvider  Craft.Abstractions.CommitModelPlan Pl
 Craft.Abstractions.ICommitMessageProvider  System.Collections.Generic.IAsyncEnumerable<System.String> WriteAsync(Craft.Abstractions.CommitMessageRequest request, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ICommitMessageProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CommitModelChoice> Models()
 Craft.Abstractions.ICommitMessageProvider : Idrak.Abstraction.IKind
+Craft.Abstractions.ICompletingLanguageSession
+Craft.Abstractions.ICompletingLanguageSession  System.Boolean CanComplete { get; }
+Craft.Abstractions.ICompletingLanguageSession  System.Boolean IsTriggerCharacter(System.Char c)
+Craft.Abstractions.ICompletingLanguageSession  System.Boolean IsWordCharacter(System.Char c)
+Craft.Abstractions.ICompletingLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.CompletionList> GetCompletionsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.CompletionTrigger trigger, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ICompletingLanguageSession : Craft.Abstractions.ILanguageSession
+Craft.Abstractions.ICompletingLanguageSession : System.IDisposable
 Craft.Abstractions.IConversationHistory
 Craft.Abstractions.IConversationHistory  System.Boolean DeleteConversation(System.String id)
 Craft.Abstractions.IConversationHistory  System.Boolean OpenConversation(System.String id)
@@ -1633,6 +1640,10 @@ Craft.Abstractions.ILanguageSession  System.Void Classify(Craft.Abstractions.ITe
 Craft.Abstractions.ILanguageSession  System.Void ClassifySyntactic(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.ILanguageSession  event System.EventHandler Reclassified
 Craft.Abstractions.ILanguageSession : System.IDisposable
+Craft.Abstractions.ILineCompletion
+Craft.Abstractions.ILineCompletion  Craft.Abstractions.CompletionList Complete(Craft.Abstractions.LineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ILineCompletion  System.Boolean IsTriggerCharacter(System.Char c)
+Craft.Abstractions.ILineCompletion  System.Boolean IsWordCharacter(System.Char c)
 Craft.Abstractions.ILinter
 Craft.Abstractions.ILinter  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
 Craft.Abstractions.ILinter  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
@@ -2062,6 +2073,20 @@ Craft.Abstractions.LanguageSettings  System.String ToString()
 Craft.Abstractions.LanguageSettings  ctor()
 Craft.Abstractions.LanguageSettings  static Craft.Abstractions.LanguageSettings Default { get; }
 Craft.Abstractions.LanguageSettings : System.IEquatable<Craft.Abstractions.LanguageSettings>
+Craft.Abstractions.LineCompletionRequest
+Craft.Abstractions.LineCompletionRequest  Craft.Abstractions.CompletionTrigger Trigger { get; init; }
+Craft.Abstractions.LineCompletionRequest  Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
+Craft.Abstractions.LineCompletionRequest  Craft.Abstractions.LineCompletionRequest <Clone>$()
+Craft.Abstractions.LineCompletionRequest  Craft.Abstractions.LineTokenizer Tokenizer { get; init; }
+Craft.Abstractions.LineCompletionRequest  System.Boolean Equals(Craft.Abstractions.LineCompletionRequest other)
+Craft.Abstractions.LineCompletionRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LineCompletionRequest  System.Int32 GetHashCode()
+Craft.Abstractions.LineCompletionRequest  System.Int32 Position { get; init; }
+Craft.Abstractions.LineCompletionRequest  System.String ToString()
+Craft.Abstractions.LineCompletionRequest  System.UInt64 LineState { get; init; }
+Craft.Abstractions.LineCompletionRequest  System.Void Deconstruct(out Craft.Abstractions.ITextSnapshot Snapshot, out System.Int32 Position, out Craft.Abstractions.CompletionTrigger Trigger, out Craft.Abstractions.LineTokenizer Tokenizer, out System.UInt64 LineState)
+Craft.Abstractions.LineCompletionRequest  ctor(Craft.Abstractions.ITextSnapshot Snapshot, System.Int32 Position, Craft.Abstractions.CompletionTrigger Trigger, Craft.Abstractions.LineTokenizer Tokenizer, System.UInt64 LineState)
+Craft.Abstractions.LineCompletionRequest : System.IEquatable<Craft.Abstractions.LineCompletionRequest>
 Craft.Abstractions.LineMark
 Craft.Abstractions.LineMark  Craft.Abstractions.LineMarkKind Kind { get; init; }
 Craft.Abstractions.LineMark  System.Boolean Equals(Craft.Abstractions.LineMark other)
@@ -2115,14 +2140,20 @@ Craft.Abstractions.LineStateSession
 Craft.Abstractions.LineStateSession  Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
 Craft.Abstractions.LineStateSession  Craft.Abstractions.LineTokenizer Tokenizer { get; }
 Craft.Abstractions.LineStateSession  Craft.Abstractions.LinkedEditingRanges GetLinkedEditingRanges(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxLines)
+Craft.Abstractions.LineStateSession  System.Boolean CanComplete { get; }
 Craft.Abstractions.LineStateSession  System.Boolean ChangeDialect(Craft.Abstractions.LineTokenizer tokenizer)
+Craft.Abstractions.LineStateSession  System.Boolean IsTriggerCharacter(System.Char c)
+Craft.Abstractions.LineStateSession  System.Boolean IsWordCharacter(System.Char c)
 Craft.Abstractions.LineStateSession  System.Int32 KnownLines { get; }
 Craft.Abstractions.LineStateSession  System.Int64 LinesScanned { get; }
+Craft.Abstractions.LineStateSession  System.Threading.Tasks.Task<Craft.Abstractions.CompletionList> GetCompletionsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.CompletionTrigger trigger, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.LineStateSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.LineStateSession  System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.LineStateSession  System.Void Dispose()
 Craft.Abstractions.LineStateSession  ctor(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter, Craft.Abstractions.LanguageSettings settings)
+Craft.Abstractions.LineStateSession  ctor(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter, Craft.Abstractions.LanguageSettings settings, Craft.Abstractions.ILineCompletion completion)
 Craft.Abstractions.LineStateSession  event System.EventHandler Reclassified
+Craft.Abstractions.LineStateSession : Craft.Abstractions.ICompletingLanguageSession
 Craft.Abstractions.LineStateSession : Craft.Abstractions.IFormattingLanguageSession
 Craft.Abstractions.LineStateSession : Craft.Abstractions.ILanguageSession
 Craft.Abstractions.LineStateSession : System.IDisposable

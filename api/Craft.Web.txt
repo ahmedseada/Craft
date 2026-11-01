@@ -24,6 +24,7 @@ sealed class Craft.Web.Markup.AngularSelector : Craft.Abstractions.ILanguageSele
   ctor(System.String name, System.Func<Craft.Web.Markup.AngularSettings> settings, Craft.Abstractions.ILanguage templates, Craft.Abstractions.ILanguage typeScript)
 sealed class Craft.Web.Markup.AngularSettings : System.IEquatable<Craft.Web.Markup.AngularSettings>
   Craft.Web.Markup.AngularSettings <Clone>$()
+  System.Boolean Completion { get; init; }
   System.Boolean Equals(Craft.Web.Markup.AngularSettings other)
   System.Boolean Equals(System.Object obj)
   System.Boolean InlineTemplates { get; init; }
@@ -70,6 +71,27 @@ static class Craft.Web.Markup.AngularWorkspaces
   static System.Int64 Reads { get; }
   static System.Threading.Tasks.Task<Craft.Web.Markup.AngularWorkspace> ReadAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
   static System.Void Forget(System.String folder = null)
+sealed class Craft.Web.Markup.HtmlCompletion : Craft.Abstractions.ILineCompletion
+  Craft.Abstractions.CompletionList Complete(Craft.Abstractions.LineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
+  System.Boolean IsTriggerCharacter(System.Char c)
+  System.Boolean IsWordCharacter(System.Char c)
+  ctor()
+  static Craft.Web.Markup.HtmlCompletion Instance { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.Snippet> Blocks { get; }
+static class Craft.Web.Markup.HtmlData
+  static System.Boolean IsBoolean(System.ReadOnlySpan<System.Char> attribute)
+  static System.Boolean IsElement(System.ReadOnlySpan<System.Char> name)
+  static System.Collections.Generic.IEnumerable<System.String> AngularEventsOf(System.ReadOnlySpan<System.Char> element)
+  static System.Collections.Generic.IEnumerable<System.String> AngularPropertiesOf(System.ReadOnlySpan<System.Char> element)
+  static System.Collections.Generic.IReadOnlyList<System.String> AllElements { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> AllEvents { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Aria { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> AttributesOf(System.ReadOnlySpan<System.Char> element)
+  static System.Collections.Generic.IReadOnlyList<System.String> Directives { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Entities { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> EventHandlers { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Globals { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> ValuesOf(System.ReadOnlySpan<System.Char> element, System.ReadOnlySpan<System.Char> attribute)
 sealed class Craft.Web.Markup.HtmlFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
   System.String Name { get; }
@@ -102,6 +124,7 @@ struct Craft.Web.Markup.HtmlOptions : System.IEquatable<Craft.Web.Markup.HtmlOpt
 sealed class Craft.Web.Markup.HtmlSettings : System.IEquatable<Craft.Web.Markup.HtmlSettings>
   Craft.Web.Markup.HtmlSettings <Clone>$()
   System.Boolean AttributesAsCode { get; init; }
+  System.Boolean Completion { get; init; }
   System.Boolean Embedded { get; init; }
   System.Boolean Equals(Craft.Web.Markup.HtmlSettings other)
   System.Boolean Equals(System.Object obj)
@@ -226,6 +249,17 @@ struct Craft.Web.Script.ScriptVersion : System.IEquatable<Craft.Web.Script.Scrip
   static Craft.Web.Script.ScriptVersion Newest { get; }
   static System.Int32? ParseEcmaScript(System.ReadOnlySpan<System.Char> text)
   static System.Int32? ParseTypeScript(System.ReadOnlySpan<System.Char> text)
+sealed class Craft.Web.Style.StyleCompletion : Craft.Abstractions.ILineCompletion
+  Craft.Abstractions.CompletionList Complete(Craft.Abstractions.LineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
+  System.Boolean IsTriggerCharacter(System.Char c)
+  System.Boolean IsWordCharacter(System.Char c)
+  ctor()
+  static Craft.Abstractions.CompletionList Complete(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 end, System.Int32 position, Craft.Web.Style.StyleDialect dialect, System.Int32 year, System.Boolean declarations, System.Threading.CancellationToken cancellationToken)
+  static Craft.Web.Style.StyleCompletion Instance { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Properties { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> PseudoClasses { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> PseudoElements { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> ValuesOf(System.ReadOnlySpan<System.Char> property)
 enum Craft.Web.Style.StyleDialect : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Css = 0
   Less = 2
@@ -242,6 +276,7 @@ static class Craft.Web.Style.StyleNames
   const System.Int32 Latest = 2147483647
   static System.Boolean IsColor(System.ReadOnlySpan<System.Char> name)
   static System.Collections.Generic.IReadOnlyCollection<System.String> AllAtRules { get; }
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllColors { get; }
   static System.Collections.Generic.IReadOnlyCollection<System.String> AllFunctions { get; }
   static System.Collections.Generic.IReadOnlyCollection<System.String> AllProperties { get; }
   static System.Collections.Generic.IReadOnlyCollection<System.String> AllPseudos { get; }

@@ -158,6 +158,14 @@ public sealed class HtmlTokenizer : LineTokenizer
         return (MarkupMode)(frame & 0xF);
     }
 
+    // The attribute a line in `state` is in (its kind, and whether a value follows its '=').
+    internal AttributeKind AttributeOf(ulong state, out bool afterEquals)
+    {
+        ulong frame = LineStates.IsInterned(state) ? States.Frames(state)[0] : state;
+        afterEquals = ((frame >> 12) & 1) != 0;
+        return (AttributeKind)((frame >> 9) & 0x7);
+    }
+
     // The block depth of Angular's control flow a line in `state` starts at.
     internal int BlocksOf(ulong state)
     {

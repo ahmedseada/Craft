@@ -358,6 +358,28 @@ public sealed record SemanticTelemetry(string? WorkspaceRoot, string? Reader, in
 }
 
 /// <summary>
+/// A language session that completes without a semantic layer (contract 1.1, additions: W's HTML and CSS completion): the
+/// editor asks it when the document has no <see cref="ISemanticLanguageSession"/>, off the UI thread, and nothing else of
+/// a semantic layer (rename, references, outline, diagnostics) is implied. It says which typed characters ask for a list
+/// beyond a word's first letter ('&lt;', '&amp;', ':', '@') and which characters its words hold beyond letters, digits and
+/// '_' ('-' in <c>background-color</c> and <c>aria-label</c>).
+/// </summary>
+public interface ICompletingLanguageSession : ILanguageSession
+{
+    /// <summary>Whether it completes now (a setting may turn it off); the editor asks nothing when false.</summary>
+    bool CanComplete { get; }
+
+    /// <summary>Whether typing <paramref name="c"/> (not a word's letter) asks for a list.</summary>
+    bool IsTriggerCharacter(char c);
+
+    /// <summary>Whether <paramref name="c"/> is part of a completed word beyond letters, digits and '_'.</summary>
+    bool IsWordCharacter(char c);
+
+    /// <summary>The completion list at <paramref name="position"/> of <paramref name="snapshot"/>, or null; off the calling thread.</summary>
+    Task<CompletionList?> GetCompletionsAsync(ITextSnapshot snapshot, int position, CompletionTrigger trigger, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// The semantic layer of a language session, for languages that have one (a session that only classifies need not
 /// implement it). Everything here runs off the UI thread and never blocks it: each request is a task that the caller
 /// awaits or drops, cancelled by its token; diagnostics are computed on the session's own worker after a pause in the

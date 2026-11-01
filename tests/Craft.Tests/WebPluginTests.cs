@@ -296,7 +296,7 @@ public static class WebPluginTests
             }
 
             Check.True(FoldingRangeProviders.Find(CssFolding.ProviderName) is { } folding && folding.Languages.Contains("less"), "its folding provider is registered");
-            Check.True(EditorPlugins.Find(CssPlugin.PluginName) is { } plugin && plugin.Settings.Count == 3, "its editor plug-in carries its three settings");
+            Check.True(EditorPlugins.Find(CssPlugin.PluginName) is { } plugin && plugin.Settings.Count == 4, "its editor plug-in carries its four settings (version, projectVersion, format, completion)");
             Check.True(FileIcons.For("theme.scss") is { Language: "SCSS", Shape: not null }, "its icons are registered, drawn (W-files: Craft's shape kept)");
             Check.Equal("Angular component styles", FileIcons.For("app.component.scss").Language, "an Angular component's styles keep their own icon (W-files: a compound suffix over the plug-in's .scss)");
             Check.Equal("LESS", FileIcons.For("theme.less").Language, "LESS's icon");

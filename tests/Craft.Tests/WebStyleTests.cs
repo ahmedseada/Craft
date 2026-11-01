@@ -671,7 +671,7 @@ public static class WebStyleTests
         Check.Equal(2024, CssSettings.ParseYear("2024"), "a year");
         var read = CssSettings.Read(new Settings(("version", "2023"), ("projectVersion", "false"), ("format", "off")));
         Check.True(read is { Year: 2023, ProjectVersion: false, Format: false }, "the settings read from the plug-in's values");
-        Check.True(CssSettings.Declared.Select(s => PluginSetting.VariableName(CssPlugin.PluginName, s.Key)).SequenceEqual(["CRAFT_PLUGIN_CSS_VERSION", "CRAFT_PLUGIN_CSS_PROJECTVERSION", "CRAFT_PLUGIN_CSS_FORMAT"]),
+        Check.True(CssSettings.Declared.Select(s => PluginSetting.VariableName(CssPlugin.PluginName, s.Key)).SequenceEqual(["CRAFT_PLUGIN_CSS_VERSION", "CRAFT_PLUGIN_CSS_PROJECTVERSION", "CRAFT_PLUGIN_CSS_FORMAT", "CRAFT_PLUGIN_CSS_COMPLETION"]),
             "the variables CRAFT_PLUGIN_CSS_VERSION, _PROJECTVERSION, _FORMAT");
         Check.True(CssSettings.Declared.All(s => s.Shape is not null), "each has its shape on the settings page");
 

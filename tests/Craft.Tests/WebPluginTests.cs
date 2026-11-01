@@ -297,13 +297,16 @@ public static class WebPluginTests
 
             Check.True(FoldingRangeProviders.Find(CssFolding.ProviderName) is { } folding && folding.Languages.Contains("less"), "its folding provider is registered");
             Check.True(EditorPlugins.Find(CssPlugin.PluginName) is { } plugin && plugin.Settings.Count == 3, "its editor plug-in carries its three settings");
-            Check.Equal("SCSS", FileIcons.For("app.component.scss").Language, "its icons are registered");
+            Check.True(FileIcons.For("theme.scss") is { Language: "SCSS", Shape: not null }, "its icons are registered, drawn (W-files: Craft's shape kept)");
+            Check.Equal("Angular component styles", FileIcons.For("app.component.scss").Language, "an Angular component's styles keep their own icon (W-files: a compound suffix over the plug-in's .scss)");
             Check.Equal("LESS", FileIcons.For("theme.less").Language, "LESS's icon");
 
             Check.True(IdrakPlugins.Unregister(CssPlugin.PluginName), "the plug-in unregisters");
             Check.True(files.All(f => EditorLanguages.ForFile(f) is null), "removed, its files open as plain text");
-            Check.True(FoldingRangeProviders.Find(CssFolding.ProviderName) is null && EditorPlugins.Find(CssPlugin.PluginName) is null && FileIcons.Find(".less") is null,
-                "its folding, settings and icons go with it");
+            Check.True(FoldingRangeProviders.Find(CssFolding.ProviderName) is null && EditorPlugins.Find(CssPlugin.PluginName) is null,
+                "its folding and settings go with it");
+            Check.True(FileIcons.Find(".less") is { Shape: not null } less && less.Argb != StyleLanguages.Icons[3].Argb,
+                "its icons go with it: .less shows the library's own drawn icon again (W-files' built-in set), not the plug-in's");
             Check.Equal("#", FileIcons.For("a.css").Badge, "the library's own .css icon answers again");
 
             var options = CraftOptions.FromVariables(n => n switch

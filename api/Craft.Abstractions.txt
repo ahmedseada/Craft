@@ -462,6 +462,7 @@ enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, Sys
   A = 16
   B = 25
   Backquote = 65
+  Backslash = 72
   Backspace = 9
   BracketLeft = 70
   BracketRight = 71

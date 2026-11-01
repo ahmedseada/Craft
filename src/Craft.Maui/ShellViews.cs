@@ -145,6 +145,22 @@ public sealed class FolderTreeView : ContentView
     /// <summary>Whether a file's row can be dragged (onto the editor, to open it).</summary>
     public bool DragsFiles { get; set; }
 
+    /// <summary>The key of a dragged folder row's full path in the drag's properties (a drop on a folder of the tree moves it).</summary>
+    public const string DragFolderKey = "craft.folder";
+
+    /// <summary>
+    /// Whether a row dragged onto a folder's row moves there (the X restart: <c>CRAFT_TREE_DRAG_MOVE</c>): folders can be
+    /// dragged too, every folder's row takes a drop (a file's row takes it for its folder, so the workspace's root is
+    /// reachable), the row under the drag shows it.
+    /// </summary>
+    public bool MovesEntries { get; set; } = true;
+
+    /// <summary>Whether a drop copies rather than moves (the platform's Ctrl at the drop), or null (moves).</summary>
+    public Func<DropEventArgs, bool>? CopiesOnDrop { get; set; }
+
+    /// <summary>Raised when a row was dropped on a folder: the dragged path, the folder, and whether to copy.</summary>
+    public event EventHandler<(string Source, string TargetFolder, bool Copy)>? MoveRequested;
+
     /// <summary>Raised with a file's full path when its row is picked.</summary>
     public event EventHandler<string>? FileActivated;
 
@@ -215,12 +231,30 @@ public sealed class FolderTreeView : ContentView
         var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
         context.Tapped += (_, e) => ContextRequested?.Invoke(this, (row.BindingContext as FolderTreeItem, e));
         row.GestureRecognizers.Add(context);
-        // Phase X: a file's row dragged onto the editor opens it (the drop is the window's).
+        // Phase X: a file's row dragged onto the editor opens it (the drop is the window's); the X restart: a row dragged
+        // onto a folder's row moves there (a folder's row too).
         var drag = new DragGestureRecognizer { CanDrag = true };
         drag.DragStarting += (_, e) =>
         {
-            if (!DragsFiles || row.BindingContext is not FolderTreeItem item || _tree is not { } tree || tree.IndexOf(item.Path) is not (>= 0 and var index)
-                || tree.Rows[index].Entry.IsFolder)
+            if (row.BindingContext is not FolderTreeItem item || _tree is not { } tree || tree.IndexOf(item.Path) is not (>= 0 and var index))
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            if (tree.Rows[index].Entry.IsFolder)
+            {
+                if (!MovesEntries)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+
+                e.Data.Properties[DragFolderKey] = item.Path;
+                return;
+            }
+
+            if (!DragsFiles && !MovesEntries)
             {
                 e.Cancel = true;
                 return;
@@ -230,8 +264,45 @@ public sealed class FolderTreeView : ContentView
             e.Data.Text = item.Path;
         };
         row.GestureRecognizers.Add(drag);
+        var drop = new DropGestureRecognizer { AllowDrop = true };
+        drop.DragOver += (_, e) =>
+        {
+            if (MovesEntries && DraggedEntry(e.Data) is { } dragged && row.BindingContext is FolderTreeItem target && FolderOf(target) is { } folder
+                && !string.Equals(dragged, folder, StringComparison.OrdinalIgnoreCase))
+            {
+                e.AcceptedOperation = DataPackageOperation.Copy;
+                row.BackgroundColor = (Palette?.Accent ?? Colors.Orange).WithAlpha(0.18f);
+            }
+        };
+        drop.DragLeave += (_, _) => row.BackgroundColor = Colors.Transparent;
+        drop.Drop += (_, e) =>
+        {
+            row.BackgroundColor = Colors.Transparent;
+            if (!MovesEntries || DraggedEntry(e.Data) is not { } dragged || row.BindingContext is not FolderTreeItem target || FolderOf(target) is not { } folder)
+            {
+                return;
+            }
+
+            e.Handled = true;                            // not the window's drop: nothing opens
+            MoveRequested?.Invoke(this, (dragged, folder, CopiesOnDrop?.Invoke(e) ?? false));
+        };
+        row.GestureRecognizers.Add(drop);
         return row;
     }
+
+    // The tree row a drag carries (a file's or a folder's path), or null for anything else.
+    private static string? DraggedEntry(DataPackage data) =>
+        data.Properties.TryGetValue(DragPathKey, out var file) && file is string filePath ? filePath
+        : data.Properties.TryGetValue(DragFolderKey, out var folder) && folder is string folderPath ? folderPath
+        : null;
+
+    private static string? DraggedEntry(DataPackageView data) =>
+        data.Properties.TryGetValue(DragPathKey, out var file) && file is string filePath ? filePath
+        : data.Properties.TryGetValue(DragFolderKey, out var folder) && folder is string folderPath ? folderPath
+        : null;
+
+    // The folder a drop on a row goes to: the row's folder, or a file row's own folder.
+    private static string? FolderOf(FolderTreeItem item) => item.IsFolder ? item.Path : System.IO.Path.GetDirectoryName(item.Path);
 
     private void OnTreeChanged(object? sender, EventArgs e) => Refresh();
 
@@ -346,7 +417,8 @@ public sealed class FolderTreeView : ContentView
 public sealed class TabStripView : ContentView, IDisposable
 {
     private readonly DocumentTabs _tabs;
-    private readonly PageTabs? _pages;
+    private PageTabs? _pages;
+    private bool _focusedGroup = true;
     private readonly HorizontalStackLayout _strip = new() { Spacing = 0 };
     private readonly Grid _row;
     private readonly ScrollView _scroll;
@@ -380,6 +452,52 @@ public sealed class TabStripView : ContentView, IDisposable
         tabs.TabChanged += OnTabChanged;
         Rebuild();
     }
+
+    /// <summary>The page tabs it shows after the documents' (the first editor group's strip), or null.</summary>
+    public PageTabs? Pages
+    {
+        get => _pages;
+        set
+        {
+            if (ReferenceEquals(_pages, value))
+            {
+                return;
+            }
+
+            if (_pages is not null)
+            {
+                _pages.Changed -= OnTabsChanged;
+            }
+
+            _pages = value;
+            if (value is not null)
+            {
+                value.Changed += OnTabsChanged;
+            }
+
+            Rebuild();
+        }
+    }
+
+    /// <summary>
+    /// Whether its group is the focused one (the split editor): the active tab keeps the accent's line; in a group not
+    /// focused the line is the strong border's, so the focus reads at a glance.
+    /// </summary>
+    public bool FocusedGroup
+    {
+        get => _focusedGroup;
+        set
+        {
+            if (value != _focusedGroup)
+            {
+                _focusedGroup = value;
+                Rebuild();
+            }
+        }
+    }
+
+    /// <summary>Raised when another group's tab is dropped on one of these tabs (the page moves it here, at that place).</summary>
+    public event EventHandler<(DocumentTab Dragged, DocumentTab Target)>? ForeignTabDropped;
 
     /// <summary>Whether it shows the narrow layout's single switcher.</summary>
     public bool Compact
@@ -536,7 +654,7 @@ public sealed class TabStripView : ContentView, IDisposable
                 _tabs.Activate(tab);
             };
             _titles[tab] = (title, dot);
-            var cell = Cell(palette, row, title, isActive, tab.FilePath ?? tab.Title, tap);
+            var cell = Cell(palette, row, title, isActive, tab.FilePath ?? tab.Title, tap, _focusedGroup);
             var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
             context.Tapped += (_, e) => ContextRequested?.Invoke(this, (tab, e));
             cell.GestureRecognizers.Add(context);
@@ -557,7 +675,7 @@ public sealed class TabStripView : ContentView, IDisposable
             var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, close } };
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) => _pages!.Activate(shown);
-            _strip.Children.Add(Cell(palette, row, title, isActive, open.Title, tap));
+            _strip.Children.Add(Cell(palette, row, title, isActive, open.Title, tap, _focusedGroup));
         }
     }
 
@@ -576,7 +694,14 @@ public sealed class TabStripView : ContentView, IDisposable
             if (e.Data.Properties.TryGetValue(DragTabKey, out var value) && value is DocumentTab dragged)
             {
                 e.Handled = true;
-                _tabs.MoveOnto(dragged, tab);
+                if (_tabs.Contains(dragged))
+                {
+                    _tabs.MoveOnto(dragged, tab);
+                }
+                else
+                {
+                    ForeignTabDropped?.Invoke(this, (dragged, tab));     // another group's tab: the page moves it here
+                }
             }
         };
         cell.GestureRecognizers.Add(drop);
@@ -584,7 +709,7 @@ public sealed class TabStripView : ContentView, IDisposable
 
     // A tab's cell: the accent's line over the active one, on the surface; a border between the others; its hover and
     // pressed looks (phase X) from the theme, its title following them.
-    private static Grid Cell(ShellPalette palette, View row, Label title, bool isActive, string tooltip, TapGestureRecognizer tap)
+    private static Grid Cell(ShellPalette palette, View row, Label title, bool isActive, string tooltip, TapGestureRecognizer tap, bool focusedGroup = true)
     {
         var cell = new Grid
         {
@@ -595,7 +720,7 @@ public sealed class TabStripView : ContentView, IDisposable
         var states = palette.States(cell, InteractionKind.Tab);
         states.Label = title;
         states.Selected = isActive;
-        var accentLine = new BoxView { Color = isActive ? palette.Accent : Colors.Transparent };
+        var accentLine = new BoxView { Color = isActive ? (focusedGroup ? palette.Accent : palette.BorderStrong) : Colors.Transparent };
         cell.Add(accentLine, 0, 0);
         Grid.SetColumnSpan(accentLine, 2);
         cell.Add(row, 0, 1);
@@ -695,4 +820,10 @@ public interface IShellPlatform
     /// platform's drop data while the drop lasts; none when it carries none, or on a platform without the mapping.
     /// </summary>
     Task<IReadOnlyList<string>> DroppedPathsAsync(DropEventArgs drop) => Task.FromResult<IReadOnlyList<string>>([]);
+
+    /// <summary>
+    /// Whether the user asked a drop to copy rather than move (Ctrl held when it landed: a tree row dragged onto a folder
+    /// copies it); false on a platform that does not say.
+    /// </summary>
+    bool DropCopies(DropEventArgs drop) => false;
 }

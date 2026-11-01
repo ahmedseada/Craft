@@ -107,6 +107,9 @@ public static class InventoryTests
             // Phase X slice 3: inline, not modal; the welcome page.
             ["CRAFT_WELCOME_AT_START"] = "false", ["CRAFT_UNDO_BAR_MS"] = "3000", ["CRAFT_FIND_BACKGROUND_CHARS"] = "1000", ["CRAFT_FIND_REGEX_TIMEOUT_MS"] = "100",
             ["CRAFT_QUICK_OPEN_BACKGROUND_FILES"] = "50", ["CRAFT_QUICK_OPEN_RECENT"] = "5",
+            // The X restart, piece 3a: the split editor, moving files in the tree, peek definition.
+            ["CRAFT_EDITOR_GROUPS_MAX"] = "3", ["CRAFT_EDITOR_GROUPS_CLOSE_EMPTY"] = "false", ["CRAFT_TREE_DRAG_MOVE"] = "false", ["CRAFT_PEEK_LINES"] = "8",
+            ["CRAFT_PEEK_MAX_MB"] = "4",
             // The owner's note 26: the telemetry table.
             ["CRAFT_TELEMETRY_SAMPLES"] = "30", ["CRAFT_TELEMETRY_SLOW_MS"] = "250",
             // B8-B10: the splitters, the terminal's profiles and design, the global loader.
@@ -146,6 +149,7 @@ public static class InventoryTests
             PaintLineLayouts = false, PaintCacheLines = 8,
             WelcomeAtStart = false, UndoBarMilliseconds = 3000, FindBackgroundCharacters = 1000, FindRegexTimeoutMilliseconds = 100,
             QuickOpenBackgroundFiles = 50, QuickOpenRecent = 5,
+            EditorGroupsMax = 3, EditorGroupsCloseEmpty = false, TreeDragMove = false, PeekLines = 8, PeekMaxMegabytes = 4,
             TelemetrySamples = 30, TelemetrySlowMilliseconds = 250,
             SplitterGrip = 12, SplitterHoverMilliseconds = 50, SplitterKeyStep = 20, SplitterSnap = false,
             TerminalDefaultProfile = "Git Bash", TerminalProfiles = options.TerminalProfiles, TerminalTabs = "tabs", TerminalListFrom = 5, TerminalPadding = 4,

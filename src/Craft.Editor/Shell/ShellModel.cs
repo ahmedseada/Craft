@@ -159,6 +159,29 @@ public static class ShellCommandIds
 
     /// <summary>View: Clear the notifications (with Undo in the inline bar).</summary>
     public const string ClearNotifications = "craft.clearNotifications";
+
+    // The X restart, piece 3a: the split editor and peek definition.
+
+    /// <summary>View: Split the editor right (Ctrl+\): a new group to the right showing the active document too.</summary>
+    public const string SplitRight = "craft.splitRight";
+
+    /// <summary>View: Split the editor down (Ctrl+K Ctrl+\): a new group under the focused one.</summary>
+    public const string SplitDown = "craft.splitDown";
+
+    /// <summary>View: Move the editor to the next group (Ctrl+Alt+Right), or to a new group to the right.</summary>
+    public const string MoveToNextGroup = "craft.moveToNextGroup";
+
+    /// <summary>View: Close the editor group (its tabs, asking about unsaved changes).</summary>
+    public const string CloseGroup = "craft.closeGroup";
+
+    /// <summary>View: Focus the next editor group.</summary>
+    public const string FocusNextGroup = "craft.focusNextGroup";
+
+    /// <summary>The prefix of View: Focus editor group N (Ctrl+1, Ctrl+2, Ctrl+3): "craft.focusGroup" + N.</summary>
+    public const string FocusGroupPrefix = "craft.focusGroup";
+
+    /// <summary>Go: Peek definition (Alt+F12): the definition in an overlay under the caret's line.</summary>
+    public const string PeekDefinition = "craft.peekDefinition";
 }
 
 /// <summary>What a drop of paths onto the window or the editor opened (<see cref="ShellModel.OpenDroppedAsync"/>).</summary>
@@ -255,14 +278,26 @@ public sealed partial class ShellModel : IDisposable
         _optionsSignature = Signature();
         Recent.Limit = Options.RecentLimit;
         Theme = ThemeOf(Options);
-        Tabs = new DocumentTabs(host);
+        Groups = new EditorGroups(host, Options.EditorGroupsMax) { CloseEmpty = Options.EditorGroupsCloseEmpty };
         Layout = new ShellLayout(Options);
         Pages = new PageTabs();
         Panels = new PanelLayout(settings, Options, (message, error) => host.Dispatch(() => host.Log(EditorLogLevel.Warning, message, error)));
         Layout.WideTreeOpen = Panels.IsOpen(ShellPanel.Explorer);
         Panels.Changed += (_, _) => Layout.WideTreeOpen = Panels.IsOpen(ShellPanel.Explorer);
-        // A document chosen or opened shows in the editor area again (a page tab stays open beside it).
-        Tabs.ActiveChanged += (_, _) => Pages.ShowDocument();
+        // A document chosen or opened in the first group (where the pages show) shows there again (a page tab stays open
+        // beside it).
+        Groups.ActiveChanged += (_, group) =>
+        {
+            if (ReferenceEquals(group, Groups.Groups[0]))
+            {
+                Pages.ShowDocument();
+            }
+        };
+        Groups.GroupsChanged += (_, _) => KeepLayout();
+        Groups.TabsChanged += (_, _) => KeepLayout();
+        Groups.ActiveChanged += (_, _) => KeepLayout();
+        Groups.FocusChanged += (_, _) => KeepLayout();
+        Groups.LayoutResized += (_, _) => KeepLayout();
         host.DocumentSaved += OnDocumentSaved;
         host.PanelsChanged += OnPanelsChanged;
         host.PanelShowRequested += OnPanelShowRequested;
@@ -272,7 +307,7 @@ public sealed partial class ShellModel : IDisposable
         // did nothing); a second proposal for the same new file goes to the same tab.
         host.OpenFile = async (path, token) => File.Exists(path)
             ? (await OpenFileAsync(path, cancellationToken: token).ConfigureAwait(true))?.HostDocument
-            : (Tabs.FindSuggested(path) ?? NewFile(path)).HostDocument;
+            : (Groups.FindSuggested(path) ?? NewFile(path)).HostDocument;
         host.SetKeyBindings(Options.KeyBindings, Options.KeyMap);
         UndoBar = new UndoBar(Options.UndoBarMilliseconds, action => host.Dispatch("shell: the undo bar's time is up", action));
         // B11: what a plug-in reaches through its host: the Undo bar, the folder dialog, its settings written as the page writes them.
@@ -420,7 +455,7 @@ public sealed partial class ShellModel : IDisposable
     public async Task<bool> SaveAllAsync(CancellationToken cancellationToken = default)
     {
         bool all = true;
-        foreach (var tab in Tabs.Tabs.ToArray())
+        foreach (var tab in Groups.DocumentTabs())
         {
             if (tab.IsDirty && !await SaveAsync(tab, cancellationToken))
             {
@@ -523,8 +558,14 @@ public sealed partial class ShellModel : IDisposable
     /// <summary>The recent files and folders.</summary>
     public RecentList Recent { get; }
 
-    /// <summary>The tabs.</summary>
-    public DocumentTabs Tabs { get; }
+    /// <summary>The focused editor group's tabs (<see cref="EditorGroups.Focused"/>).</summary>
+    public DocumentTabs Tabs => Groups.Focused.Tabs;
+
+    /// <summary>The editor groups (the split editor): each its own tabs, one focused.</summary>
+    public EditorGroups Groups { get; }
+
+    /// <summary>The open documents' language sessions, one per document shared by its views (the split editor).</summary>
+    public LanguageSessionPool Sessions { get; } = new();
 
     /// <summary>The layout and what shows in it.</summary>
     public ShellLayout Layout { get; }
@@ -592,6 +633,7 @@ public sealed partial class ShellModel : IDisposable
         Workspace workspace;
         SettingsFile workspaceSettings;
         string? branch;
+        bool layoutKept;
         try
         {
             // The folder's checks and files (its .craft/settings.json, its git branch) are read on the thread pool: the
@@ -599,10 +641,11 @@ public sealed partial class ShellModel : IDisposable
             var options = Options;
             // B10: opening a folder is workspace work, so the window's loader shows it when it takes a while.
             using var activity = Host.Activities.Start($"Opening {Path.GetFileName(Path.TrimEndingDirectorySeparator(path))}", ActivityKinds.Workspace, keep: false);
-            (workspace, workspaceSettings, branch) = await Task.Run(() =>
+            (workspace, workspaceSettings, branch, layoutKept) = await Task.Run(() =>
             {
                 var opened = new Workspace(path, options);
-                return (opened, SettingsFile.Load(CraftSettings.WorkspaceFilePath(opened.Root)), GitBranch.Read(opened.Root));
+                return (opened, SettingsFile.Load(CraftSettings.WorkspaceFilePath(opened.Root)), GitBranch.Read(opened.Root),
+                    File.Exists(new EditorLayoutFile(opened.Root).FilePath));
             });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
@@ -620,6 +663,7 @@ public sealed partial class ShellModel : IDisposable
         // a workspace lists nothing until asked, so this costs nothing.
         Workspace = new Workspace(workspace.Root, Options);
         Host.WorkspaceFolder = Workspace.Root;
+        UseLayoutFile(Workspace.Root, layoutKept);
         Tree = new FolderTree(Workspace);
         Watch();
         Recent.Add(Workspace.Root, RecentKind.Folder);
@@ -641,6 +685,7 @@ public sealed partial class ShellModel : IDisposable
         Workspace.Dispose();
         Workspace = null;
         Host.WorkspaceFolder = null;
+        UseLayoutFile(null, false);
         Tree = null;
         Settings.Workspace = null;
         ReloadOptions();
@@ -659,6 +704,12 @@ public sealed partial class ShellModel : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var full = Path.GetFullPath(path);
         var tab = Tabs.Find(full);
+        if (tab is null && Groups.FindOpen(full) is { } elsewhere)
+        {
+            // Open in another group: shown here too, one document (the split editor).
+            tab = Groups.Focused.Tabs.AddShared(elsewhere, activate: false, takeView: false);
+        }
+
         if (tab is null)
         {
             ITextDocument document;
@@ -677,6 +728,11 @@ public sealed partial class ShellModel : IDisposable
             {
                 document.Dispose();
                 tab = opened;
+            }
+            else if (Groups.FindOpen(full) is { } openedElsewhere)
+            {
+                document.Dispose();
+                tab = Groups.Focused.Tabs.AddShared(openedElsewhere, activate: false, takeView: false);
             }
             else
             {
@@ -763,7 +819,7 @@ public sealed partial class ShellModel : IDisposable
         var language = EditorLanguages.ForFile(path);
         if (!ReferenceEquals(language, tab.Language))
         {
-            Tabs.SetLanguage(tab, language);
+            Groups.SetLanguage(tab, language);
         }
 
         return true;
@@ -818,12 +874,18 @@ public sealed partial class ShellModel : IDisposable
             return false;
         }
 
-        if (tab.IsDirty && !await ResolveUnsavedAsync(tab, cancellationToken))
+        // A document another group still shows keeps its changes: only its last tab asks.
+        if (tab.IsDirty && !Groups.IsShared(tab) && !await ResolveUnsavedAsync(tab, cancellationToken))
         {
             return false;
         }
 
-        if (tab.FilePath is { } closed)
+        if (Groups.GroupOf(tab) is null)
+        {
+            return false;
+        }
+
+        if (tab.FilePath is { } closed && !Groups.IsShared(tab))
         {
             _closedFiles.Remove(closed);
             _closedFiles.Add(closed);
@@ -833,7 +895,7 @@ public sealed partial class ShellModel : IDisposable
             }
         }
 
-        Tabs.Remove(tab);
+        Groups.Remove(tab);
         return true;
     }
 
@@ -843,14 +905,14 @@ public sealed partial class ShellModel : IDisposable
     /// </summary>
     public async Task<bool> ConfirmCloseAllAsync(CancellationToken cancellationToken = default)
     {
-        foreach (var tab in Tabs.Tabs.ToArray())
+        foreach (var tab in Groups.DocumentTabs())
         {
             if (!tab.IsDirty)
             {
                 continue;
             }
 
-            Tabs.Activate(tab);
+            Groups.GroupOf(tab)?.Tabs.Activate(tab);
             if (!await ResolveUnsavedAsync(tab, cancellationToken))
             {
                 return false;
@@ -973,6 +1035,8 @@ public sealed partial class ShellModel : IDisposable
         }
 
         Recent.Limit = options.RecentLimit;
+        Groups.Max = options.EditorGroupsMax;
+        Groups.CloseEmpty = options.EditorGroupsCloseEmpty;
         UndoBar.Milliseconds = options.UndoBarMilliseconds;
         Host.SetKeyBindings(options.KeyBindings, options.KeyMap);
         Layout.Options = options;
@@ -1037,7 +1101,7 @@ public sealed partial class ShellModel : IDisposable
         StopWatching();
         _memoryWatch?.Dispose();
         Pages.CloseAll();
-        Tabs.Dispose();
+        Groups.Dispose();
         Workspace?.Dispose();
     }
 
@@ -1080,9 +1144,9 @@ public sealed partial class ShellModel : IDisposable
         }
 
         _treeWatch?.Touch(path);
-        if (Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && EditorLanguages.ForFile(path) is var language && !ReferenceEquals(language, tab.Language))
+        if (Groups.AllTabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && EditorLanguages.ForFile(path) is var language && !ReferenceEquals(language, tab.Language))
         {
-            Tabs.SetLanguage(tab, language);
+            Groups.SetLanguage(tab, language);
         }
     }
 
@@ -1265,6 +1329,7 @@ public sealed partial class ShellModel : IDisposable
             "A plug-in adds commands, key bindings, menu items (EditorMenus), rail items (EditorRailItems), status items, panels, settings, languages and themes."), null, null);
         Command(ShellCommandIds.Welcome, "Help: Welcome", (_, _) => { ShowWelcome(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.ClearNotifications, "View: Clear the notifications", (_, _) => { ClearNotifications(); return Task.CompletedTask; }, null, null);
+        RegisterGroupCommands();
         Command(ShellCommandIds.About, "Help: About Craft", (_, _) => _ui.ShowMessageAsync("Craft",
             $"A code editor on Idrak. Plug-in contracts {CraftContracts.Version}; .NET {Environment.Version}; {System.Runtime.InteropServices.RuntimeInformation.OSDescription}."), null, null);
 
@@ -1296,6 +1361,10 @@ public sealed partial class ShellModel : IDisposable
         Menu(EditorMenus.View, ShellCommandIds.ZoomIn, 4, 1);
         Menu(EditorMenus.View, ShellCommandIds.ZoomOut, 4, 2);
         Menu(EditorMenus.View, ShellCommandIds.ZoomReset, 4, 3);
+        Menu(EditorMenus.View, ShellCommandIds.SplitRight, 5, 0);
+        Menu(EditorMenus.View, ShellCommandIds.SplitDown, 5, 1);
+        Menu(EditorMenus.View, ShellCommandIds.MoveToNextGroup, 5, 2);
+        Menu(EditorMenus.View, ShellCommandIds.CloseGroup, 5, 3);
         Menu(EditorMenus.Plugins, ShellCommandIds.Plugins, 0, 0);
         Menu(EditorMenus.Help, ShellCommandIds.Welcome, 0, 0);
         Menu(EditorMenus.Help, ShellCommandIds.CommandPalette, 0, 1, "Every command and its keys");

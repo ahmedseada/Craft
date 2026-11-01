@@ -560,6 +560,23 @@ public sealed record CraftOptions
     /// <summary>The files and commands quick open and the palette keep as recent, shown first (<c>CRAFT_QUICK_OPEN_RECENT</c>); 0 keeps none.</summary>
     public int QuickOpenRecent { get; init; } = 20;
 
+    // The X restart, piece 3a: the split editor, moving files in the tree, peek definition.
+
+    /// <summary>The most editor groups the editor area splits into (<c>CRAFT_EDITOR_GROUPS_MAX</c>); 1 turns splitting off.</summary>
+    public int EditorGroupsMax { get; init; } = 4;
+
+    /// <summary>Whether a group closes when its last tab closes, while another group is open (<c>CRAFT_EDITOR_GROUPS_CLOSE_EMPTY</c>).</summary>
+    public bool EditorGroupsCloseEmpty { get; init; } = true;
+
+    /// <summary>Whether a file or folder dragged onto a folder of the tree moves there (Ctrl copies) (<c>CRAFT_TREE_DRAG_MOVE</c>).</summary>
+    public bool TreeDragMove { get; init; } = true;
+
+    /// <summary>The lines the peek definition overlay shows (<c>CRAFT_PEEK_LINES</c>).</summary>
+    public int PeekLines { get; init; } = 12;
+
+    /// <summary>A closed file larger than this many megabytes is not read for a peek (said instead) (<c>CRAFT_PEEK_MAX_MB</c>).</summary>
+    public int PeekMaxMegabytes { get; init; } = 16;
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -700,6 +717,12 @@ public sealed record CraftOptions
         new("CRAFT_FIND_REGEX_TIMEOUT_MS", "250", "Milliseconds a find's regular expression may take on one line before it is stopped (said in the find box).") { Shape = SettingShape.Whole(SettingSections.Editor, "Regular expression time limit", 1, 60_000, "ms", "Find", step: 50) },
         new("CRAFT_QUICK_OPEN_BACKGROUND_FILES", "2000", "File lists longer than this are matched off the UI thread by quick open; 0 always matches off it.") { Shape = SettingShape.Whole(SettingSections.Files, "Match off the UI thread above", 0, int.MaxValue, "files", "Quick open", step: 500) },
         new("CRAFT_QUICK_OPEN_RECENT", "20", "The files and commands quick open and the command palette keep as recent and show first; 0 keeps none.") { Shape = SettingShape.Whole(SettingSections.Files, "Recent items kept", 0, 1000, null, "Quick open") },
+        // The X restart, piece 3a: the split editor, moving files in the tree, peek definition.
+        new("CRAFT_EDITOR_GROUPS_MAX", "4", "The most editor groups the editor area splits into (Split right, Ctrl+\\; Split down); 1 turns splitting off.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Most editor groups", 1, 16, "groups", "Layout") },
+        new("CRAFT_EDITOR_GROUPS_CLOSE_EMPTY", "true", "Whether an editor group closes when its last tab closes while another group is open.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Close a group when its last tab closes", "Layout") },
+        new("CRAFT_TREE_DRAG_MOVE", "true", "Whether a file or folder dragged onto a folder of the explorer moves there (Ctrl copies), with Undo.") { Shape = SettingShape.Toggle(SettingSections.Files, "Move files by dragging them in the tree", "Tree") },
+        new("CRAFT_PEEK_LINES", "12", "The lines the peek definition overlay (Alt+F12) shows under the caret's line.") { Shape = SettingShape.Whole(SettingSections.Editor, "Peek shows", 3, 200, "lines", "Navigation") },
+        new("CRAFT_PEEK_MAX_MB", "16", "A closed file larger than this many megabytes is not read for a peek (said instead).") { Shape = SettingShape.Whole(SettingSections.Editor, "Peek reads closed files up to", 1, 4096, "MB", "Navigation") },
     ];
 
     /// <summary>
@@ -1377,6 +1400,31 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_QUICK_OPEN_RECENT") is { } quickRecent)
         {
             options = options with { QuickOpenRecent = Whole(quickRecent, "CRAFT_QUICK_OPEN_RECENT", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_EDITOR_GROUPS_MAX") is { } groupsMax)
+        {
+            options = options with { EditorGroupsMax = Whole(groupsMax, "CRAFT_EDITOR_GROUPS_MAX", 1, 16) };
+        }
+
+        if (Text(read, "CRAFT_EDITOR_GROUPS_CLOSE_EMPTY") is { } closeEmpty)
+        {
+            options = options with { EditorGroupsCloseEmpty = Flag(closeEmpty, "CRAFT_EDITOR_GROUPS_CLOSE_EMPTY") };
+        }
+
+        if (Text(read, "CRAFT_TREE_DRAG_MOVE") is { } dragMove)
+        {
+            options = options with { TreeDragMove = Flag(dragMove, "CRAFT_TREE_DRAG_MOVE") };
+        }
+
+        if (Text(read, "CRAFT_PEEK_LINES") is { } peekLines)
+        {
+            options = options with { PeekLines = Whole(peekLines, "CRAFT_PEEK_LINES", 3, 200) };
+        }
+
+        if (Text(read, "CRAFT_PEEK_MAX_MB") is { } peekMax)
+        {
+            options = options with { PeekMaxMegabytes = Whole(peekMax, "CRAFT_PEEK_MAX_MB", 1, 4096) };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

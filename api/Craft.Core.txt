@@ -44,6 +44,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean CrashTicketOffer { get; init; }
   System.Boolean CrashTrail { get; init; }
   System.Boolean DiffCheck { get; init; }
+  System.Boolean EditorGroupsCloseEmpty { get; init; }
   System.Boolean Equals(Craft.Core.CraftOptions other)
   System.Boolean Equals(System.Object obj)
   System.Boolean ExplorerOpen { get; init; }
@@ -57,6 +58,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean SplitterSnap { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
   System.Boolean TerminalCursorBlink { get; init; }
+  System.Boolean TreeDragMove { get; init; }
   System.Boolean WelcomeAtStart { get; init; }
   System.Boolean WordHighlight { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
@@ -85,6 +87,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 DiffContextLines { get; init; }
   System.Int32 DiffLineLimit { get; init; }
   System.Int32 DoubleClickMilliseconds { get; init; }
+  System.Int32 EditorGroupsMax { get; init; }
   System.Int32 FindBackgroundCharacters { get; init; }
   System.Int32 FindCountLimit { get; init; }
   System.Int32 FindRegexTimeoutMilliseconds { get; init; }
@@ -100,6 +103,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 NotificationsKeep { get; init; }
   System.Int32 PaintCacheLines { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
+  System.Int32 PeekLines { get; init; }
+  System.Int32 PeekMaxMegabytes { get; init; }
   System.Int32 ProblemsListLimit { get; init; }
   System.Int32 ProposalPreviewCharacters { get; init; }
   System.Int32 QuickOpenBackgroundFiles { get; init; }

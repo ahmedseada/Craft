@@ -136,6 +136,7 @@ public sealed class WindowsTextInputAdapter : ITextInputAdapter
         VirtualKey.Add => EditorKey.Plus,
         (VirtualKey)0xDB => EditorKey.BracketLeft, // VK_OEM_4 ([ on US keyboards)
         (VirtualKey)0xDD => EditorKey.BracketRight, // VK_OEM_6 (] on US keyboards)
+        (VirtualKey)0xDC => EditorKey.Backslash, // VK_OEM_5 (\ on US keyboards), for Split right (Ctrl+\)
         _ => EditorKey.None,
     };
 

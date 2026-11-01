@@ -248,6 +248,47 @@ public sealed partial class EditorModel
         });
     }
 
+    /// <summary>
+    /// Raised by <see cref="PeekDefinition"/> with where the symbol at the caret is defined (this document, or another
+    /// file): the shell shows it in an overlay under the caret's line (the X restart's peek). A metadata symbol shows its
+    /// description as a tooltip instead, and nothing is raised.
+    /// </summary>
+    public event EventHandler<DefinitionRequestedEventArgs>? PeekRequested;
+
+    /// <summary>
+    /// Alt+F12: asks the language where the symbol at the caret is defined, off the UI thread, and raises
+    /// <see cref="PeekRequested"/> with it on the UI thread (the caret does not move); false when the language has no
+    /// semantic layer.
+    /// </summary>
+    public bool PeekDefinition()
+    {
+        if (SemanticSession is not { } session)
+        {
+            return false;
+        }
+
+        var snapshot = Snapshot;
+        int caret = _selection.Caret;
+        Track(session.GetDefinitionAsync(snapshot, caret, CancellationToken.None), location =>
+        {
+            if (location is null || Snapshot.Version != snapshot.Version || _selection.Caret != caret)
+            {
+                LateResultsDropped += location is null ? 0 : 1;
+                return;
+            }
+
+            if (location.IsMetadata)
+            {
+                Tooltip = new EditorTooltip(location.Description, caret);
+                Invalidate();
+                return;
+            }
+
+            PeekRequested?.Invoke(this, new DefinitionRequestedEventArgs(location));
+        });
+        return true;
+    }
+
     /// <summary>The language's formatter (C#'s semantic session, or a language that only formats, such as XML or JSON), or null.</summary>
     public IFormattingLanguageSession? FormattingSession => _session as IFormattingLanguageSession;
 

@@ -495,6 +495,12 @@ public enum EditorKey
 
     /// <summary>The closing square bracket key; "]" in a chord's text.</summary>
     BracketRight,
+
+    // The X restart (piece 3a, 2026-11-01): the backslash, for Split right (Ctrl+\), added at the end so the values above
+    // keep theirs (contract 1.1 adds it).
+
+    /// <summary>The backslash key (VK_OEM_5 on US keyboards); "\" in a chord's text.</summary>
+    Backslash,
 }
 
 /// <summary>Where the platform's input goes: the editor implements it, a <see cref="ITextInputAdapter"/> calls it.</summary>

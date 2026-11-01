@@ -46,6 +46,10 @@ public sealed class EditorView : ContentView, IDisposable
     private bool _disposed;
     private bool _readOnly;
     private bool _lineNumbers = true;
+    private bool _focusedView = true;
+    private LanguageSessionLease? _lease;
+    private ILanguageSession? _givenSession;
+    private bool _sessionGiven;
 
     /// <summary>An empty editor (set <see cref="Document"/> to show one).</summary>
     public EditorView()
@@ -198,10 +202,52 @@ public sealed class EditorView : ContentView, IDisposable
         }
     }
 
+    /// <summary>
+    /// The pool the document's language session is taken from (the split editor: views of one document share one session;
+    /// each view keeps its own carets, scroll and folds), or null for a session of the view's own.
+    /// </summary>
+    public LanguageSessionPool? Sessions { get; set; }
+
+    /// <summary>
+    /// Whether this view is the focused group's (the X restart): only that view's caret blinks; another shows no caret and
+    /// redraws nothing on the blink.
+    /// </summary>
+    public bool IsFocusedView
+    {
+        get => _focusedView;
+        set
+        {
+            if (_focusedView == value)
+            {
+                return;
+            }
+
+            _focusedView = value;
+            _caretOn = value;
+            _drawable.CaretVisible = value;
+            if (value)
+            {
+                RestartBlink();
+            }
+            else
+            {
+                _blink?.Stop();
+            }
+
+            _caretLayer.Invalidate();
+        }
+    }
+
+    /// <summary>Raised when the pointer presses the text (before the editor acts on it): the page focuses the view's group.</summary>
+    public event EventHandler? Engaged;
+
+    /// <summary>Raised after a double click on the text (the peek opens its definition).</summary>
+    public event EventHandler? DoubleClicked;
+
     /// <summary>Raised on the UI thread when a new model replaced the last (a new document, language or options).</summary>
     public event EventHandler? ModelChanged;
 
-    /// <summary>Where the document's language shows its long work (the host's activities), or null; set before <see cref="Open"/>.</summary>
+    /// <summary>Where the document's language shows its long work (the host's activities), or null; set before <see cref="Open(ITextDocument?, ILanguage?)"/>.</summary>
     public IEditorActivities? Activities { get; set; }
 
     /// <summary>The open folder the document belongs to (its language's workspace), or null; a change makes a new model.</summary>
@@ -255,6 +301,9 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>Raised on F12 when the definition is in another file (the app opens it) or only in metadata.</summary>
     public event EventHandler<DefinitionRequestedEventArgs>? DefinitionRequested;
 
+    /// <summary>Raised on Alt+F12 with the definition to peek (the page shows the overlay under the caret's line).</summary>
+    public event EventHandler<DefinitionRequestedEventArgs>? PeekRequested;
+
     /// <summary>Releases the language's semantic memory (its workspace), as on the platform's memory-pressure signal; it is rebuilt on the next request.</summary>
     public void ReleaseSemanticMemory() => _model?.SemanticSession?.Release();
 
@@ -263,6 +312,21 @@ public sealed class EditorView : ContentView, IDisposable
     {
         _document = document;
         _language = language;
+        _sessionGiven = false;
+        _givenSession = null;
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Shows <paramref name="document"/> with <paramref name="session"/>, a session the view neither opens nor disposes (the
+    /// peek's: an open document's shared session, or a closed file's syntactic one); null for none.
+    /// </summary>
+    public void Open(ITextDocument? document, ILanguage? language, ILanguageSession? session)
+    {
+        _document = document;
+        _language = language;
+        _sessionGiven = true;
+        _givenSession = session;
         Rebuild();
     }
 
@@ -299,14 +363,28 @@ public sealed class EditorView : ContentView, IDisposable
             return;
         }
 
-        var model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities)
+        EditorModel model;
+        if (_sessionGiven)
         {
-            IsReadOnly = _readOnly,
-            ShowLineNumbers = _lineNumbers,
-        };
+            model = new EditorModel(_document, _givenSession, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities);
+        }
+        else if (Sessions is { } pool)
+        {
+            // The split editor: one session per document, shared by its views (counted; the last view lets it go).
+            _lease = pool.Acquire(_document, _language, EditorModel.OpenContext(_document, _workspaceRoot, _options, Activities));
+            model = new EditorModel(_document, _lease?.Session, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities);
+        }
+        else
+        {
+            model = new EditorModel(_document, _language, _options, _theme, _measurer, _clipboard, workspaceRoot: _workspaceRoot, activities: Activities);
+        }
+
+        model.IsReadOnly = _readOnly;
+        model.ShowLineNumbers = _lineNumbers;
         model.Dispatch = action => Dispatcher.DispatchLabelled("editor: a language's answer", action);
         model.DiagnosticsChanged += OnModelDiagnosticsChanged;
         model.DefinitionRequested += OnModelDefinitionRequested;
+        model.PeekRequested += OnModelPeekRequested;
         model.Invalidated += OnModelInvalidated;
         model.CaretMoved += OnModelCaretMoved;
         model.ScrollRequested += OnModelScrollRequested;
@@ -338,10 +416,13 @@ public sealed class EditorView : ContentView, IDisposable
         model.Reclassified -= OnModelReclassified;
         model.DiagnosticsChanged -= OnModelDiagnosticsChanged;
         model.DefinitionRequested -= OnModelDefinitionRequested;
+        model.PeekRequested -= OnModelPeekRequested;
         model.Dispatch = null;
         _drawable.Model = null;
         _model = null;
         model.Dispose();
+        _lease?.Dispose();                               // after the model: the session goes with its last view
+        _lease = null;
     }
 
     private void UpdateContentSize()
@@ -529,8 +610,8 @@ public sealed class EditorView : ContentView, IDisposable
             return;
         }
 
-        _caretOn = true;
-        _drawable.CaretVisible = true;
+        _caretOn = _focusedView;
+        _drawable.CaretVisible = _focusedView;
         RestartBlink();
         Invalidate();
     }
@@ -610,7 +691,17 @@ public sealed class EditorView : ContentView, IDisposable
         var modifiers = _inputConnection is IKeyModifierSource source ? source.CurrentModifiers : KeyModifiers.None;
         var point = e.Touches[0];
         using var label = _labels?.Enter("editor: pointer pressed");
-        _model.PointerPressed(point.X, point.Y, modifiers);
+        Engaged?.Invoke(this, EventArgs.Empty);
+        if (_model is not { } model)
+        {
+            return;
+        }
+
+        model.PointerPressed(point.X, point.Y, modifiers);
+        if (model.ClickCount == 2)
+        {
+            DoubleClicked?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void OnDragInteraction(object? sender, TouchEventArgs e)
@@ -659,6 +750,17 @@ public sealed class EditorView : ContentView, IDisposable
 
     private void OnModelDefinitionRequested(object? sender, DefinitionRequestedEventArgs e) => DefinitionRequested?.Invoke(this, e);
 
+    private void OnModelPeekRequested(object? sender, DefinitionRequestedEventArgs e) => PeekRequested?.Invoke(this, e);
+
+    // A key or text that reached a view of a group not focused (the platform's focus moved there): its group takes the focus.
+    private void EngageFromKeyboard()
+    {
+        if (!_focusedView)
+        {
+            Engaged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private void OnGraphicsHandlerChanged(object? sender, EventArgs e)
     {
         _inputConnection?.Dispose();
@@ -671,14 +773,20 @@ public sealed class EditorView : ContentView, IDisposable
 #endif
     }
 
-    private void OnLoaded(object? sender, EventArgs e) => RestartBlink();
+    private void OnLoaded(object? sender, EventArgs e)
+    {
+        if (_focusedView)
+        {
+            RestartBlink();
+        }
+    }
 
     private void OnUnloaded(object? sender, EventArgs e) => _blink?.Stop();
 
     private void RestartBlink()
     {
         int ms = _options.CaretBlinkMilliseconds;
-        if (ms <= 0)
+        if (ms <= 0 || !_focusedView)
         {
             _blink?.Stop();
             return;
@@ -723,12 +831,14 @@ public sealed class EditorView : ContentView, IDisposable
         public bool OnKey(EditorKey key, KeyModifiers modifiers)
         {
             using var label = view._labels?.Enter(KeyLabel(key));
+            view.EngageFromKeyboard();
             return view.KeyHandler is { } handler ? handler.HandleKey(key, modifiers, view._model) : view._model?.OnKey(key, modifiers) ?? false;
         }
 
         public void OnText(string text)
         {
             using var label = view._labels?.Enter("editor: typed text");
+            view.EngageFromKeyboard();
             view._model?.OnText(text);
         }
 

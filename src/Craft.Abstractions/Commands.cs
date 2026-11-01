@@ -162,7 +162,7 @@ public readonly record struct KeyChord(EditorKey Key, KeyModifiers Modifiers)
     /// <summary>
     /// Reads a chord: modifiers (Ctrl or Control, Shift, Alt) and a key's name (<see cref="EditorKey"/>'s, ignoring case;
     /// a digit names its key D0 to D9; the punctuation keys are their characters too: "`", ",", ".", "/", "-", "=" or
-    /// "+", "[", "]"), joined by '+' ("ctrl+shift+w", "F5", "Alt+1", "Ctrl+/", "Ctrl++").
+    /// "+", "[", "]", "\"), joined by '+' ("ctrl+shift+w", "F5", "Alt+1", "Ctrl+/", "Ctrl++", "Ctrl+\").
     /// </summary>
     /// <exception cref="FormatException">The text names no key, or an unknown modifier or key (the message says which).</exception>
     public static KeyChord Parse(ReadOnlySpan<char> text) =>
@@ -264,6 +264,7 @@ public readonly record struct KeyChord(EditorKey Key, KeyModifiers Modifiers)
         '=' => EditorKey.Plus,
         '[' => EditorKey.BracketLeft,
         ']' => EditorKey.BracketRight,
+        '\\' => EditorKey.Backslash,
         _ => null,
     };
 
@@ -277,6 +278,7 @@ public readonly record struct KeyChord(EditorKey Key, KeyModifiers Modifiers)
         EditorKey.Plus => '=',
         EditorKey.BracketLeft => '[',
         EditorKey.BracketRight => ']',
+        EditorKey.Backslash => '\\',
         >= EditorKey.D0 and <= EditorKey.D9 => (char)('0' + (key - EditorKey.D0)),
         _ => null,
     };

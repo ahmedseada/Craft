@@ -39,7 +39,7 @@ public sealed record ShellStartup(CraftOptions Options, CraftSettings Settings, 
 /// <summary>
 /// The app's shell (phase D: the approved design, docs/design/Main.dc.html, on E4's <see cref="ShellModel"/> and K's
 /// contracts): the title bar (the logo, the menus of registered commands, the search box for quick open, the model chip),
-/// the activity rail, the explorer with the semantic layer's card, the tabs, the breadcrumb, the editor (one
+/// the activity rail, the explorer with the semantic layer's card, the editor groups (the X restart: each its tabs and editor, one focused; a document in two groups shares one text and session), the breadcrumb, the editor (one
 /// <see cref="EditorView"/> per tab, only the active one in the page), the bottom panel (Problems, Terminal, Output, Idrak
 /// telemetry), the chat and agent column, and the status bar. Phase U2: the settings, Models and Plug-ins pages are tabs
 /// of the editor area (<see cref="PageTabs"/>), never over the window; there is no right-hand column of panels (a plug-in
@@ -66,11 +66,14 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly QuickOpen _quickOpen;
     private readonly FolderTreeView _tree = new();
     private readonly ExplorerView _explorer;
-    private readonly TabStripView _tabStrip;
     private readonly BreadcrumbView _breadcrumb;
-    private readonly ContentView _editorArea = new();
+    private readonly EditorGroupsView _groupsView;
+    private readonly List<EditorGroupPane> _panes = [];
     private readonly List<EditorView> _views = [];
-    private readonly Label _empty;
+    private readonly string _emptyText;
+    private PeekView? _peek;
+    private EditorGroupPane? _peekPane;
+    private EditorView? _peekSource;
     private readonly FindOverlay _find;
     private readonly QuickOpenOverlay _overlay;
     private readonly UndoBarView _undoBar;
@@ -141,7 +144,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         // The owner's note 19: Ctrl+C that no control took copies the bottom panel's chosen rows, before the key bindings.
         // Phase X: the open menu (a title-bar menu or a context menu) takes its keys first, then the dialogs, then the bindings.
         _menu = new MenuModel(_host);
-        _keys = _menu.Before(new PanelCopyKeys(_dialog.Queue.Before(_host), () => _bottom?.CopyChosen() ?? false));
+        // The X restart: Escape closes an open peek first, from the editor it came from too.
+        _keys = new PeekEscapeKeys(_menu.Before(new PanelCopyKeys(_dialog.Queue.Before(_host), () => _bottom?.CopyChosen() ?? false)), () => ClosePeek());
         // The owner's note 21: the keys' names, the commands, the UI work and the log lines go to the run's trail.
         _host.Trail = startup.Crashes?.Trail;
         CallbackGuard.Options = startup.Options;
@@ -251,23 +255,21 @@ public sealed class ShellPage : ContentPage, IDisposable
         _tree.Indent = _shell.Options.TreeIndent;
         _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
         _tree.DragsFiles = true;                                 // phase X: a file dragged from the tree onto the editor opens
+        // The X restart: a row dragged onto a folder moves there (Ctrl copies), with Undo.
+        _tree.MovesEntries = startup.Options.TreeDragMove;
+        _tree.CopiesOnDrop = startup.Platform.DropCopies;
+        _tree.MoveRequested += (_, e) => _ = MoveEntryAsync(e.Source, e.TargetFolder, e.Copy);
         _explorer = new ExplorerView(_tree, _palette);
         _explorer.SetFolder(null);
         _explorer.Empty.ActionChosen += (_, action) => RunEmptyAction(action);
         _tree.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tree,
             e.Item is { } item ? new ContextMenuTarget(EditorContextMenus.Tree, item.Path, item.IsFolder) : new ContextMenuTarget(EditorContextMenus.Tree), e.Where);
         _sideSplit.Panel = _explorer;
-        _tabStrip = new TabStripView(_shell.Tabs, _shell.Pages);
-        _tabStrip.CloseRequested += (_, tab) => _ = _shell.CloseTabAsync(tab);
-        _tabStrip.ListRequested += (_, _) => _ = PickTabAsync();
-        _tabStrip.Tooltip = (title, command) => ShellTooltips.For(_host, title, command);
-        _tabStrip.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, e.Tab.FilePath, false, e.Tab), e.Where);
-        _tabStrip.NewFileRequested += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.NewFile);
         _breadcrumb = new BreadcrumbView(_palette);
-        _empty = _palette.Label("No file is open.\nCtrl+O opens a file, Ctrl+Shift+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.", _palette.Secondary);
-        _empty.HorizontalTextAlignment = TextAlignment.Center;
-        _empty.LineBreakMode = LineBreakMode.WordWrap;
-        _empty.Margin = new Thickness(24);
+        _emptyText = "No file is open.\nCtrl+O opens a file, Ctrl+Shift+O a folder, Ctrl+P a file of the folder by name, Ctrl+N a new file; Ctrl+Shift+P lists every command.";
+        // The X restart: the editor area's groups, each a pane of its own tabs and editor (the focused one has the find
+        // overlay and the breadcrumb).
+        _groupsView = new EditorGroupsView(_shell.Groups, PaneOf, _palette) { MinimumSize = _shell.Options.PanelMinimumSize, Pointer = startup.Platform.PointerCursor };
 
         // Phase X: find and replace as an overlay in the editor's top-right corner, the undo bar at its bottom.
         _find = new FindOverlay(_palette);
@@ -278,8 +280,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
         _find.Notice += (_, text) => _status!.Notice.Text = text;      // raised after the page is made
         _undoBar = new UndoBarView(_shell.UndoBar, _palette);
-        _editorStack.Add(_editorArea);
-        _editorStack.Add(_find);
+        _editorStack.Add(_groupsView);
         _editorStack.Add(_undoBar);
         _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested, WindowKeys = _keys };
         // The owner's note 26: Ctrl+F in Output searches its text; its right-click opens the read-only text's menu.
@@ -292,7 +293,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         // settings when it ends (not on every move).
         Wire(_sideSplit, ShellPanel.Explorer, () => Width - _rail.Width - (_chatSplit.IsShown ? _chatSplit.Width : 0));
         Wire(_chatSplit, ShellPanel.Chat, () => Width - _rail.Width - (_sideSplit.IsShown ? _sideSplit.Width : 0));
-        Wire(_bottomSplit, ShellPanel.Bottom, () => (_center?.Height ?? 0) - _tabStrip.Height - _breadcrumb.Height);
+        Wire(_bottomSplit, ShellPanel.Bottom, () => (_center?.Height ?? 0) - 36 - _breadcrumb.Height);
 
         // Phase T: the terminals in the Terminal tab, on the platform's host (ConPTY on Windows) when it has one.
         if (startup.Platform.TerminalHost is { } terminalHost)
@@ -358,8 +359,6 @@ public sealed class ShellPage : ContentPage, IDisposable
                 new RowDefinition(GridLength.Auto),
             ],
         };
-        _center.Add(_tabStrip, 0, 0);
-        _center.Add(_breadcrumb, 0, 1);
         _center.Add(_editorStack, 0, 3);
         _center.Add(_bottomSplit, 0, 4);
 
@@ -403,20 +402,27 @@ public sealed class ShellPage : ContentPage, IDisposable
         root.GestureRecognizers.Add(drop);
         Content = root;
 
-        _shell.Tabs.TabsChanged += OnTabsChanged;
-        _shell.Tabs.ActiveChanged += (_, _) =>
+        _shell.Groups.TabsChanged += (_, _) => OnTabsChanged();
+        _shell.Groups.ActiveChanged += (_, group) =>
         {
             ShowActive();
-            if (_shell.Tabs.Active?.FilePath is { } opened)
+            if (ReferenceEquals(group, _shell.Groups.Focused) && _shell.Tabs.Active?.FilePath is { } opened)
             {
                 _quickOpen.NoteFile(opened);                     // every file opened counts as recent in quick open
             }
         };
-        _shell.Tabs.TabChanged += (_, _) =>
+        _shell.Groups.TabChanged += (_, _) =>
         {
             UpdateStatus();
             UpdateTitle();
         };
+        _shell.Groups.FocusChanged += (_, _) =>
+        {
+            ShowActive();
+            _shown?.Focus();                                     // the keyboard follows the focused group (Ctrl+1, Ctrl+2)
+        };
+        _shell.Groups.GroupsChanged += (_, _) => OnGroupsChanged();
+        _groupsView.Resized += (_, _) => _shown?.Focus();
         _shell.WorkspaceChanged += (_, _) => OnWorkspaceChanged();
         _shell.OptionsChanged += (_, _) => OnOptionsChanged();
         // A plug-in's setting changes no option: the model chip and the model item read the AI plug-in's settings again.
@@ -772,7 +778,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             try
             {
-                _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Tabs.HasUnsaved, () => _shell.ConfirmCloseAllAsync()));
+                _platformHooks.Add(_startup.Platform.GuardClose(_window, () => _shell.Groups.HasUnsaved, () => _shell.ConfirmCloseAllAsync()));
                 _closeGuarded = true;
             }
             catch (InvalidOperationException error)
@@ -974,9 +980,9 @@ public sealed class ShellPage : ContentPage, IDisposable
     // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
     private void OnCodeActionRequested(ProblemItem item, string kind)
     {
-        if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Tabs.Tabs.Contains(owner))
+        if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Groups.GroupOf(owner) is { } ownerGroup)
         {
-            _shell.Tabs.Activate(owner);                    // a row of another file: its file first
+            ownerGroup.Tabs.Activate(owner);                // a row of another file: its file first (its group focused)
         }
 
         if (_shell.Tabs.Active is not { } active || _shown?.Model is not { } model)
@@ -1019,13 +1025,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
-    private async Task PickTabAsync()
+    private async Task PickTabAsync(EditorGroup group)
     {
-        var tabs = _shell.Tabs.Tabs.ToArray();
+        var tabs = group.Tabs.Tabs.ToArray();
         int picked = await _dialog.PickAsync("Tabs", [.. tabs.Select(TabStripView.TitleOf)]);
-        if (picked >= 0 && picked < tabs.Length)
+        if (picked >= 0 && picked < tabs.Length && group.Tabs.Contains(tabs[picked]))
         {
-            _shell.Tabs.Activate(tabs[picked]);
+            group.Tabs.Activate(tabs[picked]);
         }
     }
 
@@ -1109,7 +1115,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         string Tip(string title, string command) => ShellTooltips.For(_host, title, command);
         _titleWide.SetTooltips(Tip);
         _titleNarrow.SetTooltips(Tip);
-        _tabStrip.Refresh();
+        foreach (var pane in _panes)
+        {
+            pane.Strip.Refresh();
+        }
+
         _conversations.SetCloseTooltip(Tip("Close the chat", "craft.chat"));
         _centre.SetTooltips(Tip("Close the notifications", "craft.notifications"), "Dismiss every notification that has ended");
         _bell.Keys = _host.KeysOf("craft.notifications") is { } keys ? $" ({keys})" : "";
@@ -1206,6 +1216,12 @@ public sealed class ShellPage : ContentPage, IDisposable
             if (_conversations.Holds(e))
             {
                 return;     // dropped on the chat column: its panel takes the files (ConversationsView)
+            }
+
+            // A drop a pane or a tree row took (a tab, a move), a folder of the tree or a tab let go elsewhere: nothing opens.
+            if (e.Handled || e.Data.Properties.ContainsKey(FolderTreeView.DragFolderKey) || e.Data.Properties.ContainsKey(TabStripView.DragTabKey))
+            {
+                return;
             }
 
             IReadOnlyList<string> paths = e.Data.Properties.TryGetValue(FolderTreeView.DragPathKey, out var dragged) && dragged is string path
@@ -1363,33 +1379,156 @@ public sealed class ShellPage : ContentPage, IDisposable
         UpdateModel();
     }
 
-    // A tab added gets its editor view; a tab removed has its view disposed.
-    private void OnTabsChanged(object? sender, EventArgs e)
+    // A tab removed has its view disposed (a tab gets its view when its group first shows it); a view moved with its tab to
+    // another group (the split editor) is kept.
+    private void OnTabsChanged()
     {
-        foreach (var tab in _shell.Tabs.Tabs)
+        var owned = new HashSet<EditorView>(ReferenceEqualityComparer.Instance);
+        foreach (var tab in _shell.Groups.AllTabs)
         {
-            tab.View ??= MakeView(tab);
+            if (tab.View is EditorView view)
+            {
+                owned.Add(view);
+            }
         }
 
         foreach (var view in _views.ToArray())
         {
-            if (!_shell.Tabs.Tabs.Any(t => ReferenceEquals(t.View, view)))
+            if (owned.Contains(view))
             {
-                _views.Remove(view);
-                if (ReferenceEquals(_shown, view))
+                continue;
+            }
+
+            _views.Remove(view);
+            if (ReferenceEquals(_peekSource, view))
+            {
+                ClosePeek();
+            }
+
+            foreach (var pane in _panes)
+            {
+                if (ReferenceEquals(pane.Shown, view))
                 {
-                    _shown = null;
-                    if (_shell.Pages.Active is null)
+                    pane.Shown = null;
+                    if (ReferenceEquals(pane.Area.Content, view))
                     {
-                        _editorArea.Content = _empty;
+                        pane.Area.Content = pane.Empty;
                     }
                 }
-
-                view.Dispose();
             }
+
+            if (ReferenceEquals(_shown, view))
+            {
+                _shown = null;
+            }
+
+            view.Dispose();
         }
 
         UpdateTitle();
+    }
+
+    // The tab whose editor is `view` (in any group), or null.
+    private DocumentTab? OwnerOf(EditorView view) => _shell.Groups.AllTabs.FirstOrDefault(t => ReferenceEquals(t.View, view));
+
+    // A group's pane, made the first time the group shows: its strip (the first group's with the page tabs), its editor
+    // area taking drops.
+    private EditorGroupPane PaneOf(EditorGroup group)
+    {
+        if (group.View is EditorGroupPane made)
+        {
+            return made;
+        }
+
+        var strip = new TabStripView(group.Tabs) { Tooltip = (title, command) => ShellTooltips.For(_host, title, command) };
+        strip.CloseRequested += (_, tab) => _ = _shell.CloseTabAsync(tab);
+        strip.ListRequested += (_, _) => _ = PickTabAsync(group);
+        strip.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, e.Tab.FilePath, false, e.Tab), e.Where);
+        strip.NewFileRequested += (_, _) =>
+        {
+            _shell.Groups.Focus(group);
+            _ = _host.ExecuteCommandAsync(ShellCommandIds.NewFile);
+        };
+        strip.ForeignTabDropped += (_, e) => _shell.Groups.MoveTab(e.Dragged, group, group.Tabs.IndexOf(e.Target));
+        var pane = new EditorGroupPane(group, strip, _palette);
+        if (group.Id == 1)
+        {
+            pane.Empty.Text = _emptyText;
+        }
+
+        pane.Engaged += (_, _) => _shell.Groups.Focus(group);
+        pane.TabDropped += (_, e) =>
+        {
+            _shell.Groups.Drop(e.Tab, group, e.Zone);
+            _shown?.Focus();
+        };
+        pane.FileDropped += (_, e) => _ = OpenDroppedFileAsync(group, e.Path, e.Zone);
+        strip.Compact = _shell.Layout.IsNarrow;
+        group.View = pane;
+        _panes.Add(pane);
+        return pane;
+    }
+
+    // A file from the tree dropped on a group's zone: opened in the group, or in a new group beside it.
+    private async Task OpenDroppedFileAsync(EditorGroup group, string path, EditorDropZone zone)
+    {
+        try
+        {
+            var target = zone is EditorDropZone.Right or EditorDropZone.Down
+                ? _shell.Groups.Split(group, zone == EditorDropZone.Right ? SplitDirection.Right : SplitDirection.Down) ?? group
+                : group;
+            await _shell.OpenInGroupAsync(target, path);
+            _shown?.Focus();
+        }
+#pragma warning disable CA1031 // A drop's work: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the editor: a file dropped on a group", error);
+        }
+    }
+
+    // Groups added or closed: the closed ones' panes go, the first group's strip holds the page tabs, the layout is laid
+    // out again (the panes and their editors are kept).
+    private void OnGroupsChanged()
+    {
+        var open = _shell.Groups.Groups;
+        foreach (var pane in _panes.ToArray())
+        {
+            if (!open.Contains(pane.Group))
+            {
+                if (ReferenceEquals(_peekPane, pane))
+                {
+                    ClosePeek();
+                }
+
+                _panes.Remove(pane);
+                pane.Strip.Dispose();
+                pane.Group.View = null;
+            }
+        }
+
+        for (int i = 0; i < open.Count; i++)
+        {
+            PaneOf(open[i]).Strip.Pages = i == 0 ? _shell.Pages : null;
+        }
+
+        _groupsView.Rebuild();
+        ShowActive();
+    }
+
+    private async Task MoveEntryAsync(string source, string targetFolder, bool copy)
+    {
+        try
+        {
+            await _shell.MoveEntryAsync(source, targetFolder, copy);
+        }
+#pragma warning disable CA1031 // A drop's work: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the explorer: a move by drag", error);
+        }
     }
 
     private EditorView MakeView(DocumentTab tab)
@@ -1403,11 +1542,25 @@ public sealed class ShellPage : ContentPage, IDisposable
             Activities = _host.Activities,
             WorkspaceRoot = _shell.Workspace?.Root,
         };
+        view.Sessions = _shell.Sessions;                    // one language session per document, shared by its views
         view.Open(tab.Document, tab.Language);
+        view.Engaged += (_, _) =>
+        {
+            if (OwnerOf(view) is { } owner && _shell.Groups.GroupOf(owner) is { } group)
+            {
+                _shell.Groups.Focus(group);
+            }
+
+            if (_peek is not null)
+            {
+                FocusPeek(ReferenceEquals(view, _peek.Editor));
+            }
+        };
+        view.PeekRequested += OnPeekRequested;
         view.DiagnosticsChanged += (_, _) =>
         {
             // Phase A1: the plug-ins read a document's diagnostics, and the diff view checks a change, through the host.
-            if (view.Model is { } shownModel && _shell.Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } owner)
+            if (view.Model is { } shownModel && OwnerOf(view) is { } owner)
             {
                 _host.SetDiagnostics(owner.HostDocument, shownModel.Diagnostics);
                 _host.SetSemanticSession(owner.HostDocument, shownModel.SemanticSession);
@@ -1418,7 +1571,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         view.DefinitionRequested += OnDefinitionRequested;
         view.ContextRequested += (_, e) =>
         {
-            if (_shell.Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } owner)
+            if (OwnerOf(view) is { } owner)
             {
                 OpenContextMenu(EditorContextMenus.Editor, new ContextMenuTarget(EditorContextMenus.Editor, owner.FilePath, false, owner), e);
             }
@@ -1427,7 +1580,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         view.FindRequested += (_, e) => ShowFind(e.Replace, e.InitialQuery);   // the document's own find (not Output's)
         view.CaretMoved += (_, _) =>
         {
-            if (view.Model is { } model && _shell.Tabs.Tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } owner)
+            // A document in two groups: the focused view's selection is the host's.
+            if (view.Model is { } model && OwnerOf(view) is { } owner && (ReferenceEquals(view, _shown) || !_shell.Groups.IsShared(owner)))
             {
                 _host.UpdateSelection(owner.HostDocument, model.Selection);
             }
@@ -1451,45 +1605,234 @@ public sealed class ShellPage : ContentPage, IDisposable
         return view;
     }
 
-    // The editor area: the page tab shown (settings, Models, Plug-ins), else the active document's editor, else the hint.
+    // The editor area: each group's pane shows its active document's editor (the first group a page tab when one shows),
+    // else its hint; the focused group's pane has the find overlay and the breadcrumb, and only its editor's caret blinks.
     private void ShowActive()
     {
+        var groups = _shell.Groups;
+        var focused = groups.Focused;
         var page = _shell.Pages.Active;
-        var tab = _shell.Tabs.Active;
-        if (tab is not null && page is null)
+        EditorView? shown = null;
+        bool focusedChanged = false;
+        for (int i = 0; i < groups.Groups.Count; i++)
         {
-            tab.View ??= MakeView(tab);
-        }
-
-        var view = page is null ? tab?.View as EditorView : null;
-        var content = page is not null ? PageViewOf(page) : (View?)view ?? _empty;
-        _breadcrumb.IsVisible = !_shell.Layout.IsNarrow && page is null;
-        if (!ReferenceEquals(view, _shown) || !ReferenceEquals(_editorArea.Content, content))
-        {
-            _shown = view;
-            _editorArea.Content = content;
-            _find.Model = view?.Model;                           // the find overlay follows the shown editor
-            if (view?.Model is { } model)
+            var group = groups.Groups[i];
+            var pane = PaneOf(group);
+            var groupPage = i == 0 ? page : null;
+            var tab = group.Tabs.Active;
+            if (tab is not null && groupPage is null)
             {
-                model.EnsureCaretVisible();
-                view.Focus();
+                tab.View ??= MakeView(tab);
+            }
+
+            var view = groupPage is null ? tab?.View as EditorView : null;
+            var content = groupPage is not null ? PageViewOf(groupPage) : (View?)view ?? pane.Empty;
+            bool isFocused = ReferenceEquals(group, focused);
+            if (!ReferenceEquals(view, pane.Shown) || !ReferenceEquals(pane.Area.Content, content))
+            {
+                if (ReferenceEquals(_peekPane, pane))
+                {
+                    ClosePeek();                                 // the peek belongs to the editor it came from
+                }
+
+                pane.Shown = view;
+                pane.Area.Content = content;
+                focusedChanged |= isFocused;
+            }
+
+            pane.Strip.FocusedGroup = isFocused || groups.Groups.Count == 1;
+            if (view is not null)
+            {
+                view.IsFocusedView = isFocused && (_peek is null || !ReferenceEquals(_peekSource, view) || !_peek.Editor.IsFocusedView);
+            }
+
+            if (isFocused)
+            {
+                shown = view;
+                MoveInto(_breadcrumb, pane.BreadcrumbSlot);
+                if (!ReferenceEquals(_find.Parent, pane.Stack))
+                {
+                    (_find.Parent as Layout)?.Remove(_find);
+                    pane.Stack.Add(_find);
+                }
             }
         }
 
-        _tree.ActivePath = tab?.FilePath;
+        _breadcrumb.IsVisible = !_shell.Layout.IsNarrow && !(ReferenceEquals(focused, groups.Groups[0]) && page is not null);
+        if (!ReferenceEquals(shown, _shown) || focusedChanged)
+        {
+            _shown = shown;
+            _find.Model = shown?.Model;                          // the find overlay follows the focused group's editor
+            if (shown?.Model is { } model)
+            {
+                model.EnsureCaretVisible();
+                shown.Focus();
+            }
+        }
+
+        _tree.ActivePath = _shell.Tabs.Active?.FilePath;
         UpdateStatus();
         UpdateTitle();
         UpdateProblems();
+    }
+
+    private static void MoveInto(View view, ContentView slot)
+    {
+        if (ReferenceEquals(slot.Content, view))
+        {
+            return;
+        }
+
+        if (view.Parent is ContentView holder)
+        {
+            holder.Content = null;
+        }
+
+        slot.Content = view;
+    }
+
+    // Alt+F12 from an editor: the peek, resolved off the UI thread, shown under the caret's line of that editor.
+    private async void OnPeekRequested(object? sender, DefinitionRequestedEventArgs e)
+    {
+        try
+        {
+            if (sender is not EditorView source || source.Model is not { } model)
+            {
+                return;
+            }
+
+            var peek = await _shell.PeekAsync(model, e.Location);
+            if (peek is null)
+            {
+                return;
+            }
+
+            if (_disposed || source.Model is null || _panes.FirstOrDefault(p => ReferenceEquals(p.Shown, source)) is not { } pane)
+            {
+                peek.Dispose();                                  // the editor went meanwhile
+                return;
+            }
+
+            ShowPeek(pane, source, peek);
+        }
+#pragma warning disable CA1031 // An async void handler: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the editor: peek definition", error);
+        }
+    }
+
+    private void ShowPeek(EditorGroupPane pane, EditorView source, PeekSession peek)
+    {
+        ClosePeek();
+        var view = new PeekView(peek, _palette, editor =>
+        {
+            editor.Options = _shell.Options;
+            editor.Theme = _shell.Theme;
+            editor.KeyHandler = new PeekKeys(() => _peek, _keys);
+            editor.Labels = _host.Labels;
+            editor.Activities = _host.Activities;
+        }, _shell.Options.PeekLines);
+        view.Editor.Engaged += (_, _) => FocusPeek(true);
+        view.OpenRequested += (_, _) => _ = OpenPeekAsync();
+        view.CloseRequested += (_, _) => ClosePeek();
+        // Under the caret's line, kept inside the editor area.
+        var model = source.Model!;
+        double line = model.Metrics.LineHeight;
+        double below = ((model.RowOfLine(model.CaretLine) + 1) * line) - model.ScrollY;
+        double room = Math.Max(0, pane.Stack.Height - view.OverlayHeight - 8);
+        view.Margin = new Thickness(8, Math.Clamp(below, 0, room), 8, 0);
+        _peek = view;
+        _peekPane = pane;
+        _peekSource = source;
+        pane.Stack.Add(view);
+        FocusPeek(true);
+        view.Editor.Focus();
+        _ = ShellMotion.ShowAsync(view, -6);
+    }
+
+    // The peek's editor or the one it came from has the keyboard: only that one blinks.
+    private void FocusPeek(bool peekHasFocus)
+    {
+        if (_peek is null)
+        {
+            return;
+        }
+
+        _peek.Editor.IsFocusedView = peekHasFocus;
+        if (_peekSource is { } source)
+        {
+            source.IsFocusedView = !peekHasFocus && ReferenceEquals(source, _shown);
+        }
+    }
+
+    private async Task OpenPeekAsync()
+    {
+        if (_peek is not { } view)
+        {
+            return;
+        }
+
+        var peek = view.Peek;
+        ClosePeek();
+        try
+        {
+            await _shell.OpenPeekAsync(peek);
+            ShowActive();
+            _shown?.Focus();
+        }
+#pragma warning disable CA1031 // A peek's open: nothing may leave it.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the editor: open the peeked definition", error);
+        }
+    }
+
+    // Closes the peek (Escape, ×, its editor gone); false when none was open.
+    private bool ClosePeek()
+    {
+        if (_peek is not { } view)
+        {
+            return false;
+        }
+
+        _peek = null;
+        var source = _peekSource;
+        (view.Parent as Layout)?.Remove(view);
+        _peekPane = null;
+        _peekSource = null;
+        view.Dispose();
+        if (source is not null)
+        {
+            source.IsFocusedView = ReferenceEquals(source, _shown);
+            if (ReferenceEquals(source, _shown))
+            {
+                source.Focus();
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Escape with a peek open closes it, wherever the key arrived; every other key goes on.</summary>
+    private sealed class PeekEscapeKeys(IEditorKeyHandler inner, Func<bool> closePeek) : IEditorKeyHandler
+    {
+        public bool HandleKey(EditorKey key, KeyModifiers modifiers, IEditorInputSink? editor) =>
+            (key == EditorKey.Escape && modifiers == KeyModifiers.None && closePeek()) || inner.HandleKey(key, modifiers, editor);
     }
 
     private void UpdateProblems()
     {
         var model = _shown?.Model;
         // The owner's note 26: every open document's problems, grouped by file in the tabs' order.
+        // A document in two groups is listed once (its first shown view's diagnostics).
         var sources = new List<ProblemSource>();
-        foreach (var tab in _shell.Tabs.Tabs)
+        var listed = new HashSet<ITextDocument>(ReferenceEqualityComparer.Instance);
+        foreach (var tab in _shell.Groups.AllTabs)
         {
-            if (tab.View is EditorView { Model: { } open } && open.SemanticSession is not null)
+            if (tab.View is EditorView { Model: { } open } && open.SemanticSession is not null && listed.Add(tab.Document))
             {
                 sources.Add(new ProblemSource(tab.FilePath ?? tab.Title, tab.Title, open.Snapshot, open.Diagnostics.ToArray(), tab));
             }
@@ -1508,9 +1851,9 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private void OnProblemChosen(ProblemItem item)
     {
-        if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Tabs.Tabs.Contains(owner))
+        if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Groups.GroupOf(owner) is { } ownerGroup)
         {
-            _shell.Tabs.Activate(owner);                    // a problem of another open file: its tab first
+            ownerGroup.Tabs.Activate(owner);                // a problem of another open file: its tab first (its group focused)
         }
 
         if (_shown is { Model: { } model } view)
@@ -1554,7 +1897,8 @@ public sealed class ShellPage : ContentPage, IDisposable
     // A plug-in moved a document's selection or typed into it (phase V: "go to line 40", dictation): its editor shows it.
     private void OnSelectionRequested(object? sender, EditorSelectionRequestEventArgs e)
     {
-        foreach (var tab in _shell.Tabs.Tabs)
+        // The focused group's view of the document first, then any other group's.
+        foreach (var tab in _shell.Tabs.Tabs.Concat(_shell.Groups.AllTabs))
         {
             if (ReferenceEquals(tab.HostDocument, e.Document) && tab.View is EditorView { Model: { } model })
             {
@@ -1592,7 +1936,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             return;
         }
 
-        foreach (var tab in _shell.Tabs.Tabs)
+        _groupsView.MinimumSize = options.PanelMinimumSize;
+        _tree.MovesEntries = options.TreeDragMove;
+        foreach (var tab in _shell.Groups.AllTabs)
         {
             if (tab.View is EditorView view && !ReferenceEquals(view.Options, options) && !Equals(view.Options, options))
             {
@@ -1686,10 +2032,20 @@ public sealed class ShellPage : ContentPage, IDisposable
         _chatSplit.SetVisible(_conversations.HasPanels && (narrow ? _chatSheetOpen : panels.IsOpen(ShellPanel.Chat)), narrow ? 0 : ShellMotion.Milliseconds);
         _bottomSplit.Size = panels.SizeOf(ShellPanel.Bottom);
         _bottomSplit.SetVisible(panels.IsOpen(ShellPanel.Bottom) && !narrow, narrow ? 0 : ShellMotion.Milliseconds);
-        _breadcrumb.IsVisible = !narrow && _shell.Pages.Active is null;
+        _breadcrumb.IsVisible = !narrow && !(ReferenceEquals(_shell.Groups.Focused, _shell.Groups.Groups[0]) && _shell.Pages.Active is not null);
         _body.ColumnDefinitions[2].Width = narrow && layout.TreeVisible ? GridLength.Star : GridLength.Auto;
         _body.ColumnDefinitions[3].Width = layout.EditorVisible ? GridLength.Star : new GridLength(0);
-        _tabStrip.Compact = narrow;
+        foreach (var pane in _panes)
+        {
+            pane.Strip.Compact = narrow;
+        }
+
+        if (_groupsView.Narrow != narrow || _groupsView.Content is null)
+        {
+            _groupsView.Narrow = narrow;
+            _groupsView.Rebuild();
+        }
+
         _status.SetNarrow(narrow);
         if (_popup.IsOpen)
         {
@@ -1728,7 +2084,18 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _rail.Apply(p);
         _explorer.Apply(p);
-        _tabStrip.Apply(p);
+        foreach (var pane in _panes)
+        {
+            pane.Apply(p);
+        }
+
+        if (_peek is not null)
+        {
+            _peek.Apply(p);
+            _peek.Editor.Theme = theme;
+        }
+
+        _groupsView.Apply(p);
         _breadcrumb.Apply(p);
         _bottom.Apply(p);
         _terminalPanel.Apply(p);
@@ -1739,7 +2106,6 @@ public sealed class ShellPage : ContentPage, IDisposable
         _centre.Apply(p);
         _toast.Apply(p);
         _center.BackgroundColor = p.Surface;
-        _editorArea.BackgroundColor = p.Surface;
         // Phase X: every control's states take the new theme's tokens (one walk, at a theme change only).
         foreach (var element in ((IVisualTreeElement)this).GetVisualTreeDescendants())
         {
@@ -1748,7 +2114,6 @@ public sealed class ShellPage : ContentPage, IDisposable
                 states.Apply(p);
             }
         }
-        _empty.TextColor = p.Secondary;
         foreach (var line in (ReadOnlySpan<BoxView>)[_railLine, _statusLine, _titleLine])
         {
             line.Color = p.Border;

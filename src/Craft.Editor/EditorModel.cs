@@ -20,6 +20,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private readonly ITextDocument _document;
     private readonly ILanguage? _language;
     private readonly ILanguageSession? _session;
+    private readonly bool _ownsSession;
     private readonly ITextMeasurer _measurer;
     private readonly IEditorClipboard _clipboard;
     private readonly TimeProvider _time;
@@ -55,6 +56,33 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <param name="activities">Where its language shows long work (a workspace build), or null for nowhere.</param>
     public EditorModel(ITextDocument document, ILanguage? language, CraftOptions? options, ITheme? theme, ITextMeasurer measurer,
         IEditorClipboard clipboard, TimeProvider? time = null, string? workspaceRoot = null, IEditorActivities? activities = null)
+        : this(document, language, options, theme, measurer, clipboard, time, workspaceRoot, activities, shared: false, session: null)
+    {
+    }
+
+    /// <summary>
+    /// An editor over <paramref name="document"/> that uses <paramref name="session"/>, a language session it does not own
+    /// (the X restart's split editor: two views of one document share one session, counted by
+    /// <see cref="LanguageSessionPool"/>; a peek's syntactic session): disposing the editor leaves it open.
+    /// </summary>
+    /// <param name="document">The document it edits (the caller keeps owning it).</param>
+    /// <param name="session">The session over the document's buffer, or null for none (plain text).</param>
+    /// <param name="language">The session's language, or null for plain text.</param>
+    /// <param name="options">The settings (the defaults when null).</param>
+    /// <param name="theme">The colours (the options' theme when null).</param>
+    /// <param name="measurer">Measures the options' font on the platform.</param>
+    /// <param name="clipboard">The clipboard for copy, cut and paste.</param>
+    /// <param name="time">The clock (the system's when null).</param>
+    /// <param name="workspaceRoot">The open folder the document belongs to, or null.</param>
+    /// <param name="activities">Where long work shows, or null for nowhere.</param>
+    public EditorModel(ITextDocument document, ILanguageSession? session, ILanguage? language, CraftOptions? options, ITheme? theme, ITextMeasurer measurer,
+        IEditorClipboard clipboard, TimeProvider? time = null, string? workspaceRoot = null, IEditorActivities? activities = null)
+        : this(document, language, options, theme, measurer, clipboard, time, workspaceRoot, activities, shared: true, session)
+    {
+    }
+
+    private EditorModel(ITextDocument document, ILanguage? language, CraftOptions? options, ITheme? theme, ITextMeasurer measurer,
+        IEditorClipboard clipboard, TimeProvider? time, string? workspaceRoot, IEditorActivities? activities, bool shared, ILanguageSession? session)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(measurer);
@@ -73,7 +101,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         WorkspaceRoot = workspaceRoot;
         InlineCompletion = new InlineCompletionController(this);
         _activities = activities ?? NoActivities.Instance;
-        _session = language?.Open(document.Buffer, new LanguageOpenContext(document.FilePath, workspaceRoot, Options.ToLanguageSettings()) { Activities = _activities });
+        _ownsSession = !shared;
+        _session = shared ? session : language?.Open(document.Buffer, OpenContext(document, workspaceRoot, Options, _activities));
         if (_session is not null)
         {
             _session.Reclassified += OnSessionReclassified;
@@ -90,6 +119,18 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         document.Buffer.Changed += OnBufferChanged;
     }
 
+    /// <summary>
+    /// What a language session of <paramref name="document"/> is opened with by an editor with these settings: its file,
+    /// the workspace, the options' language settings, where long work shows. Two views asking with equal arguments share
+    /// one session (<see cref="LanguageSessionPool"/>).
+    /// </summary>
+    public static LanguageOpenContext OpenContext(ITextDocument document, string? workspaceRoot, CraftOptions options, IEditorActivities? activities)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(options);
+        return new LanguageOpenContext(document.FilePath, workspaceRoot, options.ToLanguageSettings()) { Activities = activities ?? NoActivities.Instance };
+    }
+
     /// <summary>The document it edits.</summary>
     public ITextDocument Document => _document;
 
@@ -99,8 +140,11 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>Its language, or null for plain text.</summary>
     public ILanguage? Language => _language;
 
-    /// <summary>The language session over the document's buffer (null for plain text); disposed with the editor.</summary>
+    /// <summary>The language session over the document's buffer (null for plain text); disposed with the editor unless it was given (<see cref="OwnsLanguageSession"/>).</summary>
     public ILanguageSession? LanguageSession => _session;
+
+    /// <summary>Whether the editor opened its language session itself and disposes it (false for a shared one).</summary>
+    public bool OwnsLanguageSession => _ownsSession;
 
     /// <summary>The language's comment and bracket rules (<see cref="LanguageRules.Plain"/> for plain text).</summary>
     public LanguageRules Rules => _language?.Rules ?? LanguageRules.Plain;
@@ -550,7 +594,10 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         if (_session is not null)
         {
             _session.Reclassified -= OnSessionReclassified;
-            _session.Dispose();
+            if (_ownsSession)
+            {
+                _session.Dispose();
+            }
         }
 
         _bracketSpans.Dispose();

@@ -527,6 +527,7 @@ Craft.Abstractions.EditorKey
 Craft.Abstractions.EditorKey  A = 16
 Craft.Abstractions.EditorKey  B = 25
 Craft.Abstractions.EditorKey  Backquote = 65
+Craft.Abstractions.EditorKey  Backslash = 72
 Craft.Abstractions.EditorKey  Backspace = 9
 Craft.Abstractions.EditorKey  BracketLeft = 70
 Craft.Abstractions.EditorKey  BracketRight = 71

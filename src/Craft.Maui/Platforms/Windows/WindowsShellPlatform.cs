@@ -79,6 +79,10 @@ public sealed class WindowsShellPlatform : IShellPlatform
     }
 
     /// <inheritdoc />
+    public bool DropCopies(Microsoft.Maui.Controls.DropEventArgs drop) =>
+        drop?.PlatformArgs?.DragEventArgs is { } args && (args.Modifiers & global::Windows.ApplicationModel.DataTransfer.DragDrop.DragDropModifiers.Control) != 0;
+
+    /// <inheritdoc />
     public IDisposable RouteKeys(MauiWindow window, IEditorKeyHandler handler)
     {
         ArgumentNullException.ThrowIfNull(window);

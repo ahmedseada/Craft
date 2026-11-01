@@ -36,9 +36,10 @@ public sealed partial class ShellModel
         Command(ShellCommandIds.OpenInTerminal, "Terminal: Open in this folder", (_, _) => OpenInTerminal(TargetFolder()), _ => Host.Terminals is not null && TargetFolder() is not null, null);
         Command(ShellCommandIds.CopyPath, "File: Copy path", (_, _) => CopyAsync(TargetEntry().Path), _ => _clipboard is not null && TargetEntry().Path is not null, "Shift+Alt+C");
         Command(ShellCommandIds.CopyRelativePath, "File: Copy relative path", (_, _) => CopyAsync(RelativeOf(TargetEntry().Path)), _ => _clipboard is not null && RelativeOf(TargetEntry().Path) is not null, null);
-        Command(ShellCommandIds.CloseOtherTabs, "Tab: Close others", (_, token) => CloseOthersAsync(TargetTab(), false, token), _ => TargetTab() is not null && Tabs.Tabs.Count > 1, null);
+        Command(ShellCommandIds.CloseOtherTabs, "Tab: Close others", (_, token) => CloseOthersAsync(TargetTab(), false, token),
+            _ => TargetTab() is { } tab && Groups.GroupOf(tab)?.Tabs.Tabs.Count > 1, null);
         Command(ShellCommandIds.CloseTabsToTheRight, "Tab: Close to the right", (_, token) => CloseOthersAsync(TargetTab(), true, token),
-            _ => TargetTab() is { } tab && IndexOfTab(tab) is var at && at >= 0 && at < Tabs.Tabs.Count - 1, null);
+            _ => TargetTab() is { } tab && Groups.GroupOf(tab) is { } group && group.Tabs.IndexOf(tab) is var at && at >= 0 && at < group.Tabs.Tabs.Count - 1, null);
         Command(ShellCommandIds.RevealInTree, "File: Reveal in the explorer", (_, _) => RevealInTree(TargetEntry().Path), _ => Tree is not null && TargetEntry().Path is { } path && Tree.Workspace.Contains(Path.GetFullPath(path)), null);
         Command(ShellCommandIds.FindReferences, "Go: Find references", (_, token) => FindReferencesAsync(token), _ => Tabs.Active is { } tab && EditorOf?.Invoke(tab)?.SemanticSession is not null, "Shift+F12");
 
@@ -81,22 +82,8 @@ public sealed partial class ShellModel
         return Workspace?.Root;
     }
 
-    // The tab the menu was opened on, else the active one.
-    private DocumentTab? TargetTab() => EditorContextMenus.Target is { Item: DocumentTab tab } && Tabs.Tabs.Contains(tab) ? tab : Tabs.Active;
-
-    private int IndexOfTab(DocumentTab tab)
-    {
-        var tabs = Tabs.Tabs;
-        for (int i = 0; i < tabs.Count; i++)
-        {
-            if (ReferenceEquals(tabs[i], tab))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
+    // The tab the menu was opened on (in any group), else the focused group's active one.
+    private DocumentTab? TargetTab() => EditorContextMenus.Target is { Item: DocumentTab tab } && Groups.GroupOf(tab) is not null ? tab : Tabs.Active;
 
     // Whether a file or folder of the workspace (not its root) may be renamed or deleted.
     private bool CanChange(string? path) =>
@@ -196,7 +183,7 @@ public sealed partial class ShellModel
     {
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         var tabs = new List<DocumentTab>();
-        foreach (var tab in Tabs.Tabs)
+        foreach (var tab in Groups.AllTabs)
         {
             if (tab.FilePath is { } file && (PathKeys.Comparer.Equals(file, full)
                 || (isFolder && file.Length > full.Length + 1 && file.StartsWith(full, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
@@ -277,28 +264,9 @@ public sealed partial class ShellModel
             return;
         }
 
-        // The renamed file's (or folder's) clean tabs open again under the new name, the active one staying active.
-        var active = Tabs.Active;
-        DocumentTab? reopenedActive = null;
-        foreach (var tab in open)
-        {
-            string moved = target + tab.FilePath![path.Length..];
-            bool wasActive = ReferenceEquals(tab, active);
-            if (await CloseTabAsync(tab, cancellationToken) && await OpenFileAsync(moved, cancellationToken: cancellationToken) is { } reopened && wasActive)
-            {
-                reopenedActive = reopened;
-            }
-        }
-
-        if (reopenedActive is not null)
-        {
-            Tabs.Activate(reopenedActive);
-        }
-        else if (active is not null && Tabs.Tabs.Contains(active))
-        {
-            Tabs.Activate(active);
-        }
-
+        // The renamed file's (or folder's) clean tabs open again under the new name, in their groups and places, the
+        // active ones staying active.
+        await FollowMovedAsync(open, path, target, cancellationToken);
         _treeWatch?.Touch(path);
         _treeWatch?.Touch(target);
         Tree?.Reveal(target);
@@ -427,8 +395,13 @@ public sealed partial class ShellModel
             return;
         }
 
-        int at = IndexOfTab(keep);
-        var closing = Tabs.Tabs.Where((tab, index) => !ReferenceEquals(tab, keep) && (!toTheRight || index > at)).ToArray();
+        if (Groups.GroupOf(keep) is not { } group)
+        {
+            return;
+        }
+
+        int at = group.Tabs.IndexOf(keep);
+        var closing = group.Tabs.Tabs.Where((tab, index) => !ReferenceEquals(tab, keep) && (!toTheRight || index > at)).ToArray();
         foreach (var tab in closing)
         {
             if (!await CloseTabAsync(tab, cancellationToken))
@@ -437,9 +410,70 @@ public sealed partial class ShellModel
             }
         }
 
-        if (Tabs.Tabs.Contains(keep))
+        if (group.Tabs.Contains(keep))
         {
-            Tabs.Activate(keep);
+            group.Tabs.Activate(keep);
+        }
+    }
+
+    /// <summary>
+    /// The clean tabs of a moved or renamed file or folder (<paramref name="open"/>, under <paramref name="from"/>) open
+    /// again under <paramref name="to"/>, each in its group at its place, the active ones active again; the focus stays.
+    /// </summary>
+    private async Task FollowMovedAsync(List<DocumentTab> open, string from, string to, CancellationToken cancellationToken)
+    {
+        if (open.Count == 0)
+        {
+            return;
+        }
+
+        var focused = Groups.Focused;
+        var places = new List<(EditorGroup Group, string Path, int Index, bool Active)>(open.Count);
+        foreach (var tab in open)
+        {
+            if (Groups.GroupOf(tab) is { } group && tab.FilePath is { } file)
+            {
+                places.Add((group, to + file[from.Length..], group.Tabs.IndexOf(tab), ReferenceEquals(group.Tabs.Active, tab)));
+            }
+        }
+
+        // A group whose every tab follows stays open meanwhile (it gets them back).
+        bool closeEmpty = Groups.CloseEmpty;
+        Groups.CloseEmpty = false;
+        try
+        {
+            foreach (var tab in open)
+            {
+                Groups.Remove(tab);
+            }
+
+            foreach (var (group, moved, index, active) in places)
+            {
+                if (!Groups.Groups.Contains(group) || await OpenInGroupAsync(group, moved, activate: false, cancellationToken) is not { } reopened)
+                {
+                    continue;
+                }
+
+                group.Tabs.Move(reopened, index);
+                if (active)
+                {
+                    group.Tabs.Select(reopened);
+                }
+            }
+        }
+        finally
+        {
+            Groups.CloseEmpty = closeEmpty;
+            foreach (var group in Groups.Groups.ToArray())
+            {
+                Groups.CloseIfEmpty(group);
+            }
+        }
+
+        if (Groups.Groups.Contains(focused))
+        {
+            Groups.Focus(focused);
+            focused.Tabs.TookFocus();
         }
     }
 

@@ -27,7 +27,10 @@ public static class PaintTests
     // The fixed C# file: a source file of this repository, classified by the C# plug-in's language (its parse waited for).
     private static (EditorModel Model, TextDocument Document) CSharpEditor(CraftOptions? options = null)
     {
-        string text = File.ReadAllText(TestRunner.RepositoryPath("src", "Craft.Editor", "EditorModel.cs")).ReplaceLineEndings("\n");
+        // A fixed copy of EditorModel.cs as B1 measured it (2026-11-01): the paint's numbers and its 0 B a frame are about the
+        // renderer, so the text on screen must not move when the source file is edited (the X restart's constructor put more
+        // documentation comments on screen, whose structured trivia Roslyn keeps only weakly and rebuilds after a collection).
+        string text = File.ReadAllText(TestRunner.RepositoryPath("tests", "Craft.Tests", "Editor", "Samples", "EditorModel.cs.txt")).ReplaceLineEndings("\n");
         options = (options ?? new CraftOptions()) with { NewLine = "\n", ParseWaitMilliseconds = 10_000, FoldingDelayMilliseconds = 60_000 };
         var document = TextDocument.Create(text, options);
         var model = new EditorModel(document, new CSharpLanguage(), options, EditorThemes.Get(EditorThemes.Dark), new FixedMeasurer(), new FakeClipboard());

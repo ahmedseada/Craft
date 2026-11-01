@@ -6,7 +6,11 @@ using Craft.Core.Workspaces;
 
 namespace Craft.Editor.Shell;
 
-/// <summary>An open document in a tab: its text document (the tabs own it), the host's view of it, its title.</summary>
+/// <summary>
+/// An open document in a tab: its text document (the tabs own it; with the split editor, a document shown in two groups is
+/// one text document and one host document in two tabs, closed and disposed with the last of them), the host's view of
+/// it, its title.
+/// </summary>
 public sealed class DocumentTab
 {
     internal DocumentTab(ITextDocument document, IEditorDocument hostDocument, ILanguage? language, int untitledNumber)
@@ -63,13 +67,28 @@ public sealed class DocumentTab
 /// tab removed closes it in the host and disposes its document. A file opens in one tab only (<see cref="Find"/>).
 /// <see cref="TabChanged"/> is raised when a tab's title or dirty marker changes (not on every edit), so the view redraws
 /// a tab only then. Asking about unsaved changes is the shell's (<see cref="ShellModel.CloseTabAsync"/>); <see cref="Remove"/>
-/// closes at once. Used on the UI thread.
+/// closes at once. With the split editor each group has its own tabs (<see cref="EditorGroups"/>): only the focused
+/// group's active tab is the host's active document, a tab may share its document with another group's tab (the
+/// document is closed in the host and disposed with the last of them), and the untitled numbers are counted across the
+/// groups. Used on the UI thread.
 /// </summary>
 public sealed class DocumentTabs : IDisposable
 {
     private readonly EditorHost _host;
     private readonly List<DocumentTab> _tabs = [];
     private int _nextUntitled = 1;
+
+    // Set by EditorGroups: whether another group's tab holds a tab's document, whether these are the focused group's tabs,
+    // the group's own focus (a tab activated by the user), and the untitled counter the groups share.
+    internal Func<DocumentTab, bool>? SharedElsewhere { get; set; }
+
+    internal Func<bool>? IsFocused { get; set; }
+
+    internal Action<DocumentTabs>? FocusRequested { get; set; }
+
+    internal Func<int>? NextUntitled { get; set; }
+
+    private bool Focused => IsFocused?.Invoke() ?? true;
 
     /// <summary>The tabs of <paramref name="host"/>.</summary>
     public DocumentTabs(EditorHost host)
@@ -136,7 +155,7 @@ public sealed class DocumentTabs : IDisposable
     {
         ArgumentNullException.ThrowIfNull(document);
         var hostDocument = _host.Open(document, language, languageName);
-        var tab = new DocumentTab(document, hostDocument, language, document.FilePath is null ? _nextUntitled++ : 0) { SuggestedPath = suggestedPath };
+        var tab = new DocumentTab(document, hostDocument, language, document.FilePath is null ? TakeUntitled() : 0) { SuggestedPath = suggestedPath };
         tab.StateHandler = (_, _) => OnStateChanged(tab);
         document.StateChanged += tab.StateHandler;
         _tabs.Add(tab);
@@ -144,14 +163,28 @@ public sealed class DocumentTabs : IDisposable
         TabsChanged?.Invoke(this, EventArgs.Empty);
         if (activate || Active is null)
         {
-            Activate(tab);
+            ActivateCore(tab, focus: activate);     // the first tab of a group not focused leaves the focus where it is
         }
 
         return tab;
     }
 
-    /// <summary>Makes <paramref name="tab"/> the active one (and the host's active document).</summary>
-    public void Activate(DocumentTab tab)
+    /// <summary>Makes <paramref name="tab"/> the active one (its group the focused one, and the host's active document).</summary>
+    public void Activate(DocumentTab tab) => ActivateCore(tab, focus: true);
+
+    /// <summary>Makes <paramref name="tab"/> the active one without moving the focus to its group (a background restore).</summary>
+    internal void Select(DocumentTab tab) => ActivateCore(tab, focus: false);
+
+    /// <summary>Whether <paramref name="tab"/> is one of these tabs.</summary>
+    public bool Contains(DocumentTab tab) => _tabs.Contains(tab);
+
+    /// <summary>The index of <paramref name="tab"/>, or -1.</summary>
+    public int IndexOf(DocumentTab tab) => _tabs.IndexOf(tab);
+
+    /// <summary>The tab showing <paramref name="document"/> here, or null.</summary>
+    public DocumentTab? Showing(ITextDocument document) => _tabs.Find(t => ReferenceEquals(t.Document, document));
+
+    private void ActivateCore(DocumentTab tab, bool focus)
     {
         ArgumentNullException.ThrowIfNull(tab);
         if (!_tabs.Contains(tab))
@@ -159,13 +192,76 @@ public sealed class DocumentTabs : IDisposable
             throw new ArgumentException("The tab is not open.", nameof(tab));
         }
 
-        _host.SetActive(tab.HostDocument);
+        if (focus)
+        {
+            FocusRequested?.Invoke(this);
+        }
+
+        if (Focused)
+        {
+            _host.SetActive(tab.HostDocument);
+        }
+
         if (!ReferenceEquals(Active, tab))
         {
             Active = tab;
             ActiveChanged?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    /// <summary>
+    /// A tab of <paramref name="source"/>'s document (another group's tab) here, sharing its text document and host
+    /// document (nothing is opened again), after the others; with <paramref name="takeView"/> the source's view moves to
+    /// it (a tab moved between groups keeps its carets and scroll).
+    /// </summary>
+    internal DocumentTab AddShared(DocumentTab source, bool activate, bool takeView, int index = -1)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var tab = new DocumentTab(source.Document, source.HostDocument, source.Language, source.UntitledNumber) { SuggestedPath = source.SuggestedPath };
+        if (takeView)
+        {
+            tab.View = source.View;
+            source.View = null;
+        }
+
+        tab.StateHandler = (_, _) => OnStateChanged(tab);
+        source.Document.StateChanged += tab.StateHandler;
+        if (index >= 0 && index < _tabs.Count)
+        {
+            _tabs.Insert(index, tab);
+        }
+        else
+        {
+            _tabs.Add(tab);
+        }
+
+        Retitle();
+        TabsChanged?.Invoke(this, EventArgs.Empty);
+        if (activate || Active is null)
+        {
+            ActivateCore(tab, focus: activate);
+        }
+
+        return tab;
+    }
+
+    /// <summary>A sibling's language changed (Save As to a new extension in another group): this tab follows its host document.</summary>
+    internal void Adopt(DocumentTab tab, IEditorDocument hostDocument, ILanguage? language)
+    {
+        tab.HostDocument = hostDocument;
+        tab.Language = language;
+        if (ReferenceEquals(Active, tab) && Focused)
+        {
+            _host.SetActive(hostDocument);
+        }
+
+        TabChanged?.Invoke(this, tab);
+    }
+
+    /// <summary>The focus came to these tabs: their active tab is the host's active document (none when there is none).</summary>
+    internal void TookFocus() => _host.SetActive(Active?.HostDocument);
+
+    private int TakeUntitled() => NextUntitled?.Invoke() ?? _nextUntitled++;
 
     /// <summary>
     /// Moves <paramref name="tab"/> to <paramref name="index"/> (a tab dragged along the strip; clamped to the tabs), the
@@ -226,8 +322,12 @@ public sealed class DocumentTabs : IDisposable
         bool wasActive = ReferenceEquals(Active, tab);
         _tabs.RemoveAt(index);
         tab.Document.StateChanged -= tab.StateHandler;
-        _host.Close(tab.HostDocument);
-        tab.Document.Dispose();
+        if (SharedElsewhere?.Invoke(tab) != true)
+        {
+            _host.Close(tab.HostDocument);              // the last tab of the document: it closes
+            tab.Document.Dispose();
+        }
+
         Retitle();
         TabsChanged?.Invoke(this, EventArgs.Empty);
         if (wasActive)
@@ -235,11 +335,15 @@ public sealed class DocumentTabs : IDisposable
             Active = null;
             if (_tabs.Count > 0)
             {
-                Activate(_tabs[Math.Min(index, _tabs.Count - 1)]);
+                ActivateCore(_tabs[Math.Min(index, _tabs.Count - 1)], focus: false);
             }
             else
             {
-                _host.SetActive(null);
+                if (Focused)
+                {
+                    _host.SetActive(null);
+                }
+
                 ActiveChanged?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -263,7 +367,7 @@ public sealed class DocumentTabs : IDisposable
         tab.HostDocument = _host.Open(tab.Document, language, languageName);
         _host.UpdateSelection(tab.HostDocument, selection);
         tab.Language = language;
-        if (wasActive)
+        if (wasActive && Focused)
         {
             _host.SetActive(tab.HostDocument);
         }

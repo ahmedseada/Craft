@@ -156,6 +156,11 @@ public sealed partial class EditorHost
         public Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ShowDiffAsync(title, path, before, after, cancellationToken);
 
+        public Task<bool> ShowDiffAsync(string title, string path, string before, string after, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult(false) : host.ShowDiffAsync(title, path, before, after, notes, cancellationToken);
+
+        public bool CopyText(string text) => !_closed && host.CopyText(text);
+
         public Task<bool> ProposeWorkspaceAsync(WorkspaceEdit edit, string title, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ProposeWorkspaceAsync(edit, $"{name}: {title}", cancellationToken);
 

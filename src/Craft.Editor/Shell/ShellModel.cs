@@ -397,6 +397,16 @@ public sealed partial class ShellModel : IDisposable
             return true;
         };
         host.FolderPicker = (start, token) => _dialogs.PickFolderAsync(start, token);
+        // X part 11: a plug-in's Copy all (a review's findings) through the platform's clipboard, written off the caller.
+        if (clipboard is not null)
+        {
+            host.ClipboardWriter = text =>
+            {
+                _ = clipboard.SetTextAsync(text);
+                return true;
+            };
+        }
+
         host.SettingWriter = StoreSettingAsync;
         RegisterCommands();
         CreateViews();

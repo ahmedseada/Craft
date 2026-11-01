@@ -790,7 +790,7 @@ public sealed class ShellEditCommands : IDisposable
     [
         ("craft.cut", 0, 0), ("craft.copy", 0, 1), ("craft.paste", 0, 2),
         ("craft.goToDefinition", 1, 0),
-        ("craft.formatDocument", 2, 0), (StandardShortcuts.QuickFix, 2, 1),
+        ("craft.formatDocument", 2, 0), (StandardShortcuts.QuickFix, 2, 1), (StandardShortcuts.InlineChat, 2, 2),
     ];
 
     /// <summary>The read-only text's context menu items (<see cref="EditorContextMenus.ReadOnlyText"/>: Output's): copy, select all, find.</summary>

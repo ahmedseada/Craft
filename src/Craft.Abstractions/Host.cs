@@ -372,6 +372,19 @@ public interface IEditorHost
     /// <paramref name="title"/>; completes when the user closed it. False when the host has no diff view (the default).
     /// </summary>
     Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <summary>
+    /// <see cref="ShowDiffAsync(string, string, string, string, CancellationToken)"/> with <paramref name="notes"/> under
+    /// their lines (X part 11 item 4: a review's findings on the changes). By default the diff alone.
+    /// </summary>
+    Task<bool> ShowDiffAsync(string title, string path, string before, string after, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken = default) =>
+        ShowDiffAsync(title, path, before, after, cancellationToken);
+
+    /// <summary>
+    /// Puts <paramref name="text"/> on the system's clipboard (a plug-in's Copy all: a review's findings); false when the
+    /// host reaches no clipboard (the default).
+    /// </summary>
+    bool CopyText(string text) => false;
 }
 
 /// <summary>What <see cref="IEditorHost.AddRepository"/> gives when the host shows no repository.</summary>

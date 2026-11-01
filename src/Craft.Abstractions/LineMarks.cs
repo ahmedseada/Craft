@@ -17,6 +17,9 @@ public enum LineMarkKind
 
     /// <summary>A merge conflict's block (the warning colour).</summary>
     Conflict,
+
+    /// <summary>A note on the line (X part 11: a code review's finding; the accent colour), its card shown on a click.</summary>
+    Note,
 }
 
 /// <summary>A mark in an editor's gutter and on its overview ruler: lines and what they are.</summary>
@@ -56,3 +59,13 @@ public sealed record InlineCardAction(string Title, Action Run);
 /// <param name="Text">Its lines, separated by '\n'.</param>
 /// <param name="Actions">Its buttons, in order.</param>
 public sealed record InlineCard(int Line, string Text, IReadOnlyList<InlineCardAction> Actions);
+
+/// <summary>
+/// A note under a line of the read-only diff view (X part 11 item 4: a code review's finding): how much it matters, what
+/// it says in one line and why.
+/// </summary>
+/// <param name="Line">The line of the new text it is about (from 1); 0 for the file as a whole (shown first).</param>
+/// <param name="Severity">How much it matters.</param>
+/// <param name="Text">What it says, in one line.</param>
+/// <param name="Reason">Why, or empty.</param>
+public sealed record DiffNote(int Line, DiagnosticSeverity Severity, string Text, string Reason);

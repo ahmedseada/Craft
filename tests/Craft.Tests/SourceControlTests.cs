@@ -481,7 +481,7 @@ public static class SourceControlTests
             repo.Act(SourceControlView.Generate, null);
             repo.Until(() => session.State.Generating && session.Draft == "Add the", "the first piece is in the box");
             var box = session.Panel.Blocks.OfType<PanelMessageBox>().Single();
-            Check.True(box is { Busy: true, Actions: [{ ActionId: SourceControlView.Stop }] }, "while it writes: the box is busy and Stop takes the button's place");
+            Check.True(box is { Busy: true, Actions: [{ ActionId: SourceControlView.Stop }, ..] }, "while it writes: the box is busy and Stop takes the button's place");
             Check.True(repo.Activities.Any(t => t.Contains("fake-7b", StringComparison.Ordinal)), "the writing is an activity (with Cancel)");
             repo.Act(SourceControlView.Stop, null);
             repo.Until(() => !session.State.Generating, "Stop ends it");
@@ -611,7 +611,7 @@ public static class SourceControlTests
     // ---- helpers ----
 
     /// <summary>A temporary git repository (main: a.txt and b.txt committed; then a.txt changed and "new file.txt" untracked) with the git plug-in active in a host whose UI thread the test pumps.</summary>
-    private sealed class Repo : IDisposable
+    internal sealed class Repo : IDisposable
     {
         private static readonly string? GitPath = GitProgram.Find("", out _)?.Path;
         private readonly TempFolder _temp = new();
@@ -749,7 +749,7 @@ public static class SourceControlTests
     }
 
     /// <summary>Answers every question with its first choice and accepts every proposal, recording both.</summary>
-    private sealed class AnsweringPresenter : IEditorPresenter
+    internal sealed class AnsweringPresenter : IEditorPresenter
     {
         public ConcurrentBag<string> Questions { get; } = [];
 
@@ -761,7 +761,21 @@ public static class SourceControlTests
             return Task.FromResult(true);
         }
 
+        public ConcurrentBag<(string Title, IReadOnlyList<DiffNote> Notes)> Diffs { get; } = [];
+
         public Task ShowMessageAsync(string title, string message) => Task.CompletedTask;
+
+        public Task<bool> ShowDiffAsync(string title, string path, TextDiff diff, CancellationToken cancellationToken)
+        {
+            Diffs.Add((title, []));
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> ShowDiffAsync(string title, string path, TextDiff diff, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken)
+        {
+            Diffs.Add((title, notes));
+            return Task.FromResult(true);
+        }
 
         public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken)
         {

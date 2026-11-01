@@ -57,6 +57,9 @@ public sealed record GitSettings
     /// <summary>The recent subjects shown to the model as the repository's style (<c>commitExamples</c>).</summary>
     public int CommitExamples { get; init; } = 10;
 
+    /// <summary>The most tokens of changes a review reads (<c>reviewDiffTokens</c>, X part 11); the model's context bounds it, the largest files summarised beyond it.</summary>
+    public int ReviewDiffTokens { get; init; } = 6000;
+
     /// <summary>The settings this plug-in declares, with their shapes on the settings page.</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
@@ -86,6 +89,8 @@ public sealed record GitSettings
             SettingShape.Whole(SettingSections.SourceControl, "Changes budget", 200, 200_000, "tokens", "Generate commit message", 100)),
         Setting("commitExamples", "10", "The recent subjects shown to the model as the repository's style",
             SettingShape.Whole(SettingSections.SourceControl, "Style examples", 0, 100, "subjects", "Generate commit message")),
+        Setting("reviewDiffTokens", "6000", "The most tokens of changes Review changes reads (within the model's context; the largest files summarised and not reviewed beyond it)",
+            SettingShape.Whole(SettingSections.SourceControl, "Changes budget", 200, 1_000_000, "tokens", "Review changes", 100)),
     ];
 
     /// <summary>The settings as <paramref name="settings"/> holds them now; a value that does not parse keeps its default.</summary>
@@ -109,6 +114,7 @@ public sealed record GitSettings
             CommitMaxTokens = Whole(Get("commitMaxTokens"), defaults.CommitMaxTokens, 0),
             CommitDiffTokens = Whole(Get("commitDiffTokens"), defaults.CommitDiffTokens, 1),
             CommitExamples = Whole(Get("commitExamples"), defaults.CommitExamples, 0),
+            ReviewDiffTokens = Whole(Get("reviewDiffTokens"), defaults.ReviewDiffTokens, 1),
         };
     }
 

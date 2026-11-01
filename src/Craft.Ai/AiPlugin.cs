@@ -194,7 +194,7 @@ public sealed class AiPlugin : IEditorPlugin
     public string Name => AiSettings.PluginName;
 
     /// <inheritdoc />
-    public string Summary => "The AI plug-ins: inline completion, the chat, code actions and the agent, on the editor's tools (served over MCP when asked), the diff for every model edit and the local model provider";
+    public string Summary => "The AI plug-ins: inline completion, the inline chat (Ctrl+I), the chat, code actions, the agent, Review changes and Fix with AI, on the editor's tools (served over MCP when asked), the diff for every model edit and the local model provider";
 
     /// <inheritdoc />
     public IReadOnlyList<PluginSetting> Settings => AiSettingShapes.Declared;
@@ -262,6 +262,13 @@ public sealed class AiSession : IDisposable
         // X part 8: the git plug-in's Generate commit message writes with a model already loaded, through these leases.
         CommitMessages = new AiCommitMessages(() => Settings, Models);
         CommitMessageProviders.Register(CommitMessages);
+        // X part 9 item 23 and X part 11 items 4 and 5: the inline chat (Ctrl+I), Review changes, Fix with AI.
+        InlineChat = new AiInlineChat(() => Settings, Models, token => LoadModelAsync(ModelRoleKeys.Chat, token));
+        InlineChatProviders.Register(InlineChat);
+        Review = new AiCodeReview(() => Settings, Models);
+        CodeReviewProviders.Register(Review);
+        BuildFix = new AiBuildFix(host, () => Settings, Actions, Agent);
+        BuildFixProviders.Register(BuildFix);
         _host.AddPanel(Chat);
         _host.AddPanel(Agent);
         Completion.Unavailable += (_, reason) => _host.Dispatch("ai: completion's state", () => ShowUnavailable(reason));
@@ -286,6 +293,15 @@ public sealed class AiSession : IDisposable
 
     /// <summary>"ai" in <see cref="CommitMessageProviders"/>: a commit message written with a model already loaded.</summary>
     public AiCommitMessages CommitMessages { get; }
+
+    /// <summary>"ai" in <see cref="InlineChatProviders"/>: the inline chat's answers (Ctrl+I).</summary>
+    public AiInlineChat InlineChat { get; }
+
+    /// <summary>"ai" in <see cref="CodeReviewProviders"/>: Source Control's Review changes.</summary>
+    public AiCodeReview Review { get; }
+
+    /// <summary>"ai" in <see cref="BuildFixProviders"/>: a failed build's Fix with AI.</summary>
+    public AiBuildFix BuildFix { get; }
 
     /// <summary>The chat panel.</summary>
     public AiChatPanel Chat { get; }
@@ -464,6 +480,9 @@ public sealed class AiSession : IDisposable
         InlineCompletionProviders.Unregister(Completion.Name);
         CodeActionProviders.Unregister(Actions.Name);
         CommitMessageProviders.Unregister(CommitMessages.Name);
+        InlineChatProviders.Unregister(InlineChat.Name);
+        CodeReviewProviders.Unregister(Review.Name);
+        BuildFixProviders.Unregister(BuildFix.Name);
         Chat.Dispose();
         Agent.Dispose();
         if (ReferenceEquals(AiPlugin.Local.DraftSource?.Target, Models))

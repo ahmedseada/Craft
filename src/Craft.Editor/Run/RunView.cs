@@ -52,7 +52,7 @@ public sealed record RunProblemFile(string Path, ITextSnapshot Snapshot, IReadOn
 /// compilers' <c>file(line,col): error CODE:</c> lines go to Problems. No debugging. Headless; every member is called on
 /// the UI thread.
 /// </summary>
-public sealed class RunView : IEditorViewPanel, IDisposable
+public sealed partial class RunView : IEditorViewPanel, IDisposable
 {
     /// <summary>Its panel id (and its rail item's).</summary>
     public const string PanelId = "craft.run";
@@ -90,6 +90,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _host.DocumentSaved += OnDocumentSaved;
         RunProviders.Changed += OnProvidersChanged;
+        BuildFixProviders.Changed += OnFixProvidersChanged;
         Publish();
     }
 
@@ -330,11 +331,14 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 var built = await StepAsync(item, provider, target, RunActions.Build, configuration, root, cancellationToken).ConfigureAwait(true);
                 if (built.End != RunEnd.Succeeded)
                 {
+                    NoteOutcome(configuration, RunActions.Build, built);
                     return built;
                 }
             }
 
-            return await StepAsync(item, provider, target, configuration.Action, configuration, root, cancellationToken).ConfigureAwait(true);
+            var outcome = await StepAsync(item, provider, target, configuration.Action, configuration, root, cancellationToken).ConfigureAwait(true);
+            NoteOutcome(configuration, configuration.Action, outcome);
+            return outcome;
         }
         finally
         {
@@ -504,6 +508,19 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 _draft = null;
                 Publish();
                 break;
+            case FixWithAiAction:
+                await FixWithAiAsync(null, cancellationToken).ConfigureAwait(true);
+                break;
+            case StopFixAction:
+                if (_fixing is { } fixing)
+                {
+                    await fixing.CancelAsync().ConfigureAwait(true);
+                }
+
+                break;
+            case RunAgainAction:
+                await RunAgainAsync(cancellationToken).ConfigureAwait(true);
+                break;
         }
     }
 
@@ -518,6 +535,8 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         _disposed = true;
         _host.DocumentSaved -= OnDocumentSaved;
         RunProviders.Changed -= OnProvidersChanged;
+        BuildFixProviders.Changed -= OnFixProvidersChanged;
+        _fixing?.Cancel();
         _watch?.Dispose();
         _finding?.Cancel();
         _finding?.Dispose();
@@ -1172,6 +1191,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
             new PanelButton("Add configuration", "run.add", PanelButtonKind.Flat) { Icon = RailIcons.Add, Enabled = _targets.Count > 0, Tooltip = "A configuration: arguments, variables, folder, build first; saved in .craft/run.json" },
             new PanelButton("Refresh", "run.refresh", PanelButtonKind.Flat) { Icon = RailIcons.Refresh, Tooltip = "Find again what the workspace runs" },
         ]));
+        AddFailure(blocks);
         foreach (var problem in _providerProblems)
         {
             blocks.Add(new PanelText(problem, PanelTextStyle.Secondary) { Tone = PanelTone.Warning });

@@ -108,6 +108,24 @@ public static class DraftModelTests
             Check.True(provider.Chats["big"].Options.Last() is { DraftTokens: 0 } again && ReferenceEquals(again.Draft, provider.Drafts["small"]),
                 "draftTokens 0 (adapted) reaches the generator with the same copy");
             Check.Equal(1, provider.Acquired.Count(m => m == "small"), "still one copy of the small model");
+
+            // The owner's run (2026-11-01): the Sampler plug-in took "default", and Idrak refuses a draft beside another
+            // sampler, which ended every agent turn. The draft is left out while it samples, said on the chip; back after.
+            TokenSamplers.Register(Craft.Plugins.Sampler.BracketBalancedSamplerKind.Instance);
+            try
+            {
+                await adapted.Chat!.ChatAsync(new ChatRequest([new ChatMessage("user", "with a sampler plug-in")]));
+                Check.True(provider.Chats["big"].Options.Last() is { Draft: null }, "a sampler plug-in samples: the request goes without the draft");
+                Check.True(models.DraftOf(ModelRoleKeys.Chat) is { Model: null, State: { } why } && why.Contains("sampler plug-in", StringComparison.Ordinal),
+                    $"the chip says why ({models.DraftOf(ModelRoleKeys.Chat)})");
+            }
+            finally
+            {
+                TokenSamplers.Unregister(TokenSamplers.DefaultName);
+            }
+
+            await adapted.Chat!.ChatAsync(new ChatRequest([new ChatMessage("user", "the library's sampler again")]));
+            Check.True(provider.Chats["big"].Options.Last() is { Draft: not null }, "the plug-in gone: the draft is back");
         }
         finally
         {

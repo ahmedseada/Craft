@@ -126,6 +126,7 @@ public sealed class AiModels : IDisposable
             if (_drafts.TryGetValue(PairKey(key, plan), out var pair))
             {
                 return pair.Off is { } off ? new DraftStatus(null, off, null)
+                    : SamplerRefusal() is { } sampler ? new DraftStatus(null, sampler, null)
                     : pair.Ready is null ? new DraftStatus(null, $"{plan.Name} is loading to draft", null)
                     : new DraftStatus(plan.Name, null, pair.Acceptance);
             }
@@ -326,6 +327,12 @@ public sealed class AiModels : IDisposable
         }
     }
 
+    // Why no draft can run while a sampler other than the library's samples (Idrak's TextGenerator refuses that pair), or null.
+    private static string? SamplerRefusal() =>
+        string.Equals(TokenSamplers.Origin(TokenSamplers.DefaultName), Overrides.Library, StringComparison.Ordinal)
+            ? null
+            : $"no draft: a sampler plug-in ({TokenSamplers.Origin(TokenSamplers.DefaultName)}) samples, and speculative decoding checks the draft by the library's own sampling rule";
+
     // The target's chat model with the draft passed on in each request's options once it is ready (GenerationOptions.Draft,
     // the role's draftTokens), each reply's statistics recorded for the chip.
     private sealed class DraftingChat(IChatModel inner, DraftPair pair) : IChatModel
@@ -334,7 +341,10 @@ public sealed class AiModels : IDisposable
 
         public async IAsyncEnumerable<ChatChunk> StreamAsync(ChatRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            if (pair.Ready is { } draft)
+            // A sampler plug-in that took the library's "default" sampler leaves the draft out (Idrak's check of a round
+            // draws by the library's rule, and refuses another sampler: the owner's run 2026-11-01 ended every agent turn
+            // on that refusal). Asked per request, so turning the plug-in off brings the draft back.
+            if (pair.Ready is { } draft && SamplerRefusal() is null)
             {
                 request = request with { Options = (request.Options ?? new GenerationOptions()) with { Draft = draft, DraftTokens = pair.Tokens } };
             }

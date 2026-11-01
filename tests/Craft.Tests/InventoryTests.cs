@@ -107,6 +107,9 @@ public static class InventoryTests
             // The X restart, piece 2a.
             ["CRAFT_PIECE_COALESCE_CHARS"] = "32", ["CRAFT_PIECE_BATCH_MIN_EDITS"] = "4", ["CRAFT_PIECE_BATCH_PIECES_PER_EDIT"] = "16", ["CRAFT_HOVER_HIDE_MS"] = "200",
             ["CRAFT_FOLD_PREVIEW_LINES"] = "6", ["CRAFT_OVERVIEW_RULER"] = "false", ["CRAFT_OVERVIEW_RULER_WIDTH"] = "20", ["CRAFT_STICKY_SCROLL"] = "false", ["CRAFT_STICKY_SCROLL_LINES"] = "3",
+            // The X restart, piece 2b: the minimap; completion and ghost text at several carets.
+            ["CRAFT_MINIMAP"] = "true", ["CRAFT_MINIMAP_SCALE"] = "3", ["CRAFT_MINIMAP_MAX_COLUMNS"] = "80", ["CRAFT_MINIMAP_MIN_WIDTH"] = "400", ["CRAFT_MINIMAP_LINES_PER_FRAME"] = "32",
+            ["CRAFT_MINIMAP_DIAGNOSTICS"] = "false", ["CRAFT_MINIMAP_FIND"] = "false", ["CRAFT_COMPLETION_ALL_CARETS"] = "false",
             // Phase X slice 3: inline, not modal; the welcome page.
             ["CRAFT_WELCOME_AT_START"] = "false", ["CRAFT_UNDO_BAR_MS"] = "3000", ["CRAFT_FIND_BACKGROUND_CHARS"] = "1000", ["CRAFT_FIND_REGEX_TIMEOUT_MS"] = "100",
             ["CRAFT_QUICK_OPEN_BACKGROUND_FILES"] = "50", ["CRAFT_QUICK_OPEN_RECENT"] = "5",
@@ -160,6 +163,7 @@ public static class InventoryTests
             PaintLineLayouts = false, PaintCacheLines = 8,
             PieceCoalesceCharacters = 32, PieceBatchMinEdits = 4, PieceBatchPiecesPerEdit = 16, HoverHideMilliseconds = 200,
             FoldPreviewLines = 6, OverviewRuler = false, OverviewRulerWidth = 20, StickyScroll = false, StickyScrollLines = 3,
+            Minimap = true, MinimapScale = 3, MinimapMaxColumns = 80, MinimapMinWidth = 400, MinimapLinesPerFrame = 32, MinimapDiagnostics = false, MinimapFind = false, CompletionAllCarets = false,
             WelcomeAtStart = false, UndoBarMilliseconds = 3000, FindBackgroundCharacters = 1000, FindRegexTimeoutMilliseconds = 100,
             QuickOpenBackgroundFiles = 50, QuickOpenRecent = 5,
             EditorGroupsMax = 3, EditorGroupsCloseEmpty = false, TreeDragMove = false, PeekLines = 8, PeekMaxMegabytes = 4,

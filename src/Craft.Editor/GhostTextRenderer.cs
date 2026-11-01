@@ -10,7 +10,8 @@ namespace Craft.Editor;
 /// caret's line, its other lines over the lines below (an overlay: the text moves only when the user accepts), in the
 /// theme's <see cref="EditorColors.GhostText"/>, italic; then the hint bar of the approved design under it
 /// ("Completion · Tab accept · Ctrl+→ word · Esc dismiss · 41 tok/s · first token 86 ms"). Only what the viewport shows is
-/// drawn; nothing is drawn when no ghost text shows.
+/// drawn; nothing is drawn when no ghost text shows. With several carets (the X restart, piece 2b) a "+N" mark after the
+/// first line says how many other carets accepting inserts it at too.
 /// </summary>
 internal sealed class GhostTextRenderer
 {
@@ -18,9 +19,14 @@ internal sealed class GhostTextRenderer
     private static readonly string[] Meanings = [" accept", " word", " dismiss"];
     private string _source = "";
     private string[] _lines = [];
+    private int _plusCount;
+    private string _plusText = "";
 
     /// <summary>The ghost lines drawn in the last frame (the tests' measure).</summary>
     public int LinesDrawn { get; private set; }
+
+    /// <summary>The "+N" mark drawn in the last frame (other carets that take the ghost text too), or null.</summary>
+    public string? PlusDrawn { get; private set; }
 
     /// <summary>Whether the hint bar was drawn in the last frame.</summary>
     public bool HintDrawn { get; private set; }
@@ -29,6 +35,7 @@ internal sealed class GhostTextRenderer
     {
         LinesDrawn = 0;
         HintDrawn = false;
+        PlusDrawn = null;
         var inline = model.InlineCompletion;
         if (!inline.IsShown)
         {
@@ -69,6 +76,25 @@ internal sealed class GhostTextRenderer
             canvas.FillRect(left, y, width, height, i == 0 ? colors.CurrentLine : colors.Background);
             canvas.DrawText(line, left, y, style);
             LinesDrawn++;
+        }
+
+        // Several carets: "+N" after the first line, a small pill in the accent (the string kept while N stays).
+        int others = inline.OtherCarets;
+        if (others > 0 && top + height >= 0 && top <= viewportHeight)
+        {
+            if (others != _plusCount)
+            {
+                _plusCount = others;
+                _plusText = "+" + others.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            float plusLeft = x + ((_lines[0].Length + 1) * cell);
+            if (plusLeft < viewportWidth)
+            {
+                canvas.FillRect(plusLeft - (cell / 4), top + 2, (_plusText.Length + 0.5f) * cell, height - 4, colors.PopupBackground);
+                canvas.DrawText(_plusText, plusLeft, top, new TextStyle(colors.Accent, Bold: true));
+                PlusDrawn = _plusText;
+            }
         }
 
         // The hint bar, under the last ghost line, from the caret's column (kept inside the viewport).

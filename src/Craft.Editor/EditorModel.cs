@@ -513,6 +513,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         }
 
         _bracketVersion = -1;
+        NoteReclassified();
         Invalidate();
     }
 
@@ -749,6 +750,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
     private void OnBufferChanged(object? sender, TextChangedEventArgs e)
     {
+        NoteLineChange(e);                                   // the minimap moves its kept lines through it (piece 2b)
         // The folds first: the selections mapped below may land on lines they hide.
         Folding.OnBufferChanged(e);
         if (!_applying)

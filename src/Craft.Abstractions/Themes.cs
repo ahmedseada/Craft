@@ -130,6 +130,18 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
 
     /// <summary>A caret's mark on the overview ruler (the caret's colour, a little see-through, unless set).</summary>
     public uint RulerCaret { get => _rulerCaret ?? ((Caret & 0x00FFFFFFu) | 0xB0000000u); init => _rulerCaret = value; }
+
+    // The X restart, piece 2b: the minimap's slider over the lines the viewport shows. It follows the theme's text colour,
+    // see-through, unless a theme sets it (a theme made before it draws the slider in its own colours).
+
+    private uint? _minimapSlider;
+    private uint? _minimapSliderActive;
+
+    /// <summary>The minimap's slider: the band of the lines the viewport shows (the text colour, faint, unless set).</summary>
+    public uint MinimapSlider { get => _minimapSlider ?? ((Foreground & 0x00FFFFFFu) | 0x1C000000u); init => _minimapSlider = value; }
+
+    /// <summary>The minimap's slider while it is dragged (the text colour, a little stronger, unless set).</summary>
+    public uint MinimapSliderActive { get => _minimapSliderActive ?? ((Foreground & 0x00FFFFFFu) | 0x34000000u); init => _minimapSliderActive = value; }
 }
 
 /// <summary>

@@ -12,7 +12,9 @@ namespace Craft.Editor;
 /// (a later request, or a caret that left the word, drops it: <see cref="ResultsDropped"/>). Typing filters the items by
 /// prefix (case first) or camel humps ("WL" for WriteLine) and selects the best; Up, Down, Page Up and Page Down select;
 /// Enter and Tab commit (the item's edit, mapped onto the text typed since, as one undo step); Escape closes. Typing never
-/// waits for it.
+/// waits for it. With several carets (<see cref="Core.CraftOptions.CompletionAllCarets"/>) the list is asked at the primary
+/// caret and an item committed goes to every caret whose text around it equals the primary's replaced text, as one undo
+/// step; the other carets stay and the status says so.
 /// </summary>
 public sealed class CompletionController : IDisposable
 {
@@ -150,6 +152,14 @@ public sealed class CompletionController : IDisposable
         int end = edit.End >= list.Position ? edit.End + delta : edit.End;
         end = Math.Clamp(end, edit.Start, snapshot.Length);
         int caret = item.CaretAfter >= 0 && item.CaretAfter <= edit.Start + edit.Text.Length ? item.CaretAfter : edit.Start + edit.Text.Length;
+        int primary = _model.Selection.Caret;
+        if (_model.HasMultipleCarets && _model.Options.CompletionAllCarets && _model.Selection.IsEmpty && edit.Start <= primary && primary <= end)
+        {
+            // The X restart, piece 2b: the item at every caret whose text around it is the primary's replaced text.
+            _model.ApplyCompletionAtCarets(primary - edit.Start, end - primary, edit.Text, caret - edit.Start);
+            return;
+        }
+
         _model.ApplyCompletion(new TextEdit(edit.Start, end - edit.Start, edit.Text), caret);
     }
 
@@ -267,7 +277,7 @@ public sealed class CompletionController : IDisposable
 
     private void Request(CompletionTrigger trigger)
     {
-        if (_model.SemanticSession is not { } session)
+        if (_model.SemanticSession is not { } session || !_model.CompletesHere)
         {
             return;
         }

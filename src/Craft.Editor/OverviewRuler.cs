@@ -55,10 +55,13 @@ public sealed class OverviewRuler : IDisposable
     public int MarksDrawn { get; private set; }
 
     /// <summary>Draws the ruler at the right edge of a viewport of <paramref name="viewportWidth"/> by <paramref name="viewportHeight"/>.</summary>
-    internal void Draw(IEditorCanvas canvas, EditorModel model, float viewportWidth, float viewportHeight)
+    internal void Draw(IEditorCanvas canvas, EditorModel model, float viewportWidth, float viewportHeight) =>
+        Draw(canvas, model, viewportWidth - model.OverviewRulerWidth, model.OverviewRulerWidth, viewportHeight);
+
+    /// <summary>Draws the ruler <paramref name="width"/> wide from <paramref name="left"/> (the minimap's right edge, piece 2b), the viewport's height tall.</summary>
+    internal void Draw(IEditorCanvas canvas, EditorModel model, float left, float width, float viewportHeight)
     {
         MarksDrawn = 0;
-        float width = model.OverviewRulerWidth;
         if (width <= 0 || viewportHeight <= 0)
         {
             return;
@@ -66,7 +69,6 @@ public sealed class OverviewRuler : IDisposable
 
         Rebuild(model, viewportHeight);
         var colors = model.Theme.Colors;
-        float left = viewportWidth - width;
         float scale = Scale(model, viewportHeight);
         canvas.FillRect(left, 0, width, viewportHeight, colors.Gutter);
         canvas.DrawLine(left, 0, left, viewportHeight, colors.Border, 1);

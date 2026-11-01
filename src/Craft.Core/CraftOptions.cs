@@ -327,6 +327,41 @@ public sealed record CraftOptions
     /// <summary>The most header lines sticky scroll keeps at the top, outermost first (<c>CRAFT_STICKY_SCROLL_LINES</c>).</summary>
     public int StickyScrollLines { get; init; } = 5;
 
+    /// <summary>
+    /// Whether each editor shows the minimap beside its text: a rect per coloured run of each line, a slider over the lines
+    /// the viewport shows, click and drag to scroll (<c>CRAFT_MINIMAP</c>; off by default, the overview ruler on, until the
+    /// owner's Windows frame number is in). With it on, the overview ruler sits at the minimap's right edge.
+    /// </summary>
+    public bool Minimap { get; init; }
+
+    /// <summary>The minimap's size: a line is this many units tall and a column half as wide (<c>CRAFT_MINIMAP_SCALE</c>).</summary>
+    public int MinimapScale { get; init; } = 2;
+
+    /// <summary>The columns of a line the minimap draws (<c>CRAFT_MINIMAP_MAX_COLUMNS</c>); its width follows.</summary>
+    public int MinimapMaxColumns { get; init; } = 120;
+
+    /// <summary>The narrowest editor, in device-independent units, that shows the minimap; a narrower one (a phone, a narrow split) shows the ruler alone (<c>CRAFT_MINIMAP_MIN_WIDTH</c>).</summary>
+    public int MinimapMinWidth { get; init; } = 600;
+
+    /// <summary>
+    /// The most kept lines whose colours a minimap frame checks again after an edit, a landed parse or a theme (the lines an
+    /// edit touched and lines never built are built at once); the rest follow in the next frames (<c>CRAFT_MINIMAP_LINES_PER_FRAME</c>).
+    /// </summary>
+    public int MinimapLinesPerFrame { get; init; } = 64;
+
+    /// <summary>Whether the minimap marks the lines with errors and warnings (<c>CRAFT_MINIMAP_DIAGNOSTICS</c>).</summary>
+    public bool MinimapDiagnostics { get; init; } = true;
+
+    /// <summary>Whether the minimap marks the find overlay's hits (<c>CRAFT_MINIMAP_FIND</c>).</summary>
+    public bool MinimapFind { get; init; } = true;
+
+    /// <summary>
+    /// Whether the completion list and ghost text work at several carets (<c>CRAFT_COMPLETION_ALL_CARETS</c>): one request
+    /// at the primary caret; accepting applies the item at every caret whose text before it matches the primary's, the rest
+    /// left and said. Off: they close while there are several carets.
+    /// </summary>
+    public bool CompletionAllCarets { get; init; } = true;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -829,6 +864,15 @@ public sealed record CraftOptions
         new("CRAFT_OVERVIEW_RULER_WIDTH", "14", "The overview ruler's width.") { Shape = SettingShape.Whole(SettingSections.Editor, "Overview ruler width", 4, 200, "units", "Display") },
         new("CRAFT_STICKY_SCROLL", "true", "Whether the headers of the blocks the top line is in stay at the top while their insides scroll (a click goes to the header).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Sticky scroll", "Display") },
         new("CRAFT_STICKY_SCROLL_LINES", "5", "The most header lines sticky scroll keeps at the top, outermost first.") { Shape = SettingShape.Whole(SettingSections.Editor, "Sticky scroll keeps at most", 1, 50, "lines", "Display") },
+        // The X restart, piece 2b: the minimap; completion and ghost text at several carets.
+        new("CRAFT_MINIMAP", "false", "Whether each editor shows the minimap beside its text (a click or a drag on it scrolls; the overview ruler then sits at its right edge).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Minimap", "Display") },
+        new("CRAFT_MINIMAP_SCALE", "2", "The minimap's size: a line is this many units tall and a column half as wide.") { Shape = SettingShape.Whole(SettingSections.Editor, "Minimap scale", 1, 8, null, "Display") },
+        new("CRAFT_MINIMAP_MAX_COLUMNS", "120", "The columns of a line the minimap draws (its width follows).") { Shape = SettingShape.Whole(SettingSections.Editor, "Minimap columns", 10, 1000, "columns", "Display", step: 10) },
+        new("CRAFT_MINIMAP_MIN_WIDTH", "600", "The narrowest editor that shows the minimap; a narrower one shows the overview ruler alone.") { Shape = SettingShape.Whole(SettingSections.Editor, "Minimap from an editor width of", 0, 100_000, "units", "Display", step: 50) },
+        new("CRAFT_MINIMAP_LINES_PER_FRAME", "64", "After an edit, a landed parse or a theme, the most of the minimap's kept lines a frame colours again (the lines an edit touched are built at once); the rest follow in the next frames.") { Shape = SettingShape.Whole(SettingSections.Editor, "Minimap recolours a frame at most", 1, 100_000, "lines", "Advanced", step: 16) },
+        new("CRAFT_MINIMAP_DIAGNOSTICS", "true", "Whether the minimap marks the lines with errors and warnings.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Minimap marks problems", "Display") },
+        new("CRAFT_MINIMAP_FIND", "true", "Whether the minimap marks the find box's hits.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Minimap marks search hits", "Display") },
+        new("CRAFT_COMPLETION_ALL_CARETS", "true", "Whether the completion list and ghost text work at several carets: asked at the primary caret, applied at every caret whose text before it matches (the rest left and said); off closes them while there are several carets.") { Shape = SettingShape.Toggle(SettingSections.Completion, "Complete at every matching caret", "Completion list") },
         // Phase X slice 3: inline, not modal; the welcome page.
         new("CRAFT_WELCOME_AT_START", "true", "Whether the welcome page (open a folder, a new file, the recent folders, the main shortcuts) opens at start when no folder is open; Help › Welcome opens it any time.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Show the welcome page at start", "Welcome") },
         new("CRAFT_UNDO_BAR_MS", "5000", "Milliseconds the inline bar with Undo stays after a change that can be taken back (the notification centre cleared, a recent folder removed).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Undo bar stays for", 500, 600_000, "ms", "Notifications", step: 500) },
@@ -1148,6 +1192,46 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_STICKY_SCROLL_LINES") is { } stickyLines)
         {
             options = options with { StickyScrollLines = Whole(stickyLines, "CRAFT_STICKY_SCROLL_LINES", 1, 50) };
+        }
+
+        if (Text(read, "CRAFT_MINIMAP") is { } minimap)
+        {
+            options = options with { Minimap = Flag(minimap, "CRAFT_MINIMAP") };
+        }
+
+        if (Text(read, "CRAFT_MINIMAP_SCALE") is { } minimapScale)
+        {
+            options = options with { MinimapScale = Whole(minimapScale, "CRAFT_MINIMAP_SCALE", 1, 8) };
+        }
+
+        if (Text(read, "CRAFT_MINIMAP_MAX_COLUMNS") is { } minimapColumns)
+        {
+            options = options with { MinimapMaxColumns = Whole(minimapColumns, "CRAFT_MINIMAP_MAX_COLUMNS", 10, 1000) };
+        }
+
+        if (Text(read, "CRAFT_MINIMAP_MIN_WIDTH") is { } minimapWidth)
+        {
+            options = options with { MinimapMinWidth = Whole(minimapWidth, "CRAFT_MINIMAP_MIN_WIDTH", 0, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_MINIMAP_LINES_PER_FRAME") is { } minimapLines)
+        {
+            options = options with { MinimapLinesPerFrame = Whole(minimapLines, "CRAFT_MINIMAP_LINES_PER_FRAME", 1, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_MINIMAP_DIAGNOSTICS") is { } minimapDiagnostics)
+        {
+            options = options with { MinimapDiagnostics = Flag(minimapDiagnostics, "CRAFT_MINIMAP_DIAGNOSTICS") };
+        }
+
+        if (Text(read, "CRAFT_MINIMAP_FIND") is { } minimapFind)
+        {
+            options = options with { MinimapFind = Flag(minimapFind, "CRAFT_MINIMAP_FIND") };
+        }
+
+        if (Text(read, "CRAFT_COMPLETION_ALL_CARETS") is { } allCarets)
+        {
+            options = options with { CompletionAllCarets = Flag(allCarets, "CRAFT_COMPLETION_ALL_CARETS") };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)

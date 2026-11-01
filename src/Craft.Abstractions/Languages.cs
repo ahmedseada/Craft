@@ -96,6 +96,14 @@ public interface ILanguageSession : IDisposable
     void Classify(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into);
 
     /// <summary>
+    /// Adds the syntactic layer's spans of the range to <paramref name="into"/>, as <see cref="Classify"/> does, but never
+    /// the semantic colours and never asking for them (the X restart's minimap classifies a window of hundreds of lines,
+    /// which must not start a semantic pass). A session without semantic colours classifies as <see cref="Classify"/> (the
+    /// default). It never waits.
+    /// </summary>
+    void ClassifySyntactic(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into) => Classify(snapshot, start, length, into);
+
+    /// <summary>
     /// Waits up to <paramref name="timeout"/> (none when zero, without end when <see cref="Timeout.InfiniteTimeSpan"/>) until <see cref="Classify"/> of <paramref name="snapshot"/>
     /// gives its final spans (its parse landed); true when it does. The editor calls it before a frame with its budget, so
     /// ordinary typing paints classified in the same frame and a long parse never holds the UI thread longer. A session

@@ -25,7 +25,7 @@ public sealed partial class EditorModel
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
         bool control = (modifiers & KeyModifiers.Control) != 0;
         bool alt = (modifiers & KeyModifiers.Alt) != 0;
-        if (!Completion.IsOpen && !HasMultipleCarets && InlineCompletion.HandleKey(key, modifiers))
+        if (!Completion.IsOpen && CompletesHere && InlineCompletion.HandleKey(key, modifiers))
         {
             NoteInput();
             return true;
@@ -93,8 +93,10 @@ public sealed partial class EditorModel
         }
 
         NoteInput();
-        bool many = HasMultipleCarets;
-        if (many)
+        // The X restart, piece 2b: with CRAFT_COMPLETION_ALL_CARETS, several carets keep the completion list and ghost text
+        // (asked at the primary); off, they close while there are several.
+        bool completes = CompletesHere;
+        if (!completes)
         {
             InlineCompletion.Dismiss();
         }
@@ -105,7 +107,7 @@ public sealed partial class EditorModel
 
         EditCarets(EditKind.Typing, keepAutoClosed: true, text, static (model, selection, snapshot, typed) => model.TypedPart(selection, snapshot, typed));
         EnsureCaretVisible();
-        if (!many)
+        if (completes)
         {
             AfterTyped(text);
         }

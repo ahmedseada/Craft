@@ -70,6 +70,9 @@ public sealed class EditorRenderer : IDisposable
     /// <summary>The ghost lines of an inline completion drawn in the last frame.</summary>
     public int GhostLinesDrawn => _ghost.LinesDrawn;
 
+    /// <summary>The ghost text's "+N" mark drawn in the last frame (other carets that take it too), or null.</summary>
+    public string? GhostPlusDrawn => _ghost.PlusDrawn;
+
     /// <summary>Whether the inline completion's hint bar was drawn in the last frame.</summary>
     public bool GhostHintDrawn => _ghost.HintDrawn;
 

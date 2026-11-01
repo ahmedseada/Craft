@@ -14,6 +14,12 @@ namespace Craft.Editor;
 /// cancels the request at once (a provider stops within a token) and removes the ghost; Tab inserts it all as one
 /// <see cref="EditKind.Command"/> undo step, Ctrl+Right a word, Escape dismisses. Text typed that the ghost starts with
 /// is typed through (the rest stays, the request stops). Used on the UI thread.
+/// <para>
+/// With several carets (the X restart, piece 2b; <see cref="Core.CraftOptions.CompletionAllCarets"/>) the request is made at
+/// the primary caret and the ghost drawn there with a "+N" mark (<see cref="OtherCarets"/>); Tab and Ctrl+Right insert at
+/// every caret whose line before it equals the primary's (its leading white space aside; the ghost's later lines take that
+/// caret's indent), as one undo step; the other carets stay and the status says so.
+/// </para>
 /// </summary>
 public sealed class InlineCompletionController : IDisposable
 {
@@ -25,6 +31,10 @@ public sealed class InlineCompletionController : IDisposable
     private long _requestStarted;
     private long _firstPieceAt;
     private bool _accepting;
+    private int _othersStamp = -1;
+    private int _othersVersion = -1;
+    private int _othersPosition = -1;
+    private int _others;
 
     internal InlineCompletionController(EditorModel model) => _model = model;
 
@@ -39,6 +49,34 @@ public sealed class InlineCompletionController : IDisposable
 
     /// <summary>Whether a request streams now.</summary>
     public bool IsRequesting => _request is not null;
+
+    /// <summary>
+    /// The carets other than the primary that accepting the ghost text would also insert it at (the "+N" mark drawn after
+    /// it): those whose line before the caret equals the primary's, leading white space aside. Counted once per change of
+    /// the carets, the text or the ghost's place.
+    /// </summary>
+    public int OtherCarets
+    {
+        get
+        {
+            if (!IsShown || !_model.HasMultipleCarets)
+            {
+                return 0;
+            }
+
+            int stamp = _model.SelectionStamp;
+            int version = _model.Snapshot.Version;
+            if (stamp != _othersStamp || version != _othersVersion || Position != _othersPosition)
+            {
+                _othersStamp = stamp;
+                _othersVersion = version;
+                _othersPosition = Position;
+                _others = _model.OtherMatchingCarets(CaretMatch.LinePrefix, 0, 0);
+            }
+
+            return _others;
+        }
+    }
 
     /// <summary>The provider that answered the last request, or null.</summary>
     public string? ProviderName { get; private set; }
@@ -264,7 +302,7 @@ public sealed class InlineCompletionController : IDisposable
     private InlineCompletionRequest? Request()
     {
         var selection = _model.Selection;
-        if (_model.IsReadOnly || !selection.IsEmpty || string.Equals(_model.Options.InlineCompletionProvider, "none", StringComparison.OrdinalIgnoreCase))
+        if (_model.IsReadOnly || !selection.IsEmpty || !_model.CompletesHere || string.Equals(_model.Options.InlineCompletionProvider, "none", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
@@ -391,7 +429,14 @@ public sealed class InlineCompletionController : IDisposable
         _accepting = true;
         try
         {
-            _model.ApplyAcceptedText(at, text);
+            if (_model.HasMultipleCarets)
+            {
+                _model.ApplyAtMatchingCarets(CaretMatch.LinePrefix, 0, 0, text, text.Length, "Ghost text");
+            }
+            else
+            {
+                _model.ApplyAcceptedText(at, text);
+            }
         }
         finally
         {

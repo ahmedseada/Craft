@@ -1644,6 +1644,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
+    private IEditorNotification? _completionStatus;
+
     private EditorView MakeView(DocumentTab tab)
     {
         var view = new EditorView
@@ -1654,6 +1656,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             Labels = _host.Labels,
             Activities = _host.Activities,
             WorkspaceRoot = _shell.Workspace?.Root,
+            ShowsMinimap = true,                            // the X restart, piece 2b: one minimap per document view
         };
         view.Sessions = _shell.Sessions;                    // one language session per document, shared by its views
         view.Open(tab.Document, tab.Language);
@@ -1670,6 +1673,12 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         view.PeekRequested += OnPeekRequested;
+        view.StatusRequested += (_, message) =>
+        {
+            // One completion status line, replaced by the next (applied at 3 of 4 carets).
+            _completionStatus?.Dispose();
+            _completionStatus = _shell.Host.ShowStatus("Completion", message);
+        };
         view.DiagnosticsChanged += (_, _) =>
         {
             // Phase A1: the plug-ins read a document's diagnostics, and the diff view checks a change, through the host.

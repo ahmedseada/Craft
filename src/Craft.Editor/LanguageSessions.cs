@@ -196,6 +196,9 @@ public sealed class SyntacticLanguageSession : ILanguageSession
     public void Classify(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into) => _inner.Classify(snapshot, start, length, into);
 
     /// <inheritdoc />
+    public void ClassifySyntactic(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into) => _inner.ClassifySyntactic(snapshot, start, length, into);
+
+    /// <inheritdoc />
     public bool WaitUntilClassified(ITextSnapshot snapshot, TimeSpan timeout) => _inner.WaitUntilClassified(snapshot, timeout);
 
     /// <inheritdoc />

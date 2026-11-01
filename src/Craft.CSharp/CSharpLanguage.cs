@@ -268,6 +268,20 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
         }
     }
 
+    /// <inheritdoc />
+    void ILanguageSession.ClassifySyntactic(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(into);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (start < 0 || length < 0 || start > snapshot.Length - length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(start), start, $"The range of {length} characters at {start} runs outside the text of {snapshot.Length}.");
+        }
+
+        ClassifySyntactic(snapshot, start, length, into);       // the minimap's window: never Roslyn's semantic colours, never a pass asked for
+    }
+
     /// <summary>The syntactic layer's spans of the range (the last parse, through the change still being parsed).</summary>
     private void ClassifySyntactic(ITextSnapshot snapshot, int start, int length, TokenSpanBuffer into)
     {

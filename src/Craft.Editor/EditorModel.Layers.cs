@@ -27,8 +27,114 @@ public sealed partial class EditorModel
     /// <summary>The sticky headers at the top of the view.</summary>
     public StickyScrollLayer StickyScroll => _sticky ??= new StickyScrollLayer(this);
 
-    /// <summary>The overview ruler's width at the viewport's right edge (0 when <c>CRAFT_OVERVIEW_RULER</c> is off).</summary>
-    public float OverviewRulerWidth => Options.OverviewRuler ? Options.OverviewRulerWidth : 0;
+    /// <summary>
+    /// The overview ruler's width at the text viewport's right edge (0 when <c>CRAFT_OVERVIEW_RULER</c> is off, or while the
+    /// minimap shows: the ruler then sits at the minimap's right edge, outside the text's viewport).
+    /// </summary>
+    public float OverviewRulerWidth => Options.OverviewRuler && !_minimapShown ? Options.OverviewRulerWidth : 0;
+
+    /// <summary>The overview ruler's width wherever it is drawn (the text's edge or the minimap's), 0 when it is off.</summary>
+    internal float RulerWidth => Options.OverviewRuler ? Options.OverviewRulerWidth : 0;
+
+    private bool _minimapShown;
+
+    /// <summary>
+    /// Whether the view shows this editor's minimap beside the text (the X restart, piece 2b): set by the view from
+    /// <c>CRAFT_MINIMAP</c> and its measured width (<see cref="MinimapRenderer.Shows"/>). While it shows, the overview ruler is
+    /// the minimap's, so the text's viewport keeps no room for it.
+    /// </summary>
+    public bool MinimapShown
+    {
+        get => _minimapShown;
+        set
+        {
+            if (_minimapShown != value)
+            {
+                _minimapShown = value;
+                Invalidate();
+            }
+        }
+    }
+
+    /// <summary>Changes whenever a landed parse may have changed the colours without a new text (the minimap keys its lines on it).</summary>
+    internal int ClassificationStamp { get; private set; }
+
+    internal void NoteReclassified() => ClassificationStamp++;
+
+    // The lines the changes since a version touched, merged change by change (the minimap moves its kept lines through
+    // them instead of building its window again): in the first version's lines, [first, last] were touched and the lines
+    // after them moved by delta.
+    private int _lineLogFrom = -1;
+    private int _lineLogTo = -1;
+    private int _lineLogFirst = int.MaxValue;
+    private int _lineLogLast = -1;
+    private int _lineLogDelta;
+
+    private void NoteLineChange(TextChangedEventArgs change)
+    {
+        if (_lineLogTo != change.Before.Version)
+        {
+            _lineLogFrom = change.Before.Version;           // a gap (no consumer yet): the log starts here
+            _lineLogFirst = int.MaxValue;
+            _lineLogLast = -1;
+            _lineLogDelta = 0;
+        }
+
+        _lineLogTo = change.After.Version;
+        var edits = change.Edits;
+        if (edits.Count == 0)
+        {
+            return;
+        }
+
+        var before = change.Before;
+        int first = before.GetLineIndex(Math.Clamp(edits[0].Start, 0, before.Length));
+        int last = before.GetLineIndex(Math.Clamp(edits[^1].End, 0, before.Length));
+        int delta = change.After.LineCount - before.LineCount;
+        if (_lineLogLast < 0)
+        {
+            _lineLogFirst = first;
+            _lineLogLast = last;
+            _lineLogDelta = delta;
+            return;
+        }
+
+        // This change's lines in the log's first version: before the touched lines they are the same; inside the touched
+        // lines (as they are now) they map to the touched range; after it they move back by the delta so far.
+        int shownLast = _lineLogLast + _lineLogDelta;
+        int firstThen = first < _lineLogFirst ? first : first <= shownLast ? _lineLogFirst : first - _lineLogDelta;
+        int lastThen = last < _lineLogFirst ? last : last <= shownLast ? _lineLogLast : last - _lineLogDelta;
+        _lineLogFirst = Math.Min(_lineLogFirst, firstThen);
+        _lineLogLast = Math.Max(_lineLogLast, lastThen);
+        _lineLogDelta += delta;
+    }
+
+    /// <summary>
+    /// The lines the changes since <paramref name="version"/> touched, in that version's lines: [<paramref name="first"/>,
+    /// <paramref name="last"/>] (none when <paramref name="last"/> is below <paramref name="first"/>), the lines after them
+    /// moved by <paramref name="delta"/>. False when the log does not reach back to that version (all lines are to be read again).
+    /// </summary>
+    internal bool LineChangesSince(int version, out int first, out int last, out int delta)
+    {
+        int now = Snapshot.Version;
+        if (version == now)
+        {
+            (first, last, delta) = (int.MaxValue, -1, 0);
+            return true;
+        }
+
+        (first, last, delta) = (_lineLogFirst, _lineLogLast, _lineLogDelta);
+        return _lineLogFrom == version && _lineLogTo == now;
+    }
+
+    /// <summary>Starts the line-change log again at the current version (its reader took what it held).</summary>
+    internal void RestartLineLog()
+    {
+        _lineLogFrom = _lineLogTo = Snapshot.Version;
+        _lineLogFirst = int.MaxValue;
+        _lineLogLast = -1;
+        _lineLogDelta = 0;
+    }
 
     /// <summary>Whether the hover card shown describes a symbol (its card has the "Go to definition" row).</summary>
     internal bool HoverHasSymbol => _hoverHasSymbol;
@@ -315,8 +421,9 @@ public sealed partial class EditorModel
         }
     }
 
-    // The overview ruler maps the content's height onto the viewport's: a point on it centres the view there.
-    private void ScrollToRuler(float viewY)
+    // The overview ruler maps the content's height onto the viewport's: a point on it centres the view there (the minimap's
+    // ruler too: its height is the viewport's).
+    internal void ScrollToRuler(float viewY)
     {
         float scale = OverviewRuler.Scale(this, ViewportHeight);
         if (scale <= 0)

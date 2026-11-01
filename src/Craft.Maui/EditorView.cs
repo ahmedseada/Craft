@@ -22,6 +22,8 @@ namespace Craft.Maui;
 public sealed class EditorView : ContentView, IDisposable
 {
     private readonly ScrollView _scroll;
+    private readonly Grid _root;
+    private readonly MinimapView _minimap;
     private readonly Grid _content;
     private readonly GraphicsView _graphics;
     private readonly GraphicsView _caretLayer;
@@ -47,6 +49,7 @@ public sealed class EditorView : ContentView, IDisposable
     private bool _readOnly;
     private bool _lineNumbers = true;
     private bool _focusedView = true;
+    private bool _showsMinimap;
     private LanguageSessionLease? _lease;
     private ILanguageSession? _givenSession;
     private bool _sessionGiven;
@@ -87,7 +90,14 @@ public sealed class EditorView : ContentView, IDisposable
             VerticalScrollBarVisibility = ScrollBarVisibility.Default,
             Content = _content,
         };
-        Content = _scroll;
+        // The X restart, piece 2b: the minimap beside the text (its own view, so the text's frame never draws it), shown when
+        // CRAFT_MINIMAP is on and the view is wide enough; the overview ruler then sits at its right edge.
+        _minimap = new MinimapView { IsVisible = false, VerticalOptions = LayoutOptions.Fill };
+        _root = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)] };
+        _root.Add(_scroll, 0, 0);
+        _root.Add(_minimap, 1, 0);
+        Content = _root;
+        SizeChanged += (_, _) => UpdateMinimap();
 
         _scroll.Scrolled += OnScrolled;
         _scroll.SizeChanged += OnViewportSizeChanged;
@@ -238,6 +248,27 @@ public sealed class EditorView : ContentView, IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether this view may show the minimap (the X restart, piece 2b): the documents' editors do; the peek, the output and
+    /// the chat's transcript do not. It shows while <c>CRAFT_MINIMAP</c> is on and the view is at least
+    /// <c>CRAFT_MINIMAP_MIN_WIDTH</c> wide (<see cref="MinimapRenderer.Shows"/>).
+    /// </summary>
+    public bool ShowsMinimap
+    {
+        get => _showsMinimap;
+        set
+        {
+            _showsMinimap = value;
+            UpdateMinimap();
+        }
+    }
+
+    /// <summary>The minimap's view (its renderer's counters).</summary>
+    public MinimapView Minimap => _minimap;
+
+    /// <summary>Raised with a short message for the status bar (a completion applied at some carets only).</summary>
+    public event EventHandler<string>? StatusRequested;
+
     /// <summary>Raised when the pointer presses the text (before the editor acts on it): the page focuses the view's group.</summary>
     public event EventHandler? Engaged;
 
@@ -330,11 +361,12 @@ public sealed class EditorView : ContentView, IDisposable
         Rebuild();
     }
 
-    /// <summary>Redraws (the text and the caret layer).</summary>
+    /// <summary>Redraws (the text and the caret layer; the minimap only when its frame would differ).</summary>
     public void Invalidate()
     {
         _graphics.Invalidate();
         _caretLayer.Invalidate();
+        _minimap.Refresh();
     }
 
     /// <inheritdoc />
@@ -352,6 +384,7 @@ public sealed class EditorView : ContentView, IDisposable
         _inputConnection = null;
         DetachModel();
         _drawable.Dispose();
+        _minimap.Dispose();
     }
 
     private void Rebuild()
@@ -392,8 +425,10 @@ public sealed class EditorView : ContentView, IDisposable
         model.SaveRequested += OnModelSaveRequested;
         model.FindRequested += OnModelFindRequested;
         model.Reclassified += OnModelReclassified;
+        model.StatusRequested += OnModelStatusRequested;
         _model = model;
         _drawable.Model = model;
+        UpdateMinimap();
         model.UpdateViewport((float)_scroll.ScrollX, (float)_scroll.ScrollY, (float)_scroll.Width, (float)_scroll.Height);
         UpdateContentSize();
         Invalidate();
@@ -414,16 +449,34 @@ public sealed class EditorView : ContentView, IDisposable
         model.SaveRequested -= OnModelSaveRequested;
         model.FindRequested -= OnModelFindRequested;
         model.Reclassified -= OnModelReclassified;
+        model.StatusRequested -= OnModelStatusRequested;
         model.DiagnosticsChanged -= OnModelDiagnosticsChanged;
         model.DefinitionRequested -= OnModelDefinitionRequested;
         model.PeekRequested -= OnModelPeekRequested;
         model.Dispatch = null;
         _drawable.Model = null;
+        _minimap.Model = null;
         _model = null;
         model.Dispose();
         _lease?.Dispose();                               // after the model: the session goes with its last view
         _lease = null;
     }
+
+    // The minimap shows beside the text while it is on, this view may show it and the view is wide enough (the layout
+    // follows the measured width); the model then leaves the ruler to it.
+    private void UpdateMinimap()
+    {
+        bool show = _showsMinimap && _model is not null && MinimapRenderer.Shows(_options, (float)Width);
+        _minimap.WidthRequest = MinimapRenderer.WidthOf(_options);
+        _minimap.IsVisible = show;
+        _minimap.Model = show ? _model : null;
+        if (_model is { } model)
+        {
+            model.MinimapShown = show;
+        }
+    }
+
+    private void OnModelStatusRequested(object? sender, string message) => StatusRequested?.Invoke(this, message);
 
     private void UpdateContentSize()
     {

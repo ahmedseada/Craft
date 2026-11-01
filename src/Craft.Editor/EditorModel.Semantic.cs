@@ -734,6 +734,20 @@ public sealed partial class EditorModel
         EnsureCaretVisible();
     }
 
+    /// <summary>
+    /// Applies a committed completion item at every matching caret (the X restart, piece 2b): <paramref name="before"/> and
+    /// <paramref name="after"/> characters around each caret replaced by <paramref name="text"/>, the caret then
+    /// <paramref name="caretOffset"/> into it; one undo step.
+    /// </summary>
+    internal void ApplyCompletionAtCarets(int before, int after, string text, int caretOffset)
+    {
+        ApplyAtMatchingCarets(CaretMatch.ReplacedText, before, after, text, caretOffset, "Completion");
+        if (text.EndsWith('('))
+        {
+            RequestSignatureHelp();
+        }
+    }
+
     /// <summary>Applies a committed completion item as one undo step, the caret at <paramref name="caret"/>.</summary>
     internal void ApplyCompletion(TextEdit edit, int caret)
     {

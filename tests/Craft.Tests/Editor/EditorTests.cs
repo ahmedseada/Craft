@@ -531,6 +531,7 @@ public static class EditorTests
         foreach (var c in canvas.Calls)
         {
             string label = c.Kind == "text" ? (c.X >= model.TextLeft ? "text" : "number")
+                : c.X >= 800 - model.OverviewRulerWidth ? "ruler"
                 : c.X == 0 && c.Y == 0 && c.W == 800 ? "background"
                 : c.X == 0 && c.Y == 0 && c.W == model.GutterWidth ? "gutter"
                 : c.Argb == theme.Colors.CurrentLine ? "current"
@@ -542,8 +543,8 @@ public static class EditorTests
             }
         }
 
-        Check.SequenceEqual(["background", "current", "selection", "text", "gutter", "number", "caret"], labels,
-            "drawn in order: background, current line, selection, text, gutter, line numbers, caret");
+        Check.SequenceEqual(["background", "current", "selection", "text", "gutter", "number", "ruler", "caret"], labels,
+            "drawn in order: background, current line, selection, text, gutter, line numbers, the overview ruler, caret");
         var selection = canvas.Calls.Single(c => c.Argb == theme.Colors.Selection);
         Check.Equal((model.TextLeft, 10f), (selection.X, selection.W), "the selection covers one cell");
         var caret = canvas.Calls.Single(c => c.Argb == theme.Colors.Caret);
@@ -555,7 +556,7 @@ public static class EditorTests
         Check.True(canvas.Calls.Any(c => c.Kind == "fill" && c.W == 10 && (c.Argb & 0x00FFFFFFu) == (theme.Colors.Caret & 0x00FFFFFFu)), "a block caret in overwrite mode");
         canvas.Clear();
         renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: false);
-        Check.True(!canvas.Calls.Any(c => (c.Argb & 0x00FFFFFFu) == (theme.Colors.Caret & 0x00FFFFFFu) && c.Kind == "fill"), "no caret while the blink hides it");
+        Check.True(!canvas.Calls.Any(c => (c.Argb & 0x00FFFFFFu) == (theme.Colors.Caret & 0x00FFFFFFu) && c.Kind == "fill" && c.X < 800 - model.OverviewRulerWidth), "no caret while the blink hides it (the ruler's caret mark stays)");
     }
 
     [Test]

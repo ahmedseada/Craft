@@ -16,7 +16,11 @@ public sealed class DefinitionRequestedEventArgs(DefinitionLocation location) : 
 /// <param name="Text">The text (lines separated by '\n').</param>
 /// <param name="Position">The position it is anchored at.</param>
 /// <param name="Highlight">A range of <paramref name="Text"/> drawn bold (the active parameter), or (0, 0).</param>
-public readonly record struct EditorTooltip(string Text, int Position, (int Start, int Length) Highlight = default);
+public readonly record struct EditorTooltip(string Text, int Position, (int Start, int Length) Highlight = default)
+{
+    /// <summary>What it is: plain (signature help, a description), a hover card that stays under the pointer, or a fold's preview.</summary>
+    public EditorTooltipKind Kind { get; init; }
+}
 
 public sealed partial class EditorModel
 {
@@ -24,6 +28,9 @@ public sealed partial class EditorModel
     private readonly SynchronizationContext? _uiContext = SynchronizationContext.Current;
     private readonly List<(int Version, TextEdit[] Edits)> _history = [];
     private EditorDiagnostic[] _diagnostics = [];
+
+    /// <summary>The diagnostics' array as it is now (replaced, never changed in place: the overview ruler keys on it).</summary>
+    internal EditorDiagnostic[] DiagnosticsArray => _diagnostics;
     private int _diagnosticsLongest;
     private DiagnosticSet _appliedSet = DiagnosticSet.Empty;
     private CancellationTokenSource? _signatureRequest;
@@ -408,6 +415,8 @@ public sealed partial class EditorModel
         _hoverRequest?.Cancel();
         _hoverRequest = null;
         _hoverPosition = -1;
+        _hoverHideTimer?.Cancel();
+        _cardSelecting = false;
         if (SignatureHelp is not null || Tooltip is not null)
         {
             SignatureHelp = null;
@@ -422,8 +431,33 @@ public sealed partial class EditorModel
     /// </summary>
     public void PointerHovered(float viewX, float viewY)
     {
-        if (viewX < TextLeft)
+        _pointerX = viewX;
+        _pointerY = viewY;
+        if (HoverCardHovered(viewX, viewY))
         {
+            return;
+        }
+
+        if (FoldPreviewAt(viewX, viewY) is int header)
+        {
+            // The pointer rests on a folded block's "..." or its chevron: its hidden lines show after the hover delay.
+            int marker = -2 - header;
+            if (marker != _hoverPosition)
+            {
+                _hoverPosition = marker;
+                _hoverTimer ??= new DebounceTimer(this);
+                _hoverTimer.Schedule(Options.HoverDelayMilliseconds, () => ShowFoldPreview(header, marker));
+            }
+
+            return;
+        }
+
+        if (viewX < TextLeft || viewX >= ViewportWidth - OverviewRulerWidth || (StickyScroll.Count > 0 && viewY < StickyScroll.Height))
+        {
+            // The gutter, the ruler, the sticky headers: nothing to describe; a card shown goes after the hide delay.
+            _hoverTimer?.Cancel();
+            _hoverPosition = -1;
+            ScheduleHoverHide();
             return;
         }
 
@@ -434,17 +468,30 @@ public sealed partial class EditorModel
         }
 
         _hoverPosition = position;
+        if (Tooltip is { Kind: EditorTooltipKind.Hover } card && SameWord(card.Position, position))
+        {
+            _hoverTimer?.Cancel();
+            _hoverHideTimer?.Cancel();          // still on the word the card describes
+            return;
+        }
+
+        ScheduleHoverHide();
         _hoverTimer ??= new DebounceTimer(this);
         _hoverTimer.Schedule(Options.HoverDelayMilliseconds, () => StartHover(position));
     }
 
-    /// <summary>The pointer left the editor: the hover tooltip closes.</summary>
+    /// <summary>The pointer left the editor: a hover card closes after <see cref="Core.CraftOptions.HoverHideMilliseconds"/> (at once for a plain tooltip).</summary>
     public void PointerExited()
     {
         _hoverTimer?.Cancel();
         _hoverRequest?.Cancel();
         _hoverPosition = -1;
-        if (Tooltip is not null && SignatureHelp is null)
+        _pointerX = _pointerY = -1;
+        if (Tooltip is { Kind: not EditorTooltipKind.Plain } && SignatureHelp is null)
+        {
+            ScheduleHoverHide();
+        }
+        else if (Tooltip is not null && SignatureHelp is null)
         {
             Tooltip = null;
             Invalidate();
@@ -545,7 +592,9 @@ public sealed partial class EditorModel
     private void ShowHover(string problems, HoverInfo? info, int position)
     {
         var text = info is null ? problems : problems.Length == 0 ? info.Text : problems + "\n\n" + info.Text;
-        Tooltip = text.Length == 0 ? null : new EditorTooltip(text, position);
+        _hoverHasSymbol = info is not null;
+        _hoverHideTimer?.Cancel();
+        Tooltip = text.Length == 0 ? null : new EditorTooltip(text, position) { Kind = EditorTooltipKind.Hover };
         Invalidate();
     }
 
@@ -801,6 +850,7 @@ public sealed partial class EditorModel
         _signatureRequest?.Cancel();
         _hoverRequest?.Cancel();
         _hoverTimer?.Dispose();
+        _hoverHideTimer?.Dispose();
         _completion?.Dispose();
     }
 

@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Craft.Abstractions\Craft.Abstractions.csproj" />
+    <!-- The piece table's structural checks (tree height, balance, breaks, piece count) for the Buffer and MultiCaret tests. -->
+    <InternalsVisibleTo Include="Craft.Tests" />
   </ItemGroup>
 
 </Project>

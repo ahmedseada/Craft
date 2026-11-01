@@ -23,21 +23,31 @@ namespace Craft.Editor;
 /// <see cref="Core.CraftOptions.PaintCacheLines"/> above and below them), else run by run as before. The carets can be
 /// drawn alone (<see cref="DrawCarets"/>), on a layer of their own, so the caret's blink repaints no text.
 /// </para>
+/// <para>
+/// The X restart (piece 2a): after the gutter, the sticky headers (<see cref="StickyScrollLayer"/>) and the overview ruler
+/// (<see cref="OverviewRuler"/>) are drawn over the text, each its own layer; the hover card and a fold's preview are drawn
+/// by the popups from <see cref="EditorModel.HoverCard"/>. A line outside the screen that a layer shows (a sticky header, a
+/// previewed line) is classified alone and kept in the run cache with the lines on screen (<see cref="LineRunsFor"/>).
+/// </para>
 /// </summary>
 public sealed class EditorRenderer : IDisposable
 {
     private readonly TokenSpanBuffer _spans = new();
     private readonly TokenSpanBuffer _runSpans = new();
+    private readonly TokenSpanBuffer _lineSpans = new();
+    private readonly OverviewRuler _ruler = new();
     private readonly List<(int Column, float Top, int Line)> _carets = [];
     private readonly List<int> _drawnRows = [];
     private readonly Dictionary<int, LineRuns> _lines = [];
     private readonly Dictionary<int, string> _numbers = [];
-    private readonly EditorPopupRenderer _popups = new();
     private readonly GhostTextRenderer _ghost = new();
     private TokenSpan[] _clipped = ArrayPool<TokenSpan>.Shared.Rent(64);
     private EditorModel? _model;
     private ITheme? _theme;
     private bool _disposed;
+
+    /// <summary>The overview ruler it draws (its counters: rebuilds, marks).</summary>
+    public OverviewRuler OverviewRuler => _ruler;
 
     /// <summary>How many run strings it has made since it was created (the run cache's misses).</summary>
     public long RunStringsBuilt { get; private set; }
@@ -287,19 +297,29 @@ public sealed class EditorRenderer : IDisposable
             }
         }
 
+        Step = StepSticky;
+        var sticky = model.StickyScroll;
+        sticky.Draw(canvas, this, scrollX, viewportWidth);
+        float stickyHeight = sticky.Height;
+        Step = StepRuler;
+        _ruler.Draw(canvas, model, viewportWidth, viewportHeight);
+
         Step = StepCarets;
         if (caretVisible)
         {
             foreach (var (column, top, _) in _carets)
             {
-                DrawCaret(canvas, model, column, top, scrollX, viewportWidth);
+                if (top >= stickyHeight)
+                {
+                    DrawCaret(canvas, model, column, top, scrollX, viewportWidth);
+                }
             }
         }
 
         Step = StepGhost;
         _ghost.Draw(canvas, model, scrollX, scrollY, viewportWidth, viewportHeight);
         Step = StepPopups;
-        _popups.Draw(canvas, model);
+        EditorPopupRenderer.Draw(canvas, model, this);
         model.NotePainted();
         Step = StepDone;
     }
@@ -339,6 +359,7 @@ public sealed class EditorRenderer : IDisposable
         var firstLine = snapshot.GetLine(visible.First);
         var lastLine = snapshot.GetLine(visible.Last);
         CaretsDrawnAlone = 0;
+        float stickyHeight = model.StickyScroll.Height;
         char[]? buffer = null;
         try
         {
@@ -352,8 +373,14 @@ public sealed class EditorRenderer : IDisposable
                 }
 
                 var line = snapshot.GetLine(index);
+                float top = (model.RowOfLine(index) * height) - scrollY;
+                if (top < stickyHeight)
+                {
+                    continue;           // under a sticky header
+                }
+
                 int column = TextReading.ColumnOf(TextReading.ReadLine(snapshot, line, ref buffer), caret - line.Start, tabSize);
-                DrawCaret(canvas, model, column, (model.RowOfLine(index) * height) - scrollY, scrollX, viewportWidth);
+                DrawCaret(canvas, model, column, top, scrollX, viewportWidth);
                 CaretsDrawnAlone++;
             }
         }
@@ -427,6 +454,8 @@ public sealed class EditorRenderer : IDisposable
     private const string StepClassify = "classify the lines on screen";
     private const string StepLines = "draw the lines";
     private const string StepGutter = "draw the gutter";
+    private const string StepSticky = "draw the sticky headers";
+    private const string StepRuler = "draw the overview ruler";
     private const string StepCarets = "draw the carets";
     private const string StepGhost = "draw the ghost text";
     private const string StepPopups = "draw the popups";
@@ -682,6 +711,8 @@ public sealed class EditorRenderer : IDisposable
         _disposed = true;
         _spans.Dispose();
         _runSpans.Dispose();
+        _lineSpans.Dispose();
+        _ruler.Dispose();
         ArrayPool<TokenSpan>.Shared.Return(_clipped, clearArray: true);
         _clipped = [];
         ReleaseLayouts();
@@ -711,7 +742,7 @@ public sealed class EditorRenderer : IDisposable
         {
             foreach (var (key, runs) in _lines)
             {
-                if (key < first || key > last)
+                if ((key < first || key > last) && !Pinned(key))
                 {
                     runs.Line.ReleaseLayout();
                     _lines.Remove(key);
@@ -730,6 +761,59 @@ public sealed class EditorRenderer : IDisposable
             }
         }
     }
+
+    // A line a layer shows outside the screen (a sticky header, a fold preview's line) stays in the run cache.
+    private bool Pinned(int line)
+    {
+        if (_model is not { } model)
+        {
+            return false;
+        }
+
+        foreach (int header in model.StickyScroll.Lines)
+        {
+            if (header == line)
+            {
+                return true;
+            }
+        }
+
+        if (model.Tooltip is { Kind: EditorTooltipKind.FoldPreview } preview)
+        {
+            int header = model.Snapshot.GetLineIndex(Math.Clamp(preview.Position, 0, model.Snapshot.Length));
+            return line > header && line <= header + model.Options.FoldPreviewLines;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The runs of <paramref name="index"/> in its colours, for a layer that shows it outside the lines on screen (a sticky
+    /// header, a fold preview's line): classified alone and kept in the run cache like a shown line (a frame that shows it
+    /// again makes nothing).
+    /// </summary>
+    internal StyledLine LineRunsFor(EditorModel model, int index)
+    {
+        var snapshot = model.Snapshot;
+        var line = snapshot.GetLine(Math.Clamp(index, 0, snapshot.LineCount - 1));
+        _lineSpans.Clear();
+        model.LanguageSession?.Classify(snapshot, line.Start, line.Length, _lineSpans);
+        char[]? buffer = null;
+        char[]? expanded = null;
+        try
+        {
+            var text = TextReading.ReadLine(snapshot, line, ref buffer);
+            return Runs(line.Index, line, text, _lineSpans.Spans, 0, model.Theme, model.Options.TabSize, ref expanded).Line;
+        }
+        finally
+        {
+            TextReading.Return(buffer);
+            TextReading.Return(expanded);
+        }
+    }
+
+    /// <summary>A line number's text, kept (no string a frame).</summary>
+    internal string NumberText(int value) => Number(value);
 
     private LineRuns Runs(int index, in TextLine line, ReadOnlySpan<char> text, ReadOnlySpan<TokenSpan> spans, int spanIndex, ITheme theme, int tabSize, ref char[]? expanded)
     {

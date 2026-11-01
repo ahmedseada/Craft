@@ -92,25 +92,22 @@ public sealed partial class EditorModel
 
 /// <summary>
 /// Draws the editor's popups through <see cref="IEditorCanvas"/>, over the text: the completion list (its rows, the
-/// selected one filled, a kind mark, the label and its detail) and the tooltip (signature help or hover: wrapped lines,
-/// the active parameter bold). Drawn by the surface itself, so every platform shows them with no native popup. The
-/// tooltip's wrapped lines are kept while its text and width stay the same, so the caret's blink makes no strings.
+/// selected one filled, a kind mark, the label and its detail) and the tooltip's card (signature help or hover: wrapped
+/// lines, the active parameter bold; a hover card's selection, its scroll bar and its "Go to definition" row; a fold's
+/// preview, its hidden lines in their colours from the renderer's kept runs). Drawn by the surface itself, so every
+/// platform shows them with no native popup. The card's box and wrapped lines come from <see cref="EditorModel.HoverCard"/>,
+/// kept while its text and width stay the same, so the caret's blink makes no strings.
 /// </summary>
-internal sealed class EditorPopupRenderer
+internal static class EditorPopupRenderer
 {
-    private string? _wrappedText;
-    private int _wrappedColumns;
-    private readonly List<(int Start, int Length)> _lines = [];
-    private readonly List<string> _lineTexts = [];
-
-    public void Draw(IEditorCanvas canvas, EditorModel model)
+    public static void Draw(IEditorCanvas canvas, EditorModel model, EditorRenderer renderer)
     {
         var colors = model.Theme.Colors;
         var metrics = model.Metrics;
         PopupBox? completionBox = model.CompletionBox();
         if (model.Tooltip is { } tooltip)
         {
-            DrawTooltip(canvas, model, tooltip, colors, metrics, completionBox);
+            DrawTooltip(canvas, model, renderer, tooltip, colors, metrics);
         }
 
         if (completionBox is { } box)
@@ -164,112 +161,96 @@ internal sealed class EditorPopupRenderer
         DrawBorder(canvas, box, colors.PopupBorder);
     }
 
-    private void DrawTooltip(IEditorCanvas canvas, EditorModel model, EditorTooltip tooltip, EditorColors colors, FontMetrics metrics, PopupBox? avoid)
+    private static void DrawTooltip(IEditorCanvas canvas, EditorModel model, EditorRenderer renderer, EditorTooltip tooltip, EditorColors colors, FontMetrics metrics)
     {
-        float cell = metrics.CellWidth;
-        int columns = Math.Clamp((int)(model.ViewportWidth / cell) - 4, 16, EditorModel.PopupMaxColumns);
-        Wrap(tooltip.Text, columns);
-        int widest = 0;
-        foreach (var (_, length) in _lines)
-        {
-            widest = Math.Max(widest, length);
-        }
-
-        float width = (widest + (2 * EditorModel.PopupPadding)) * cell;
-        float height = _lines.Count * metrics.LineHeight;
-        var anchor = model.PointFromPosition(Math.Clamp(tooltip.Position, 0, model.Snapshot.Length));
-        float x = Math.Clamp(anchor.X - model.ScrollX, model.TextLeft, Math.Max(model.TextLeft, model.ViewportWidth - width));
-        float above = anchor.Y - model.ScrollY - height - 2;
-        float below = anchor.Y + metrics.LineHeight - model.ScrollY + 2;
-        bool listBelow = avoid is { } list && list.Y >= anchor.Y - model.ScrollY;
-        float y = above >= 0 || listBelow ? above : below;
-        if (y < 0 && avoid is { } box)
-        {
-            y = box.Y + box.Height + 2;
-        }
-
-        var popup = new PopupBox(x, y, width, height, _lines.Count);
-        canvas.FillRect(popup.X, popup.Y, popup.Width, popup.Height, colors.PopupBackground);
-        var plain = new TextStyle(colors.PopupText);
-        var bold = new TextStyle(colors.PopupText, Bold: true);
-        var (highlightStart, highlightLength) = tooltip.Highlight;
-        int highlightEnd = highlightStart + highlightLength;
-        float left = x + (EditorModel.PopupPadding * cell);
-        for (int i = 0; i < _lines.Count; i++)
-        {
-            var (start, length) = _lines[i];
-            float top = y + (i * metrics.LineHeight);
-            int end = start + length;
-            if (highlightLength > 0 && highlightStart < end && highlightEnd > start)
-            {
-                // The line in three runs: before, the active parameter (bold), after.
-                int from = Math.Max(start, highlightStart);
-                int to = Math.Min(end, highlightEnd);
-                var text = tooltip.Text;
-                if (from > start)
-                {
-                    canvas.DrawText(text[start..from], left, top, plain);
-                }
-
-                canvas.DrawText(text[from..to], left + ((from - start) * cell), top, bold);
-                if (to < end)
-                {
-                    canvas.DrawText(text[to..end], left + ((to - start) * cell), top, plain);
-                }
-            }
-            else
-            {
-                canvas.DrawText(_lineTexts[i], left, top, plain);
-            }
-        }
-
-        DrawBorder(canvas, popup, colors.PopupBorder);
-    }
-
-    /// <summary>Splits <paramref name="text"/> at its line breaks and wraps each line at a space before <paramref name="columns"/> (kept until the text or width changes).</summary>
-    private void Wrap(string text, int columns)
-    {
-        if (ReferenceEquals(text, _wrappedText) && columns == _wrappedColumns)
+        var card = model.HoverCard;
+        if (card.Layout() is not { } popup)
         {
             return;
         }
 
-        _wrappedText = text;
-        _wrappedColumns = columns;
-        _lines.Clear();
-        _lineTexts.Clear();
-        int at = 0;
-        while (at <= text.Length)
+        float cell = metrics.CellWidth;
+        float height = metrics.LineHeight;
+        canvas.FillRect(popup.X, popup.Y, popup.Width, popup.Height, colors.PopupBackground);
+        float left = popup.X + (EditorModel.PopupPadding * cell);
+        if (tooltip.Kind == EditorTooltipKind.FoldPreview)
         {
-            int newline = text.IndexOf('\n', at);
-            int end = newline < 0 ? text.Length : newline;
-            int start = at;
-            while (end - start > columns)
+            // The hidden lines in their colours, from the renderer's kept runs, their common indent taken off.
+            var snapshot = model.Snapshot;
+            int header = snapshot.GetLineIndex(Math.Clamp(tooltip.Position, 0, snapshot.Length));
+            float x = left - (card.PreviewIndent * cell);
+            for (int row = 0; row < card.ShownRows; row++)
             {
-                int cut = text.LastIndexOf(' ', start + columns, columns);
-                if (cut <= start)
+                int line = header + 1 + card.FirstRow + row;
+                if (line >= snapshot.LineCount)
                 {
-                    cut = start + columns;
+                    break;
                 }
 
-                Add(text, start, cut - start);
-                start = cut < text.Length && text[cut] == ' ' ? cut + 1 : cut;
+                StyledLines.Draw(canvas, renderer.LineRunsFor(model, line), x, popup.Y + (row * height), cell, popup.X, popup.X + popup.Width);
             }
-
-            Add(text, start, end - start);
-            if (newline < 0)
-            {
-                break;
-            }
-
-            at = newline + 1;
         }
-    }
+        else
+        {
+            var plain = new TextStyle(colors.PopupText);
+            var bold = new TextStyle(colors.PopupText, Bold: true);
+            var (highlightStart, highlightLength) = tooltip.Highlight;
+            int highlightEnd = highlightStart + highlightLength;
+            var (selectionStart, selectionEnd) = card.Selection;
+            var text = tooltip.Text;
+            for (int row = 0; row < card.ShownRows; row++)
+            {
+                var (start, length, lineText) = card.Line(card.FirstRow + row);
+                float top = popup.Y + (row * height);
+                int end = start + length;
+                if (selectionEnd > selectionStart && selectionStart <= end && selectionEnd >= start)
+                {
+                    int from = Math.Max(start, selectionStart) - start;
+                    int to = Math.Min(end, selectionEnd) - start;
+                    canvas.FillRect(left + (from * cell), top, Math.Max(1, to - from) * cell, height, colors.Selection);
+                }
 
-    private void Add(string text, int start, int length)
-    {
-        _lines.Add((start, length));
-        _lineTexts.Add(text.Substring(start, length));
+                if (highlightLength > 0 && highlightStart < end && highlightEnd > start)
+                {
+                    // The line in three runs: before, the active parameter (bold), after.
+                    int from = Math.Max(start, highlightStart);
+                    int to = Math.Min(end, highlightEnd);
+                    if (from > start)
+                    {
+                        canvas.DrawText(text[start..from], left, top, plain);
+                    }
+
+                    canvas.DrawText(text[from..to], left + ((from - start) * cell), top, bold);
+                    if (to < end)
+                    {
+                        canvas.DrawText(text[to..end], left + ((to - start) * cell), top, plain);
+                    }
+                }
+                else
+                {
+                    canvas.DrawText(lineText, left, top, plain);
+                }
+            }
+        }
+
+        if (card.ShownRows < card.Rows)
+        {
+            // The card's own scroll bar: where its shown rows are among all of them.
+            float track = card.ShownRows * height;
+            float thumb = Math.Max(height / 2, track * card.ShownRows / card.Rows);
+            float at = (track - thumb) * card.FirstRow / Math.Max(1, card.Rows - card.ShownRows);
+            canvas.FillRect(popup.X + popup.Width - (cell * 0.4f) - 1, popup.Y + at, cell * 0.4f, thumb, colors.PopupBorder);
+        }
+
+        if (card.HasDefinitionRow)
+        {
+            float top = popup.Y + (card.ShownRows * height);
+            canvas.DrawLine(popup.X, top, popup.X + popup.Width, top, colors.PopupBorder, 1);
+            canvas.DrawText(HoverCard.DefinitionLabel, left, top, new TextStyle(colors.Info));
+            canvas.DrawText(HoverCard.DefinitionKey, left + ((HoverCard.DefinitionLabel.Length + 2) * cell), top, new TextStyle(colors.GutterText));
+        }
+
+        DrawBorder(canvas, popup, colors.PopupBorder);
     }
 
     private static void DrawBorder(IEditorCanvas canvas, PopupBox box, uint argb)

@@ -110,6 +110,26 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
 
     /// <summary>The marker drawn after a folded line's text (the hidden lines' "...").</summary>
     public uint FoldMarker { get; init; } = (GutterText & 0x00FFFFFFu) | 0x50000000u;
+
+    // The X restart: the overview ruler's marks. Each follows the theme's own colour for the same thing unless a theme sets
+    // it (a plug-in's theme made before them draws the ruler in its own error, warning, find and caret colours).
+
+    private uint? _rulerError;
+    private uint? _rulerWarning;
+    private uint? _rulerFind;
+    private uint? _rulerCaret;
+
+    /// <summary>An error's mark on the overview ruler (the theme's <see cref="Error"/> unless set).</summary>
+    public uint RulerError { get => _rulerError ?? Error; init => _rulerError = value; }
+
+    /// <summary>A warning's mark on the overview ruler (the theme's <see cref="Warning"/> unless set).</summary>
+    public uint RulerWarning { get => _rulerWarning ?? Warning; init => _rulerWarning = value; }
+
+    /// <summary>A search hit's mark on the overview ruler (the find colour, opaque enough to read on the ruler, unless set).</summary>
+    public uint RulerFind { get => _rulerFind ?? ((FindMatch & 0x00FFFFFFu) | 0xC0000000u); init => _rulerFind = value; }
+
+    /// <summary>A caret's mark on the overview ruler (the caret's colour, a little see-through, unless set).</summary>
+    public uint RulerCaret { get => _rulerCaret ?? ((Caret & 0x00FFFFFFu) | 0xB0000000u); init => _rulerCaret = value; }
 }
 
 /// <summary>

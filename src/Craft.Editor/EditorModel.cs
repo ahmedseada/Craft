@@ -541,7 +541,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         NoteLineColumns(column);
         float caretX = column * metrics.CellWidth;
         float caretY = RowOfLine(CaretLine) * metrics.LineHeight;
-        float textWidth = Math.Max(metrics.CellWidth, ViewportWidth - TextLeft);
+        // The overview ruler covers the right edge, the sticky headers the top rows: the caret is kept out from under them.
+        float textWidth = Math.Max(metrics.CellWidth, ViewportWidth - TextLeft - OverviewRulerWidth);
+        float stickyTop = StickyScroll.Height;
         float marginX = Math.Min(Options.ScrollMarginColumns * metrics.CellWidth, Math.Max(0, (textWidth - metrics.CellWidth) / 2));
         float marginY = Math.Min(Options.ScrollMarginLines * metrics.LineHeight, Math.Max(0, (ViewportHeight - metrics.LineHeight) / 2));
         float x = ScrollX;
@@ -555,9 +557,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
             x = caretX + metrics.CellWidth + marginX - textWidth;
         }
 
-        if (caretY - marginY < y)
+        if (caretY - marginY - stickyTop < y)
         {
-            y = caretY - marginY;
+            y = caretY - marginY - stickyTop;
         }
         else if (caretY + metrics.LineHeight + marginY > y + ViewportHeight)
         {
@@ -605,6 +607,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
     internal void Invalidate() => Invalidated?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>Changes whenever the folds change (the rows move: the overview ruler and sticky scroll key on it).</summary>
+    internal int FoldsStamp { get; private set; }
+
     internal void SetSelection(SelectionState selection, bool keepDesiredColumn = false, bool keepAutoClosed = false)
     {
         // One selection: the other carets, a column selection and Ctrl+D's whole-word mode end.
@@ -618,6 +623,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// </summary>
     internal void OnFoldsChanged(bool movedOutOfFolds = false)
     {
+        FoldsStamp++;
         if (movedOutOfFolds && Folding.Map.HasHidden)
         {
             var snapshot = Snapshot;

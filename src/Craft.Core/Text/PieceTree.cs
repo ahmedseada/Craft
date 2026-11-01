@@ -291,6 +291,104 @@ internal sealed class PieceNode
         return offset + length == piece.Length ? new PieceNode(node.Left, Piece.Of(piece.Chunk, piece.Start, piece.Length - length), node.Right) : null;
     }
 
+    /// <summary>
+    /// The tree of <paramref name="pieces"/> in order, perfectly balanced (each node's sides differ by at most one piece),
+    /// built bottom-up in one pass: the batched build's middle (X restart piece 2a).
+    /// </summary>
+    public static PieceNode? FromSorted(ReadOnlySpan<Piece> pieces)
+    {
+        if (pieces.IsEmpty)
+        {
+            return null;
+        }
+
+        int mid = pieces.Length >> 1;
+        return new PieceNode(FromSorted(pieces[..mid]), pieces[mid], FromSorted(pieces[(mid + 1)..]));
+    }
+
+    /// <summary>
+    /// Writes the pieces of <paramref name="node"/> in order into <paramref name="into"/> from <paramref name="count"/>,
+    /// renting a bigger array from the shared pool when it is full (the old one returned, cleared); returns the new count.
+    /// </summary>
+    public static int Flatten(PieceNode? node, ref Piece[] into, int count)
+    {
+        while (node is not null)
+        {
+            count = Flatten(node.Left, ref into, count);
+            if (count == into.Length)
+            {
+                var bigger = System.Buffers.ArrayPool<Piece>.Shared.Rent(into.Length * 2);
+                into.AsSpan(0, count).CopyTo(bigger);
+                System.Buffers.ArrayPool<Piece>.Shared.Return(into, clearArray: true);
+                into = bigger;
+            }
+
+            into[count++] = node.Piece;
+            node = node.Right;
+        }
+
+        return count;
+    }
+
+    /// <summary>The pieces in the tree (walks it: tests and telemetry, not a keystroke).</summary>
+    public static int CountPieces(PieceNode? node) => node is null ? 0 : CountPieces(node.Left) + 1 + CountPieces(node.Right);
+
+    /// <summary>
+    /// What is wrong with the tree, or null: a node whose height, length or line breaks do not follow from its children and
+    /// its piece, a side more than one higher than the other, or an empty piece (the tests' structural check).
+    /// </summary>
+    public static string? Problem(PieceNode? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        if (Problem(node.Left) is { } left)
+        {
+            return left;
+        }
+
+        if (Problem(node.Right) is { } right)
+        {
+            return right;
+        }
+
+        int hl = HeightOf(node.Left), hr = HeightOf(node.Right);
+        if (node.Piece.Length <= 0)
+        {
+            return $"an empty piece at height {node.Height}";
+        }
+
+        if (Math.Abs(hl - hr) > 1)
+        {
+            return $"a node out of balance: its sides are {hl} and {hr} high";
+        }
+
+        if (node.Height != 1 + Math.Max(hl, hr))
+        {
+            return $"a node says it is {node.Height} high, its sides make {1 + Math.Max(hl, hr)}";
+        }
+
+        if (node.Length != LengthOf(node.Left) + node.Piece.Length + LengthOf(node.Right))
+        {
+            return $"a node says it holds {node.Length} characters, its parts hold {LengthOf(node.Left) + node.Piece.Length + LengthOf(node.Right)}";
+        }
+
+        var text = new char[node.Length];
+        CopyTo(node, 0, text);
+        int breaks = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\n' || (text[i] == '\r' && (i + 1 == text.Length || text[i + 1] != '\n')))
+            {
+                breaks++;
+            }
+        }
+
+        return node.Breaks == breaks ? null : $"a node of {node.Length} characters says it holds {node.Breaks} line breaks, its text holds {breaks}";
+    }
+
     private static PieceNode Last(PieceNode node)
     {
         while (node.Right is not null)

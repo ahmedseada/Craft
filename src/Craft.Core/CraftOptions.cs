@@ -291,6 +291,42 @@ public sealed record CraftOptions
     /// </summary>
     public int PaintCacheLines { get; init; } = 64;
 
+    // The X restart, piece 2a: faster typing at many carets, hover cards that stay, the overview ruler, sticky scroll.
+
+    /// <summary>
+    /// A text inserted next to a piece of the add buffer is copied with it into one piece while the two hold at most this
+    /// many characters, so typing at many carets keeps one piece a caret instead of one a keystroke; 0 never copies
+    /// (<c>CRAFT_PIECE_COALESCE_CHARS</c>).
+    /// </summary>
+    public int PieceCoalesceCharacters { get; init; } = 64;
+
+    /// <summary>A change of at least this many edits is built in one batch (one split before and after them, the middle rebuilt balanced) (<c>CRAFT_PIECE_BATCH_MIN_EDITS</c>).</summary>
+    public int PieceBatchMinEdits { get; init; } = 8;
+
+    /// <summary>
+    /// The batch is taken while the text between the first and the last edit holds at most this many pieces an edit; past
+    /// it each edit is applied on its own path (carets far apart in a much-edited file) (<c>CRAFT_PIECE_BATCH_PIECES_PER_EDIT</c>).
+    /// </summary>
+    public int PieceBatchPiecesPerEdit { get; init; } = 32;
+
+    /// <summary>Milliseconds a hover card stays after the pointer left it and its word; inside the card it stays (<c>CRAFT_HOVER_HIDE_MS</c>).</summary>
+    public int HoverHideMilliseconds { get; init; } = 300;
+
+    /// <summary>The hidden lines a folded block's hover preview shows, in their colours (<c>CRAFT_FOLD_PREVIEW_LINES</c>); 0 shows none.</summary>
+    public int FoldPreviewLines { get; init; } = 12;
+
+    /// <summary>Whether the editor's right edge shows the overview ruler: errors, warnings, search hits and carets over the whole file (<c>CRAFT_OVERVIEW_RULER</c>).</summary>
+    public bool OverviewRuler { get; init; } = true;
+
+    /// <summary>The overview ruler's width in device-independent units (<c>CRAFT_OVERVIEW_RULER_WIDTH</c>).</summary>
+    public int OverviewRulerWidth { get; init; } = 14;
+
+    /// <summary>Whether the headers of the blocks the top line is in stay at the top while their insides scroll (<c>CRAFT_STICKY_SCROLL</c>).</summary>
+    public bool StickyScroll { get; init; } = true;
+
+    /// <summary>The most header lines sticky scroll keeps at the top, outermost first (<c>CRAFT_STICKY_SCROLL_LINES</c>).</summary>
+    public int StickyScrollLines { get; init; } = 5;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -710,6 +746,16 @@ public sealed record CraftOptions
         // The owner's third Windows run (B1): the paint.
         new("CRAFT_PAINT_LINE_LAYOUTS", "true", "Whether the editor, the panels' lists and the terminal draw each shown line from a layout the platform keeps (made again only when the line, the theme or the font changes); off draws each coloured run on its own every frame.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Keep each shown line's layout", "Advanced") },
         new("CRAFT_PAINT_CACHE_LINES", "64", "The lines above and below the screen whose drawn form the editor keeps, so scrolling back lays nothing out; 0 keeps only the lines on screen.") { Shape = SettingShape.Whole(SettingSections.Editor, "Keep drawn lines around the screen", 0, 100_000, "lines", "Advanced", step: 16) },
+        // The X restart, piece 2a.
+        new("CRAFT_PIECE_COALESCE_CHARS", "64", "A text typed next to a piece of the add buffer is copied with it into one piece while the two hold at most this many characters (typing at many carets keeps one piece a caret); 0 never copies.") { Shape = SettingShape.Whole(SettingSections.Editor, "Join typed pieces up to", 0, 1_000_000, "characters", "Advanced", step: 16) },
+        new("CRAFT_PIECE_BATCH_MIN_EDITS", "8", "A change of at least this many edits (typing at many carets) is built in one batch: one split before and after them, the middle rebuilt balanced.") { Shape = SettingShape.Whole(SettingSections.Editor, "Build a change in one batch from", 1, 1_000_000, "edits", "Advanced") },
+        new("CRAFT_PIECE_BATCH_PIECES_PER_EDIT", "32", "The batch is taken while the text between the first and the last edit holds at most this many pieces an edit; past it each edit is applied on its own.") { Shape = SettingShape.Whole(SettingSections.Editor, "Batch while the middle holds at most", 1, 1_000_000, "pieces an edit", "Advanced", step: 8) },
+        new("CRAFT_HOVER_HIDE_MS", "300", "Milliseconds a hover card stays after the pointer left it and its word; inside the card it stays (select, copy and scroll in it).") { Shape = SettingShape.Whole(SettingSections.Editor, "Hover card stays after leaving", 0, 60_000, "ms", "Hover", step: 50) },
+        new("CRAFT_FOLD_PREVIEW_LINES", "12", "The hidden lines a folded block's hover preview shows, in their colours; 0 shows none.") { Shape = SettingShape.Whole(SettingSections.Editor, "Folded block preview", 0, 1000, "lines", "Display") },
+        new("CRAFT_OVERVIEW_RULER", "true", "Whether the editor's right edge shows the overview ruler: errors, warnings, search hits and carets over the whole file (a click or a drag scrolls there).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Overview ruler", "Display") },
+        new("CRAFT_OVERVIEW_RULER_WIDTH", "14", "The overview ruler's width.") { Shape = SettingShape.Whole(SettingSections.Editor, "Overview ruler width", 4, 200, "units", "Display") },
+        new("CRAFT_STICKY_SCROLL", "true", "Whether the headers of the blocks the top line is in stay at the top while their insides scroll (a click goes to the header).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Sticky scroll", "Display") },
+        new("CRAFT_STICKY_SCROLL_LINES", "5", "The most header lines sticky scroll keeps at the top, outermost first.") { Shape = SettingShape.Whole(SettingSections.Editor, "Sticky scroll keeps at most", 1, 50, "lines", "Display") },
         // Phase X slice 3: inline, not modal; the welcome page.
         new("CRAFT_WELCOME_AT_START", "true", "Whether the welcome page (open a folder, a new file, the recent folders, the main shortcuts) opens at start when no folder is open; Help › Welcome opens it any time.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Show the welcome page at start", "Welcome") },
         new("CRAFT_UNDO_BAR_MS", "5000", "Milliseconds the inline bar with Undo stays after a change that can be taken back (the notification centre cleared, a recent folder removed).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Undo bar stays for", 500, 600_000, "ms", "Notifications", step: 500) },
@@ -969,6 +1015,51 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_PAINT_CACHE_LINES") is { } cacheLines)
         {
             options = options with { PaintCacheLines = Whole(cacheLines, "CRAFT_PAINT_CACHE_LINES", 0, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_PIECE_COALESCE_CHARS") is { } coalesce)
+        {
+            options = options with { PieceCoalesceCharacters = Whole(coalesce, "CRAFT_PIECE_COALESCE_CHARS", 0, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_PIECE_BATCH_MIN_EDITS") is { } batchEdits)
+        {
+            options = options with { PieceBatchMinEdits = Whole(batchEdits, "CRAFT_PIECE_BATCH_MIN_EDITS", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_PIECE_BATCH_PIECES_PER_EDIT") is { } batchPieces)
+        {
+            options = options with { PieceBatchPiecesPerEdit = Whole(batchPieces, "CRAFT_PIECE_BATCH_PIECES_PER_EDIT", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_HOVER_HIDE_MS") is { } hoverHide)
+        {
+            options = options with { HoverHideMilliseconds = Whole(hoverHide, "CRAFT_HOVER_HIDE_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_FOLD_PREVIEW_LINES") is { } previewLines)
+        {
+            options = options with { FoldPreviewLines = Whole(previewLines, "CRAFT_FOLD_PREVIEW_LINES", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_OVERVIEW_RULER") is { } ruler)
+        {
+            options = options with { OverviewRuler = Flag(ruler, "CRAFT_OVERVIEW_RULER") };
+        }
+
+        if (Text(read, "CRAFT_OVERVIEW_RULER_WIDTH") is { } rulerWidth)
+        {
+            options = options with { OverviewRulerWidth = Whole(rulerWidth, "CRAFT_OVERVIEW_RULER_WIDTH", 4, 200) };
+        }
+
+        if (Text(read, "CRAFT_STICKY_SCROLL") is { } sticky)
+        {
+            options = options with { StickyScroll = Flag(sticky, "CRAFT_STICKY_SCROLL") };
+        }
+
+        if (Text(read, "CRAFT_STICKY_SCROLL_LINES") is { } stickyLines)
+        {
+            options = options with { StickyScrollLines = Whole(stickyLines, "CRAFT_STICKY_SCROLL_LINES", 1, 50) };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)

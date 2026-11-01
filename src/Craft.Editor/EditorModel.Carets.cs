@@ -31,6 +31,8 @@ public sealed partial class EditorModel
         Select,
         AddSelection,
         Box,
+        Card,
+        Ruler,
     }
 
     /// <summary>How many selections (carets) there are: 1, or more after Alt+click, Ctrl+D, select all occurrences or a column selection.</summary>
@@ -38,6 +40,9 @@ public sealed partial class EditorModel
 
     /// <summary>Whether there is more than one caret.</summary>
     public bool HasMultipleCarets => _carets.Count > 1;
+
+    /// <summary>Changes whenever the selections are set (the overview ruler rebuilds its caret marks on it).</summary>
+    internal int SelectionStamp { get; private set; }
 
     /// <summary>Every selection, in order of position (one: <see cref="Selection"/>).</summary>
     public ReadOnlySpan<SelectionState> Selections => _carets.Count == 0 ? new ReadOnlySpan<SelectionState>(in _selection) : CollectionsMarshal.AsSpan(_carets);
@@ -567,6 +572,7 @@ public sealed partial class EditorModel
         _desiredColumn = keepDesiredColumns ? _desiredColumn : -1;
         _primary = primary;
         _selection = _carets[primary];
+        SelectionStamp++;
         RevealCarets();
         if (_selection != previous || previousCount != _carets.Count)
         {
@@ -586,6 +592,7 @@ public sealed partial class EditorModel
         _desiredCount = 0;
         bool moved = selection != _selection || hadMany;
         _selection = selection;
+        SelectionStamp++;
         RevealCarets();
         if (moved)
         {

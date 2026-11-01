@@ -94,6 +94,9 @@ public sealed class EditorFolding : IDisposable
     /// <summary>The foldable ranges, sorted by header line, one per header (mapped through the edits since they came).</summary>
     public ReadOnlySpan<FoldingRange> Ranges => _ranges;
 
+    /// <summary>Changes whenever <see cref="Ranges"/> changes (an answer landed, or an edit moved them): sticky scroll keys on it.</summary>
+    internal int RangesStamp { get; private set; }
+
     /// <summary>The text version the providers last answered for (-1 before the first answer).</summary>
     public int RangesVersion { get; private set; } = -1;
 
@@ -402,6 +405,7 @@ public sealed class EditorFolding : IDisposable
 
         found.RemoveRange(kept, found.Count - kept);
         _ranges = [.. found];
+        RangesStamp++;
         RangesVersion = snapshot.Version;
         bool foldsChanged = Map.Reconcile(_ranges);
         if (foldsChanged)
@@ -470,6 +474,8 @@ public sealed class EditorFolding : IDisposable
             {
                 Array.Resize(ref _ranges, kept);
             }
+
+            RangesStamp++;
         }
         finally
         {

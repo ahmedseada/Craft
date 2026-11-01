@@ -317,26 +317,17 @@ public static class MultiCaretTests
             Keystrokes(recorder, keys, null, null);
         }
 
-        // Pass 2: the document alone, the same changes.
-        var replay = TextDocument.Create(text.ToString(), new CraftOptions { NewLine = "\n" });
-        var dummy = new SelectionState[100];
-        var documentTimes = new double[recorded.Count];
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < recorded.Count; i++)
-        {
-            long start = Stopwatch.GetTimestamp();
-            replay.Edit(recorded[i].Edits, recorded[i].Kind, dummy, 0, dummy, 0);
-            documentTimes[i] = Stopwatch.GetElapsedTime(start).TotalMicroseconds;
-        }
-
-        long documentBytes = (GC.GetAllocatedBytesForCurrentThread() - before) / recorded.Count;
+        // Pass 2: the document alone, the same changes: before (each edit on its own path, the batch off) and after (the
+        // X restart's batched build, the default), each with its pieces after the 400 typed keys.
+        var (beforeTimes, beforeBytes, beforePieces, beforeAdded) = Replay(new CraftOptions { NewLine = "\n", PieceBatchMinEdits = 1_000_000 });
+        var (documentTimes, documentBytes, afterPieces, afterAdded) = Replay(new CraftOptions { NewLine = "\n" });
 
         // Pass 3: the editor, the keystrokes as the user types them (the document's share included), then each with its paint.
         var (model, document) = RealEditors.Make(text.ToString(), language: new QuoteLanguage());
         using var _ = model;
         SetCarets(model, document);
         var keyTimes = new double[2 * keys];
-        before = GC.GetAllocatedBytesForCurrentThread();
+        long before = GC.GetAllocatedBytesForCurrentThread();
         Keystrokes(model, keys, keyTimes, null);
         long editorBytes = (GC.GetAllocatedBytesForCurrentThread() - before) / (2 * keys);
         using var renderer = new EditorRenderer();
@@ -350,11 +341,14 @@ public static class MultiCaretTests
         });
 
         Array.Sort(keyTimes);
-        Array.Sort(documentTimes);
         Array.Sort(paintTimes);
         long ownBytes = Math.Max(0, editorBytes - documentBytes);
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"    measured: a keystroke at 100 carets (typing and Backspace): median {Median(keyTimes):F1} us, p99 {P99(keyTimes):F1} us, {editorBytes:N0} bytes; of which the document's change {Median(documentTimes):F1} us and {documentBytes:N0} bytes, the editor's own about {ownBytes:N0} bytes; its paint median {Median(paintTimes):F1} us, p99 {P99(paintTimes):F1} us"));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"    measured: the document's change at 100 carets, before (edit by edit): median {Median(beforeTimes):F1} us, p99 {P99(beforeTimes):F1} us, {beforeBytes:N0} bytes, {beforePieces:N0} pieces after 400 keys, {beforeAdded:N0} characters added; after (batched): median {Median(documentTimes):F1} us, p99 {P99(documentTimes):F1} us, {documentBytes:N0} bytes, {afterPieces:N0} pieces, {afterAdded:N0} characters added"));
+        Check.True(afterPieces <= (100 * ((keys + 63) / 64 + 1)) + 101, $"the batch keeps a piece a caret per 64 typed characters ({afterPieces:N0} pieces after {keys} keys; edit by edit {beforePieces:N0})");
+        Check.True(documentBytes < beforeBytes, $"the batched change allocates less than the edit-by-edit one ({documentBytes:N0} against {beforeBytes:N0} bytes)");
         Check.Equal(100, model.SelectionCount, "still 100 carets");
         Check.True(renderer.CaretsDrawn == 21, $"the visible lines' carets drawn ({renderer.CaretsDrawn})");
         Check.True(Median(keyTimes) < 5_000, $"a keystroke at 100 carets stays well under a frame ({Median(keyTimes):F1} us)");
@@ -394,6 +388,33 @@ public static class MultiCaretTests
 
                 after?.Invoke(i);
             }
+        }
+
+        // The recorded changes replayed into a document of `options`: each change's time (sorted), the bytes a change, the
+        // pieces after the typed keys and the characters the add buffer took.
+        (double[] Times, long Bytes, int Pieces, long Added) Replay(CraftOptions options)
+        {
+            var replay = TextDocument.Create(text.ToString(), options);
+            var dummy = new SelectionState[100];
+            var times = new double[recorded.Count];
+            int pieces = 0;
+            long allocated = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < recorded.Count; i++)
+            {
+                long start = Stopwatch.GetTimestamp();
+                replay.Edit(recorded[i].Edits, recorded[i].Kind, dummy, 0, dummy, 0);
+                times[i] = Stopwatch.GetElapsedTime(start).TotalMicroseconds;
+                if (i == keys - 1)
+                {
+                    long counting = GC.GetAllocatedBytesForCurrentThread();
+                    pieces = Craft.Core.Text.PieceTableBuffer.PieceCount(replay.Buffer.Current);
+                    allocated += GC.GetAllocatedBytesForCurrentThread() - counting;
+                }
+            }
+
+            long bytes = (GC.GetAllocatedBytesForCurrentThread() - allocated) / recorded.Count;
+            Array.Sort(times);
+            return (times, bytes, pieces, ((Craft.Core.Text.PieceTableBuffer)replay.Buffer).AddedCharacters);
         }
 
         static double Median(double[] sorted) => sorted[sorted.Length / 2];

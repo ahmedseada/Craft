@@ -465,6 +465,11 @@ public sealed class EditorView : ContentView, IDisposable
         double line = model.Metrics.LineHeight;
         int lines = _options.ScrollWheelLines;
         double dy = SmoothScroll.WheelPixels(deltaY, lines, line);
+        if (deltaY != 0 && model.WheelOverPopup((float)dy))
+        {
+            return true;                                 // the X restart: the wheel over a hover card scrolls the card
+        }
+
         double dx = -SmoothScroll.WheelPixels(deltaX, lines, model.Metrics.CellWidth * 2);
         ScrollSmoothlyBy(dx, dy);
         return true;

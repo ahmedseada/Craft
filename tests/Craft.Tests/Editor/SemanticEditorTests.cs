@@ -66,10 +66,18 @@ internal sealed class FakeSemanticLanguage : ILanguage
         public Task<SignatureHelp?> GetSignatureHelpAsync(ITextSnapshot snapshot, int position, CancellationToken cancellationToken) =>
             Task.FromResult<SignatureHelp?>(new SignatureHelp([new SignatureInfo("void M(int a, int b)", "Does M.", [new("a", 7, 5, null), new("b", 14, 5, "The second.")])], 0, 1, position));
 
-        public Task<HoverInfo?> GetHoverAsync(ITextSnapshot snapshot, int position, CancellationToken cancellationToken) =>
-            Task.FromResult<HoverInfo?>(new HoverInfo("(local) int x", position, 1));
+        public string HoverText { get; set; } = "(local) int x";
 
-        public Task<DefinitionLocation?> GetDefinitionAsync(ITextSnapshot snapshot, int position, CancellationToken cancellationToken) => Definition.Task;
+        public List<int> DefinitionPositions { get; } = [];
+
+        public Task<HoverInfo?> GetHoverAsync(ITextSnapshot snapshot, int position, CancellationToken cancellationToken) =>
+            Task.FromResult<HoverInfo?>(new HoverInfo(HoverText, position, 1));
+
+        public Task<DefinitionLocation?> GetDefinitionAsync(ITextSnapshot snapshot, int position, CancellationToken cancellationToken)
+        {
+            DefinitionPositions.Add(position);
+            return Definition.Task;
+        }
 
         public Task<IReadOnlyList<TextEdit>> FormatAsync(ITextSnapshot snapshot, int start, int length, CancellationToken cancellationToken) => Task.FromResult(FormatEdits);
 
@@ -85,7 +93,7 @@ internal sealed class FakeSemanticLanguage : ILanguage
 [TestGroup("Editor")]
 public static class SemanticEditorTests
 {
-    private static readonly CraftOptions Immediate = new() { CompletionDelayMilliseconds = 0, HoverDelayMilliseconds = 0, CompletionRows = 3 };
+    private static readonly CraftOptions Immediate = new() { CompletionDelayMilliseconds = 0, HoverDelayMilliseconds = 0, HoverHideMilliseconds = 0, CompletionRows = 3 };
 
     private static (EditorModel Model, FakeDocument Document, FakeSemanticLanguage.Session Session, Queue<Action> Ui) Make(string text, int caret)
     {
@@ -339,8 +347,9 @@ public static class SemanticEditorTests
         model.PointerHovered(model.TextLeft + 5, 5);
         Pump(ui);
         Check.True(model.Tooltip is { Text: "(local) int x" }, "a resting pointer shows the hover");
+        Check.True(model.Tooltip is { Kind: EditorTooltipKind.Hover }, "a hover card");
         model.PointerExited();
-        Check.True(model.Tooltip is null, "leaving closes it");
+        Check.True(model.Tooltip is null, "leaving closes it after CRAFT_HOVER_HIDE_MS (0 here)");
     }
 
     [Test]

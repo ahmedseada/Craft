@@ -421,6 +421,22 @@ public sealed class EditorFind
         return list.CountAt(_editor.Selection);
     }
 
+    /// <summary>
+    /// The listed matches' starts of the current snapshot and pattern while the find overlay highlights them (empty when not
+    /// highlighting or not listed: the ruler never lists them itself), and the list itself as the key of what it shows.
+    /// </summary>
+    internal ReadOnlySpan<int> HighlightedStarts(out object? list)
+    {
+        if (IsHighlighting && Searchable && Listed(_editor.Snapshot) is { } listed)
+        {
+            list = listed;
+            return listed.Starts;
+        }
+
+        list = null;
+        return [];
+    }
+
     /// <summary>Whether the matches of the current snapshot and pattern are listed (the count and next read the list).</summary>
     public bool IsListed => Listed(_editor.Snapshot) is not null;
 
@@ -650,6 +666,8 @@ public sealed class EditorFind
         public bool Capped { get; } = capped;
 
         public int Count => starts.Length;
+
+        public ReadOnlySpan<int> Starts => starts;
 
         public FindCount CountAt(SelectionState selection)
         {

@@ -158,6 +158,11 @@ public sealed partial class EditorModel
             return;
         }
 
+        if (PressOnLayers(viewX, viewY, modifiers))
+        {
+            return;
+        }
+
         CloseTooltips();
         _completion?.Close();
         _pointerMode = PointerMode.Select;
@@ -215,12 +220,19 @@ public sealed partial class EditorModel
     /// <summary>The pointer moved to a point of the view; while pressed, the selection follows it.</summary>
     public void PointerMoved(float viewX, float viewY)
     {
+        _pointerX = viewX;
+        _pointerY = viewY;
         if (!_pointerDown || _clickCount != 1)
         {
             return;
         }
 
         NoteInput();
+        if (MoveOnLayers(viewX, viewY))
+        {
+            return;
+        }
+
         switch (_pointerMode)
         {
             case PointerMode.Box:
@@ -241,6 +253,7 @@ public sealed partial class EditorModel
     {
         _pointerDown = false;
         _pointerMode = PointerMode.Select;
+        _cardSelecting = false;
     }
 
     private int PositionFromView(float viewX, float viewY)
@@ -1075,6 +1088,11 @@ public sealed partial class EditorModel
 
     private bool Copy()
     {
+        if (CopyFromCard())
+        {
+            return true;
+        }
+
         string text = HasMultipleCarets ? CopiedTexts() : CopiedText(out _, out _);
         if (text.Length > 0)
         {

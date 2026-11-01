@@ -20,13 +20,17 @@ internal sealed class TextChunk
     private int _lineStartCount;
     private int _used;
 
-    private TextChunk(string? text, char[]? chars, int used, int lineStartCapacity)
+    private TextChunk(string? text, char[]? chars, int used, int lineStartCapacity, bool isAdd = false)
     {
+        IsAdd = isAdd;
         _text = text;
         _chars = chars;
         _used = used;
         _lineStarts = lineStartCapacity == 0 ? [] : new int[lineStartCapacity];
     }
+
+    /// <summary>Whether it is a block of the add buffer (typed or pasted text), not the original text.</summary>
+    public bool IsAdd { get; }
 
     /// <summary>The characters it can hold.</summary>
     public int Capacity => _text?.Length ?? _chars!.Length;
@@ -60,7 +64,7 @@ internal sealed class TextChunk
     }
 
     /// <summary>An empty block of the add buffer, holding up to <paramref name="capacity"/> characters.</summary>
-    public static TextChunk ForAppend(int capacity) => new(null, new char[capacity], 0, 16);
+    public static TextChunk ForAppend(int capacity) => new(null, new char[capacity], 0, 16, isAdd: true);
 
     /// <summary>
     /// Appends as much of <paramref name="text"/> as fits; returns how many characters it took (0 when none fit) and,

@@ -14,12 +14,13 @@ Windows run (2026-11-01)" at the end.
 | 2 | B1-B11 (paint and scroll, crash guard, sample plug-in and contract guard, learning's families, the start-up probe, the agent's files, learning's memory, splitters, terminal profiles, Roslyn's notification and the loader, the Learning view) | Built 2026-11-01 |
 | 3 | Note 27 (Idrak and Craft), X restart pieces 1b, 2a, 2b, 3a, 3b, X parts 6, 6b, 7, 8, 10, speculative decoding (part 11 item 1) | Built 2026-11-01 |
 | 4 | X part 9: editing helpers 1, 2, 6-9; navigation 13-17 | Built 2026-11-01 |
-| 5 | X part 9: tools 18-22 (Test explorer, Markdown and image preview, TODO list, spell check) | Running (slot s1) |
-| 6 | X part 9 item 23 and part 11 items 4-5 (inline AI chat, AI review, fix the build) | Running (slot s2) |
-| 7 | X part 9: language 3-5, 10-12 (snippets, inlay hints, code lens, linked tags, Outline, hierarchy) and two C# session speed fixes | Running (slot s3) |
-| 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test), the recovery prompt at start, X part 9's look group 24-26 | Running (slot s4) |
-| 9 | Phase W, the web languages | Started on the owner's word (2026-11-01: "start Web now"): each slot that frees takes W's next piece |
-| 10 | Left of X, for later (after W): part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times) | Planned, later |
+| 5 | X part 9: tools 18-22 (Test explorer, Markdown and image preview, TODO list, spell check) | Stopped for W (the owner, 2026-11-01: "stop all"), 14 tests passing, not pushed; for later, after W |
+| 6 | X part 9 item 23 and part 11 items 4-5 (inline AI chat, AI review, fix the build) | Stopped for W, half written, not pushed; for later, after W |
+| 7 | X part 9: language 3-5, 10-12 (snippets, inlay hints, code lens, linked tags, Outline, hierarchy) and two C# session speed fixes | Stopped for W, tests being fixed (one real bug found: a mirrored `$1` must repeat its placeholder's text), not pushed; for later, after W |
+| 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test) | Built (46d6e17) |
+| 8b | The recovery prompt at start, X part 9's look group 24-26 | Stopped for W, just begun; for later, after W |
+| 9 | Phase W, the web languages | Running: W0, W-files and W-npm first (the owner, 2026-11-01: "start Web now", "stop all") |
+| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times) | Planned, later; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
 | 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned, after W |
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |

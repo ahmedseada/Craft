@@ -183,6 +183,54 @@ Craft.Abstractions.ColorContrast  static System.Double MinRatio(System.UInt32 co
 Craft.Abstractions.ColorContrast  static System.Double Ratio(System.UInt32 a, System.UInt32 b)
 Craft.Abstractions.ColorContrast  static System.UInt32 Ensure(System.UInt32 color, System.Double ratio, System.ReadOnlySpan<System.UInt32> backgrounds)
 Craft.Abstractions.ColorContrast  static System.UInt32 Mix(System.UInt32 a, System.UInt32 b, System.Double amount)
+Craft.Abstractions.CommitMessageProviders
+Craft.Abstractions.CommitMessageProviders  event System.EventHandler Changed
+Craft.Abstractions.CommitMessageProviders  static Craft.Abstractions.ICommitMessageProvider Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.CommitMessageProviders  static Craft.Abstractions.ICommitMessageProvider Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.CommitMessageProviders  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.CommitMessageProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ICommitMessageProvider> All { get; }
+Craft.Abstractions.CommitMessageProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.CommitMessageProviders  static System.Void Register(Craft.Abstractions.ICommitMessageProvider provider)
+Craft.Abstractions.CommitMessageRequest
+Craft.Abstractions.CommitMessageRequest  Craft.Abstractions.CommitMessageRequest <Clone>$()
+Craft.Abstractions.CommitMessageRequest  System.Boolean Equals(Craft.Abstractions.CommitMessageRequest other)
+Craft.Abstractions.CommitMessageRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.CommitMessageRequest  System.Collections.Generic.IReadOnlyList<System.String> Examples { get; init; }
+Craft.Abstractions.CommitMessageRequest  System.Int32 GetHashCode()
+Craft.Abstractions.CommitMessageRequest  System.Int32 MaxTokens { get; init; }
+Craft.Abstractions.CommitMessageRequest  System.String Diff { get; init; }
+Craft.Abstractions.CommitMessageRequest  System.String Instructions { get; init; }
+Craft.Abstractions.CommitMessageRequest  System.String Model { get; init; }
+Craft.Abstractions.CommitMessageRequest  System.String ToString()
+Craft.Abstractions.CommitMessageRequest  System.Void Deconstruct(out System.String Instructions, out System.String Diff)
+Craft.Abstractions.CommitMessageRequest  ctor(System.String Instructions, System.String Diff)
+Craft.Abstractions.CommitMessageRequest : System.IEquatable<Craft.Abstractions.CommitMessageRequest>
+Craft.Abstractions.CommitModelChoice
+Craft.Abstractions.CommitModelChoice  Craft.Abstractions.CommitModelChoice <Clone>$()
+Craft.Abstractions.CommitModelChoice  System.Boolean Equals(Craft.Abstractions.CommitModelChoice other)
+Craft.Abstractions.CommitModelChoice  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.CommitModelChoice  System.Boolean Loaded { get; init; }
+Craft.Abstractions.CommitModelChoice  System.Int32 GetHashCode()
+Craft.Abstractions.CommitModelChoice  System.String Title { get; init; }
+Craft.Abstractions.CommitModelChoice  System.String ToString()
+Craft.Abstractions.CommitModelChoice  System.String Value { get; init; }
+Craft.Abstractions.CommitModelChoice  System.Void Deconstruct(out System.String Value, out System.String Title, out System.Boolean Loaded)
+Craft.Abstractions.CommitModelChoice  ctor(System.String Value, System.String Title, System.Boolean Loaded)
+Craft.Abstractions.CommitModelChoice : System.IEquatable<Craft.Abstractions.CommitModelChoice>
+Craft.Abstractions.CommitModelPlan
+Craft.Abstractions.CommitModelPlan  Craft.Abstractions.CommitModelPlan <Clone>$()
+Craft.Abstractions.CommitModelPlan  System.Boolean Equals(Craft.Abstractions.CommitModelPlan other)
+Craft.Abstractions.CommitModelPlan  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.CommitModelPlan  System.Int32 ContextTokens { get; init; }
+Craft.Abstractions.CommitModelPlan  System.Int32 GetHashCode()
+Craft.Abstractions.CommitModelPlan  System.String LoadCommand { get; init; }
+Craft.Abstractions.CommitModelPlan  System.String Model { get; init; }
+Craft.Abstractions.CommitModelPlan  System.String Role { get; init; }
+Craft.Abstractions.CommitModelPlan  System.String ToString()
+Craft.Abstractions.CommitModelPlan  System.String Why { get; init; }
+Craft.Abstractions.CommitModelPlan  System.Void Deconstruct(out System.String Model, out System.String Role, out System.String Why)
+Craft.Abstractions.CommitModelPlan  ctor(System.String Model, System.String Role, System.String Why)
+Craft.Abstractions.CommitModelPlan : System.IEquatable<Craft.Abstractions.CommitModelPlan>
 Craft.Abstractions.CompletionItem
 Craft.Abstractions.CompletionItem  Craft.Abstractions.CompletionItem <Clone>$()
 Craft.Abstractions.CompletionItem  Craft.Abstractions.CompletionItemKind Kind { get; init; }
@@ -906,6 +954,11 @@ Craft.Abstractions.IAiEventSink : Idrak.Abstraction.IKind
 Craft.Abstractions.ICodeActionProvider
 Craft.Abstractions.ICodeActionProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeAction> ActionsFor(Craft.Abstractions.CodeActionContext context)
 Craft.Abstractions.ICodeActionProvider : Idrak.Abstraction.IKind
+Craft.Abstractions.ICommitMessageProvider
+Craft.Abstractions.ICommitMessageProvider  Craft.Abstractions.CommitModelPlan Plan(System.String choice)
+Craft.Abstractions.ICommitMessageProvider  System.Collections.Generic.IAsyncEnumerable<System.String> WriteAsync(Craft.Abstractions.CommitMessageRequest request, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ICommitMessageProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CommitModelChoice> Models()
+Craft.Abstractions.ICommitMessageProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.IConversationHistory
 Craft.Abstractions.IConversationHistory  System.Boolean DeleteConversation(System.String id)
 Craft.Abstractions.IConversationHistory  System.Boolean OpenConversation(System.String id)
@@ -971,12 +1024,15 @@ Craft.Abstractions.IEditorHost  Craft.Abstractions.IEditorTerminals Terminals { 
 Craft.Abstractions.IEditorHost  Craft.Abstractions.IPluginSettings Settings { get; }
 Craft.Abstractions.IEditorHost  Craft.Abstractions.SelectionState Selection { get; }
 Craft.Abstractions.IEditorHost  System.Boolean Select(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
+Craft.Abstractions.IEditorHost  System.Boolean SetLineMarks(Craft.Abstractions.IEditorDocument document, System.String source, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> marks)
+Craft.Abstractions.IEditorHost  System.Boolean ShowInlineCard(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.InlineCard card)
 Craft.Abstractions.IEditorHost  System.Boolean ShowUndo(System.String text, System.Action undo, System.Action kept = null)
 Craft.Abstractions.IEditorHost  System.Boolean TypeText(Craft.Abstractions.IEditorDocument document, System.String text)
 Craft.Abstractions.IEditorHost  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
 Craft.Abstractions.IEditorHost  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Documents { get; }
 Craft.Abstractions.IEditorHost  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPanel> Panels { get; }
 Craft.Abstractions.IEditorHost  System.IDisposable AddPanel(Craft.Abstractions.IEditorPanel panel)
+Craft.Abstractions.IEditorHost  System.IDisposable AddRepository(Craft.Abstractions.ISourceControlRepository repository)
 Craft.Abstractions.IEditorHost  System.IDisposable AddStatusItem(Craft.Abstractions.IStatusItem item)
 Craft.Abstractions.IEditorHost  System.String DataFolder { get; }
 Craft.Abstractions.IEditorHost  System.String WorkspaceFolder { get; }
@@ -987,6 +1043,7 @@ Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> Exec
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> OpenExternalAsync(System.String path)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Void Dispatch(System.Action action)
@@ -995,12 +1052,14 @@ Craft.Abstractions.IEditorHost  System.Void Log(Craft.Abstractions.EditorLogLeve
 Craft.Abstractions.IEditorHost  System.Void Record(System.String metric, System.Double value, System.String unit)
 Craft.Abstractions.IEditorHost  System.Void ShowPanel(System.String panelId)
 Craft.Abstractions.IEditorHost  event System.EventHandler ActiveDocumentChanged
+Craft.Abstractions.IEditorHost  event System.EventHandler WorkspaceFolderChanged
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorDocumentChangedEventArgs> DocumentChanged
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentClosed
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentOpened
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> DocumentSaved
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> SelectionChanged
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorKeyEventArgs> KeyPressed
+Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.LineMarkEventArgs> LineMarkClicked
 Craft.Abstractions.IEditorInputSink
 Craft.Abstractions.IEditorInputSink  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
 Craft.Abstractions.IEditorInputSink  System.Void OnText(System.String text)
@@ -1010,6 +1069,7 @@ Craft.Abstractions.IEditorNotification  System.Void Update(System.String text, C
 Craft.Abstractions.IEditorNotification : System.IDisposable
 Craft.Abstractions.IEditorPanel
 Craft.Abstractions.IEditorPanel  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+Craft.Abstractions.IEditorPanel  System.String Badge { get; }
 Craft.Abstractions.IEditorPanel  System.String Id { get; }
 Craft.Abstractions.IEditorPanel  System.String Title { get; }
 Craft.Abstractions.IEditorPanel  event System.EventHandler Changed
@@ -1130,6 +1190,21 @@ Craft.Abstractions.ISemanticLanguageSession : System.IDisposable
 Craft.Abstractions.ISettingChoices
 Craft.Abstractions.ISettingChoices  System.Collections.Generic.IReadOnlyList<System.String> Choices { get; }
 Craft.Abstractions.ISettingChoices : Idrak.Abstraction.IKind
+Craft.Abstractions.ISourceControlProvider
+Craft.Abstractions.ISourceControlProvider  System.String Unavailable { get; }
+Craft.Abstractions.ISourceControlProvider  System.Threading.Tasks.Task<Craft.Abstractions.ISourceControlRepository> OpenAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ISourceControlProvider : Idrak.Abstraction.IKind
+Craft.Abstractions.ISourceControlRepository
+Craft.Abstractions.ISourceControlRepository  Craft.Abstractions.SourceControlStatus Status { get; }
+Craft.Abstractions.ISourceControlRepository  System.String Provider { get; }
+Craft.Abstractions.ISourceControlRepository  System.String Root { get; }
+Craft.Abstractions.ISourceControlRepository  System.Threading.Tasks.Task CommitAsync(System.String message, System.Boolean amend, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ISourceControlRepository  System.Threading.Tasks.Task RefreshAsync(System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ISourceControlRepository  System.Threading.Tasks.Task StageAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ISourceControlRepository  System.Threading.Tasks.Task UnstageAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ISourceControlRepository  System.Threading.Tasks.Task<System.String> ReadCommittedAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ISourceControlRepository  System.Threading.Tasks.Task<System.String> ReadStagedAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ISourceControlRepository  event System.EventHandler Changed
 Craft.Abstractions.IStatusItem
 Craft.Abstractions.IStatusItem  Craft.Abstractions.StatusAlignment Alignment { get; }
 Craft.Abstractions.IStatusItem  System.Int32 Priority { get; }
@@ -1200,6 +1275,29 @@ Craft.Abstractions.IWorkspaceSearchProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.IdrakInPlugins
 Craft.Abstractions.IdrakInPlugins  static System.Void IncludeLibraries(System.Reflection.Assembly plugin)
 Craft.Abstractions.IdrakInPlugins  static System.Void IncludePackages(System.Reflection.Assembly plugin, System.Collections.Generic.IEnumerable<System.String> packages)
+Craft.Abstractions.InlineCard
+Craft.Abstractions.InlineCard  Craft.Abstractions.InlineCard <Clone>$()
+Craft.Abstractions.InlineCard  System.Boolean Equals(Craft.Abstractions.InlineCard other)
+Craft.Abstractions.InlineCard  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.InlineCard  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.InlineCardAction> Actions { get; init; }
+Craft.Abstractions.InlineCard  System.Int32 GetHashCode()
+Craft.Abstractions.InlineCard  System.Int32 Line { get; init; }
+Craft.Abstractions.InlineCard  System.String Text { get; init; }
+Craft.Abstractions.InlineCard  System.String ToString()
+Craft.Abstractions.InlineCard  System.Void Deconstruct(out System.Int32 Line, out System.String Text, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.InlineCardAction> Actions)
+Craft.Abstractions.InlineCard  ctor(System.Int32 Line, System.String Text, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.InlineCardAction> Actions)
+Craft.Abstractions.InlineCard : System.IEquatable<Craft.Abstractions.InlineCard>
+Craft.Abstractions.InlineCardAction
+Craft.Abstractions.InlineCardAction  Craft.Abstractions.InlineCardAction <Clone>$()
+Craft.Abstractions.InlineCardAction  System.Action Run { get; init; }
+Craft.Abstractions.InlineCardAction  System.Boolean Equals(Craft.Abstractions.InlineCardAction other)
+Craft.Abstractions.InlineCardAction  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.InlineCardAction  System.Int32 GetHashCode()
+Craft.Abstractions.InlineCardAction  System.String Title { get; init; }
+Craft.Abstractions.InlineCardAction  System.String ToString()
+Craft.Abstractions.InlineCardAction  System.Void Deconstruct(out System.String Title, out System.Action Run)
+Craft.Abstractions.InlineCardAction  ctor(System.String Title, System.Action Run)
+Craft.Abstractions.InlineCardAction : System.IEquatable<Craft.Abstractions.InlineCardAction>
 Craft.Abstractions.InlineCompletionPiece
 Craft.Abstractions.InlineCompletionPiece  System.Boolean Equals(Craft.Abstractions.InlineCompletionPiece other)
 Craft.Abstractions.InlineCompletionPiece  System.Boolean Equals(System.Object obj)
@@ -1352,6 +1450,33 @@ Craft.Abstractions.LanguageSettings  System.String ToString()
 Craft.Abstractions.LanguageSettings  ctor()
 Craft.Abstractions.LanguageSettings  static Craft.Abstractions.LanguageSettings Default { get; }
 Craft.Abstractions.LanguageSettings : System.IEquatable<Craft.Abstractions.LanguageSettings>
+Craft.Abstractions.LineMark
+Craft.Abstractions.LineMark  Craft.Abstractions.LineMarkKind Kind { get; init; }
+Craft.Abstractions.LineMark  System.Boolean Equals(Craft.Abstractions.LineMark other)
+Craft.Abstractions.LineMark  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LineMark  System.Int32 Count { get; init; }
+Craft.Abstractions.LineMark  System.Int32 GetHashCode()
+Craft.Abstractions.LineMark  System.Int32 LastLine { get; }
+Craft.Abstractions.LineMark  System.Int32 Line { get; init; }
+Craft.Abstractions.LineMark  System.String ToString()
+Craft.Abstractions.LineMark  System.Void Deconstruct(out System.Int32 Line, out System.Int32 Count, out Craft.Abstractions.LineMarkKind Kind)
+Craft.Abstractions.LineMark  ctor(System.Int32 Line, System.Int32 Count, Craft.Abstractions.LineMarkKind Kind)
+Craft.Abstractions.LineMark : System.IEquatable<Craft.Abstractions.LineMark>
+Craft.Abstractions.LineMarkEventArgs
+Craft.Abstractions.LineMarkEventArgs  Craft.Abstractions.IEditorDocument Document { get; }
+Craft.Abstractions.LineMarkEventArgs  Craft.Abstractions.LineMark Mark { get; }
+Craft.Abstractions.LineMarkEventArgs  System.String Source { get; }
+Craft.Abstractions.LineMarkEventArgs  ctor(Craft.Abstractions.IEditorDocument document, System.String source, Craft.Abstractions.LineMark mark)
+Craft.Abstractions.LineMarkEventArgs : System.EventArgs
+Craft.Abstractions.LineMarkKind
+Craft.Abstractions.LineMarkKind  Added = 0
+Craft.Abstractions.LineMarkKind  Changed = 1
+Craft.Abstractions.LineMarkKind  Conflict = 3
+Craft.Abstractions.LineMarkKind  Deleted = 2
+Craft.Abstractions.LineMarkKind : System.IComparable
+Craft.Abstractions.LineMarkKind : System.IConvertible
+Craft.Abstractions.LineMarkKind : System.IFormattable
+Craft.Abstractions.LineMarkKind : System.ISpanFormattable
 Craft.Abstractions.ListPanel
 Craft.Abstractions.ListPanel  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
 Craft.Abstractions.ListPanel  System.String Id { get; }
@@ -1549,6 +1674,10 @@ Craft.Abstractions.NoNotification  ctor()
 Craft.Abstractions.NoNotification  static Craft.Abstractions.NoNotification Instance { get; }
 Craft.Abstractions.NoNotification : Craft.Abstractions.IEditorNotification
 Craft.Abstractions.NoNotification : System.IDisposable
+Craft.Abstractions.NoRepository
+Craft.Abstractions.NoRepository  System.Void Dispose()
+Craft.Abstractions.NoRepository  static Craft.Abstractions.NoRepository Instance { get; }
+Craft.Abstractions.NoRepository : System.IDisposable
 Craft.Abstractions.NotificationAction
 Craft.Abstractions.NotificationAction  Craft.Abstractions.NotificationAction <Clone>$()
 Craft.Abstractions.NotificationAction  System.Boolean Dismisses { get; init; }
@@ -1751,6 +1880,61 @@ Craft.Abstractions.PanelFacts  protected System.Boolean PrintMembers(System.Text
 Craft.Abstractions.PanelFacts : Craft.Abstractions.PanelBlock
 Craft.Abstractions.PanelFacts : System.IEquatable<Craft.Abstractions.PanelBlock>
 Craft.Abstractions.PanelFacts : System.IEquatable<Craft.Abstractions.PanelFacts>
+Craft.Abstractions.PanelFileList
+Craft.Abstractions.PanelFileList  Craft.Abstractions.PanelFileList <Clone>$()
+Craft.Abstractions.PanelFileList  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+Craft.Abstractions.PanelFileList  System.Boolean Equals(Craft.Abstractions.PanelFileList other)
+Craft.Abstractions.PanelFileList  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelFileList  System.Boolean Open { get; init; }
+Craft.Abstractions.PanelFileList  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelFileRow> Rows { get; init; }
+Craft.Abstractions.PanelFileList  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelIconButton> Actions { get; init; }
+Craft.Abstractions.PanelFileList  System.Int32 GetHashCode()
+Craft.Abstractions.PanelFileList  System.String Empty { get; init; }
+Craft.Abstractions.PanelFileList  System.String Id { get; init; }
+Craft.Abstractions.PanelFileList  System.String Title { get; init; }
+Craft.Abstractions.PanelFileList  System.String ToString()
+Craft.Abstractions.PanelFileList  System.Type EqualityContract { get; }
+Craft.Abstractions.PanelFileList  System.Void Deconstruct(out System.String Id, out System.String Title, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelFileRow> Rows)
+Craft.Abstractions.PanelFileList  ctor(System.String Id, System.String Title, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelFileRow> Rows)
+Craft.Abstractions.PanelFileList  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+Craft.Abstractions.PanelFileList : Craft.Abstractions.PanelBlock
+Craft.Abstractions.PanelFileList : System.IEquatable<Craft.Abstractions.PanelBlock>
+Craft.Abstractions.PanelFileList : System.IEquatable<Craft.Abstractions.PanelFileList>
+Craft.Abstractions.PanelFileRow
+Craft.Abstractions.PanelFileRow  Craft.Abstractions.PanelFileRow <Clone>$()
+Craft.Abstractions.PanelFileRow  Craft.Abstractions.PanelTone Tone { get; init; }
+Craft.Abstractions.PanelFileRow  System.Boolean Equals(Craft.Abstractions.PanelFileRow other)
+Craft.Abstractions.PanelFileRow  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelFileRow  System.Boolean Struck { get; init; }
+Craft.Abstractions.PanelFileRow  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelIconButton> Actions { get; init; }
+Craft.Abstractions.PanelFileRow  System.Int32 GetHashCode()
+Craft.Abstractions.PanelFileRow  System.String ActionId { get; init; }
+Craft.Abstractions.PanelFileRow  System.String Folder { get; init; }
+Craft.Abstractions.PanelFileRow  System.String Letter { get; init; }
+Craft.Abstractions.PanelFileRow  System.String Name { get; init; }
+Craft.Abstractions.PanelFileRow  System.String Path { get; init; }
+Craft.Abstractions.PanelFileRow  System.String ToString()
+Craft.Abstractions.PanelFileRow  System.String Tooltip { get; init; }
+Craft.Abstractions.PanelFileRow  System.Void Deconstruct(out System.String Path, out System.String Name, out System.String Letter)
+Craft.Abstractions.PanelFileRow  ctor(System.String Path, System.String Name, System.String Letter)
+Craft.Abstractions.PanelFileRow : System.IEquatable<Craft.Abstractions.PanelFileRow>
+Craft.Abstractions.PanelIconButton
+Craft.Abstractions.PanelIconButton  Craft.Abstractions.PanelIconButton <Clone>$()
+Craft.Abstractions.PanelIconButton  Craft.Abstractions.PanelTone Tone { get; init; }
+Craft.Abstractions.PanelIconButton  System.Boolean Enabled { get; init; }
+Craft.Abstractions.PanelIconButton  System.Boolean Equals(Craft.Abstractions.PanelIconButton other)
+Craft.Abstractions.PanelIconButton  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelIconButton  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelOption> Menu { get; init; }
+Craft.Abstractions.PanelIconButton  System.Int32 GetHashCode()
+Craft.Abstractions.PanelIconButton  System.String ActionId { get; init; }
+Craft.Abstractions.PanelIconButton  System.String Icon { get; init; }
+Craft.Abstractions.PanelIconButton  System.String MenuActionId { get; init; }
+Craft.Abstractions.PanelIconButton  System.String ToString()
+Craft.Abstractions.PanelIconButton  System.String Tooltip { get; init; }
+Craft.Abstractions.PanelIconButton  System.String Value { get; init; }
+Craft.Abstractions.PanelIconButton  System.Void Deconstruct(out System.String Icon, out System.String ActionId, out System.String Tooltip)
+Craft.Abstractions.PanelIconButton  ctor(System.String Icon, System.String ActionId, System.String Tooltip)
+Craft.Abstractions.PanelIconButton : System.IEquatable<Craft.Abstractions.PanelIconButton>
 Craft.Abstractions.PanelInput
 Craft.Abstractions.PanelInput  Craft.Abstractions.PanelInput <Clone>$()
 Craft.Abstractions.PanelInput  System.Boolean Code { get; init; }
@@ -1785,6 +1969,31 @@ Craft.Abstractions.PanelItem  System.String ToString()
 Craft.Abstractions.PanelItem  System.Void Deconstruct(out System.String Text, out System.String Detail, out System.String CommandId)
 Craft.Abstractions.PanelItem  ctor(System.String Text, System.String Detail = null, System.String CommandId = null)
 Craft.Abstractions.PanelItem : System.IEquatable<Craft.Abstractions.PanelItem>
+Craft.Abstractions.PanelMessageBox
+Craft.Abstractions.PanelMessageBox  Craft.Abstractions.PanelMessageBox <Clone>$()
+Craft.Abstractions.PanelMessageBox  Craft.Abstractions.PanelTone StatusTone { get; init; }
+Craft.Abstractions.PanelMessageBox  System.Boolean Busy { get; init; }
+Craft.Abstractions.PanelMessageBox  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+Craft.Abstractions.PanelMessageBox  System.Boolean Equals(Craft.Abstractions.PanelMessageBox other)
+Craft.Abstractions.PanelMessageBox  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelMessageBox  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelIconButton> Actions { get; init; }
+Craft.Abstractions.PanelMessageBox  System.Int32 GetHashCode()
+Craft.Abstractions.PanelMessageBox  System.Int32 Lines { get; init; }
+Craft.Abstractions.PanelMessageBox  System.Int32 Version { get; init; }
+Craft.Abstractions.PanelMessageBox  System.String ActionId { get; init; }
+Craft.Abstractions.PanelMessageBox  System.String Placeholder { get; init; }
+Craft.Abstractions.PanelMessageBox  System.String Status { get; init; }
+Craft.Abstractions.PanelMessageBox  System.String SubmitActionId { get; init; }
+Craft.Abstractions.PanelMessageBox  System.String SubmitKeys { get; init; }
+Craft.Abstractions.PanelMessageBox  System.String Text { get; init; }
+Craft.Abstractions.PanelMessageBox  System.String ToString()
+Craft.Abstractions.PanelMessageBox  System.Type EqualityContract { get; }
+Craft.Abstractions.PanelMessageBox  System.Void Deconstruct(out System.String ActionId, out System.String Text)
+Craft.Abstractions.PanelMessageBox  ctor(System.String ActionId, System.String Text)
+Craft.Abstractions.PanelMessageBox  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+Craft.Abstractions.PanelMessageBox : Craft.Abstractions.PanelBlock
+Craft.Abstractions.PanelMessageBox : System.IEquatable<Craft.Abstractions.PanelBlock>
+Craft.Abstractions.PanelMessageBox : System.IEquatable<Craft.Abstractions.PanelMessageBox>
 Craft.Abstractions.PanelMeter
 Craft.Abstractions.PanelMeter  Craft.Abstractions.PanelMeter <Clone>$()
 Craft.Abstractions.PanelMeter  Craft.Abstractions.PanelTone Tone { get; init; }
@@ -2335,6 +2544,7 @@ Craft.Abstractions.SettingSections  const System.String Keyboard = keyboard
 Craft.Abstractions.SettingSections  const System.String Learning = learning
 Craft.Abstractions.SettingSections  const System.String Models = models
 Craft.Abstractions.SettingSections  const System.String Plugins = plugins
+Craft.Abstractions.SettingSections  const System.String SourceControl = sourceControl
 Craft.Abstractions.SettingSections  const System.String Terminal = terminal
 Craft.Abstractions.SettingSections  const System.String Voice = voice
 Craft.Abstractions.SettingSections  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> All { get; }
@@ -2409,6 +2619,71 @@ Craft.Abstractions.SignatureParameter  System.String ToString()
 Craft.Abstractions.SignatureParameter  System.Void Deconstruct(out System.String Name, out System.Int32 Start, out System.Int32 Length, out System.String Documentation)
 Craft.Abstractions.SignatureParameter  ctor(System.String Name, System.Int32 Start, System.Int32 Length, System.String Documentation)
 Craft.Abstractions.SignatureParameter : System.IEquatable<Craft.Abstractions.SignatureParameter>
+Craft.Abstractions.SourceControlFile
+Craft.Abstractions.SourceControlFile  Craft.Abstractions.SourceControlFile <Clone>$()
+Craft.Abstractions.SourceControlFile  Craft.Abstractions.SourceControlState State { get; init; }
+Craft.Abstractions.SourceControlFile  System.Boolean Equals(Craft.Abstractions.SourceControlFile other)
+Craft.Abstractions.SourceControlFile  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.SourceControlFile  System.Boolean Staged { get; init; }
+Craft.Abstractions.SourceControlFile  System.Int32 GetHashCode()
+Craft.Abstractions.SourceControlFile  System.String Letter { get; }
+Craft.Abstractions.SourceControlFile  System.String OldPath { get; init; }
+Craft.Abstractions.SourceControlFile  System.String Path { get; init; }
+Craft.Abstractions.SourceControlFile  System.String RelativePath { get; init; }
+Craft.Abstractions.SourceControlFile  System.String ToString()
+Craft.Abstractions.SourceControlFile  System.Void Deconstruct(out System.String Path, out Craft.Abstractions.SourceControlState State, out System.Boolean Staged)
+Craft.Abstractions.SourceControlFile  ctor(System.String Path, Craft.Abstractions.SourceControlState State, System.Boolean Staged)
+Craft.Abstractions.SourceControlFile : System.IEquatable<Craft.Abstractions.SourceControlFile>
+Craft.Abstractions.SourceControlProviders
+Craft.Abstractions.SourceControlProviders  const System.String BranchCommand = craft.sourceControl.branch
+Craft.Abstractions.SourceControlProviders  const System.String ShowCommand = craft.sourceControl.show
+Craft.Abstractions.SourceControlProviders  event System.EventHandler Changed
+Craft.Abstractions.SourceControlProviders  static Craft.Abstractions.ISourceControlProvider Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.SourceControlProviders  static Craft.Abstractions.ISourceControlProvider Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.SourceControlProviders  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.SourceControlProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ISourceControlProvider> All { get; }
+Craft.Abstractions.SourceControlProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.SourceControlProviders  static System.Void Register(Craft.Abstractions.ISourceControlProvider provider)
+Craft.Abstractions.SourceControlState
+Craft.Abstractions.SourceControlState  Added = 1
+Craft.Abstractions.SourceControlState  Conflict = 6
+Craft.Abstractions.SourceControlState  Copied = 4
+Craft.Abstractions.SourceControlState  Deleted = 2
+Craft.Abstractions.SourceControlState  Modified = 0
+Craft.Abstractions.SourceControlState  Renamed = 3
+Craft.Abstractions.SourceControlState  TypeChanged = 7
+Craft.Abstractions.SourceControlState  Untracked = 5
+Craft.Abstractions.SourceControlState : System.IComparable
+Craft.Abstractions.SourceControlState : System.IConvertible
+Craft.Abstractions.SourceControlState : System.IFormattable
+Craft.Abstractions.SourceControlState : System.ISpanFormattable
+Craft.Abstractions.SourceControlStates
+Craft.Abstractions.SourceControlStates  static Craft.Abstractions.PanelTone Tone(Craft.Abstractions.SourceControlState state)
+Craft.Abstractions.SourceControlStates  static System.String Letter(Craft.Abstractions.SourceControlState state)
+Craft.Abstractions.SourceControlStates  static System.String Words(Craft.Abstractions.SourceControlState state)
+Craft.Abstractions.SourceControlStatus
+Craft.Abstractions.SourceControlStatus  Craft.Abstractions.SourceControlFile FileState(System.String path)
+Craft.Abstractions.SourceControlStatus  Craft.Abstractions.SourceControlStatus <Clone>$()
+Craft.Abstractions.SourceControlStatus  System.Boolean Detached { get; init; }
+Craft.Abstractions.SourceControlStatus  System.Boolean Equals(Craft.Abstractions.SourceControlStatus other)
+Craft.Abstractions.SourceControlStatus  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.SourceControlStatus  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SourceControlFile> Changes { get; init; }
+Craft.Abstractions.SourceControlStatus  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SourceControlFile> Conflicts { get; init; }
+Craft.Abstractions.SourceControlStatus  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SourceControlFile> Staged { get; init; }
+Craft.Abstractions.SourceControlStatus  System.Int32 Ahead { get; init; }
+Craft.Abstractions.SourceControlStatus  System.Int32 Behind { get; init; }
+Craft.Abstractions.SourceControlStatus  System.Int32 Count { get; }
+Craft.Abstractions.SourceControlStatus  System.Int32 GetHashCode()
+Craft.Abstractions.SourceControlStatus  System.Int32 Stashes { get; init; }
+Craft.Abstractions.SourceControlStatus  System.String Branch { get; init; }
+Craft.Abstractions.SourceControlStatus  System.String BranchText { get; }
+Craft.Abstractions.SourceControlStatus  System.String Root { get; init; }
+Craft.Abstractions.SourceControlStatus  System.String ToString()
+Craft.Abstractions.SourceControlStatus  System.String Upstream { get; init; }
+Craft.Abstractions.SourceControlStatus  System.Void Deconstruct(out System.String Root, out System.String Branch)
+Craft.Abstractions.SourceControlStatus  ctor(System.String Root, System.String Branch)
+Craft.Abstractions.SourceControlStatus  static Craft.Abstractions.SourceControlStatus None { get; }
+Craft.Abstractions.SourceControlStatus : System.IEquatable<Craft.Abstractions.SourceControlStatus>
 Craft.Abstractions.SpokenCommand
 Craft.Abstractions.SpokenCommand  System.Boolean TakesNumber { get; }
 Craft.Abstractions.SpokenCommand  System.String CommandId { get; }
@@ -2765,6 +3040,7 @@ Craft.Abstractions.TokenSpanBuffer : System.IDisposable
 Craft.Abstractions.ViewPanel
 Craft.Abstractions.ViewPanel  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
 Craft.Abstractions.ViewPanel  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+Craft.Abstractions.ViewPanel  System.String Badge { get; set; }
 Craft.Abstractions.ViewPanel  System.String Id { get; }
 Craft.Abstractions.ViewPanel  System.String Title { get; set; }
 Craft.Abstractions.ViewPanel  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)

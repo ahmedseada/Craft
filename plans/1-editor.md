@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"), X part 7 (rich context menus), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
 | 5 | X rest: minimap, completion at several carets, peek (built in piece 3a), measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -3633,6 +3633,132 @@ headless in `Craft.Editor.Shell`, the MAUI view only draws it.
   and "@Pro" in the composer, Up in the empty box; the header's ⤢ or Ctrl+Shift+Alt+M (the chat over the editors, the
   explorer and rail still there; resize the explorer; Escape restores); ☰ (the past conversations: New, Rename, Delete
   then Undo); run the agent on "Create C# class House…" and approve a command on its step.
+
+### X part 8 as built (2026-11-01)
+
+Slot s3: the Source Control view as a pre-installed, removable plug-in, with Generate commit message. Craft only; nothing
+in Idrak (no cause there: git is the user's own program, the model through Craft's existing leases).
+- **Contracts** (`Craft.Abstractions`, additions to contract 1.1): `ISourceControlProvider : IKind` and
+  `SourceControlProviders` (with `BranchCommand` "craft.sourceControl.branch", which the status bar's branch runs, and
+  `ShowCommand`), `ISourceControlRepository`, `SourceControlStatus`/`SourceControlFile`/`SourceControlState`/
+  `SourceControlStates` (letters, colour roles, words); `ICommitMessageProvider : IKind` and `CommitMessageProviders`
+  (`CommitMessageRequest`, `CommitModelPlan`, `CommitModelChoice`); `LineMark`/`LineMarkKind`/`LineMarkEventArgs`,
+  `InlineCard`/`InlineCardAction`; on `IEditorHost` (default members): `WorkspaceFolderChanged`, `SetLineMarks`,
+  `LineMarkClicked`, `ShowInlineCard`, `AddRepository`, `ShowDiffAsync`; `IEditorPanel.Badge` (and `ViewPanel.Badge`);
+  three blocks for B11's view panels: `PanelFileList`/`PanelFileRow` (a group of files with icons, letters, colours,
+  actions on hover), `PanelIconButton` (with an inline menu), `PanelMessageBox` (a multi-line box, its submit keys, its
+  buttons inside, a version that replaces its text); `SettingSections.SourceControl`.
+- **The plug-in** (`plugins/Craft.Plugins.Git`, "git", contract 1.1): `GitProgram` finds git on PATH or at
+  `CRAFT_PLUGIN_GIT_PATH` and runs it with an argument list (never a shell), `GIT_TERMINAL_PROMPT=0`,
+  `core.quotepath=false`, `LC_ALL=C`, output read as bytes, a cancelled run killed with its tree; `GitParsers` parses
+  `status --porcelain=v2 -z --branch --show-stash` (ordinary, renamed with the old path after its NUL, unmerged, untracked;
+  ignored skipped), `for-each-ref` branches, `-U0` hunks and conflict blocks as bytes; `GitRepository` reads the status
+  after a pause (`_REFRESH_MS` 500), one read at a time, `Changed` only when git's output changed; `GitSession` (one per
+  host) opens the open folder's repository, publishes it, watches the folder (the "system" watcher; `.git/objects` and
+  locks are not changes) and the saves, runs the user's actions (each an activity, the network ones with Cancel; no sandbox
+  question: they are the user's own), the gutter, and Generate.
+- **The view** (`SourceControlView`, headless: state to blocks; the rail's "Source Control" item with the count of changed
+  files as its badge; Ctrl+Shift+G): the commit box (Ctrl+Enter commits on the branch; the sparkle button inside with the
+  loaded models in its menu, Stop while it writes, the line under it), Commit (nothing staged: asks to stage everything
+  first), Amend, Pull ↓n, Push ↑n (no upstream: publishes to origin), Sync (asks first, `_CONFIRMSYNC`), Fetch
+  (`_AUTOFETCHMINUTES`, 0 off), Stash and Pop (n), the branch picker with ahead and behind and a New branch field, then
+  Merge conflicts (accept current, incoming, both per file; ✓ marks resolved), Staged changes (Unstage all) and Changes
+  (Stage all, Discard all), each row the file's icon, name, folder, letter and colour (deleted struck through), a click the
+  read-only diff (staged: against the last commit; else the working copy against the index), its actions on hover. No
+  git: "Git is not available" with what to do, Try again and the settings; no folder: Open folder; not a repository:
+  Initialize repository. Discard is done at once with the shell's Undo bar (the files' bytes kept, `_DISCARDUNDOMB` 16; a
+  larger discard asks first); an untracked file is deleted and Undo writes it back.
+- **The editor**: `DocumentLineMarks` (per text document, shared by its every editor, sorted, versioned) drawn by the
+  renderer as a bar in the gutter's strip left of the fold column (added: the theme's success, changed: info, removed: a
+  wedge in the error colour, a conflict: warning; a binary search to the first visible mark) and by the overview ruler as a
+  strip at its left edge (bucketed with the other marks, rebuilt only when the marks' version changes). A click on a mark
+  goes to its source (`LineMarkClicked`); the git plug-in answers with an inline card (`EditorTooltipKind.Card`) under the
+  line: the old lines on the diff's removed fill, the new on its added fill, and a row of actions (Revert, Stage; a
+  conflict: Accept current, Accept incoming, Accept both); it stays until Escape, a press outside or an action. The marks
+  are the index's blob (`git show :path`) against the document's text now (unsaved too), Craft's `TextDiff` with no
+  context, worked out on the thread pool after `_GUTTERDELAYMS` (300); Stage writes the index's text with that hunk from
+  the editor (`hash-object -w --stdin` and `update-index --cacheinfo`, the file's mode kept).
+- **The shell**: the rail draws a panel's badge as a pill on its item; the status bar's branch is the published
+  repository's with ↑ahead ↓behind and a click runs `craft.sourceControl.branch` (the branches as a question, "Create a
+  branch…" opens the view); the tree's file names take their state's colour and letter (`FolderTreeView.StateOf`); the
+  tree's and the tab's menus get Stage, Unstage, Discard changes, Open changes and Reveal in Source Control (each shows
+  only when it applies; X part 7 extends the menus); View › Source Control. The read-only diff is `ChangesDiffPage` (the
+  diff view's rows, Close) through `IEditorPresenter.ShowDiffAsync`.
+- **Generate commit message**: the staged diff (else every change of the working copy, the untracked files as new files,
+  said so), trimmed by file to `_COMMITDIFFTOKENS` (3000; within the model's context less the reply and 512), the largest
+  files summarised by name and counts; the instructions (`_COMMITPROMPT`, else the plug-in's), the style (`_COMMITSTYLE`
+  auto: the last `_COMMITEXAMPLES` 10 subjects as examples; conventional; plain); asked of the first registered commit
+  message provider, the AI plug-in's "ai" (`AiCommitMessages`): with `_COMMITMODEL` "loaded" the first loaded of the chat's,
+  the agent's, the completion's model ("chat", "agent", "completion" or a model's name pick one), through that role's
+  existing lease (no load, no second copy) and its temperature, context and reply limit (`_COMMITMAXTOKENS` 0: the role's).
+  The pieces stream into the box (one dispatch a UI turn), the reply is cleaned (a fence, quotes, "Commit message:"), the
+  line under the box names the model; Stop keeps what was written; nothing commits by itself. Nothing loaded: says so and
+  offers "Load the chat model" (`ai.loadModel`, run only when pressed); the button's tooltip names the model it would use.
+- **Decisions (the recommended option each time, the owner asleep):**
+  - The view is a block panel with three new general blocks in `Craft.Abstractions`, not a git-only MAUI view: any plug-in can draw file groups and a message box.
+  - The plug-in publishes its repository through `IEditorHost.AddRepository`; the shell never runs git itself (one status read per change, rule 75).
+  - The rail's count is `IEditorPanel.Badge` on the rail item of the panel's id; the shell rebuilds the rail only when a badge changed.
+  - The gutter diffs the index's blob against the document's text in-process (it follows typing, unsaved too) rather than `git diff` of the file on disk; git's `-U0` hunks give the same marks (`GitParsers.Hunks`, tested).
+  - Mark colours are the theme's success, info, error and warning; no new theme tokens.
+  - The inline card is a new tooltip kind under its line; while it shows, no hover replaces it.
+  - Revert, and a conflict's accepts in an open document, go through the diff (`ProposeAsync`, one undo step the user accepts): no silent edit; a closed conflicted file is rewritten on disk with the Undo bar.
+  - Discard is done at once with the Undo bar (B11's rule), up to 16 MiB kept (`_DISCARDUNDOMB`); beyond, it asks first.
+  - Commit with nothing staged asks to stage everything and commit; an empty message says so.
+  - Push without an upstream publishes to "origin" (else the first remote) with `--set-upstream`; no remote: says how to add one.
+  - `CRAFT_PLUGIN_GIT_PATH` is machine-only: added to the settings' not-from-workspace list (a folder someone else wrote names no program to run).
+  - The folder watcher is "system" (the plug-in reads no Craft option); `.git/objects` and `*.lock` events are not changes.
+  - Tokens of the commit diff are estimated at four bytes each (the plug-in has no tokenizer); the budget is a setting and the model's context bounds it.
+  - "loaded" means chat, then agent, then completion; the menu lists every role that has a model, the loaded first (the agent's entry is the chat's copy by default).
+  - The model menu opens inline under the box (no platform sheet, the look-and-feel rule).
+  - Generate has no default keys (its tooltip shows them once bound); Ctrl+Shift+G shows the view.
+  - A new settings section "Source Control" holds the plug-in's settings.
+  - A folder that is not a repository is offered Initialize repository (`git init`).
+- **Options added** (each with its shape, Settings › Source Control): `CRAFT_PLUGIN_GIT_PATH` (machine only),
+  `_REFRESHMS` (500), `_AUTOFETCHMINUTES` (0), `_CONFIRMSYNC` (on), `_DISCARDUNDOMB` (16), `_GUTTER` (on),
+  `_GUTTERDELAYMS` (300), `_COMMITMODEL` (loaded; its choices are the loaded models, source "commit-models"),
+  `_COMMITSTYLE` (auto), `_COMMITPROMPT` (empty), `_COMMITMAXTOKENS` (0), `_COMMITDIFFTOKENS` (3000), `_COMMITEXAMPLES` (10).
+- **Tests** (group `SourceControl`, 9; plus `Plugins.EveryPreinstalledPluginLoadsFromTheAppsLayout` expects "git" and
+  the source control provider): porcelain v2 fixtures (renames, conflicts, untracked, spaces, unicode, detached, initial);
+  branches, `-U0` hunks, marks and conflict blocks with their three resolutions; marks from a fixture diff drawn in the
+  gutter and on the ruler, a click reaching the source, the card in the editor clicked only, its Stage, Escape; the view's
+  groups, rows and buttons, the rail badge through the shell (rebuilt only on a change), the published repository's branch
+  and the tree's states; a real repository in a temp folder (stage, unstage, commit, commit with nothing staged, discard
+  with Undo of a tracked and an untracked file, a new branch and a switch back); an open file's gutter against the index
+  after typing, a hunk staged alone from its inline card, a Revert through the diff; the budget trimming by file; a fake
+  model's message streaming into the box from the staged diff with the repository's subjects, every change when nothing
+  is staged, nothing committed; Stop keeping the draft, no model said with the load offered and run only when pressed; the
+  AI provider writing with the loaded chat lease and its temperature and reply limit, never loading; the plug-in loaded from
+  its folder and removed. First run: 9 of 12 passed; the three failures were the tests' own expectations (the badge's
+  count, the agent's menu entry, a file already tracked), fixed. After the rebase onto X parts 6 and 10, the full filter
+  (`SourceControl|Plugins|PluginKit|PhaseP|AiPlugins|Ai.|Shell|Editor|Paint|OverviewRuler|Settings|Ui|Experience|ApiGuard|Inventory`):
+  180 passed, 3 failed, none this part's: `PhaseP.EveryPluginOfPhasePHasItsFolderItsManifestAndNoSharedContracts` and
+  `PhaseP.P5ApproveEachAsksBeforeEachCommandAndRefusesWithoutTheUser` expect the Sandbox plug-in's `plugin.json` at 1.0,
+  which X part 10 (`b068e63`) set to 1.1; `Paint.AWarmFrameLaysNothingOutAndAllocatesNothing…` saw 88 B in 12 of 1000
+  frames in the long run and passes alone and with `DOTNET_TieredCompilation=0` (rule 90: the background tier-up, as B1
+  and piece 2a recorded). API dumps regenerated (additions only): `Craft.Abstractions`, `Craft.Ai`, `Craft.Editor`, the
+  new `Craft.Plugins.Git`, the contract list (1.1) and `plans/inventory.md` (the two registries).
+- **Windows only (not run here; `Craft.Maui` compiled on net10.0, its Windows target cannot restore in this container):**
+  the view's new blocks (`PanelBlocksView.FileList`, `MessageBox`, `IconButton`), Ctrl+Enter in the commit box (the
+  existing `Platforms/Windows/ComposerKeys.cs` hooks every `ComposerEditor`), the rail's badge pill, the tree's letters and
+  colours, the status bar's branch tap, `ChangesDiffPage`. No file under `Platforms/` changed.
+- **Left:** blame and history views and pull requests (not asked, as the plan decided); Copy remote link (the plan's
+  "later"); a conflict's accepts in the editor are reached through its gutter mark's card (no row drawn over the markers);
+  Pop takes the last stash (no stash list); folders in the tree are not coloured by their files' states; the PhaseP
+  expectations for the Sandbox manifest (X part 10's slot).
+- **The owner's commands:**
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="SourceControl.|Plugins.|PluginKit.|PhaseP.|AiPlugins.|Ai.|Shell.|Editor.|Paint.|OverviewRuler.|Settings.|Ui.|Experience.|ApiGuard.|Inventory."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app (`CarftTestPOC` is not a repository: the view offers Initialize repository, or run `git init` there first):
+  the rail's branch icon opens Source Control with its count; edit `Program.cs` and see its bars in the gutter and on the
+  ruler, click one (Revert, Stage), the tree's name in its colour and letter; stage, unstage, discard and Undo at the
+  window's bottom; type a message and Ctrl+Enter; the branch in the status bar (click: switch, create); with the chat
+  model loaded, the sparkle writes a message into the box (Stop while it writes; its tooltip names the model); with none
+  loaded it offers Load the chat model; light and dark themes.
 
 ### X part 11: AI features on Idrak (the owner, 2026-11-01: "go with your pick" of five proposed)
 Each runs on the models already loaded with their roles' settings (note 25's leases, one copy; a load only when asked,

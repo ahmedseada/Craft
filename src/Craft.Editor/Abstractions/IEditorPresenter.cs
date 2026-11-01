@@ -27,6 +27,23 @@ public interface IEditorPresenter
         return answers;
     }
 
+    /// <summary>
+    /// Shows the edits to several files as one review (X part 6: Replace all in files) titled <paramref name="title"/>, and
+    /// asks which hunks of each to apply: one list of answers a proposal, one answer a hunk. The default asks for each file
+    /// in turn (<see cref="ChooseHunksAsync"/>); a view that shows them together answers them together.
+    /// </summary>
+    async Task<IReadOnlyList<IReadOnlyList<bool>>> ChooseFilesAsync(IReadOnlyList<EditProposal> proposals, string title, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(proposals);
+        var answers = new List<IReadOnlyList<bool>>(proposals.Count);
+        foreach (var proposal in proposals)
+        {
+            answers.Add(await ChooseHunksAsync(proposal, cancellationToken).ConfigureAwait(true));
+        }
+
+        return answers;
+    }
+
     /// <summary>Shows a message; completes when the user dismissed it.</summary>
     Task ShowMessageAsync(string title, string message);
 

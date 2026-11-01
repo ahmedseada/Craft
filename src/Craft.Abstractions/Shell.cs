@@ -231,6 +231,36 @@ public static class RailIcons
 
     /// <summary>A plug-in panel's side view (three lines of a list): the rail item the shell gives a panel that brings none.</summary>
     public const string Panel = "M4 6h16M4 12h16M4 18h10";
+
+    /// <summary>The Run view (a triangle pointing right: play; X part 6).</summary>
+    public const string Run = "M7 4.5v15l12-7.5z";
+
+    /// <summary>A build (a hammer; the Run view's Build).</summary>
+    public const string Build = "M14 6l4 4M4 20l9-9M12 4l8 8l-2 2l-8-8z";
+
+    /// <summary>Stop (a square; a run's Stop).</summary>
+    public const string Stop = "M6 6h12v12H6z";
+
+    /// <summary>A test (a flask; the Run view's Test).</summary>
+    public const string Test = "M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3";
+
+    /// <summary>Replace (an arrow turning back; the Search view's Replace).</summary>
+    public const string Replace = "M4 7h11a4 4 0 0 1 0 8H8M8 15l3-3M8 15l3 3";
+
+    /// <summary>Close or dismiss (a cross).</summary>
+    public const string Close = "M6 6l12 12M18 6L6 18";
+
+    /// <summary>Edit (a pencil).</summary>
+    public const string Edit = "M4 20h4L19 9l-4-4L4 16zM14 6l4 4";
+
+    /// <summary>Add (a plus).</summary>
+    public const string Add = "M12 5v14M5 12h14";
+
+    /// <summary>Folding everything (lines drawn together).</summary>
+    public const string Collapse = "M4 6h16M8 12h8M10 18h4";
+
+    /// <summary>Refresh (a circular arrow).</summary>
+    public const string Refresh = "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6";
 }
 
 /// <summary>The activity rail's items, by id (ignoring case). The app registers its own; a plug-in adds one in its registration's parts.</summary>

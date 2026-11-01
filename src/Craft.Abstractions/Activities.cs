@@ -14,6 +14,9 @@ public static class ActivityKinds
     /// <summary>Work of no particular kind.</summary>
     public const string General = "general";
 
+    /// <summary>A search of the workspace's files (X part 6): the files searched, the matches.</summary>
+    public const string Search = "search";
+
     /// <summary>A download (a model's files): bytes and a rate.</summary>
     public const string Download = "download";
 

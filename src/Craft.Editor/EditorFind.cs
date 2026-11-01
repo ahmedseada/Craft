@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
-using System.Text.RegularExpressions;
 using Craft.Abstractions;
 
 namespace Craft.Editor;
@@ -13,188 +12,51 @@ namespace Craft.Editor;
 /// </summary>
 public sealed class FindPattern
 {
-    private readonly Regex? _regex;
-    private volatile bool _timedOut;
-
     /// <summary>A pattern for <paramref name="query"/>; a regular expression stops after <paramref name="regexTimeout"/> on one line.</summary>
-    public FindPattern(string query, bool matchCase, bool wholeWord, bool regex, TimeSpan regexTimeout)
-    {
-        ArgumentNullException.ThrowIfNull(query);
-        Query = query;
-        MatchCase = matchCase;
-        WholeWord = wholeWord;
-        IsRegex = regex;
-        if (query.Length == 0 || query.AsSpan().IndexOfAny('\r', '\n') >= 0)
-        {
-            return;
-        }
-
-        if (regex)
-        {
-            try
-            {
-                _regex = new Regex(query, RegexOptions.CultureInvariant | (matchCase ? RegexOptions.None : RegexOptions.IgnoreCase), regexTimeout);
-            }
-            catch (ArgumentException e)
-            {
-                Problem = "The regular expression does not parse: " + e.Message;
-                return;
-            }
-        }
-
-        Searchable = true;
-    }
+    public FindPattern(string query, bool matchCase, bool wholeWord, bool regex, TimeSpan regexTimeout) =>
+        Pattern = new TextPattern(query, matchCase, wholeWord, regex, regexTimeout);
 
     /// <summary>No query: finds nothing.</summary>
     public static FindPattern None { get; } = new("", false, false, false, TimeSpan.FromSeconds(1));
 
+    /// <summary>
+    /// The matcher itself (Craft.Abstractions' <see cref="TextPattern"/>, X part 6): the workspace search and its providers
+    /// match with the same one, so a find in files finds what the find overlay finds.
+    /// </summary>
+    public TextPattern Pattern { get; }
+
     /// <summary>The text (or the expression) to find.</summary>
-    public string Query { get; }
+    public string Query => Pattern.Query;
 
     /// <summary>Whether case must match.</summary>
-    public bool MatchCase { get; }
+    public bool MatchCase => Pattern.MatchCase;
 
     /// <summary>Whether a match must be a whole word (no letter, digit or underscore just before or after it).</summary>
-    public bool WholeWord { get; }
+    public bool WholeWord => Pattern.WholeWord;
 
     /// <summary>Whether <see cref="Query"/> is a regular expression.</summary>
-    public bool IsRegex { get; }
+    public bool IsRegex => Pattern.IsRegex;
 
     /// <summary>Whether it can find anything (a query on one line that parses).</summary>
-    public bool Searchable { get; }
+    public bool Searchable => Pattern.Searchable;
 
     /// <summary>Why it cannot search (the expression does not parse), or null.</summary>
-    public string? Problem { get; }
+    public string? Problem => Pattern.Problem;
 
     /// <summary>Whether a line's search ran past the time limit (that line was taken as having no match).</summary>
-    public bool TimedOut => _timedOut;
-
-    private StringComparison Comparison => MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+    public bool TimedOut => Pattern.TimedOut;
 
     /// <summary>The first match in <paramref name="line"/> at or after <paramref name="from"/>, or -1; its length in <paramref name="length"/>.</summary>
-    public int NextIn(ReadOnlySpan<char> line, int from, out int length)
-    {
-        length = 0;
-        if (!Searchable || from > line.Length)
-        {
-            return -1;
-        }
-
-        if (_regex is { } regex)
-        {
-            try
-            {
-                foreach (var match in regex.EnumerateMatches(line, from))
-                {
-                    if (match.Length > 0 && (!WholeWord || IsWholeWord(line, match.Index, match.Length)))
-                    {
-                        length = match.Length;
-                        return match.Index;
-                    }
-                }
-            }
-            catch (RegexMatchTimeoutException)
-            {
-                _timedOut = true;
-            }
-
-            return -1;
-        }
-
-        var query = Query.AsSpan();
-        while (from <= line.Length - query.Length)
-        {
-            int found = line[from..].IndexOf(query, Comparison);
-            if (found < 0)
-            {
-                return -1;
-            }
-
-            found += from;
-            if (!WholeWord || IsWholeWord(line, found, query.Length))
-            {
-                length = query.Length;
-                return found;
-            }
-
-            from = found + 1;
-        }
-
-        return -1;
-    }
+    public int NextIn(ReadOnlySpan<char> line, int from, out int length) => Pattern.NextIn(line, from, out length);
 
     /// <summary>The last match in <paramref name="line"/> that ends at or before <paramref name="limit"/>, or -1; its length in <paramref name="length"/>.</summary>
-    public int PreviousIn(ReadOnlySpan<char> line, int limit, out int length)
-    {
-        length = 0;
-        if (!Searchable)
-        {
-            return -1;
-        }
-
-        limit = Math.Min(limit, line.Length);
-        if (_regex is not null)
-        {
-            int last = -1;
-            int from = 0;
-            int found;
-            while ((found = NextIn(line, from, out int matched)) >= 0 && found + matched <= limit)
-            {
-                last = found;
-                length = matched;
-                from = found + 1;
-            }
-
-            return last;
-        }
-
-        var query = Query.AsSpan();
-        while (limit >= query.Length)
-        {
-            int found = line[..limit].LastIndexOf(query, Comparison);
-            if (found < 0)
-            {
-                return -1;
-            }
-
-            if (!WholeWord || IsWholeWord(line, found, query.Length))
-            {
-                length = query.Length;
-                return found;
-            }
-
-            limit = found + query.Length - 1;
-        }
-
-        return -1;
-    }
+    public int PreviousIn(ReadOnlySpan<char> line, int limit, out int length) => Pattern.PreviousIn(line, limit, out length);
 
     /// <summary>
     /// The text that replaces the match at <paramref name="start"/> of <paramref name="line"/>: <paramref name="replacement"/>
     /// as it is, or for a regular expression with its groups put in ($1, ${name}, $$).
     /// </summary>
-    public string Replacement(ReadOnlySpan<char> line, int start, string replacement)
-    {
-        ArgumentNullException.ThrowIfNull(replacement);
-        if (_regex is not { } regex || replacement.AsSpan().IndexOf('$') < 0)
-        {
-            return replacement;
-        }
-
-        try
-        {
-            var match = regex.Match(line.ToString(), start);
-            return match.Success && match.Index == start ? match.Result(replacement) : replacement;
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            _timedOut = true;
-            return replacement;
-        }
-    }
-
-    private static bool IsWholeWord(ReadOnlySpan<char> line, int start, int length) =>
-        (start == 0 || !TextReading.IsWordChar(line[start - 1])) && (start + length >= line.Length || !TextReading.IsWordChar(line[start + length]));
+    public string Replacement(ReadOnlySpan<char> line, int start, string replacement) => Pattern.Replacement(line, start, replacement);
 }
 
 /// <summary>

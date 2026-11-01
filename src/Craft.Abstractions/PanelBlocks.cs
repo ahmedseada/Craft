@@ -167,6 +167,13 @@ public sealed record PanelButton(string Title, string ActionId, PanelButtonKind 
 
     /// <summary>The value the action is called with, or null.</summary>
     public string? Value { get; init; }
+
+    /// <summary>
+    /// An icon (SVG path data on a 24 by 24 box, drawn as a stroke): where a block draws icon buttons (a result row, a
+    /// search field), the icon shows and the title becomes its tooltip and its name for screen readers (X part 6); null:
+    /// the title is drawn.
+    /// </summary>
+    public string? Icon { get; init; }
 }
 
 /// <summary>A row of buttons (wrapping when the panel is narrow).</summary>
@@ -292,6 +299,143 @@ public sealed record PanelDisclosure(string Id, string Title, IReadOnlyList<Pane
     public bool Open { get; init; }
 }
 
+/// <summary>A toggle inside a <see cref="PanelQuery"/> field (match case, whole word, regular expression).</summary>
+/// <param name="ActionId">The action it runs, with "on" or "off".</param>
+/// <param name="Glyph">What it shows ("Aa", "ab", ".*").</param>
+/// <param name="Title">What it turns on, for its tooltip ("Match case").</param>
+/// <param name="On">Whether it is on.</param>
+public sealed record PanelToggle(string ActionId, string Glyph, string Title, bool On)
+{
+    /// <summary>Its keys, for the tooltip ("Alt+C"), or null.</summary>
+    public string? Keys { get; init; }
+}
+
+/// <summary>
+/// A search field (X part 6): every change of its text runs the action at once with the text (the panel waits and
+/// cancels as it needs); Enter runs <see cref="SubmitActionId"/>. Its toggles sit inside the field at its right and its
+/// buttons after it. The host keeps the field (and the keyboard in it) while the panel redraws.
+/// </summary>
+/// <param name="ActionId">The action each change runs, with the text.</param>
+/// <param name="Placeholder">What an empty field shows ("Search").</param>
+/// <param name="Value">Its text.</param>
+public sealed record PanelQuery(string ActionId, string Placeholder, string Value) : PanelBlock
+{
+    /// <summary>The toggles inside the field, in order.</summary>
+    public IReadOnlyList<PanelToggle> Toggles { get; init; } = [];
+
+    /// <summary>Icon buttons after the field (Replace all), in order.</summary>
+    public IReadOnlyList<PanelButton> Buttons { get; init; } = [];
+
+    /// <summary>The action Enter runs, with the text, or null.</summary>
+    public string? SubmitActionId { get; init; }
+
+    /// <summary>Whether the text is code (a glob, a path): the code font.</summary>
+    public bool Code { get; init; }
+
+    /// <summary>Why the text cannot be used (an expression that does not parse): the field's border takes the error's colour, or null.</summary>
+    public string? Problem { get; init; }
+
+    /// <summary>A number the panel raises to take the keyboard into the field (Ctrl+Shift+F); the host focuses it when it grows.</summary>
+    public int Focus { get; init; }
+}
+
+/// <summary>A highlighted part of a <see cref="PanelResultRow"/>'s text (a match), and what replaces it when a replace is shown.</summary>
+/// <param name="Start">Its first character in the row's text.</param>
+/// <param name="Length">Its characters.</param>
+public sealed record PanelSpan(int Start, int Length)
+{
+    /// <summary>The text that would replace it (shown struck through, then the replacement), or null.</summary>
+    public string? Replacement { get; init; }
+}
+
+/// <summary>A row of a <see cref="PanelResultGroup"/>: its text with its highlights, what a click does, its buttons on hover.</summary>
+/// <param name="Id">Its id, unique in the results.</param>
+/// <param name="Text">What it shows (a line of code, a target's name).</param>
+public sealed record PanelResultRow(string Id, string Text)
+{
+    /// <summary>The highlighted parts of <see cref="Text"/>, in order.</summary>
+    public IReadOnlyList<PanelSpan> Highlights { get; init; } = [];
+
+    /// <summary>A quieter text before it (a line number), or null.</summary>
+    public string? Prefix { get; init; }
+
+    /// <summary>A quieter text after it (a kind, a path), or null.</summary>
+    public string? Detail { get; init; }
+
+    /// <summary>Whether <see cref="Text"/> is code: the code font.</summary>
+    public bool Code { get; init; }
+
+    /// <summary>An icon before it (SVG path data on a 24 by 24 box, drawn as a stroke), or null.</summary>
+    public string? Icon { get; init; }
+
+    /// <summary>Its colour role (a running target in the accent, a failure in the error's).</summary>
+    public PanelTone Tone { get; init; }
+
+    /// <summary>The action a click runs, or null.</summary>
+    public string? ActionId { get; init; }
+
+    /// <summary>The value the click's action carries, or null.</summary>
+    public string? Value { get; init; }
+
+    /// <summary>Icon buttons at its right, shown while the pointer is over it or it has the keyboard.</summary>
+    public IReadOnlyList<PanelButton> Buttons { get; init; } = [];
+
+    /// <summary>A short badge at its right that always shows ("running", "default"), or null.</summary>
+    public string? Badge { get; init; }
+}
+
+/// <summary>A group of a <see cref="PanelResults"/> block: its header (a file with its icon and count) and its rows, folded or not.</summary>
+/// <param name="Id">Its id, unique in the results.</param>
+/// <param name="Title">Its header's text (a file's name).</param>
+/// <param name="Rows">Its rows, in order.</param>
+public sealed record PanelResultGroup(string Id, string Title, IReadOnlyList<PanelResultRow> Rows)
+{
+    /// <summary>A quieter text after the title (the file's folder), or null.</summary>
+    public string? Detail { get; init; }
+
+    /// <summary>A count at its right ("12"), or null.</summary>
+    public string? Badge { get; init; }
+
+    /// <summary>A short badge before the title in its colour (a file's: "C#"), or null.</summary>
+    public string? Glyph { get; init; }
+
+    /// <summary>The colour of <see cref="Glyph"/>, 0xAARRGGBB.</summary>
+    public uint GlyphArgb { get; init; }
+
+    /// <summary>An icon before the title (SVG path data), when there is no <see cref="Glyph"/>, or null.</summary>
+    public string? Icon { get; init; }
+
+    /// <summary>Whether its rows are folded under its header.</summary>
+    public bool Collapsed { get; init; }
+
+    /// <summary>The action a click on its header runs (with <see cref="Id"/>): folding it, or null when it does not fold.</summary>
+    public string? ToggleActionId { get; init; }
+
+    /// <summary>Icon buttons at its header's right, shown while the pointer is over it.</summary>
+    public IReadOnlyList<PanelButton> Buttons { get; init; } = [];
+
+    /// <summary>A tooltip for its header (the file's full path), or null.</summary>
+    public string? Tooltip { get; init; }
+}
+
+/// <summary>
+/// A list of results in groups (X part 6: a search's files and their matching lines; the Run view's projects and
+/// scripts): each group a header with its icon, title, folder and count that folds, each row a line with its matches
+/// highlighted that runs its action when clicked and shows its buttons on hover. It fills the rest of the panel and
+/// scrolls on its own, drawing only the rows in view, so thousands of rows cost what a screenful does. The host redraws
+/// its rows only when <see cref="Version"/> changes, and keeps the scroll and the rows that stayed.
+/// </summary>
+/// <param name="Id">Its id, unique in the panel.</param>
+/// <param name="Groups">The groups, in order.</param>
+public sealed record PanelResults(string Id, IReadOnlyList<PanelResultGroup> Groups) : PanelBlock
+{
+    /// <summary>A number the panel raises whenever the groups or rows change: what the host compares (not every row).</summary>
+    public int Version { get; init; }
+
+    /// <summary>What shows when there are no groups ("No results"), or null for nothing.</summary>
+    public string? Empty { get; init; }
+}
+
 /// <summary>What the blocks of a view panel say as text: one line per block (a host that draws lines, tests, a change's signature).</summary>
 public static class PanelBlocks
 {
@@ -364,6 +508,20 @@ public static class PanelBlocks
                 foreach (var inner in disclosure.Blocks)
                 {
                     Add(inner, items);
+                }
+
+                break;
+            case PanelResults results:
+                foreach (var group in results.Groups)
+                {
+                    items.Add(new PanelItem(group.Title, group.Badge));
+                    if (!group.Collapsed)
+                    {
+                        foreach (var row in group.Rows)
+                        {
+                            items.Add(new PanelItem((row.Prefix is { } prefix ? prefix + "  " : "") + row.Text, row.Detail));
+                        }
+                    }
                 }
 
                 break;
@@ -458,6 +616,25 @@ public static class PanelBlocks
                 break;
             case PanelFacts facts:
                 text.Append(string.Join(" · ", facts.Facts.Select(f => f.Label + " " + f.Value)));
+                break;
+            case PanelQuery query:
+                text.Append('[').Append(query.Placeholder).Append(": ").Append(query.Value).Append(']');
+                foreach (var toggle in query.Toggles)
+                {
+                    text.Append(' ').Append(toggle.Glyph).Append(toggle.On ? " on" : " off");
+                }
+
+                foreach (var button in query.Buttons)
+                {
+                    text.Append(' ');
+                    Button(button, text);
+                }
+
+                text.Append(query.Problem is { } problem ? " (" + problem + ")" : "").Append(c, $" #{query.Focus}");
+                break;
+            case PanelResults results:
+                // The rows themselves are not written: the version says when they changed (thousands of rows, one number).
+                text.Append(c, $"[results {results.Id} v{results.Version}: {results.Groups.Count} groups]");
                 break;
             case PanelDisclosure disclosure:
                 text.Append("[▸ ").Append(disclosure.Title).Append(':');

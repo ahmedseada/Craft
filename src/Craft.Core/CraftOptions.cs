@@ -613,6 +613,35 @@ public sealed record CraftOptions
     /// <summary>A closed file larger than this many megabytes is not read for a peek (said instead) (<c>CRAFT_PEEK_MAX_MB</c>).</summary>
     public int PeekMaxMegabytes { get; init; } = 16;
 
+    // X part 6: the Search view and the Run view.
+
+    /// <summary>The most matches a search in files reports before it stops and says so (<c>CRAFT_SEARCH_MAX_RESULTS</c>).</summary>
+    public int SearchMaxResults { get; init; } = 20_000;
+
+    /// <summary>Files larger than this many megabytes are passed over by a search in files, and counted (<c>CRAFT_SEARCH_MAX_FILE_MB</c>).</summary>
+    public int SearchMaxFileMegabytes { get; init; } = 20;
+
+    /// <summary>The files a search in files reads at once; 0: one per processor (<c>CRAFT_SEARCH_THREADS</c>).</summary>
+    public int SearchThreads { get; init; }
+
+    /// <summary>Whether a search in files leaves out what the workspace's <c>.gitignore</c> files ignore (<c>CRAFT_SEARCH_IGNORE_FILES</c>).</summary>
+    public bool SearchIgnoreFiles { get; init; } = true;
+
+    /// <summary>The workspace search provider the Search view starts with (<c>CRAFT_SEARCH_PROVIDER</c>; "text" is the library's).</summary>
+    public string SearchProvider { get; init; } = "text";
+
+    /// <summary>The command sandbox the Run view's commands run in (<c>CRAFT_RUN_SANDBOX</c>, a name in Idrak's CommandSandboxes).</summary>
+    public string RunSandbox { get; init; } = "process";
+
+    /// <summary>Minutes a run may take before it is stopped with its process tree; 0: no limit (<c>CRAFT_RUN_TIME_LIMIT_MINUTES</c>).</summary>
+    public int RunTimeLimitMinutes { get; init; }
+
+    /// <summary>
+    /// When the Run view asks before a command runs (<c>CRAFT_RUN_APPROVAL</c>): "once" (each command line the first time in
+    /// a session) or "each" (every run). There is no setting that runs without asking.
+    /// </summary>
+    public string RunApproval { get; init; } = "once";
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -769,6 +798,15 @@ public sealed record CraftOptions
         new("CRAFT_TREE_DRAG_MOVE", "true", "Whether a file or folder dragged onto a folder of the explorer moves there (Ctrl copies), with Undo.") { Shape = SettingShape.Toggle(SettingSections.Files, "Move files by dragging them in the tree", "Tree") },
         new("CRAFT_PEEK_LINES", "12", "The lines the peek definition overlay (Alt+F12) shows under the caret's line.") { Shape = SettingShape.Whole(SettingSections.Editor, "Peek shows", 3, 200, "lines", "Navigation") },
         new("CRAFT_PEEK_MAX_MB", "16", "A closed file larger than this many megabytes is not read for a peek (said instead).") { Shape = SettingShape.Whole(SettingSections.Editor, "Peek reads closed files up to", 1, 4096, "MB", "Navigation") },
+        // X part 6: the Search view and the Run view.
+        new("CRAFT_SEARCH_MAX_RESULTS", "20000", "The most matches a search in files reports; it stops there and says so.") { Shape = SettingShape.Whole(SettingSections.Files, "Search in files stops at", 1, 10_000_000, "matches", "Search", step: 1000) },
+        new("CRAFT_SEARCH_MAX_FILE_MB", "20", "Files larger than this are passed over by a search in files (and counted).") { Shape = SettingShape.Whole(SettingSections.Files, "Search files up to", 1, 2047, "MB", "Search") },
+        new("CRAFT_SEARCH_THREADS", "0", "The files a search in files reads at once; 0: one per processor.") { Shape = SettingShape.Whole(SettingSections.Files, "Files searched at once", 0, 1024, "files", "Search") },
+        new("CRAFT_SEARCH_IGNORE_FILES", "true", "Whether a search in files leaves out what the workspace's .gitignore files ignore (the ignored folders, CRAFT_WORKSPACE_IGNORE, are always left out).") { Shape = SettingShape.Toggle(SettingSections.Files, "Search leaves out .gitignore's files", "Search") },
+        new("CRAFT_SEARCH_PROVIDER", "text", "The search the Search view starts with (text, or one a plug-in registers).") { Shape = SettingShape.Text(SettingSections.Files, "Search with", "Search") },
+        new("CRAFT_RUN_SANDBOX", "process", "The command sandbox the Run view's runs and builds go through (a name in Idrak's CommandSandboxes); a workspace cannot set it.") { Shape = SettingShape.Text(SettingSections.Terminal, "Runs go through the sandbox", "Run") },
+        new("CRAFT_RUN_TIME_LIMIT_MINUTES", "0", "Minutes a run or build may take before it is stopped with its process tree; 0: no limit.") { Shape = SettingShape.Whole(SettingSections.Terminal, "Stop a run after", 0, 10_080, "min", "Run") },
+        new("CRAFT_RUN_APPROVAL", "once", "When the Run view asks before a command runs: once (each command line the first time in a session) or each (every run); a workspace cannot set it.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Ask before a run", ["once", "each"], "Run") },
     ];
 
     /// <summary>
@@ -1516,6 +1554,46 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_PEEK_MAX_MB") is { } peekMax)
         {
             options = options with { PeekMaxMegabytes = Whole(peekMax, "CRAFT_PEEK_MAX_MB", 1, 4096) };
+        }
+
+        if (Text(read, "CRAFT_SEARCH_MAX_RESULTS") is { } searchMax)
+        {
+            options = options with { SearchMaxResults = Whole(searchMax, "CRAFT_SEARCH_MAX_RESULTS", 1, 10_000_000) };
+        }
+
+        if (Text(read, "CRAFT_SEARCH_MAX_FILE_MB") is { } searchFile)
+        {
+            options = options with { SearchMaxFileMegabytes = Whole(searchFile, "CRAFT_SEARCH_MAX_FILE_MB", 1, 2047) };
+        }
+
+        if (Text(read, "CRAFT_SEARCH_THREADS") is { } searchThreads)
+        {
+            options = options with { SearchThreads = Whole(searchThreads, "CRAFT_SEARCH_THREADS", 0, 1024) };
+        }
+
+        if (Text(read, "CRAFT_SEARCH_IGNORE_FILES") is { } searchIgnore)
+        {
+            options = options with { SearchIgnoreFiles = Flag(searchIgnore, "CRAFT_SEARCH_IGNORE_FILES") };
+        }
+
+        if (Text(read, "CRAFT_SEARCH_PROVIDER") is { } searchProvider)
+        {
+            options = options with { SearchProvider = searchProvider };
+        }
+
+        if (Text(read, "CRAFT_RUN_SANDBOX") is { } runSandbox)
+        {
+            options = options with { RunSandbox = runSandbox };
+        }
+
+        if (Text(read, "CRAFT_RUN_TIME_LIMIT_MINUTES") is { } runLimit)
+        {
+            options = options with { RunTimeLimitMinutes = Whole(runLimit, "CRAFT_RUN_TIME_LIMIT_MINUTES", 0, 10_080) };
+        }
+
+        if (Text(read, "CRAFT_RUN_APPROVAL") is { } runApproval)
+        {
+            options = options with { RunApproval = OneOf(runApproval, "CRAFT_RUN_APPROVAL", "once", "each") };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

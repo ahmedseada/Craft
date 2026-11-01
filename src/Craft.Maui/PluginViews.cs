@@ -270,6 +270,28 @@ public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<IThe
         return answers;
     }
 
+    /// <inheritdoc />
+    /// <remarks>One diff-and-accept view of every file's hunks (X part 6: Replace all in files), each file's under its name.</remarks>
+    public async Task<IReadOnlyList<IReadOnlyList<bool>>> ChooseFilesAsync(IReadOnlyList<EditProposal> proposals, string title, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(proposals);
+        if (proposals.Count == 0)
+        {
+            return [];
+        }
+
+        var view = new ProposalDiffPage(proposals, title, Theme());
+        await using var cancel = cancellationToken.Register(view.Reject);
+        await _page.Navigation.PushModalAsync(view);
+        var answers = await view.FileAnswers;
+        if (_page.Navigation.ModalStack.Contains(view))
+        {
+            await _page.Navigation.PopModalAsync();
+        }
+
+        return answers;
+    }
+
     private ITheme Theme() => theme?.Invoke()
         ?? EditorThemes.Get(Application.Current?.RequestedTheme == AppTheme.Light ? EditorThemes.Light : EditorThemes.Dark);
 

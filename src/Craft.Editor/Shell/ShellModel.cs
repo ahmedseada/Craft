@@ -319,6 +319,7 @@ public sealed partial class ShellModel : IDisposable
         host.FolderPicker = (start, token) => _dialogs.PickFolderAsync(start, token);
         host.SettingWriter = StoreSettingAsync;
         RegisterCommands();
+        CreateViews();
         WatchMemory();
     }
 
@@ -1098,6 +1099,7 @@ public sealed partial class ShellModel : IDisposable
         Host.DocumentSaved -= OnDocumentSaved;
         Host.PanelsChanged -= OnPanelsChanged;
         Host.PanelShowRequested -= OnPanelShowRequested;
+        DisposeViews();
         StopWatching();
         _memoryWatch?.Dispose();
         Pages.CloseAll();
@@ -1373,9 +1375,11 @@ public sealed partial class ShellModel : IDisposable
 
         // The activity rail: each item a command; one whose command is not registered (the agent before A2) does not show.
         Rail(new RailItem("craft.explorer", "Explorer", ShellCommandIds.ToggleTree, RailIcons.Explorer, 0));
-        Rail(new RailItem("craft.search", "Search", ShellCommandIds.QuickOpen, RailIcons.Search, 10));
+        // X part 6: the rail's Search opens the Search view (it ran quick open before).
+        Rail(new RailItem(global::Craft.Editor.Search.WorkspaceSearchView.PanelId, "Search", "craft.search.rail", RailIcons.Search, 10));
         Rail(new RailItem("craft.agent", "Agent", ShellCommandIds.Agent, RailIcons.Agent, 30));
         Rail(new RailItem("craft.plugins", "Plug-ins", ShellCommandIds.Plugins, RailIcons.Plugins, 40));
+        RegisterViewCommands();
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
         RegisterContextCommands();
     }

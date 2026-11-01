@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.CSharp;
+using Craft.CSharp.Run;
 using Craft.CSharp.Workspaces;
 using Idrak.Abstraction.Plugins;
 using Microsoft.CodeAnalysis;
@@ -20,7 +21,7 @@ namespace Craft.CSharp;
 public sealed class CSharpPlugin() : IdrakPlugin("csharp")
 {
     /// <summary>What it brings.</summary>
-    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig, .json";
+    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig, .json; the Run view's projects, solutions and launch profiles (run, build, test, publish with the .NET SDK)";
 
     /// <inheritdoc />
     protected override void RegisterParts()
@@ -42,6 +43,9 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
         Part(() => FoldingRangeProviders.Register(new RazorFolding()), () => FoldingRangeProviders.Unregister(RazorFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new SolutionFolding()), () => FoldingRangeProviders.Unregister(SolutionFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new EditorConfigFolding()), () => FoldingRangeProviders.Unregister(EditorConfigFolding.ProviderName));
+
+        // The Run view (X part 6): projects, solutions and launch profiles, run and built with the .NET SDK.
+        Part(() => RunProviders.Register(new DotnetRunProvider()), () => RunProviders.Unregister(DotnetRunProvider.ProviderName));
 
         // Dictation's C# words (phase V): what they type in a C# document, over the voice plug-in's every-language table.
         foreach (var symbol in SpokenSymbolsOfCSharp)

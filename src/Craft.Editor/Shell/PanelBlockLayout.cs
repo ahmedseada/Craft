@@ -116,4 +116,129 @@ public static class PanelBlockLayout
     /// <summary>A meter's filled width in a bar of <paramref name="width"/>: the fraction held from 0 to 1 (a fraction below 0 is work without a known end: a third of the bar).</summary>
     public static float MeterWidth(double fraction, float width) =>
         fraction < 0 ? width / 3 : (float)(Math.Clamp(double.IsFinite(fraction) ? fraction : 0, 0, 1) * Math.Max(0, width));
+
+    /// <summary>
+    /// A results block's lines as the host draws them (X part 6): each group's header, then its rows unless it is folded;
+    /// each line with a signature of what it shows, so the host replaces only the lines that differ (a new batch of a
+    /// search appends its files, a fold removes one group's rows).
+    /// </summary>
+    public static IReadOnlyList<PanelResultLine> ResultLines(PanelResults results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+        var lines = new List<PanelResultLine>();
+        foreach (var group in results.Groups)
+        {
+            var header = new StringBuilder("G").Append(group.Title).Append('\u0001').Append(group.Detail).Append('\u0001').Append(group.Badge)
+                .Append('\u0001').Append(group.Glyph).Append(group.Collapsed ? "+" : "-").Append(group.Tooltip);
+            foreach (var button in group.Buttons)
+            {
+                header.Append('\u0002').Append(button.Title).Append(button.Enabled ? "" : "!");
+            }
+
+            lines.Add(new PanelResultLine("g:" + group.Id, group, null, header.ToString()));
+            if (group.Collapsed)
+            {
+                continue;
+            }
+
+            foreach (var row in group.Rows)
+            {
+                var text = new StringBuilder("R").Append(row.Text).Append('\u0001').Append(row.Prefix).Append('\u0001').Append(row.Detail).Append('\u0001')
+                    .Append(row.Badge).Append('\u0001').Append(row.Tone).Append(row.Value).Append(row.Icon is null ? "" : "i");
+                foreach (var span in row.Highlights)
+                {
+                    text.Append('\u0002').Append(span.Start).Append(',').Append(span.Length).Append(span.Replacement is null ? "" : "=" + span.Replacement);
+                }
+
+                foreach (var button in row.Buttons)
+                {
+                    text.Append('\u0003').Append(button.Title).Append(button.Enabled ? "" : "!");
+                }
+
+                lines.Add(new PanelResultLine("r:" + group.Id + "\u0001" + row.Id, group, row, text.ToString()));
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// A row's text cut at its highlights, in order: plain parts, each match, and, when a replacement is shown, the match
+    /// struck through followed by its replacement. A highlight outside the text is left out.
+    /// </summary>
+    public static IReadOnlyList<(string Text, PanelSegmentKind Kind)> Segments(string text, IReadOnlyList<PanelSpan> highlights)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(highlights);
+        var segments = new List<(string, PanelSegmentKind)>();
+        int at = 0;
+        foreach (var span in highlights.OrderBy(h => h.Start))
+        {
+            if (span.Start < at || span.Length <= 0 || span.Start + span.Length > text.Length)
+            {
+                continue;
+            }
+
+            if (span.Start > at)
+            {
+                segments.Add((text[at..span.Start], PanelSegmentKind.Plain));
+            }
+
+            var matched = text.Substring(span.Start, span.Length);
+            if (span.Replacement is { } replacement)
+            {
+                segments.Add((matched, PanelSegmentKind.Removed));
+                if (replacement.Length > 0)
+                {
+                    segments.Add((replacement, PanelSegmentKind.Inserted));
+                }
+            }
+            else
+            {
+                segments.Add((matched, PanelSegmentKind.Match));
+            }
+
+            at = span.Start + span.Length;
+        }
+
+        if (at < text.Length)
+        {
+            segments.Add((text[at..], PanelSegmentKind.Plain));
+        }
+
+        return segments;
+    }
+}
+
+/// <summary>How a part of a result row's text is drawn.</summary>
+public enum PanelSegmentKind
+{
+    /// <summary>As the row's text.</summary>
+    Plain,
+
+    /// <summary>A match: the highlight's fill.</summary>
+    Match,
+
+    /// <summary>A match a replace takes out: struck through in the error's colour.</summary>
+    Removed,
+
+    /// <summary>The replacement put in: in the success colour.</summary>
+    Inserted,
+}
+
+/// <summary>A line of a drawn results block: a group's header (<see cref="Row"/> null) or one of its rows, and its signature.</summary>
+/// <param name="Key">Its key, unique in the block.</param>
+/// <param name="Group">Its group.</param>
+/// <param name="Row">Its row, or null for the group's header.</param>
+/// <param name="Signature">What it shows, as text: two lines with the same key and signature draw the same.</param>
+public sealed record PanelResultLine(string Key, PanelResultGroup Group, PanelResultRow? Row, string Signature)
+{
+    /// <summary>Whether it is a group's header.</summary>
+    public bool IsHeader => Row is null;
+
+    /// <inheritdoc />
+    public bool Equals(PanelResultLine? other) => other is not null && Key == other.Key && Signature == other.Signature;
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(Key, Signature);
 }

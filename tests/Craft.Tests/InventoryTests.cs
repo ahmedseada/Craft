@@ -120,6 +120,9 @@ public static class InventoryTests
             ["CRAFT_TERMINAL_DEFAULT_PROFILE"] = "Git Bash", ["CRAFT_TERMINAL_PROFILES"] = "Node=node -i", ["CRAFT_TERMINAL_TABS"] = "tabs", ["CRAFT_TERMINAL_LIST_FROM"] = "5",
             ["CRAFT_TERMINAL_PADDING"] = "4", ["CRAFT_TERMINAL_CURSOR"] = "bar", ["CRAFT_TERMINAL_CURSOR_BLINK"] = "false", ["CRAFT_TERMINAL_BUSY_AFTER_MS"] = "250",
             ["CRAFT_TERMINAL_BUSY_QUIET_MS"] = "300", ["CRAFT_LOADER_DELAY_MS"] = "100", ["CRAFT_LOADER_KINDS"] = "workspace, indexing", ["CRAFT_LOADER_CYCLE_MS"] = "900",
+            // X part 6: the Search view and the Run view.
+            ["CRAFT_SEARCH_MAX_RESULTS"] = "500", ["CRAFT_SEARCH_MAX_FILE_MB"] = "3", ["CRAFT_SEARCH_THREADS"] = "2", ["CRAFT_SEARCH_IGNORE_FILES"] = "false",
+            ["CRAFT_SEARCH_PROVIDER"] = "code", ["CRAFT_RUN_SANDBOX"] = "approve-each", ["CRAFT_RUN_TIME_LIMIT_MINUTES"] = "30", ["CRAFT_RUN_APPROVAL"] = "each",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -160,6 +163,8 @@ public static class InventoryTests
             TerminalDefaultProfile = "Git Bash", TerminalProfiles = options.TerminalProfiles, TerminalTabs = "tabs", TerminalListFrom = 5, TerminalPadding = 4,
             TerminalCursor = "bar", TerminalCursorBlink = false, TerminalBusyAfterMilliseconds = 250, TerminalBusyQuietMilliseconds = 300,
             LoaderDelayMilliseconds = 100, LoaderKinds = options.LoaderKinds, LoaderCycleMilliseconds = 900,
+            SearchMaxResults = 500, SearchMaxFileMegabytes = 3, SearchThreads = 2, SearchIgnoreFiles = false, SearchProvider = "code",
+            RunSandbox = "approve-each", RunTimeLimitMinutes = 30, RunApproval = "each",
         }, options, "options read from every variable");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");
         Check.True(Equals(new CraftOptions(), new CraftOptions()), "two default options compare equal (no list made per instance)");

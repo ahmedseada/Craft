@@ -19,12 +19,15 @@ namespace Craft.Maui;
 /// drawn again (<see cref="PanelBlockLayout.Changed"/>); what is typed in a field and whether a disclosure is open stay
 /// across redraws. Called on the UI thread; an action runs through <see cref="IEditorViewPanel.ActAsync"/>.
 /// </summary>
-public sealed class PanelBlocksView : ContentView
+public sealed partial class PanelBlocksView : ContentView
 {
     private readonly IEditorViewPanel _panel;
     private readonly Action<string, Exception> _failed;
     private readonly VerticalStackLayout _stack = new() { Spacing = 12, Padding = new Thickness(12, 4, 12, 20) };
     private readonly List<string> _signatures = [];
+    private readonly Grid _layout = new() { RowDefinitions = [new RowDefinition(GridLength.Star), new RowDefinition(new GridLength(0))] };
+    private readonly ContentView _resultsHost = new();
+    private readonly ContentView _resultsPlace = new() { IsVisible = false };
     private readonly Dictionary<string, string> _drafts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _open = new(StringComparer.Ordinal);
     private ShellPalette _palette;
@@ -36,7 +39,10 @@ public sealed class PanelBlocksView : ContentView
         _panel = panel ?? throw new ArgumentNullException(nameof(panel));
         _palette = palette ?? throw new ArgumentNullException(nameof(palette));
         _failed = failed ?? throw new ArgumentNullException(nameof(failed));
-        Content = new ScrollView { Content = _stack };
+        // X part 6: a results block fills the panel's rest below the other blocks and scrolls on its own (virtualized).
+        _layout.Add(new ScrollView { Content = _stack }, 0, 0);
+        _layout.Add(_resultsHost, 0, 1);
+        Content = _layout;
         Update();
     }
 
@@ -46,32 +52,89 @@ public sealed class PanelBlocksView : ContentView
         _palette = palette ?? throw new ArgumentNullException(nameof(palette));
         _signatures.Clear();
         _stack.Children.Clear();
+        _resultsHost.Content = null;
+        _queries.Clear();                                         // made again in the new colours
+        _results.Clear();
         Update();
     }
 
-    /// <summary>Draws again the top-level blocks that changed since they were drawn.</summary>
+    /// <summary>
+    /// Draws again the top-level blocks that changed since they were drawn. A search field and a results block are kept
+    /// (by their id) and updated in place, so the keyboard stays in the field and the list keeps its scroll.
+    /// </summary>
     public void Update()
     {
         var blocks = _panel.Blocks;
         var signatures = blocks.Select(PanelBlockLayout.Signature).ToList();
-        foreach (int index in PanelBlockLayout.Changed(_signatures, signatures))
+        var changed = new HashSet<int>(PanelBlockLayout.Changed(_signatures, signatures));
+        var views = new List<View>(blocks.Count);
+        bool results = false;
+        for (int i = 0; i < blocks.Count; i++)
         {
-            var view = Block(blocks[index], nested: false);
-            if (index < _stack.Children.Count)
+            if (blocks[i] is PanelResults block)
             {
-                _stack.Children[index] = view;
+                // The results fill the rest of the panel; their place in the stack holds an empty view.
+                results = true;
+                var list = Results(block, nested: false);
+                if (!ReferenceEquals(_resultsHost.Content, list))
+                {
+                    Detach(list);
+                    _resultsHost.Content = list;
+                }
+
+                views.Add(_resultsPlace);
+                continue;
             }
-            else
+
+            views.Add(changed.Contains(i) || i >= _stack.Children.Count ? Block(blocks[i], nested: false) : (View)_stack.Children[i]);
+        }
+
+        // A kept view that moved to another place: the stack is laid out again (each view in one place only).
+        bool moved = false;
+        for (int i = 0; i < views.Count && !moved; i++)
+        {
+            moved = !(i < _stack.Children.Count && ReferenceEquals(_stack.Children[i], views[i])) && views[i].Parent is not null && !ReferenceEquals(views[i], _resultsPlace);
+        }
+
+        if (moved || views.Contains(_resultsPlace) != _stack.Children.Contains(_resultsPlace))
+        {
+            _stack.Children.Clear();
+            foreach (var view in views)
             {
+                Detach(view);
                 _stack.Children.Add(view);
             }
         }
-
-        while (_stack.Children.Count > blocks.Count)
+        else
         {
-            _stack.Children.RemoveAt(_stack.Children.Count - 1);
+            for (int i = 0; i < views.Count; i++)
+            {
+                if (i < _stack.Children.Count)
+                {
+                    if (!ReferenceEquals(_stack.Children[i], views[i]))
+                    {
+                        _stack.Children[i] = views[i];
+                    }
+                }
+                else
+                {
+                    _stack.Children.Add(views[i]);
+                }
+            }
+
+            while (_stack.Children.Count > views.Count)
+            {
+                _stack.Children.RemoveAt(_stack.Children.Count - 1);
+            }
         }
 
+        if (!results)
+        {
+            _resultsHost.Content = null;
+        }
+
+        _layout.RowDefinitions[0].Height = results ? GridLength.Auto : GridLength.Star;
+        _layout.RowDefinitions[1].Height = results ? GridLength.Star : new GridLength(0);
         _signatures.Clear();
         _signatures.AddRange(signatures);
     }
@@ -92,8 +155,21 @@ public sealed class PanelBlocksView : ContentView
             PanelInput input => Input(input),
             PanelFacts facts => Facts(facts),
             PanelDisclosure disclosure => Disclosure(disclosure),
+            PanelQuery query => Query(query, nested),
+            PanelResults results => Results(results, nested),
             _ => new ContentView(),
         };
+        if (block is PanelQuery or PanelResults)
+        {
+            // Kept views are not wrapped: their variable joins their tooltip.
+            if (block.Variable is { } named)
+            {
+                ToolTipProperties.SetText(view, (block.Tooltip is { } said ? said + Environment.NewLine : "") + named);
+            }
+
+            return view;
+        }
+
         if (block.Tooltip is { } tip)
         {
             ToolTipProperties.SetText(view, block.Variable is { } variable ? tip + Environment.NewLine + variable : tip);

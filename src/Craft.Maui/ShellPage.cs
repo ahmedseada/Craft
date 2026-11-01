@@ -425,6 +425,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _groupsView.Resized += (_, _) => _shown?.Focus();
         _shell.WorkspaceChanged += (_, _) => OnWorkspaceChanged();
         _shell.OptionsChanged += (_, _) => OnOptionsChanged();
+        _shell.Run.ProblemsChanged += (_, _) => UpdateProblems();      // X part 6: a run's errors in Problems
         // A plug-in's setting changes no option: the model chip and the model item read the AI plug-in's settings again.
         _shell.SettingApplied += (_, variable) =>
         {
@@ -1838,6 +1839,12 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         }
 
+        // X part 6: the last run's (a build's) problems, each file's after the open documents'.
+        foreach (var file in _shell.Run.ProblemFiles)
+        {
+            sources.Add(new ProblemSource(file.Path + "|run", Path.GetFileName(file.Path) + " (build)", file.Snapshot, [.. file.Diagnostics], file));
+        }
+
         _bottom.ShowProblems(sources, model, _shell.Tabs.Active?.Title);
         _status.Problems.Text = model?.SemanticSession is null ? "" : ShellText.Problems(model.ErrorCount, model.WarningCount);
         _status.Problems.TextColor = model is { ErrorCount: > 0 } ? _palette.Error : _palette.Warning;
@@ -1851,6 +1858,12 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private void OnProblemChosen(ProblemItem item)
     {
+        if (item.Group.Owner is Craft.Editor.Run.RunProblemFile built)
+        {
+            _ = OpenRunProblemAsync(built.Path, item.Line, item.Column);
+            return;
+        }
+
         if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Groups.GroupOf(owner) is { } ownerGroup)
         {
             ownerGroup.Tabs.Activate(owner);                // a problem of another open file: its tab first (its group focused)
@@ -1863,6 +1876,20 @@ public sealed class ShellPage : ContentPage, IDisposable
             model.EnsureCaretVisible();
             view.Focus();
         }
+    }
+
+    // A run's problem: its file opened (or shown), the caret at its line and column.
+    private async Task OpenRunProblemAsync(string path, int line, int column)
+    {
+        if (await _host.OpenDocumentAsync(path) is not { } document)
+        {
+            return;
+        }
+
+        var snapshot = document.Document.Buffer.Current;
+        var text = snapshot.GetLine(Math.Clamp(line - 1, 0, snapshot.LineCount - 1));
+        int position = text.Start + Math.Clamp(column - 1, 0, text.Length);
+        _host.Select(document, SelectionState.At(position));
     }
 
     private async void OnDefinitionRequested(object? sender, DefinitionRequestedEventArgs e)

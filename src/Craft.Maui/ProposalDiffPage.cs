@@ -29,11 +29,21 @@ public sealed class DiffHunkGroup : ObservableCollection<DiffRow>, INotifyProper
 
     /// <summary>The hunk <paramref name="index"/> of <paramref name="hunk"/>'s rows.</summary>
     public DiffHunkGroup(int index, DiffHunk hunk, string? placement, IEnumerable<DiffRow> rows)
+        : this(index, hunk, placement, rows, null, 0)
+    {
+    }
+
+    /// <summary>
+    /// The hunk <paramref name="index"/> of <paramref name="hunk"/>'s rows, of the file <paramref name="file"/> (its name
+    /// heads the hunk) which is proposal <paramref name="proposal"/> of a review across files (X part 6).
+    /// </summary>
+    public DiffHunkGroup(int index, DiffHunk hunk, string? placement, IEnumerable<DiffRow> rows, string? file, int proposal)
         : base(rows)
     {
         ArgumentNullException.ThrowIfNull(hunk);
         Index = index;
-        Title = string.Create(CultureInfo.InvariantCulture, $"Hunk {index + 1}");
+        Proposal = proposal;
+        Title = file is null ? string.Create(CultureInfo.InvariantCulture, $"Hunk {index + 1}") : string.Create(CultureInfo.InvariantCulture, $"{file} · hunk {index + 1}");
         int first = hunk.NewCount > 0 ? hunk.NewStart : hunk.OldStart;
         int last = first + Math.Max(hunk.NewCount, hunk.OldCount) - 1;
         Lines = string.Create(CultureInfo.InvariantCulture, $"lines {first}–{Math.Max(first, last)}");
@@ -42,6 +52,9 @@ public sealed class DiffHunkGroup : ObservableCollection<DiffRow>, INotifyProper
 
     /// <summary>Its index in the diff.</summary>
     public int Index { get; }
+
+    /// <summary>The proposal (the file) of a review across files it belongs to; 0 for a single file's.</summary>
+    public int Proposal { get; }
 
     /// <summary>"Hunk 1".</summary>
     public string Title { get; }
@@ -88,40 +101,63 @@ public sealed class DiffHunkGroup : ObservableCollection<DiffRow>, INotifyProper
 public sealed class ProposalDiffPage : ContentPage
 {
     private const double NarrowWidth = 720;
-    private readonly TaskCompletionSource<IReadOnlyList<bool>> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<IReadOnlyList<IReadOnlyList<bool>>> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<DiffHunkGroup> _groups;
     private readonly Grid _body;
     private readonly View _diffView;
     private readonly View _side;
-    private readonly int _answerCount;
+    private readonly int[] _answerCounts;
     private bool _narrow;
 
     /// <summary>The view of <paramref name="proposal"/> in <paramref name="theme"/>'s colours.</summary>
     public ProposalDiffPage(EditProposal proposal, ITheme theme)
+        : this([proposal ?? throw new ArgumentNullException(nameof(proposal))], proposal.Title, theme)
     {
-        ArgumentNullException.ThrowIfNull(proposal);
+    }
+
+    /// <summary>
+    /// One review of the edits to several files (X part 6: Replace all in files) titled <paramref name="title"/>, each file's
+    /// hunks under its name, in <paramref name="theme"/>'s colours; Accept all, Reject all, or the hunks accepted.
+    /// </summary>
+    public ProposalDiffPage(IReadOnlyList<EditProposal> proposals, string title, ITheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(proposals);
         ArgumentNullException.ThrowIfNull(theme);
+        if (proposals.Count == 0)
+        {
+            throw new ArgumentException("A review needs at least one file's edits.", nameof(proposals));
+        }
+
         var colors = theme.Colors;
         Color C(uint argb) => ThemeColors.Of(argb);
-        Title = proposal.Title;
+        var proposal = proposals[0];
+        bool several = proposals.Count > 1;
+        Title = several ? title : proposal.Title;
         BackgroundColor = C(colors.Ground);
         var diff = proposal.Diff;
-        _answerCount = Math.Max(1, diff.Hunks.Count);
-        _groups = Groups(diff, proposal.Placement, colors);
+        _answerCounts = [.. proposals.Select(p => Math.Max(1, p.Diff.Hunks.Count))];
+        _groups = [];
+        for (int i = 0; i < proposals.Count; i++)
+        {
+            var name = several ? (proposals[i].Document.FilePath is { } one ? Path.GetFileName(one) : "untitled") : null;
+            _groups.AddRange(Groups(proposals[i].Diff, proposals[i].Placement, colors, name, i));
+        }
 
-        var file = proposal.Document.FilePath is { } path ? Path.GetFileName(path) : "untitled";
+        int hunks = proposals.Sum(p => p.Diff.Hunks.Count);
+        int added = proposals.Sum(p => p.Diff.Added), removed = proposals.Sum(p => p.Diff.Removed);
+        var file = several ? string.Create(CultureInfo.InvariantCulture, $"{proposals.Count} files") : proposal.Document.FilePath is { } path ? Path.GetFileName(path) : "untitled";
         var heading = new Label { Text = $"{file} · Review changes", FontSize = 13, TextColor = C(colors.SecondaryText) };
-        var title = new Label { Text = proposal.Title, FontSize = 17, FontAttributes = FontAttributes.Bold, TextColor = C(colors.Foreground) };
+        var titleLabel = new Label { Text = Title, FontSize = 17, FontAttributes = FontAttributes.Bold, TextColor = C(colors.Foreground) };
         var detail = new Label
         {
             Text = string.Create(CultureInfo.InvariantCulture,
-                $"{proposal.Origin ?? proposal.Source} · {diff.Hunks.Count} {(diff.Hunks.Count == 1 ? "hunk" : "hunks")}, +{diff.Added} −{diff.Removed}{(diff.Coarse ? " · a long change, shown whole" : "")}"),
+                $"{proposal.Origin ?? proposal.Source} · {hunks} {(hunks == 1 ? "hunk" : "hunks")}, +{added} −{removed}{(diff.Coarse ? " · a long change, shown whole" : "")}"),
             FontSize = 13,
             TextColor = C(colors.SecondaryText),
         };
         var rejectAll = Button("Reject all", colors, primary: false);
         var acceptAll = Button("Accept all", colors, primary: true);
-        rejectAll.Clicked += (_, _) => _answer.TrySetResult(new bool[_answerCount]);
+        rejectAll.Clicked += (_, _) => _answer.TrySetResult(Fill(false));
         acceptAll.Clicked += (_, _) => _answer.TrySetResult(Fill(true));
         var apply = Button("Apply accepted hunks", colors, primary: false);
         apply.Clicked += (_, _) => _answer.TrySetResult(Answers());
@@ -133,7 +169,7 @@ public sealed class ProposalDiffPage : ContentPage
             BackgroundColor = C(colors.Surface),
             ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)],
         };
-        header.Add(new VerticalStackLayout { Spacing = 2, Children = { heading, title, detail } }, 0, 0);
+        header.Add(new VerticalStackLayout { Spacing = 2, Children = { heading, titleLabel, detail } }, 0, 0);
         header.Add(buttons, 1, 0);
 
         _diffView = new CollectionView
@@ -157,11 +193,16 @@ public sealed class ProposalDiffPage : ContentPage
         SizeChanged += (_, _) => Layout(Width > 0 && Width < NarrowWidth);
     }
 
-    /// <summary>The user's answer: one a hunk, true to apply it (all false: rejected).</summary>
-    public Task<IReadOnlyList<bool>> Answer => _answer.Task;
+    /// <summary>The user's answer for the first (or only) file: one a hunk, true to apply it (all false: rejected).</summary>
+    public Task<IReadOnlyList<bool>> Answer => FirstAnswer();
+
+    /// <summary>The user's answers, one list a file (one answer a hunk).</summary>
+    public Task<IReadOnlyList<IReadOnlyList<bool>>> FileAnswers => _answer.Task;
 
     /// <summary>Answers Reject all (a cancelled request, the page closed another way).</summary>
-    public void Reject() => _answer.TrySetResult(new bool[_answerCount]);
+    public void Reject() => _answer.TrySetResult(Fill(false));
+
+    private async Task<IReadOnlyList<bool>> FirstAnswer() => (await _answer.Task.ConfigureAwait(true))[0];
 
     /// <inheritdoc />
     protected override bool OnBackButtonPressed()
@@ -178,7 +219,10 @@ public sealed class ProposalDiffPage : ContentPage
     }
 
     /// <summary>The hunks of <paramref name="diff"/> as the list's groups, their rows in <paramref name="colors"/>.</summary>
-    public static List<DiffHunkGroup> Groups(TextDiff diff, string? placement, EditorColors colors)
+    public static List<DiffHunkGroup> Groups(TextDiff diff, string? placement, EditorColors colors) => Groups(diff, placement, colors, null, 0);
+
+    /// <summary>The hunks of <paramref name="diff"/> (of the file <paramref name="file"/>, proposal <paramref name="proposal"/> of a review across files) as the list's groups.</summary>
+    public static List<DiffHunkGroup> Groups(TextDiff diff, string? placement, EditorColors colors, string? file, int proposal)
     {
         ArgumentNullException.ThrowIfNull(diff);
         ArgumentNullException.ThrowIfNull(colors);
@@ -207,25 +251,31 @@ public sealed class ProposalDiffPage : ContentPage
                 };
             }
 
-            groups.Add(new DiffHunkGroup(h, hunk, placement, rows));
+            groups.Add(new DiffHunkGroup(h, hunk, placement, rows, file, proposal));
         }
 
         return groups;
     }
 
-    private bool[] Fill(bool value)
+    private IReadOnlyList<bool>[] Fill(bool value)
     {
-        var answers = new bool[_answerCount];
-        Array.Fill(answers, value);
+        var answers = new IReadOnlyList<bool>[_answerCounts.Length];
+        for (int i = 0; i < answers.Length; i++)
+        {
+            var one = new bool[_answerCounts[i]];
+            Array.Fill(one, value);
+            answers[i] = one;
+        }
+
         return answers;
     }
 
-    private bool[] Answers()
+    private IReadOnlyList<bool>[] Answers()
     {
         var answers = Fill(true);
         foreach (var group in _groups)
         {
-            answers[group.Index] = group.Accepted;
+            ((bool[])answers[group.Proposal])[group.Index] = group.Accepted;
         }
 
         return answers;

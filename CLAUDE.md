@@ -90,7 +90,12 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   one test run, (c) once per batch of fixes; never after a clean rebase (even one that brought API changes from another
   slot: the next slot's or the owner's build catches it), never for a side fix on its own (it joins the slot's one
   cycle), never the Windows target in the cloud container, never "just to check"; a rebase with a text conflict in code
-  the slot then edits gets one build and its own filter once. 7. Hand the owner one targeted
+  the slot then edits gets one build and its own filter once. **Agents commit, the session merges (the owner,
+  2026-11-01):** an agent never rebases, never pushes and never rebuilds for another slot's change: it writes its work,
+  builds and tests its own filter as above, commits on its own worktree and stops, reporting its commits and filter. The
+  main session alone brings finished commits onto `main` (cherry-pick or rebase), resolves conflicts, batches every
+  commit that is ready into one merge, builds once for that batch, runs the union of their filters once, and pushes.
+  7. Hand the owner one targeted
   command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it
   needs with `--no-build`, and no second pull. At most three agents at a time (the owner's limit for Craft and every phase of its plan, including the phases that change Idrak, such as S0 and A0; Idrak's own work outside this plan keeps Idrak's limit of two), so builds do not compete for the machine.

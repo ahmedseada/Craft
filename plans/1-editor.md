@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B8: hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 | Lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view) | Part 6 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -2829,13 +2829,51 @@ where the text before the caret matches the primary's, the rest said.
   interactions" replays a fixed script and writes p50, p95, max per kind.
 - Tests: `Minimap`, `CaretCompletion`, `PeekDefinition`, `InteractionTimes`.
 
+### X part 6: the Search view and the Run view (the owner, 2026-11-01)
+The owner: "the search icon on the left side bar only opens the search command; it should have a search tool" and
+"there is no run page that configures and runs based on the current workspace's available runners and builders".
+- **Search view** (seen: the rail's Search runs `ShellCommandIds.QuickOpen`, `ShellModel.cs:1263`). The rail's Search
+  opens a real Search side view (U2's side views), Ctrl+Shift+F: a query box with match case, whole word and regular
+  expression (the find overlay's `FindPattern`), include and exclude globs, `CRAFT_WORKSPACE_IGNORE` kept (and
+  `.gitignore` read), results grouped by file (file icon, count, collapsible) with each line's match highlighted, a
+  click opens the place; Replace and Replace all in files as one diff the user accepts (open documents one undo step
+  each), the Undo bar after. The search runs off the UI thread over the files in parallel (rule 79), reads bytes and
+  searches with `SearchValues`/`IndexOf` spans (rules 17, 74), streams results in batches as they come, is cancelled by
+  the next keystroke (`CRAFT_SEARCH_DELAY_MS`), shows as an activity, and caps results (`CRAFT_SEARCH_MAX_RESULTS`,
+  `CRAFT_SEARCH_MAX_FILE_MB`). Open documents are searched in their current text, not the disk's. Contract
+  `IWorkspaceSearchProvider : IKind` and `WorkspaceSearchProviders` ("text" built in), so P6's code search later adds its
+  results to the same view instead of a second one. Measured: a cold and a warm search over the test project and over
+  Craft's own source size, with the time to the first result.
+- **Run view** (none exists). A rail item "Run" opens a Run side view listing what this workspace can run, found off the
+  UI thread and kept up to date by the folder watcher, each with Run, Build (where it applies) and Stop, and a picked
+  default for F5 / Ctrl+F5 (run) and Ctrl+Shift+B (build). Contract `IRunProvider : IKind` and `RunProviders` in
+  `Craft.Abstractions`, so every plug-in contributes its own:
+  - the C# plug-in: every `.csproj` (by `OutputType`: run Exe projects, build and test the rest), `.sln`/`.slnx` (build,
+    test), `launchSettings.json` profiles (command, arguments, environment, URL), `dotnet run/build/test/publish`;
+  - W's npm plug-in: `package.json` scripts (and `ng serve` through them);
+  - plain scripts: `.ps1`, `.cmd`/`.bat`, `.sh` at the workspace root and in a `scripts` folder.
+  Configurations (name, provider, target, arguments, environment, working folder, before-run build) are edited in the
+  view and saved in `.craft/run.json`; every run goes through a registered sandbox with approval (no silent run),
+  streams to its own terminal tab, is an activity with Stop that ends the process tree, and its errors (MSBuild's and
+  the compiler's `file(line,col): error CODE:` lines, npm's) land in Problems. Debugging is not part of this step (not
+  asked).
+- Decisions (recommended, noted): one Search view for text now and code search later; Run without debugging;
+  configurations in `.craft/run.json`; the same keys as Visual Studio and VS Code (F5, Ctrl+F5, Ctrl+Shift+B) in both
+  keymaps.
+- Tests: `WorkspaceSearch` (results equal a plain scan, regex and globs, ignore files, open documents' text, cancel,
+  replace in files as one diff and Undo, 0 bytes per line searched warm), `RunView` (providers found for a fixture with
+  a .sln, two .csproj, launchSettings, package.json and scripts; a run through a fake sandbox; Stop; errors to Problems;
+  `.craft/run.json` round trip).
+- Slot: X part 6 runs in slot 3 right after the split editor (3a), before 3b.
+
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; 1c (last) the interaction
   times.
 - Slot 2, the surface: 2a batched build, hover cards and fold preview, ruler, sticky scroll; 2b minimap, completion at
   several carets.
 - Slot 3, language and shell: 3a split editor first (the owner asked for it directly, 2026-11-01: "I need to split the
-  editor screen"), then tree move and peek; 3b symbols, `@`, breadcrumb, F2 rename.
+  editor screen"), then tree move and peek; then X part 6 (the Search view, the Run view); 3b symbols, `@`, breadcrumb,
+  F2 rename.
 - Merge: 1a, then 2a, 3a (the split editor), 1b as they finish, then 2b and 3b, then 1c; 3a's `EditorModel.cs` change
   (a shared language session) rebases on 2a's. Shared files (`CraftOptions.cs`, the API dumps,
   `StandardShortcuts.cs`, `MenuModel.cs`): a dump that conflicts is regenerated, built once, `ApiGuard|Inventory` run.

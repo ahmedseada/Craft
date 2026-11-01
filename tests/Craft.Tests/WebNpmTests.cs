@@ -91,6 +91,12 @@ public static class WebNpmTests
         string root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "npm-fake-machine"));
         bool windows = OperatingSystem.IsWindows();
 
+        // A Unix layout found from PATH; a Unix PATH splits on ':', which a Windows path's drive letter holds ("D:\..."), so on
+        // Windows the same layouts are found from the Node setting (a rooted path, no PATH read) and the rest is the same.
+        NodeInstall UnixAt(string binFolder, Func<string, string?> link) => windows
+            ? NodeInstall.Find(new NpmSettings { Node = Path.Combine(binFolder, "node") }, _ => null, windows: false, Exists, link)
+            : NodeInstall.Find(new NpmSettings(), n => Env(n, binFolder), windows: false, Exists, link);
+
         // Windows' installer: node.exe with node_modules\npm beside it.
         string winFolder = Path.Combine(root, "nodejs");
         files.Add(Path.Combine(winFolder, "node.exe"));
@@ -103,7 +109,7 @@ public static class WebNpmTests
         string unix = Path.Combine(root, "node22");
         files.Add(Path.Combine(unix, "bin", "node"));
         files.Add(Path.Combine(unix, "lib", "node_modules", "npm", "bin", "npm-cli.js"));
-        var tarball = NodeInstall.Find(new NpmSettings(), n => Env(n, Path.Combine(unix, "bin")), windows: false, Exists, _ => null);
+        var tarball = UnixAt(Path.Combine(unix, "bin"), _ => null);
         Check.True(tarball is { Ready: true } && tarball.NpmCli == Path.Combine(unix, "lib", "node_modules", "npm", "bin", "npm-cli.js"), $"Unix: ../lib/node_modules/npm ({tarball.NpmCli})");
 
         // A link (Homebrew, nvm): bin/node links into the Cellar, whose ../lib holds npm.
@@ -111,7 +117,7 @@ public static class WebNpmTests
         string cellar = Path.Combine(brew, "Cellar", "node", "23.1.0");
         files.Add(Path.Combine(brew, "bin", "node"));
         files.Add(Path.Combine(cellar, "lib", "node_modules", "npm", "bin", "npm-cli.js"));
-        var linked = NodeInstall.Find(new NpmSettings(), n => Env(n, Path.Combine(brew, "bin")), windows: false, Exists,
+        var linked = UnixAt(Path.Combine(brew, "bin"),
             p => p == Path.Combine(brew, "bin", "node") ? Path.Combine(cellar, "bin", "node") : null);
         Check.True(linked is { Ready: true } && linked.NpmCli == Path.Combine(cellar, "lib", "node_modules", "npm", "bin", "npm-cli.js"), $"through Node's link ({linked.NpmCli})");
 
@@ -124,7 +130,7 @@ public static class WebNpmTests
         Check.True(none is { Ready: false, Problem: { } missing } && missing.Contains("not found on PATH", StringComparison.Ordinal) && missing.Contains("CRAFT_PLUGIN_NPM_NODE", StringComparison.Ordinal),
             $"no Node on PATH: said, with the setting to use ({none.Problem})");
         files.Add(Path.Combine(root, "lonely", "bin", "node"));
-        var noNpm = NodeInstall.Find(new NpmSettings(), n => Env(n, Path.Combine(root, "lonely", "bin")), windows: false, Exists, _ => null);
+        var noNpm = UnixAt(Path.Combine(root, "lonely", "bin"), _ => null);
         Check.True(noNpm is { Ready: false, Node: not null, Problem: { } cli } && cli.Contains("CRAFT_PLUGIN_NPM_NPM", StringComparison.Ordinal), "Node without npm beside it names npm's setting");
 
         Check.Equal("22.23.4", NodeInstall.ParseVersion("v22.23.4\n"), "node --version's output");

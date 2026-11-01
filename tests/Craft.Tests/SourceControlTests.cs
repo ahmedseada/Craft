@@ -419,10 +419,14 @@ public static class SourceControlTests
             repo.Until(() => session.Repository?.Status.Changes.Count == 2, "the repository opens");
             repo.Act(SourceControlView.Stage, repo.File("a.txt"));
             repo.Until(() => session.State.Status.Staged.Count == 1, "a.txt staged");
+            // The stage's own refresh may still be running when the count shows (a slower git on Windows): the button is
+            // enabled once it ends, so the check waits for that (bounded) and then names what it found.
+            repo.Until(() => session.State.Working is null, "the stage's work ends");
             var box = session.Panel.Blocks.OfType<PanelMessageBox>().Single();
             Check.True(box.Actions[0] is { ActionId: SourceControlView.Generate, Enabled: true } button && button.Tooltip.Contains("fake-7b", StringComparison.Ordinal)
                 && button.Menu.Any(m => m.Title.Contains("fake-7b", StringComparison.Ordinal)),
-                $"the button's tooltip names the model it will use, its menu the loaded ones ({box.Actions[0].Tooltip})");
+                $"the button's tooltip names the model it will use, its menu the loaded ones ({box.Actions[0].ActionId}, enabled {box.Actions[0].Enabled}, " +
+                $"working '{session.State.Working}', tooltip '{box.Actions[0].Tooltip}', menu [{string.Join(", ", box.Actions[0].Menu.Select(m => m.Title))}])");
             var versions = new List<int>();
             session.Panel.Changed += (_, _) => versions.Add(session.State.MessageVersion);
             string head = repo.Git("rev-parse", "HEAD");

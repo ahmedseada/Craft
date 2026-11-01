@@ -317,7 +317,7 @@ internal static class PublicApi
                     break;
                 case FieldInfo f when f.IsPublic || f.IsFamily || f.IsFamilyOrAssembly:
                     yield return $"{(f.IsLiteral ? "const " : f.IsStatic ? "static " : "")}{(f.IsInitOnly ? "readonly " : "")}{Name(f.FieldType)} {f.Name}" +
-                                 (f.IsLiteral ? $" = {f.GetRawConstantValue()}" : "");
+                                 (f.IsLiteral ? $" = {Literal(f.GetRawConstantValue())}" : "");
                     break;
                 case EventInfo e when e.AddMethod is { } add && Visible(add):
                     yield return $"event {Name(e.EventHandlerType!)} {e.Name}";
@@ -325,6 +325,11 @@ internal static class PublicApi
             }
         }
     }
+
+    // A constant as the dump writes it: a string's line breaks as \n whatever the checkout's line endings (a raw string
+    // literal takes the source file's, CRLF on a Windows checkout), so one dump holds on every machine; others as before.
+    private static string? Literal(object? value) =>
+        value is string text ? text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Replace("\n", "\\n", StringComparison.Ordinal) : $"{value}";
 
     private static bool Visible(MethodBase method) => method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly;
 

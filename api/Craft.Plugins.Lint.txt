@@ -116,19 +116,7 @@ sealed class Craft.Plugins.Lint.PrettierFormatter : Craft.Abstractions.IDocument
   System.Threading.Tasks.Task<System.String> FormatAsync(Craft.Abstractions.DocumentFormatRequest request, System.Threading.CancellationToken cancellationToken = null)
   System.Void Forget()
   const System.String FormatterName = prettier
-  const System.String Script = 'use strict';
-// Craft's Prettier runner: node craft-prettier.cjs PRETTIER_FOLDER INPUT FILE_PATH OUTPUT
-const fs = require('fs');
-const [, , folder, input, filepath, output] = process.argv;
-(async () => {
-  const prettier = require(folder);
-  const text = fs.readFileSync(input, 'utf8');
-  const info = prettier.getFileInfo ? await prettier.getFileInfo(filepath, { ignorePath: undefined, resolveConfig: false }) : { ignored: false };
-  if (info && info.ignored) { fs.writeFileSync(output, text); return; }
-  const options = (await prettier.resolveConfig(filepath, { editorconfig: true })) || {};
-  const formatted = await prettier.format(text, { ...options, filepath });
-  fs.writeFileSync(output, formatted);
-})().catch(e => { process.stderr.write(String((e && e.message) || e)); process.exit(2); });
+  const System.String Script = 'use strict';\n// Craft's Prettier runner: node craft-prettier.cjs PRETTIER_FOLDER INPUT FILE_PATH OUTPUT\nconst fs = require('fs');\nconst [, , folder, input, filepath, output] = process.argv;\n(async () => {\n  const prettier = require(folder);\n  const text = fs.readFileSync(input, 'utf8');\n  const info = prettier.getFileInfo ? await prettier.getFileInfo(filepath, { ignorePath: undefined, resolveConfig: false }) : { ignored: false };\n  if (info && info.ignored) { fs.writeFileSync(output, text); return; }\n  const options = (await prettier.resolveConfig(filepath, { editorconfig: true })) || {};\n  const formatted = await prettier.format(text, { ...options, filepath });\n  fs.writeFileSync(output, formatted);\n})().catch(e => { process.stderr.write(String((e && e.message) || e)); process.exit(2); });
   static Craft.Abstractions.DocumentFormatterFit Fit(System.String folder, System.String root, Craft.Plugins.Lint.PrettierSettings settings)
   static Craft.Plugins.Lint.PrettierFormatter Instance { get; }
 sealed class Craft.Plugins.Lint.PrettierPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind

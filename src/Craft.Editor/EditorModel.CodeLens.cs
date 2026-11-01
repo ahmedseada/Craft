@@ -255,17 +255,21 @@ public sealed partial class EditorModel
     /// </summary>
     internal void NoteLensesShown(int firstLine, int lastLine)
     {
-        if (!CodeLensShown || _disposed)
+        if (!Options.CodeLens || _language is null || _disposed)
         {
             return;
         }
 
+        // The registry is asked only when a request is due (once a version): a warm frame allocates nothing here.
         var snapshot = Snapshot;
         if ((_lensVersion != snapshot.Version || _lensStale) && _lensAskedVersion != snapshot.Version)
         {
-            _lensAskedVersion = snapshot.Version;
-            _lensTimer ??= new DebounceTimer(this);
-            _lensTimer.Schedule(Options.CodeLensDelayMilliseconds, _lensDue ??= RequestLenses);
+            _lensAskedVersion = snapshot.Version;              // once a version, whether a provider serves the language or not
+            if (CodeLensProviders.For(_language.Name).Count > 0)
+            {
+                _lensTimer ??= new DebounceTimer(this);
+                _lensTimer.Schedule(Options.CodeLensDelayMilliseconds, _lensDue ??= RequestLenses);
+            }
         }
 
         if (_lenses.Length == 0 || (_lensResolveFrom == firstLine && _lensResolveTo == lastLine && _lensResolving is not null))
@@ -368,8 +372,7 @@ public sealed partial class EditorModel
         {
             if (ReferenceEquals(_lensRequest, cancel))
             {
-                _lensRequest = null;
-                _lensAskedVersion = -1;
+                _lensRequest = null;                           // failed: not asked again for this text (an edit asks again)
             }
         });
     }

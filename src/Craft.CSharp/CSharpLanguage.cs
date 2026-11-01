@@ -254,10 +254,10 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
         {
             if (!_working)
             {
-                return Task.CompletedTask;
+                return _idle?.Task ?? Task.CompletedTask;     // the last wait's task (completed) while it is kept: the same task again
             }
 
-            if (_idle is null)
+            if (_idle is null || _idle.Task.IsCompleted)
             {
                 _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 Interlocked.Increment(ref _idleSourcesMade);
@@ -582,7 +582,6 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
     {
         _working = false;
         _idle?.TrySetResult();
-        _idle = null;
         Monitor.PulseAll(_gate);
         if (_disposed)
         {
@@ -603,7 +602,6 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
         Interlocked.Exchange(ref _scratch, null)?.Dispose();
         Interlocked.Exchange(ref _colorScratch, null)?.Dispose();
         _idle?.TrySetResult();
-        _idle = null;
     }
 
     /// <summary>

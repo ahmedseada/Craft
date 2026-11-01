@@ -165,6 +165,19 @@ internal sealed class HintLensProvider : ICodeLensProvider
     }
 }
 
+/// <summary>
+/// C# registered for a test and unregistered after it (its languages, readers, snippets and lenses), so a later group that
+/// reads the registries (Inventory) sees what it saw before.
+/// </summary>
+internal sealed class CSharpRegistration : IDisposable
+{
+    private CSharpRegistration() => CSharpLanguage.Register();
+
+    public static CSharpRegistration Scope() => new();
+
+    public void Dispose() => CSharpLanguage.Unregister();
+}
+
 /// <summary>X part 9: snippets (the syntax, the editor's stops, mirrors and choices, C#'s set, the user's files).</summary>
 [TestGroup("Snippets")]
 public static class SnippetTests
@@ -277,6 +290,7 @@ public static class SnippetTests
     [Test]
     public static async Task TheUsersSnippetsAreReadFromTheFoldersAndAgainWhenAFileIsSaved()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var folder = new TempFolder();
         CSharpLanguage.Register();
         string user = Path.Combine(folder.Path, "user");
@@ -321,6 +335,7 @@ public static class InlayHintTests
     [Test]
     public static async Task CSharpNamesLiteralArgumentsAndShowsInferredTypesButNotWhatTheCodeAlreadySays()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var project = new SemanticTests.Project();
         project.Replace("public static void Run()", "static void Show(int arg1, int arg2) { }\n    static void SetColor(string color) { }\n    public static void Run()");
         project.Replace("Console.WriteLine(circle.Area(2));", "Console.WriteLine(circle.Area(2));\n        Show(1, 2);\n        SetColor(\"red\");\n        var name = \"n\";\n        Circle.Make(radius: 3, name);\n        Func<int, int> twice = x => x * 2;\n        foreach (var each in new[] { 1 }) { }");
@@ -332,7 +347,7 @@ public static class InlayHintTests
         Check.True(shown.Contains("radius:@1, \"") && shown.Contains("name:@\"a\")"), "parameter names before literal arguments");
         Check.True(shown.Contains("scale:@2));"), "a literal inside a nested call");
         Check.True(shown.Any(s => s.StartsWith(": Circle?@", StringComparison.Ordinal)), "the type inferred for var circle (nullable, as var infers it with nullable on), after its name");
-        Check.True(shown.Any(s => s.StartsWith(": string@", StringComparison.Ordinal)) && shown.Any(s => s.StartsWith(": int@", StringComparison.Ordinal)), "var name and foreach's var each");
+        Check.True(shown.Any(s => s.StartsWith(": string?@", StringComparison.Ordinal)) && shown.Any(s => s.StartsWith(": int@", StringComparison.Ordinal)), "var name (string?, nullable on) and foreach's var each");
         Check.True(shown.Contains("int@x =>"), "an implicit lambda parameter's type before it");
         Check.True(!shown.Any(s => s.StartsWith("arg", StringComparison.Ordinal)), "none for parameters that differ only by a number");
         Check.True(!shown.Any(s => s.StartsWith("color:", StringComparison.Ordinal)), "none where the method's name ends with the parameter's");
@@ -443,8 +458,44 @@ public static class InlayHintTests
     }
 
     [Test]
+    public static async Task OnAWrappedLineAHintMovesOnlyWhatFollowsItOnItsRowAndTheWrapIsUnchanged()
+    {
+        const string text = "abcdefghijklmnopqrs call(1, 22) end\nnext\n";
+        var options = new CraftOptions { InlayHintsDelayMilliseconds = 0, CodeLens = false, WordWrap = "column", WordWrapColumn = 20 };
+        var (plain, _, plainRenderer, plainCanvas) = Make(text, options with { InlayHints = "off" });
+        using var _ = plainRenderer;
+        plainRenderer.Draw(plainCanvas, plain, 0, 0, 800, 400, caretVisible: true);
+        int rows = plain.RowsOfLine(0);
+        Check.True(rows > 1, $"the line wraps ({rows} rows)");
+
+        var (model, session, renderer, canvas) = Make(text, options);
+        using var __ = renderer;
+        renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: true);
+        await Landed(() => model.InlayHints.Count == 2, "the hints land");
+        canvas.Clear();
+        renderer.Draw(canvas, model, 0, 0, 800, 400, caretVisible: true);
+        Check.Equal(rows, model.RowsOfLine(0), "the wrap is the same with hints (they move drawing only)");
+        Check.Equal(2, renderer.HintsDrawn, "both hints drawn on the wrapped row");
+        float height = model.Metrics.LineHeight;
+        float cell = model.Metrics.CellWidth;
+        var chip = canvas.Texts.First(t => t.Text == "n:");
+        Check.True(Math.Abs(chip.Top - height) < 0.01, "the first hint is on the second row, where its argument wrapped to");
+        var argument = canvas.Texts.First(t => t.Top == chip.Top && t.Text.StartsWith('1'));
+        Check.True(Math.Abs(argument.X - (chip.X + (3 * cell))) < 0.01, "its argument drawn three cells after it");
+        Check.True(canvas.Texts.Any(t => t.Top == 0 && t.Text.StartsWith("abcdefghijklmnopqrs", StringComparison.Ordinal) && Math.Abs(t.X - model.TextLeft) < 0.01), "the first row unmoved");
+        int one = text.IndexOf("1,", StringComparison.Ordinal);
+        model.Select(one, one);
+        canvas.Clear();
+        renderer.DrawCarets(canvas, model, 0, 0, 800, 400);
+        Check.True(canvas.Calls.Any(c => c.Kind == "fill" && Math.Abs(c.Y - height) < 0.01 && Math.Abs(c.X - chip.X) < 0.01), "the caret before the hint, on its row");
+        Check.Equal(one, model.PositionFromPoint(argument.X + (0.2f * cell), height + 1), "a click on the moved argument finds it");
+        Check.Equal(1, session.HintRequests, "asked once");
+    }
+
+    [Test]
     public static async Task AScreenOfAFiveThousandLineFileColdAndWarmAndAWarmFrameAllocatesNothing()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var folder = new TempFolder();
         CSharpLanguage.Register();
         string path = folder.File("Big.cs");
@@ -622,6 +673,7 @@ public static class CodeLensTests
     [Test]
     public static async Task CSharpCountsReferencesAndRunsATestThroughTheHost()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var project = new SemanticTests.Project();
         project.Replace("public static void Run()", "[Fact]\n    public static void Adds() { }\n\n    public static void Run()");
         var symbols = await project.Session.GetDocumentSymbolsAsync(project.Buffer.Current, CancellationToken.None);
@@ -780,6 +832,7 @@ public static class OutlineTests
     [Test]
     public static async Task TheOutlineShowsTheActiveEditorsTreeFollowsTheCaretFiltersSortsAndGoes()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var folder = new TempFolder();
         using var fixture = new SplitFixture(folder);
         CSharpLanguage.Register();
@@ -878,6 +931,7 @@ public static class HierarchyTests
     [Test]
     public static async Task CallersCallsBaseAndDerivedTypesAreWalkedOneLevelAtATime()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var project = new HierarchyProject();
         var snapshot = project.Buffer.Current;
         var make = await project.Session.PrepareHierarchyAsync(snapshot, project.At("Make()"), HierarchyKind.Call, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(2));
@@ -942,6 +996,7 @@ public static class HierarchyTests
     [Test]
     public static async Task TheHierarchyTabOpensLazilyAsActivitiesAndAClickGoesToTheCall()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var folder = new TempFolder();
         using var fixture = new SplitFixture(folder);
         CSharpLanguage.Register();
@@ -1008,6 +1063,7 @@ public static class PartNineSpeedTests
     [Test]
     public static async Task AnIdleFileWithNoWorkspaceDocumentStartsNoColourPassEveryDelay()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         CSharpLanguage.Register();
         var buffer = new PieceTableBuffer("class A { void M() { int x = 1; } }\n");
         var settings = LanguageSettings.Default with { WorkspaceReaders = [], SemanticColorsDelayMilliseconds = 5, DiagnosticsDelayMilliseconds = 60_000 };
@@ -1039,6 +1095,7 @@ public static class PartNineSpeedTests
     [Test]
     public static async Task AKeystrokeMakesNoIdleSourceWhenNothingWaits()
     {
+        using var registered = CSharpRegistration.Scope();    // unregistered after: the Inventory group reads the registries
         using var project = new SemanticTests.Project(LanguageSettings.Default with { DiagnosticsDelayMilliseconds = 60_000, SemanticColorsDelayMilliseconds = -1 });
         await project.Session.WhenDiagnosticsIdle().WaitAsync(TimeSpan.FromMinutes(2));
         await project.Session.WhenIdle();

@@ -1250,9 +1250,17 @@ public sealed class BottomPanelView : ContentView, IDisposable
     {
         _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.Logged -= OnLogged;
-        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Todo, BottomTab.Telemetry, BottomTab.Hierarchy])
+        if (_todo is not null)
         {
-            if ((tab == BottomTab.Hierarchy && _hierarchy is null) || (tab == BottomTab.Todo && _todo is null))
+            _todo.Changed -= OnTodoChanged;
+        }
+
+        if (_hierarchy is not null)
+        {
+            _hierarchy.Changed -= OnHierarchyChanged;
+        }
+
+        _todoView?.Dispose();
         _metrics.Recorded -= OnMeasured;
         _metrics.Dispose();
         _metricsView.Dispose();
@@ -1347,12 +1355,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private void RebuildTabs()
     {
         _tabs.Children.Clear();
-        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Telemetry, BottomTab.Hierarchy])
+        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Todo, BottomTab.Telemetry, BottomTab.Hierarchy])
         {
-            if (tab == BottomTab.Hierarchy && _hierarchy is null)
-        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Todo, BottomTab.Telemetry])
-        {
-            if (tab == BottomTab.Todo && _todo is null)
+            if ((tab == BottomTab.Todo && _todo is null) || (tab == BottomTab.Hierarchy && _hierarchy is null))
             {
                 continue;
             }

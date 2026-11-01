@@ -195,8 +195,7 @@ public sealed partial class EditorModel
         {
             if (ReferenceEquals(_hintsRequest, cancel))
             {
-                _hintsRequest = null;
-                _hintsAskedVersion = -1;                      // failed or cancelled: the next frame asks again
+                _hintsRequest = null;                          // failed: not asked again for this text (an edit asks again)
             }
         });
     }

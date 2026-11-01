@@ -45,6 +45,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean ChatExpanded { get; init; }
   System.Boolean ChatOpen { get; init; }
   System.Boolean ChatShowMetrics { get; init; }
+  System.Boolean CodeLens { get; init; }
   System.Boolean CompletionAllCarets { get; init; }
   System.Boolean CrashTicketOffer { get; init; }
   System.Boolean CrashTrail { get; init; }
@@ -57,13 +58,17 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean Folding { get; init; }
   System.Boolean FormatOnSave { get; init; }
   System.Boolean IndentGuides { get; init; }
+  System.Boolean InlayHintsParameters { get; init; }
+  System.Boolean InlayHintsTypes { get; init; }
   System.Boolean InsertFinalNewline { get; init; }
   System.Boolean InsertSpaces { get; init; }
   System.Boolean Lightbulb { get; init; }
+  System.Boolean LinkedEditing { get; init; }
   System.Boolean MarkdownPreviewFollow { get; init; }
   System.Boolean Minimap { get; init; }
   System.Boolean MinimapDiagnostics { get; init; }
   System.Boolean MinimapFind { get; init; }
+  System.Boolean OutlineFollowCaret { get; init; }
   System.Boolean OverviewRuler { get; init; }
   System.Boolean PaintLineLayouts { get; init; }
   System.Boolean PreviewTabs { get; init; }
@@ -71,6 +76,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean ReducedMotion { get; init; }
   System.Boolean RestoreSession { get; init; }
   System.Boolean SearchIgnoreFiles { get; init; }
+  System.Boolean Snippets { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Boolean SpellCheck { get; init; }
   System.Boolean SplitterSnap { get; init; }
@@ -104,6 +110,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 BufferChunkCharacters { get; init; }
   System.Int32 CaretBlinkMilliseconds { get; init; }
   System.Int32 ChatFoldCodeLines { get; init; }
+  System.Int32 CodeLensDelayMilliseconds { get; init; }
   System.Int32 CompletionDelayMilliseconds { get; init; }
   System.Int32 CompletionRows { get; init; }
   System.Int32 ComposerMaxLines { get; init; }
@@ -124,10 +131,12 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 FoldingDelayMilliseconds { get; init; }
   System.Int32 GetHashCode()
   System.Int32 GutterPaddingCells { get; init; }
+  System.Int32 HierarchyLimit { get; init; }
   System.Int32 HostLogLines { get; init; }
   System.Int32 HoverDelayMilliseconds { get; init; }
   System.Int32 HoverHideMilliseconds { get; init; }
   System.Int32 ImagePreviewMaxMegabytes { get; init; }
+  System.Int32 InlayHintsDelayMilliseconds { get; init; }
   System.Int32 LightbulbDelayMilliseconds { get; init; }
   System.Int32 LoaderCycleMilliseconds { get; init; }
   System.Int32 LoaderDelayMilliseconds { get; init; }
@@ -217,6 +226,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String FontFallback { get; init; }
   System.String FontFamily { get; init; }
   System.String IconTheme { get; init; }
+  System.String InlayHints { get; init; }
   System.String InlineCompletionProvider { get; init; }
   System.String InlineDiagnostics { get; init; }
   System.String InterfaceFont { get; init; }
@@ -224,14 +234,17 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String LinksUnderline { get; init; }
   System.String MemoryMonitor { get; init; }
   System.String NewLine { get; init; }
+  System.String OutlineSort { get; init; }
   System.String RecoveryFolder { get; init; }
   System.String RenderWhitespace { get; init; }
   System.String ResolveDataFolder()
+  System.String ResolveSnippetsFolder()
   System.String Rulers { get; init; }
   System.String RunApproval { get; init; }
   System.String RunInteractive { get; init; }
   System.String RunSandbox { get; init; }
   System.String SearchProvider { get; init; }
+  System.String SnippetsFolder { get; init; }
   System.String SpellLanguage { get; init; }
   System.String TerminalArguments { get; init; }
   System.String TerminalCursor { get; init; }

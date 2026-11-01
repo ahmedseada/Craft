@@ -52,10 +52,12 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean FormatOnSave { get; init; }
   System.Boolean IndentGuides { get; init; }
   System.Boolean InsertSpaces { get; init; }
+  System.Boolean OverviewRuler { get; init; }
   System.Boolean PaintLineLayouts { get; init; }
   System.Boolean ReducedMotion { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Boolean SplitterSnap { get; init; }
+  System.Boolean StickyScroll { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
   System.Boolean TerminalCursorBlink { get; init; }
   System.Boolean TreeDragMove { get; init; }
@@ -91,20 +93,26 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 FindBackgroundCharacters { get; init; }
   System.Int32 FindCountLimit { get; init; }
   System.Int32 FindRegexTimeoutMilliseconds { get; init; }
+  System.Int32 FoldPreviewLines { get; init; }
   System.Int32 FoldingDelayMilliseconds { get; init; }
   System.Int32 GetHashCode()
   System.Int32 GutterPaddingCells { get; init; }
   System.Int32 HostLogLines { get; init; }
   System.Int32 HoverDelayMilliseconds { get; init; }
+  System.Int32 HoverHideMilliseconds { get; init; }
   System.Int32 LoaderCycleMilliseconds { get; init; }
   System.Int32 LoaderDelayMilliseconds { get; init; }
   System.Int32 MaxCarets { get; init; }
   System.Int32 MotionMilliseconds { get; init; }
   System.Int32 NotificationsKeep { get; init; }
+  System.Int32 OverviewRulerWidth { get; init; }
   System.Int32 PaintCacheLines { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
   System.Int32 PeekLines { get; init; }
   System.Int32 PeekMaxMegabytes { get; init; }
+  System.Int32 PieceBatchMinEdits { get; init; }
+  System.Int32 PieceBatchPiecesPerEdit { get; init; }
+  System.Int32 PieceCoalesceCharacters { get; init; }
   System.Int32 ProblemsListLimit { get; init; }
   System.Int32 ProposalPreviewCharacters { get; init; }
   System.Int32 QuickOpenBackgroundFiles { get; init; }
@@ -121,6 +129,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SemanticColorsDelayMilliseconds { get; init; }
   System.Int32 SemanticMaxCharacters { get; init; }
   System.Int32 SplitterHoverMilliseconds { get; init; }
+  System.Int32 StickyScrollLines { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 TelemetrySamples { get; init; }
   System.Int32 TelemetrySlowMilliseconds { get; init; }

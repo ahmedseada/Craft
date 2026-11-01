@@ -396,6 +396,10 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 PopupText { get; init; }
   System.UInt32 Raised { get; init; }
   System.UInt32 RaisedHigh { get; init; }
+  System.UInt32 RulerCaret { get; init; }
+  System.UInt32 RulerError { get; init; }
+  System.UInt32 RulerFind { get; init; }
+  System.UInt32 RulerWarning { get; init; }
   System.UInt32 SecondaryText { get; init; }
   System.UInt32 Selection { get; init; }
   System.UInt32 Success { get; init; }

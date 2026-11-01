@@ -454,6 +454,10 @@ Craft.Abstractions.EditorColors  System.UInt32 PopupSelection { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 PopupText { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Raised { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 RaisedHigh { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 RulerCaret { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 RulerError { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 RulerFind { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 RulerWarning { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 SecondaryText { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Selection { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Success { get; init; }

@@ -503,7 +503,7 @@ public static class FoldingTests
             var (model, document) = RealEditors.Make(text, language: new QuoteLanguage());
             using var _ = model;
             await model.Folding.RefreshAsync();
-            Check.True(model.Folding.IsAvailable && provider.Calls == 1, "the provider was asked off the UI thread, once for the version");
+            Check.True(model.Folding.IsAvailable && model.Folding.Requests == 1, "the provider was asked off the UI thread, once for the version (this editor's requests: since piece 1b every editor left open re-asks a provider when one registers)");
             Check.SequenceEqual([new FoldingRange(0, 5), new FoldingRange(1, 3)], model.Folding.Ranges.ToArray(), "its ranges, by header line");
             Check.Equal((1 + 2 + 2) * 10f, model.GutterWidth, "the gutter has its fold column (one digit, the padding, the chevrons)");
 
@@ -575,7 +575,7 @@ public static class FoldingTests
             model.OnKey(EditorKey.Delete, KeyModifiers.None);
             Check.True(!model.Folding.Map.HasHidden, "deleting into the hidden lines unfolds them (an edit never happens out of sight)");
             await model.Folding.RefreshAsync();
-            Check.True(provider.Calls == 2 && model.Folding.RangesVersion == document.Buffer.Current.Version, "asked again for the new version");
+            Check.True(model.Folding.Requests == 2 && model.Folding.RangesVersion == document.Buffer.Current.Version, "asked again for the new version");
         }
         finally
         {

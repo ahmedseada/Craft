@@ -3010,6 +3010,117 @@ only; nothing was needed in Idrak.
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
 
+### X restart piece 2a as built (2026-11-01)
+
+Slot s3: X part 4's **Faster typing at many carets**, **Hover cards that stay**, **Overview ruler** and **Sticky scroll**.
+Craft only; nothing in Idrak (no cause there).
+- **The batched document build** (`Craft.Core/Text/PieceTableBuffer.cs`, `PieceTree.cs`). A change of at least
+  `CRAFT_PIECE_BATCH_MIN_EDITS` (8) edits splits the tree once before its first edit and once after its last, flattens
+  the middle into a pooled array (`PieceNode.Flatten`), copies the kept pieces and skips the removed text in one walk,
+  appends every inserted text to the add buffer in one run, joins pieces that continue each other in their block, copies an
+  insertion together with the short add-buffer piece before it into one piece while the two stay within
+  `CRAFT_PIECE_COALESCE_CHARS` (64; 0 never), and rebuilds the middle perfectly balanced (`PieceNode.FromSorted`); the two
+  seams join through `Concat`. The middle starts up to the coalescing limit before the first edit, so the first caret's
+  typing joins too (found by the piece-count test: without it the first caret kept a piece a keystroke). A middle of more
+  than `CRAFT_PIECE_BATCH_PIECES_PER_EDIT` (32) pieces an edit (carets far apart in a much-edited file) takes the per-edit
+  path, whose cost does not grow with the middle. Pooled arrays are cleared on return (they hold chunk references).
+- **Hover cards that stay** (`Craft.Editor/HoverCard.cs`, `EditorModel.Layers.cs`). `EditorTooltip.Kind` (Plain, Hover,
+  FoldPreview); `EditorModel.HoverCard` lays the card out from the model's state whenever asked (box, wrapped rows, scroll,
+  selection), so the paint and the pointer agree. The pointer inside the card keeps it (no new hover, no hide); leaving it
+  and its word (the gutter, the ruler, the sticky rows, another word, out of the editor) closes it once
+  `CRAFT_HOVER_HIDE_MS` (300) has passed, counted from leaving (moving on does not postpone it); back inside in time keeps
+  it. A drag in the card selects its text, Ctrl+C copies it (`Copy` takes the card's selection first), the wheel over the
+  card scrolls it (`EditorModel.WheelOverPopup`, called by `EditorView`'s wheel first) when it is taller than half the
+  editor, with its own thin scroll bar. A hover on a symbol (a semantic session, an answer) ends with a "Go to definition
+  F12" row: a click puts the caret on the symbol and runs go to definition (`GoToDefinitionAt`). Signature help and a
+  definition's description stay plain tooltips, as before.
+- **The fold's preview.** The pointer resting on a folded header's "..." or its gutter chevron shows up to
+  `CRAFT_FOLD_PREVIEW_LINES` (12) of the hidden lines under the header, in their colours: each line's runs from the
+  renderer's run cache (`EditorRenderer.LineRunsFor`: the line classified alone, kept like a shown line and pinned against
+  the cache's trim while shown), the lines' common indent taken off. A click in the preview unfolds the block.
+- **The overview ruler** (`Craft.Editor/OverviewRuler.cs`, owned by the renderer). `CRAFT_OVERVIEW_RULER` (on),
+  `CRAFT_OVERVIEW_RULER_WIDTH` (14) at the viewport's right edge: the whole content mapped onto the viewport's height;
+  errors and warnings (right half, an error wins), the find overlay's listed hits (left half; the ruler never lists them
+  itself), carets (across, thin), and the band the viewport shows. One pass over each sorted list (diagnostics, hits,
+  selections) into a pooled byte array of one bucket per unit of height, then runs lane by lane; rebuilt only when the text
+  version, the diagnostics array, the find list, the selections (`SelectionStamp`), the folds (`FoldsStamp`), the rows or
+  the height changed (rules 73, 75). New theme tokens `RulerError`, `RulerWarning`, `RulerFind`, `RulerCaret`, each the
+  theme's error, warning, find and caret colour unless a theme sets it. A press on the ruler centres the view there, a drag
+  follows (instant scroll requests); the caret is kept out from under it (`EnsureCaretVisible`'s text width).
+- **Sticky scroll** (`Craft.Editor/StickyScrollLayer.cs`, `EditorModel.StickyScroll`). `CRAFT_STICKY_SCROLL` (on),
+  `CRAFT_STICKY_SCROLL_LINES` (5), over `EditorFolding.Ranges`: each range's enclosing range is found once when the ranges
+  change (`EditorFolding.RangesStamp`, one pass with a stack); a frame finds the top line's innermost range by a binary
+  search and walks up, into arrays it keeps, and is reused while the scroll, the text, the ranges and the folds stay. A
+  header stays while it is above the row it covers and its block goes on below that row (outermost first). Drawn over the
+  text and the gutter with its own line numbers and a border and soft shadow under it; carets under the headers are not
+  drawn (both layers); a click on a header puts the caret at its first non-blank and scrolls the header to where its row
+  was; a caret moved up under the headers scrolls out from under them.
+- **Measured** (headless, Linux container, Release, the tests' fixed metrics; `MultiCaret.AKeystrokeAtAHundredCaretsIsMeasured`,
+  400 keys typed then 400 Backspaces at 100 carets; the document's change replayed with the batch off, then on):
+  - Before (edit by edit): median 115.7-132.7 us, 312,061 bytes a change, **40,101 pieces after 400 keys**, 40,000
+    characters added to the add buffer.
+  - After (batched): median 30.8-34.6 us, p99 80-94 us, 44,284 bytes a change, **807 pieces after 400 keys**, 1,263,131
+    characters added (coalescing copies a caret's run while it grows to 64: about 31 times the typed text, 2.5 MB here,
+    against the 40,101 tree nodes, about 3.5 MB, it saves).
+  - The whole keystroke at 100 carets: median 66.4-79.4 us (p99 176-217 us), 45,984 bytes (slice 2: 191 us, 314 KB); the editor's own
+    about 1.7 KB; its paint (ruler included) median 97.6-120.1 us.
+  - Warm frames: the ruler's and the sticky headers' frames allocate nothing (200 frames each under 1 KB in all, 0 seen);
+    B1's C# paint test still 0 B a frame (warm median 173 us in the long run). Once, in the first long run, that test saw
+    88 B in one frame; alone, with `DOTNET_TieredCompilation=0` and in the next long run it was 0 (rule 90: the long run's
+    background tier-up, as B1 recorded).
+- **Decisions on the recommendation (one line each)**:
+  - The batch starts at 8 edits and is taken while the middle holds at most 32 pieces an edit (a new option, so it is not fixed).
+  - Coalescing copies only pieces of the add buffer, never the original text (copying the text between carets would grow the add buffer by the whole middle a keystroke).
+  - The middle starts up to the coalescing limit before the first edit, so the first caret coalesces like the others.
+  - "Before" and "after" are measured in one run (the batch switched off by its option), not against slice 2's machine.
+  - `InternalsVisibleTo Craft.Tests` on Craft.Core for the tree's structural checks, not a public diagnostic API.
+  - The card's layout lives in the model (`HoverCard`), so the hit tests and the paint use one box.
+  - A hover card stays while the pointer is on its word too; leaving starts one hide timer that moving on does not postpone.
+  - The wheel over a card is the card's (the text under it does not scroll); a card shows at most half the editor's height.
+  - The definition row's link takes the theme's `Info` colour (blue, as the design's links); no new token.
+  - A click in a fold's preview unfolds the block (its text is not selectable; a hover card's is).
+  - The ruler is drawn by the renderer over the text's right edge (not a view of its own) and maps the content's height, as VS Code's.
+  - Ruler marks: errors and warnings right, find left, carets across; at least two units high.
+  - The ruler keeps `ContentWidth` as it was; the scroll margin already leaves room for the line ends under it.
+  - Sticky scroll follows the folding ranges, so it is off where a document does not fold (and with `CRAFT_FOLDING` off).
+  - The sticky headers scroll sideways with the text and draw their own line numbers.
+  - Pointer hit tests for the card, the ruler and the sticky rows run before the editor's own press (after the completion list).
+- **Found on the way**: since piece 1b every editor left open re-asks a provider when one registers, so the Folding tests'
+  `provider.Calls` counted other groups' undisposed editors in a long run; they now count their own editor's
+  `Folding.Requests`.
+- **Windows-only lines**: none. The wheel's route to the card is in `EditorView`'s shared code; not compiled for the
+  Windows target here (no `#if WINDOWS` line changed). Not run here: the drawing on Windows, and whether WinUI's own scroll
+  bar sits over the ruler (the plan's "(guess)"): the owner's check.
+- **Left**: an `IEditorCanvas` has no clip, so a preview line wider than its card draws past the card's right edge; the
+  sticky headers have no push-up animation (a header leaves when its block's end reaches its row); the ruler shows the find
+  overlay's hits only once the find box has listed them; a long-run allocation diagnosis tool (Idrak's `AllocatedTypes`)
+  is not in Craft's tests.
+- **Tests**: new groups `HoverCards` (3), `OverviewRuler` (3), `StickyScroll` (4); `Buffer` (+3: batched equivalence
+  against a string for five option sets with tree height, balance, length and line-break checks after every step and old
+  snapshots; a piece a caret at 100 carets; the per-edit path for a large middle) and `MultiCaret` (the measure, before and
+  after, the piece bound); `Editor` (the draw order with the ruler; the old hover test leaves after the hide delay),
+  `Folding` (own requests), `Inventory` (the nine options). The full filter
+  (`Buffer|Document|MultiCaret|HoverCards|OverviewRuler|StickyScroll|Surface|Editor|Paint|Folding|Semantic|Settings|ApiGuard|Inventory`):
+  156 passed, 0 failed (after the rebases over pieces 1b and 3a). The API dumps of Craft.Abstractions, Craft.Core and Craft.Editor
+  and the contract list (1.1, piece 1b's step) regenerated: lines added only.
+- **Options added** (each with its shape on the settings page): `CRAFT_PIECE_COALESCE_CHARS` (64),
+  `CRAFT_PIECE_BATCH_MIN_EDITS` (8), `CRAFT_PIECE_BATCH_PIECES_PER_EDIT` (32) in Editor › Advanced; `CRAFT_HOVER_HIDE_MS`
+  (300) in Editor › Hover; `CRAFT_FOLD_PREVIEW_LINES` (12), `CRAFT_OVERVIEW_RULER` (on), `CRAFT_OVERVIEW_RULER_WIDTH` (14),
+  `CRAFT_STICKY_SCROLL` (on), `CRAFT_STICKY_SCROLL_LINES` (5) in Editor › Display.
+- **The owner's check** on `test-output\CarftTestPOC`: Alt+click ten carets (or Ctrl+Shift+L on a common word) and hold a
+  key; hover a symbol, move into its card, select and Ctrl+C, scroll a long card with the wheel, click "Go to definition",
+  move out and see it close after a moment; fold a method and rest the pointer on its "..." and on its chevron, click the
+  preview; open Problems with an error and a warning and look at the right edge, Ctrl+F a word, click and drag on the ruler
+  (is WinUI's scroll bar over it?); scroll inside a method of a class and see the namespace, class and method headers stay,
+  click one; Settings › Editor › Display turns the ruler and sticky scroll off.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "Buffer|Document|MultiCaret|HoverCards|OverviewRuler|StickyScroll|Surface|Editor|Paint|Folding|Semantic|Settings|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
 ### X part 4
 - **Document symbols**: a default member `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by default) and
   `DocumentSymbol(Name, Kind, Start, Length, NameStart, NameLength, Detail, Children)`; `ScopeKind` gains Property, Field,

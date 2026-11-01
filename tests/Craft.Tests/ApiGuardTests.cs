@@ -34,6 +34,7 @@ public static class ApiGuardTests
         Assembly.Load(new AssemblyName("Craft.Plugins.Git")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Json")),
         Assembly.Load(new AssemblyName("Craft.Web")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Npm")),
     ];
 
     [Test]

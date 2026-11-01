@@ -125,6 +125,12 @@ public sealed partial class EditorHost
             remove => host._workspaceChanged.Remove(value);
         }
 
+        public event EventHandler<WorkspaceChangedEventArgs>? WorkspaceChanged
+        {
+            add => Track(host._workspaceChangedWith, value);
+            remove => host._workspaceChangedWith.Remove(value);
+        }
+
         public event EventHandler<LineMarkEventArgs>? LineMarkClicked
         {
             add => Track(host._lineMarkClicked, value);

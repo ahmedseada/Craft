@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plan 1, phase W (W-npm): the npm plug-in, pre-installed and removable ("npm"; delete plugins\Craft.Plugins.Npm\ or
+    CRAFT_PLUGINS_DISABLED=Craft.Plugins.Npm). It finds Node on PATH or at CRAFT_PLUGIN_NPM_NODE (this machine's setting
+    only, never a workspace's), runs npm as node with npm's own npm-cli.js (never npm.cmd), reads every package.json of the
+    workspace as UTF-8 bytes (Utf8JsonReader, no node_modules walk), and offers each script as a command in the palette, in
+    the tree's and the tab's menu on package.json, and as the Run view's provider "npm". Every run goes through the
+    registered sandbox its setting names ("approve-each" by default, which asks you first, worded for "the npm plug-in"
+    with the script's text), its output in a terminal tab of its own, an activity with Cancel that stops its process tree.
+
+    Built on Craft.Abstractions (and Idrak.Abstraction through it) alone: nothing native, no reflection (trim-safe).
+    Android (phase M): Node does not run there; the plug-in says so and adds nothing.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Npm</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

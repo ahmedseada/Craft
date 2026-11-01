@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Npm",
+  "version": "0.1.0",
+  "summary": "W · npm: your package.json scripts in the palette, the tree's menu and the Run view, each run asked first through the sandbox and shown in its own terminal tab; npm install as an activity; Node's version in the status bar [RunProviders \"npm\", EditorCommands, EditorMenus]",
+  "contractVersion": "1.1",
+  "capabilities": ["files", "sandbox"]
+}

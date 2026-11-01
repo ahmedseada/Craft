@@ -53,7 +53,7 @@ public sealed record SandboxSettings
     /// <summary>The settings it declares.</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
-        new("inner", CommandSandboxes.Process, "The sandbox a command runs in once you allow it: process (a plain process), container (the network off; Idrak.Reinforcement.Plugins)."),
+        new("inner", CommandSandboxes.Process, "The sandbox a command runs in once you allow it: process (a plain process), container (the network off; Idrak.Reinforcement.Plugins). This machine's only.") { MachineOnly = true },
         new("runGapMinutes", "15", "Minutes between two commands after which 'Allow PROGRAM for this run' ends and the next command asks again."),
         new("panelLines", "400", "Lines the sandbox keeps of its commands and their output (its \"Agent sandbox\" terminal tab keeps CRAFT_TERMINAL_SCROLLBACK)."),
     ];

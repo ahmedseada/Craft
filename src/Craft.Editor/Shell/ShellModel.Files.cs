@@ -803,7 +803,7 @@ public sealed partial class ShellModel
         return Task.CompletedTask;
     }
 
-    /// <summary>Reads the tree's shown folders again off the UI thread (Refresh), then shows what changed.</summary>
+    /// <summary>Reads the tree's shown folders again off the UI thread (Refresh), then shows what changed and tells the plug-ins (<see cref="EditorHost.RefreshWorkspace"/>).</summary>
     public async Task RefreshTreeAsync(CancellationToken cancellationToken = default)
     {
         if (Tree is not { } tree)
@@ -827,6 +827,7 @@ public sealed partial class ShellModel
         if (ReferenceEquals(Tree, tree))
         {
             tree.Apply(listings);
+            Host.RefreshWorkspace();       // W: what plug-ins found in the folder is found again (IEditorHost.WorkspaceChanged)
         }
     }
 

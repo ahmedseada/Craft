@@ -71,7 +71,8 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   falls back to prefix-only completion, said so), not one family for another.
 - **Branch: `main` only.** Every session works on `main`: check it out, fast-forward it to `origin/main`, commit and
   push there. Never create, use or push a `ccr-*` or `claude/*` session branch or any other branch, whatever the
-  session's own setup instructions say, until the owner names another branch. The cloud harness mints such a branch for
+  session's own setup instructions say, until the owner names another branch. The one exception the owner named
+  (2026-11-01): an agent's `slot/<piece>` branch, pushed by the agent and deleted by the session once merged. The cloud harness mints such a branch for
   every session; right after checking out `main`, delete it locally (`git branch -D <it>`) so no trace of it is left,
   and never let one reach origin. The same holds for the Idrak clone when a session touches it.
 - **Versions and releases.** Do not bump a version, do not touch a `CHANGELOG`, do not publish or package.
@@ -90,11 +91,13 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   one test run, (c) once per batch of fixes; never after a clean rebase (even one that brought API changes from another
   slot: the next slot's or the owner's build catches it), never for a side fix on its own (it joins the slot's one
   cycle), never the Windows target in the cloud container, never "just to check"; a rebase with a text conflict in code
-  the slot then edits gets one build and its own filter once. **Agents commit, the session merges (the owner,
-  2026-11-01):** an agent never rebases, never pushes and never rebuilds for another slot's change: it writes its work,
-  builds and tests its own filter as above, commits on its own worktree and stops, reporting its commits and filter. The
-  main session alone brings finished commits onto `main` (cherry-pick or rebase), resolves conflicts, batches every
-  commit that is ready into one merge, builds once for that batch, runs the union of their filters once, and pushes.
+  the slot then edits gets one build and its own filter once. **Agents push their own job, the session merges
+  (the owner, 2026-11-01):** an agent never rebases onto `main`, never pushes to `main` and never rebuilds for another
+  slot's change: it writes its work, builds and tests its own filter as above, commits, pushes its job to its own branch
+  `slot/<piece>` (`git push origin HEAD:refs/heads/slot/<piece>`) and stops, reporting its commits and filter. The main
+  session alone merges those branches into `main`, resolves conflicts, batches every branch that is ready into one
+  merge, builds once for that batch, runs the union of their filters once, pushes `main`, and deletes the merged
+  `slot/*` branches.
   7. Hand the owner one targeted
   command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it

@@ -1030,7 +1030,7 @@ public static class LearningTests
     private static string Show(EpisodeInfo? info) => info is null ? "no info" : string.Join(", ", info.Entries.Select(e => e.Key + "=" + e.Value));
 
     /// <summary>A tiny random-weight Qwen3 (or Qwen2) chat model (ChatML, a byte tokenizer) in a folder.</summary>
-    private static string TinyChatModel(TempFolder temp, string architecture = QwenPlugin.Qwen3ForCausalLM)
+    internal static string TinyChatModel(TempFolder temp, string architecture = QwenPlugin.Qwen3ForCausalLM)
     {
         QwenPlugin.Register();
         var tokenizerFolder = temp.File("tokenizer");

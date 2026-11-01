@@ -78,6 +78,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     private string? _autoDevice;
     private int _devicesListed;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _deviceOf = new(StringComparer.Ordinal);   // load key → device in use
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ModelMemoryEstimate> _memoryOf = new(StringComparer.Ordinal);   // load key → its weights' choice
 
     /// <summary>
     /// What the provider holds (phase D's Models page and the model chip): the chat model of the settings and its state,
@@ -149,13 +150,30 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         {
             var key = LoadKey.Parse(model.Name);
             if (key.Model.Equals(role.Model, StringComparison.OrdinalIgnoreCase) && key.Device.Equals(role.Device, StringComparison.OrdinalIgnoreCase)
-                && key.Context == role.Context && string.Equals(key.Weights, role.Weights, StringComparison.OrdinalIgnoreCase))
+                && key.Context == role.Context && string.Equals(key.Weights, role.Weights, StringComparison.OrdinalIgnoreCase) && key.Offload == role.Offload)
             {
                 return _deviceOf.TryGetValue(model.Name, out var device) ? device : role.Device;
             }
         }
 
         return null;
+    }
+
+    // The role's weights as its loaded copy took them ("int4 (auto): 4.1 GB of 6.6 GB free"), else its setting ("auto").
+    private string WeightsOf(AiRoleSettings role, IReadOnlyList<LoadedModel> loaded)
+    {
+        foreach (var model in loaded)
+        {
+            var key = LoadKey.Parse(model.Name);
+            if (key.Model.Equals(role.Model, StringComparison.OrdinalIgnoreCase) && key.Device.Equals(role.Device, StringComparison.OrdinalIgnoreCase)
+                && key.Context == role.Context && string.Equals(key.Weights, role.Weights, StringComparison.OrdinalIgnoreCase) && key.Offload == role.Offload
+                && _memoryOf.TryGetValue(model.Name, out var memory))
+            {
+                return memory.Text;
+            }
+        }
+
+        return role.Offload ? role.Weights + " · offload" : role.Weights;
     }
 
     private ModelRole ChatRole(AiSettings settings, IReadOnlyList<LoadedModel> loaded)
@@ -169,6 +187,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             Key = ModelRoleKeys.Chat,
             Enabled = role.Enabled,
             Device = device,
+            Weights = model is null ? null : WeightsOf(role, loaded),
             DeviceChoice = role.Device,
             ModelSetting = new ModelSettingField(Variable("model"), "Chat model"),
             DeviceSetting = new ModelSettingField(Variable("device"), "Chat runs on", "auto (the fastest found)"),
@@ -190,6 +209,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             Key = ModelRoleKeys.Agent,
             Enabled = role.Enabled,
             Device = device,
+            Weights = model is null ? null : WeightsOf(role, loaded),
             DeviceChoice = role.Device,
             ModelSetting = new ModelSettingField(Variable("agentModel"), "Agent model (empty: the chat's)"),
             DeviceSetting = new ModelSettingField(Variable("agentDevice"), "Agent runs on", "the chat's device"),
@@ -230,6 +250,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 Model = role.Model,
                 State = device is not null ? "loaded" : settings.CompletionLoad ? "loads on the first completion" : "not loaded (completionLoad is off)",
                 Device = device,
+                Weights = WeightsOf(role, loaded),
             };
         }
 
@@ -330,8 +351,43 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Model);
         var settings = Settings;
         var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
-            request.Adapter is { Length: > 0 } adapter ? Path.GetFullPath(adapter) : "");
+            request.Adapter is { Length: > 0 } adapter ? Path.GetFullPath(adapter) : "", request.Offload ?? settings.Offload);
         return Task.Run(() => Acquire(key, request.KeepAlive, settings, progress, cancellationToken), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The model's folder resolved (a model not cached is downloaded first, as its load would), its size read from its config,
+    /// the device's free memory measured now: the weights "auto" picks (or the named ones) and whether they fit. Null when
+    /// the model's size is not known here.
+    /// </remarks>
+    public Task<ModelMemoryEstimate?> EstimateAsync(ModelRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Model);
+        var settings = Settings;
+        var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
+            "", request.Offload ?? settings.Offload);
+        return Task.Run(() =>
+        {
+            IdrakLibraries.EnsureIncluded();
+            RegisterIdrakPlugins(settings);
+            string folder = ModelSource.Resolve(key.Model, ModelSource.Options());
+            return Estimate(key, folder, settings);
+        }, cancellationToken);
+    }
+
+    /// <summary>The weights the role's settings load with, measured before the load ("int4 (auto): 4.1 GB of 6.6 GB free"); null when it has none.</summary>
+    private static ModelMemoryEstimate? Estimate(LoadKey key, string folder, AiSettings settings)
+    {
+        if (WeightsAuto.ShapeOf(folder) is not { } shape)
+        {
+            return null;
+        }
+
+        int context = WeightsAuto.BudgetContext(shape, key.Context, settings.WeightsAutoContext);
+        string device = key.Device;
+        return WeightsAuto.Choose(key.Model, device, shape, key.Weights, context, WeightsAuto.FreeMemory(device), key.Offload, settings.WeightsAutoHeadroom);
     }
 
     /// <inheritdoc />
@@ -413,6 +469,11 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         var model = lease.Model;
         _device = model.Device;                    // the device in use, shown in the status bar and the chip
         _deviceOf[key.Text] = model.Device;        // and per copy, so each role shows its own (note 25)
+        if (model.Memory is { } memory)
+        {
+            _memoryOf[key.Text] = memory;          // the weights it loaded with, said on the chip and the Models page
+        }
+
         Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
             ? string.Create(CultureInfo.InvariantCulture, $"{key.Model} loaded on {model.Device} in {lease.LoadDuration.TotalSeconds:F1} s, context {model.ContextLength}")
             : $"{key.Model} on {model.Device} (loaded already)"));
@@ -422,6 +483,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             ChatTemplate = model.Pretrained.ChatTemplate,                   // the agent reads calls written as text and corrects in its format (note 27)
             Draft = model.Draft,                                            // this copy drafting for another of its vocabulary, through its gate
             Underlying = model.Pretrained,                                  // the one copy, for a plug-in that trains it (B7)
+            Memory = model.Memory,
             Exclusive = model.Gate.ExclusiveAsync,
         };
     }
@@ -472,7 +534,20 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         // The download's bytes of all its files (Idrak's ModelSourceOptions.Progress; a cached model reports nothing).
         string folder = ModelSource.Resolve(key.Model, ModelSource.Options() with { Progress = report is null ? null : new PullReport(key.Model, report) });
         var device = key.Device.Equals("auto", StringComparison.OrdinalIgnoreCase) ? Device.Default : Device.Parse(key.Device);
-        string weights = key.Weights.ToLowerInvariant();
+        // The owner, 2026-11-01 ("1a"): weights "auto" chosen by the device's free memory measured now (after the idle copies
+        // were let go), before any weight is read; a named format wins; nothing fitting is refused here, offload named.
+        var memory = Estimate(key, folder, settings);
+        if (memory?.Refusal is { } refusal)
+        {
+            throw new InvalidOperationException(refusal);
+        }
+
+        if (key.Offload)
+        {
+            Idrak.Abstraction.ComputeResources.OffloadToHostMemory = true;   // Idrak's offload is the process's: on once a copy asks for it
+        }
+
+        string weights = (memory?.Weights ?? (key.Weights.Equals(WeightsAuto.Auto, StringComparison.OrdinalIgnoreCase) ? WeightsAuto.Float32 : key.Weights)).ToLowerInvariant();
         var model = PretrainedModel.Load(folder, new PretrainedOptions
         {
             // The checkpoint's values read of all of them (Idrak's PretrainedOptions.Progress).
@@ -481,7 +556,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             Int8 = weights == "int8",
             Int4 = weights == "int4",
             BFloat16 = weights is "bf16" or "bfloat16",
-            PackedFormatName = weights is "" or "int8" or "int4" or "bf16" or "bfloat16" or "float32" or "f32" ? null : key.Weights,
+            PackedFormatName = weights is "" or "int8" or "int4" or "bf16" or "bfloat16" or "float32" or "f32" or "auto" ? null : weights,
             MaxPositions = key.Context > 0 ? key.Context : null,
         });
         try
@@ -502,6 +577,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             {
                 Tokenizer = model.Tokenizer as IPretrainedTokenizer,
                 Draft = new GatedDraftModel(generator, gate),
+                Memory = memory,
             };
         }
         catch
@@ -571,14 +647,14 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     }
 
     /// <summary>What one loaded model is kept under: its name, device, context, weights and adapter ("" for none).</summary>
-    private readonly record struct LoadKey(string Model, string Device, int Context, string Weights, string Adapter)
+    private readonly record struct LoadKey(string Model, string Device, int Context, string Weights, string Adapter, bool Offload = false)
     {
-        public string Text => string.Join('\n', Model, Device, Context.ToString(CultureInfo.InvariantCulture), Weights, Adapter);
+        public string Text => string.Join('\n', Model, Device, Context.ToString(CultureInfo.InvariantCulture), Weights, Adapter, Offload ? "offload" : "");
 
         public static LoadKey Parse(string text)
         {
             var parts = text.Split('\n');
-            return new LoadKey(parts[0], parts[1], int.Parse(parts[2], CultureInfo.InvariantCulture), parts[3], parts.Length > 4 ? parts[4] : "");
+            return new LoadKey(parts[0], parts[1], int.Parse(parts[2], CultureInfo.InvariantCulture), parts[3], parts.Length > 4 ? parts[4] : "", parts.Length > 5 && parts[5] == "offload");
         }
     }
 
@@ -600,6 +676,8 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         public IPretrainedTokenizer? Tokenizer { get; init; }
 
         public IDraftModel? Draft { get; init; }
+
+        public ModelMemoryEstimate? Memory { get; init; }
 
         public void Dispose() => Pretrained.Dispose();
     }

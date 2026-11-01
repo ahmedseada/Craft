@@ -1661,8 +1661,17 @@ Craft.Abstractions.IModelAdapterSource : Idrak.Abstraction.IKind
 Craft.Abstractions.IModelProvider
 Craft.Abstractions.IModelProvider  Craft.Abstractions.ModelProviderStatus Status { get; }
 Craft.Abstractions.IModelProvider  System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> AcquireAsync(Craft.Abstractions.ModelRequest request, System.IProgress<Craft.Abstractions.ModelLoadStatus> progress = null, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IModelProvider  System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateAsync(Craft.Abstractions.ModelRequest request, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IModelProvider  event System.EventHandler StatusChanged
 Craft.Abstractions.IModelProvider : Idrak.Abstraction.IKind
+Craft.Abstractions.IModelSessionHost
+Craft.Abstractions.IModelSessionHost  Craft.Abstractions.ModelSessionSettings ModelSession { get; }
+Craft.Abstractions.IModelSessionHost  Craft.Abstractions.ModelSessionShared ModelShared { get; }
+Craft.Abstractions.IModelSessionHost  System.String ModelSessionTitle { get; }
+Craft.Abstractions.IModelSessionHost  System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IModelSessionHost  System.Threading.Tasks.Task<System.Boolean> SaveModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IModelSessionHost  System.Threading.Tasks.Task<System.String> ApplyModelSessionToEnvironmentAsync(Craft.Abstractions.ModelSessionSettings proposed, Craft.Abstractions.ModelSettingsScope scope, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IModelSessionHost  event System.EventHandler ModelSessionChanged
 Craft.Abstractions.IMultiSelectionDocument
 Craft.Abstractions.IMultiSelectionDocument  Craft.Abstractions.ITextSnapshot Edit(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.EditKind kind, System.ReadOnlySpan<Craft.Abstractions.SelectionState> before, System.Int32 primaryBefore, System.ReadOnlySpan<Craft.Abstractions.SelectionState> after, System.Int32 primaryAfter)
 Craft.Abstractions.IMultiSelectionDocument  System.Int32 RestoredPrimary { get; }
@@ -1676,6 +1685,7 @@ Craft.Abstractions.IPluginSettings
 Craft.Abstractions.IPluginSettings  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
 Craft.Abstractions.IPluginSettings  System.String Get(System.String plugin, System.String key)
 Craft.Abstractions.IPluginSettings  System.Threading.Tasks.Task<System.String> SetAsync(System.String plugin, System.String key, System.String value)
+Craft.Abstractions.IPluginSettings  System.Threading.Tasks.Task<System.String> SetAsync(System.String plugin, System.String key, System.String value, Craft.Abstractions.ModelSettingsScope scope)
 Craft.Abstractions.IRunProvider
 Craft.Abstractions.IRunProvider  Craft.Abstractions.RunCommand Command(Craft.Abstractions.RunTarget target, Craft.Abstractions.RunActions action, Craft.Abstractions.RunConfiguration configuration, System.String root)
 Craft.Abstractions.IRunProvider  Craft.Abstractions.RunCommand TestCommand(Craft.Abstractions.RunTarget target, System.String testName, System.String root)
@@ -2437,6 +2447,7 @@ Craft.Abstractions.ModelAdapters  static System.Void Register(Craft.Abstractions
 Craft.Abstractions.ModelErrors
 Craft.Abstractions.ModelErrors  static System.Boolean IsOutOfMemory(System.Exception error)
 Craft.Abstractions.ModelLease
+Craft.Abstractions.ModelLease  Craft.Abstractions.ModelMemoryEstimate Memory { get; init; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IChatModel Chat { get; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IChatTemplate ChatTemplate { get; init; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IDraftModel Draft { get; init; }
@@ -2463,6 +2474,28 @@ Craft.Abstractions.ModelLoadStatus  System.String ToString()
 Craft.Abstractions.ModelLoadStatus  System.Void Deconstruct(out System.String Stage, out System.Double? Fraction, out System.String Message)
 Craft.Abstractions.ModelLoadStatus  ctor(System.String Stage, System.Double? Fraction, System.String Message)
 Craft.Abstractions.ModelLoadStatus : System.IEquatable<Craft.Abstractions.ModelLoadStatus>
+Craft.Abstractions.ModelMemoryEstimate
+Craft.Abstractions.ModelMemoryEstimate  Craft.Abstractions.ModelMemoryEstimate <Clone>$()
+Craft.Abstractions.ModelMemoryEstimate  System.Boolean Auto { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.Boolean Equals(Craft.Abstractions.ModelMemoryEstimate other)
+Craft.Abstractions.ModelMemoryEstimate  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.ModelMemoryEstimate  System.Boolean Fits { get; }
+Craft.Abstractions.ModelMemoryEstimate  System.Boolean Offload { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.Int32 GetHashCode()
+Craft.Abstractions.ModelMemoryEstimate  System.Int64 NeededBytes { get; }
+Craft.Abstractions.ModelMemoryEstimate  System.Int64 WeightBytes { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.Int64 WorkingBytes { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.Int64? FreeBytes { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.String Device { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.String Model { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.String Refusal { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.String Text { get; }
+Craft.Abstractions.ModelMemoryEstimate  System.String ToString()
+Craft.Abstractions.ModelMemoryEstimate  System.String Weights { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.Void Deconstruct(out System.String Model, out System.String Device, out System.String Weights, out System.Boolean Auto, out System.Int64 WeightBytes, out System.Int64 WorkingBytes, out System.Int64? FreeBytes)
+Craft.Abstractions.ModelMemoryEstimate  ctor(System.String Model, System.String Device, System.String Weights, System.Boolean Auto, System.Int64 WeightBytes, System.Int64 WorkingBytes, System.Int64? FreeBytes)
+Craft.Abstractions.ModelMemoryEstimate  static System.String Gigabytes(System.Int64 bytes)
+Craft.Abstractions.ModelMemoryEstimate : System.IEquatable<Craft.Abstractions.ModelMemoryEstimate>
 Craft.Abstractions.ModelProviderStatus
 Craft.Abstractions.ModelProviderStatus  Craft.Abstractions.ModelProviderStatus <Clone>$()
 Craft.Abstractions.ModelProviderStatus  Craft.Abstractions.ModelRole RoleOf(System.String key)
@@ -2502,6 +2535,7 @@ Craft.Abstractions.ModelRequest
 Craft.Abstractions.ModelRequest  Craft.Abstractions.ModelRequest <Clone>$()
 Craft.Abstractions.ModelRequest  System.Boolean Equals(Craft.Abstractions.ModelRequest other)
 Craft.Abstractions.ModelRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.ModelRequest  System.Boolean? Offload { get; init; }
 Craft.Abstractions.ModelRequest  System.Int32 GetHashCode()
 Craft.Abstractions.ModelRequest  System.Int32? Context { get; init; }
 Craft.Abstractions.ModelRequest  System.String Adapter { get; init; }
@@ -2539,6 +2573,7 @@ Craft.Abstractions.ModelRole  System.String Role { get; init; }
 Craft.Abstractions.ModelRole  System.String SettingsCommand { get; init; }
 Craft.Abstractions.ModelRole  System.String State { get; init; }
 Craft.Abstractions.ModelRole  System.String ToString()
+Craft.Abstractions.ModelRole  System.String Weights { get; init; }
 Craft.Abstractions.ModelRole  System.Void Deconstruct(out System.String Role, out System.String Model, out System.String State, out System.Boolean IsProblem)
 Craft.Abstractions.ModelRole  ctor(System.String Role, System.String Model, System.String State, System.Boolean IsProblem = false)
 Craft.Abstractions.ModelRole : System.IEquatable<Craft.Abstractions.ModelRole>
@@ -2546,6 +2581,54 @@ Craft.Abstractions.ModelRoleKeys
 Craft.Abstractions.ModelRoleKeys  const System.String Agent = agent
 Craft.Abstractions.ModelRoleKeys  const System.String Chat = chat
 Craft.Abstractions.ModelRoleKeys  const System.String Completion = completion
+Craft.Abstractions.ModelSessionSettings
+Craft.Abstractions.ModelSessionSettings  Craft.Abstractions.ModelSessionSettings <Clone>$()
+Craft.Abstractions.ModelSessionSettings  Craft.Abstractions.ModelSessionSettings LoadOnly { get; }
+Craft.Abstractions.ModelSessionSettings  System.Boolean ChangesLoad { get; }
+Craft.Abstractions.ModelSessionSettings  System.Boolean Equals(Craft.Abstractions.ModelSessionSettings other)
+Craft.Abstractions.ModelSessionSettings  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.ModelSessionSettings  System.Boolean IsEmpty { get; }
+Craft.Abstractions.ModelSessionSettings  System.Boolean? Offload { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Int32 GetHashCode()
+Craft.Abstractions.ModelSessionSettings  System.Int32? Context { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Int32? MaxTokens { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Int32? Seed { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Int32? TopK { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Single? MinP { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Single? RepeatPenalty { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Single? Temperature { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.Single? TopP { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.String Device { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.String Draft { get; init; }
+Craft.Abstractions.ModelSessionSettings  System.String ToString()
+Craft.Abstractions.ModelSessionSettings  System.String Weights { get; init; }
+Craft.Abstractions.ModelSessionSettings  ctor()
+Craft.Abstractions.ModelSessionSettings  static Craft.Abstractions.ModelSessionSettings None { get; }
+Craft.Abstractions.ModelSessionSettings : System.IEquatable<Craft.Abstractions.ModelSessionSettings>
+Craft.Abstractions.ModelSessionShared
+Craft.Abstractions.ModelSessionShared  Craft.Abstractions.ModelSessionShared <Clone>$()
+Craft.Abstractions.ModelSessionShared  System.Boolean Equals(Craft.Abstractions.ModelSessionShared other)
+Craft.Abstractions.ModelSessionShared  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.ModelSessionShared  System.Boolean Offload { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Collections.Generic.IReadOnlyList<System.String> Devices { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Collections.Generic.IReadOnlyList<System.String> WeightChoices { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Int32 Context { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Int32 GetHashCode()
+Craft.Abstractions.ModelSessionShared  System.Int32 MaxTokens { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Int32 TopK { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Int32? Seed { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Single MinP { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Single RepeatPenalty { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Single Temperature { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Single TopP { get; init; }
+Craft.Abstractions.ModelSessionShared  System.String Device { get; init; }
+Craft.Abstractions.ModelSessionShared  System.String Draft { get; init; }
+Craft.Abstractions.ModelSessionShared  System.String Model { get; init; }
+Craft.Abstractions.ModelSessionShared  System.String ToString()
+Craft.Abstractions.ModelSessionShared  System.String Weights { get; init; }
+Craft.Abstractions.ModelSessionShared  System.Void Deconstruct(out System.String Model, out System.Single Temperature, out System.Int32 TopK, out System.Single TopP, out System.Single MinP, out System.Single RepeatPenalty, out System.Int32? Seed, out System.Int32 MaxTokens, out System.Int32 Context, out System.String Weights, out System.String Device, out System.Boolean Offload, out System.String Draft)
+Craft.Abstractions.ModelSessionShared  ctor(System.String Model, System.Single Temperature, System.Int32 TopK, System.Single TopP, System.Single MinP, System.Single RepeatPenalty, System.Int32? Seed, System.Int32 MaxTokens, System.Int32 Context, System.String Weights, System.String Device, System.Boolean Offload, System.String Draft)
+Craft.Abstractions.ModelSessionShared : System.IEquatable<Craft.Abstractions.ModelSessionShared>
 Craft.Abstractions.ModelSettingField
 Craft.Abstractions.ModelSettingField  Craft.Abstractions.ModelSettingField <Clone>$()
 Craft.Abstractions.ModelSettingField  System.Boolean Equals(Craft.Abstractions.ModelSettingField other)
@@ -2558,6 +2641,13 @@ Craft.Abstractions.ModelSettingField  System.String Variable { get; init; }
 Craft.Abstractions.ModelSettingField  System.Void Deconstruct(out System.String Variable, out System.String Label, out System.String Placeholder)
 Craft.Abstractions.ModelSettingField  ctor(System.String Variable, System.String Label, System.String Placeholder = null)
 Craft.Abstractions.ModelSettingField : System.IEquatable<Craft.Abstractions.ModelSettingField>
+Craft.Abstractions.ModelSettingsScope
+Craft.Abstractions.ModelSettingsScope  User = 0
+Craft.Abstractions.ModelSettingsScope  Workspace = 1
+Craft.Abstractions.ModelSettingsScope : System.IComparable
+Craft.Abstractions.ModelSettingsScope : System.IConvertible
+Craft.Abstractions.ModelSettingsScope : System.IFormattable
+Craft.Abstractions.ModelSettingsScope : System.ISpanFormattable
 Craft.Abstractions.NoActivities
 Craft.Abstractions.NoActivities  Craft.Abstractions.IActivity Start(System.String title, System.String kind = "general", System.Boolean cancellable = false, System.Threading.CancellationToken cancellationToken = null, System.Boolean keep = true)
 Craft.Abstractions.NoActivities  System.Boolean Cancel(System.Int64 id)
@@ -2954,6 +3044,7 @@ Craft.Abstractions.PanelOption  ctor(System.String Value, System.String Title)
 Craft.Abstractions.PanelOption : System.IEquatable<Craft.Abstractions.PanelOption>
 Craft.Abstractions.PanelPicker
 Craft.Abstractions.PanelPicker  Craft.Abstractions.PanelPicker <Clone>$()
+Craft.Abstractions.PanelPicker  System.Boolean Drawn { get; init; }
 Craft.Abstractions.PanelPicker  System.Boolean Enabled { get; init; }
 Craft.Abstractions.PanelPicker  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
 Craft.Abstractions.PanelPicker  System.Boolean Equals(Craft.Abstractions.PanelPicker other)
@@ -2961,6 +3052,7 @@ Craft.Abstractions.PanelPicker  System.Boolean Equals(System.Object obj)
 Craft.Abstractions.PanelPicker  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelOption> Options { get; init; }
 Craft.Abstractions.PanelPicker  System.Int32 GetHashCode()
 Craft.Abstractions.PanelPicker  System.String ActionId { get; init; }
+Craft.Abstractions.PanelPicker  System.String ResetActionId { get; init; }
 Craft.Abstractions.PanelPicker  System.String Selected { get; init; }
 Craft.Abstractions.PanelPicker  System.String Title { get; init; }
 Craft.Abstractions.PanelPicker  System.String ToString()
@@ -3059,6 +3151,31 @@ Craft.Abstractions.PanelResults  protected System.Boolean PrintMembers(System.Te
 Craft.Abstractions.PanelResults : Craft.Abstractions.PanelBlock
 Craft.Abstractions.PanelResults : System.IEquatable<Craft.Abstractions.PanelBlock>
 Craft.Abstractions.PanelResults : System.IEquatable<Craft.Abstractions.PanelResults>
+Craft.Abstractions.PanelSlider
+Craft.Abstractions.PanelSlider  Craft.Abstractions.PanelSlider <Clone>$()
+Craft.Abstractions.PanelSlider  System.Boolean Enabled { get; init; }
+Craft.Abstractions.PanelSlider  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+Craft.Abstractions.PanelSlider  System.Boolean Equals(Craft.Abstractions.PanelSlider other)
+Craft.Abstractions.PanelSlider  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelSlider  System.Boolean Overridden { get; init; }
+Craft.Abstractions.PanelSlider  System.Double Max { get; init; }
+Craft.Abstractions.PanelSlider  System.Double Min { get; init; }
+Craft.Abstractions.PanelSlider  System.Double Step { get; init; }
+Craft.Abstractions.PanelSlider  System.Double Value { get; init; }
+Craft.Abstractions.PanelSlider  System.Int32 GetHashCode()
+Craft.Abstractions.PanelSlider  System.String ActionId { get; init; }
+Craft.Abstractions.PanelSlider  System.String Detail { get; init; }
+Craft.Abstractions.PanelSlider  System.String ResetActionId { get; init; }
+Craft.Abstractions.PanelSlider  System.String Title { get; init; }
+Craft.Abstractions.PanelSlider  System.String ToString()
+Craft.Abstractions.PanelSlider  System.String Unit { get; init; }
+Craft.Abstractions.PanelSlider  System.Type EqualityContract { get; }
+Craft.Abstractions.PanelSlider  System.Void Deconstruct(out System.String ActionId, out System.String Title, out System.Double Value, out System.Double Min, out System.Double Max, out System.Double Step)
+Craft.Abstractions.PanelSlider  ctor(System.String ActionId, System.String Title, System.Double Value, System.Double Min, System.Double Max, System.Double Step)
+Craft.Abstractions.PanelSlider  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+Craft.Abstractions.PanelSlider : Craft.Abstractions.PanelBlock
+Craft.Abstractions.PanelSlider : System.IEquatable<Craft.Abstractions.PanelBlock>
+Craft.Abstractions.PanelSlider : System.IEquatable<Craft.Abstractions.PanelSlider>
 Craft.Abstractions.PanelSpan
 Craft.Abstractions.PanelSpan  Craft.Abstractions.PanelSpan <Clone>$()
 Craft.Abstractions.PanelSpan  System.Boolean Equals(Craft.Abstractions.PanelSpan other)

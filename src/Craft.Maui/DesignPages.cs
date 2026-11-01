@@ -620,6 +620,13 @@ public sealed class ModelsPage : ContentView, IDisposable
             rows.Children.Add(PageParts.Segmented(p, devices));
         }
 
+        if (role.Weights is { Length: > 0 } weights)
+        {
+            // The owner, 2026-11-01 ("1a"): the weights as loaded, measured ("int4 (auto): 4.1 GB of 6.6 GB free"), else the setting.
+            rows.Children.Add(p.Label("Weights", p.Secondary, p.SmallSize));
+            rows.Children.Add(Mono(weights, p.Text));
+        }
+
         if (card.CanInherit)
         {
             var same = p.Flat((card.SameAsOther ? "✓ " : "") + card.SameAsLabel, card.SameAsOther ? p.Accent : p.Text, 30);

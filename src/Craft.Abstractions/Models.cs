@@ -29,6 +29,47 @@ public sealed record ModelRequest(string Model)
     /// null for the provider's setting, <see cref="TimeSpan.Zero"/> to unload it at once.
     /// </summary>
     public TimeSpan? KeepAlive { get; init; }
+
+    /// <summary>
+    /// Whether part of the model may live in system memory when the device is full (offload; the session's or the role's
+    /// setting), or null for the provider's settings. A copy kept under its own lease key: one copy per model, weights,
+    /// device and offload.
+    /// </summary>
+    public bool? Offload { get; init; }
+}
+
+/// <summary>
+/// What loading a model would take on its device, measured before the load (the weights "auto" choice, a session's
+/// separate copy): the weights' format chosen or set, their bytes, the working memory of its context, and the device's
+/// free memory at that moment (copies already loaded and the driver's share counted).
+/// </summary>
+/// <param name="Model">The model's name.</param>
+/// <param name="Device">The device it would load on.</param>
+/// <param name="Weights">The weights' format ("float32", "bfloat16", "int8", "int4", or a packed format's name).</param>
+/// <param name="Auto">Whether the format was chosen by "auto" (else the setting named it).</param>
+/// <param name="WeightBytes">The weights' bytes in that format.</param>
+/// <param name="WorkingBytes">The room its working memory needs (the context's caches, the scores, the headroom).</param>
+/// <param name="FreeBytes">The device's free memory measured now, or null when it reports none.</param>
+public sealed record ModelMemoryEstimate(string Model, string Device, string Weights, bool Auto, long WeightBytes, long WorkingBytes, long? FreeBytes)
+{
+    /// <summary>The bytes it needs in all.</summary>
+    public long NeededBytes => WeightBytes + WorkingBytes;
+
+    /// <summary>Whether it fits the free memory (true when the device reports none).</summary>
+    public bool Fits => FreeBytes is not { } free || NeededBytes <= free;
+
+    /// <summary>Whether it loads with offload (part of it in system memory when the device fills).</summary>
+    public bool Offload { get; init; }
+
+    /// <summary>Why it cannot load as set (even the smallest format does not fit, offload off), with what to do; null when it can.</summary>
+    public string? Refusal { get; init; }
+
+    /// <summary>The choice in a line, as the chip and the Models page say it: "int4 (auto): 4.1 GB of 6.6 GB free".</summary>
+    public string Text => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+        $"{Weights}{(Auto ? " (auto)" : "")}: {Gigabytes(NeededBytes)}{(FreeBytes is { } free ? $" of {Gigabytes(free)} free" : "")}{(Offload ? " · offload" : "")}");
+
+    /// <summary>Bytes in gigabytes, one decimal ("4.1 GB").</summary>
+    public static string Gigabytes(long bytes) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{bytes / 1e9:0.0} GB");
 }
 
 /// <summary>How far a model's load is: what it does now, and how far (0 to 1) when that is known.</summary>
@@ -118,6 +159,9 @@ public sealed class ModelLease : IDisposable
     /// <summary>Whether this lease loaded it.</summary>
     public bool Loaded => LoadDuration > TimeSpan.Zero;
 
+    /// <summary>The memory its load took as it was measured before it ("int4 (auto): 4.1 GB of 6.6 GB free"), or null when the provider says none.</summary>
+    public ModelMemoryEstimate? Memory { get; init; }
+
     /// <inheritdoc />
     public void Dispose() => Interlocked.Exchange(ref _release, null)?.Dispose();
 }
@@ -148,6 +192,12 @@ public interface IModelProvider : IKind
         add { }
         remove { }
     }
+
+    /// <summary>
+    /// What loading <paramref name="request"/> would take on its device, measured now, without loading it (a session's
+    /// separate copy is confirmed with it); null when the provider cannot tell (the default).
+    /// </summary>
+    Task<ModelMemoryEstimate?> EstimateAsync(ModelRequest request, CancellationToken cancellationToken = default) => Task.FromResult<ModelMemoryEstimate?>(null);
 }
 
 /// <summary>
@@ -211,6 +261,9 @@ public sealed record ModelRole(string Role, string? Model, string State, bool Is
 
     /// <summary>Why no draft drafts, or that it is loading, as the user reads it; null when it drafts or the provider has none to say.</summary>
     public string? DraftState { get; init; }
+
+    /// <summary>The role's weights as loaded, or as they would load ("int4 (auto): 4.1 GB of 6.6 GB free", "auto"), or null.</summary>
+    public string? Weights { get; init; }
 }
 
 /// <summary>The keys of the model roles (<see cref="ModelRole.Key"/>, <see cref="IConversationPanel.ModelRoleKey"/>).</summary>

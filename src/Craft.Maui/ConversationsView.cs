@@ -214,6 +214,9 @@ public sealed class ConversationsView : ContentView, IDisposable
         layout.Add(_body, 0, 2);
         layout.Add(_status, 0, 3);
         layout.Add(_footer, 0, 4);
+        // The owner, 2026-11-01 ("2a"): a session's model settings open as a sheet over the transcript and the composer.
+        layout.Add(_sheet, 0, 1);
+        Grid.SetRowSpan(_sheet, 4);
         // X part 5: a file dragged from the tree, or files from the system's file manager, dropped on the view go to the
         // shown panel (IConversationPanel.AcceptDropAsync); the composer shows the accent while a drag is over it.
         var drop = new DropGestureRecognizer { AllowDrop = true };
@@ -239,6 +242,26 @@ public sealed class ConversationsView : ContentView, IDisposable
 
     /// <summary>The composer's model chip (the shell sets its text and handles its tap).</summary>
     public ModelChip ModelChip { get; }
+
+    private readonly ContentView _sheet = new() { IsVisible = false, ZIndex = 10 };
+
+    /// <summary>Whether a sheet (a session's model settings) shows over the transcript.</summary>
+    public bool SheetShown => _sheet.IsVisible;
+
+    /// <summary>Shows <paramref name="view"/> as a sheet over the transcript and the composer (the header stays).</summary>
+    public void ShowSheet(View view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        _sheet.Content = view;
+        _sheet.IsVisible = true;
+    }
+
+    /// <summary>Takes the sheet away.</summary>
+    public void HideSheet()
+    {
+        _sheet.IsVisible = false;
+        _sheet.Content = null;
+    }
 
     /// <summary>Reads the paths a drop from outside the app carries (the shell sets it: <c>IShellPlatform.DroppedPathsAsync</c>), or null for none.</summary>
     public Func<DropEventArgs, Task<IReadOnlyList<string>>>? DroppedPaths { get; set; }

@@ -299,4 +299,12 @@ public interface IPluginSettings
     /// cannot write settings says so (the default).
     /// </summary>
     Task<string?> SetAsync(string plugin, string key, string? value) => Task.FromResult<string?>("This host cannot change settings: set the variable instead.");
+
+    /// <summary>
+    /// <see cref="SetAsync(string, string, string?)"/> into <paramref name="scope"/>: the user's settings, or the open
+    /// workspace's <c>.craft/settings.json</c>. A host that has no workspace's file says so (the default writes the user's
+    /// settings and refuses the workspace's).
+    /// </summary>
+    Task<string?> SetAsync(string plugin, string key, string? value, ModelSettingsScope scope) =>
+        scope == ModelSettingsScope.User ? SetAsync(plugin, key, value) : Task.FromResult<string?>("This host cannot write the workspace's settings: set them on the settings page instead.");
 }

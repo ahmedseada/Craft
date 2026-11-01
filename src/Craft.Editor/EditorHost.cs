@@ -269,10 +269,16 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     }
 
     /// <summary>
-    /// How <see cref="IPluginSettings.SetAsync"/> writes a plug-in setting's variable (its name, its value; null when
+    /// How <see cref="IPluginSettings.SetAsync(string, string, string?)"/> writes a plug-in setting's variable (its name, its value; null when
     /// written, else why not): the shell sets it to its settings files; null: a write is refused in words.
     /// </summary>
     public Func<string, string?, Task<string?>>? SettingWriter { get; set; }
+
+    /// <summary>
+    /// How a plug-in's setting is written into the open workspace's <c>.craft/settings.json</c> (a session's model settings
+    /// applied to the workspace; the shell sets it while a folder is open); null: there is none.
+    /// </summary>
+    public Func<string, string?, Task<string?>>? WorkspaceSettingWriter { get; set; }
 
     /// <summary>How <see cref="OpenExternalAsync"/> opens a folder or a file outside the editor (the page sets it); null: it cannot, and the call gives false.</summary>
     public Func<string, Task<bool>>? OpenExternal { get; set; }
@@ -1300,6 +1306,23 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
             string variable = PluginSetting.VariableName(owner.Name, setting.Key);
             return host.SettingWriter is { } write ? write(variable, string.IsNullOrWhiteSpace(value) ? null : value.Trim())
                 : Task.FromResult<string?>($"This window cannot change settings: set {variable} instead.");
+        }
+
+        public Task<string?> SetAsync(string plugin, string key, string? value, ModelSettingsScope scope)
+        {
+            if (scope == ModelSettingsScope.User)
+            {
+                return SetAsync(plugin, key, value);
+            }
+
+            ArgumentNullException.ThrowIfNull(plugin);
+            ArgumentNullException.ThrowIfNull(key);
+            var owner = EditorPlugins.Get(plugin);
+            var setting = owner.Settings.FirstOrDefault(s => s.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
+                ?? throw new ArgumentException($"Plug-in '{owner.Name}' declares no setting '{key}'.", nameof(key));
+            string variable = PluginSetting.VariableName(owner.Name, setting.Key);
+            return host.WorkspaceSettingWriter is { } write ? write(variable, string.IsNullOrWhiteSpace(value) ? null : value.Trim())
+                : Task.FromResult<string?>($"No workspace is open, so {variable} cannot go into its .craft/settings.json.");
         }
 
         public IReadOnlyList<PluginSettingValue> All =>

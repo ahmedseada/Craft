@@ -415,6 +415,12 @@ public static class ShellText
         }
 
         string text = PlannedDevice(status, role) is { } device ? $"{model} · {device}" : model;
+        if (found?.Weights is { Length: > 0 } weights && (weights.Contains(':', StringComparison.Ordinal) || !weights.StartsWith("auto", StringComparison.OrdinalIgnoreCase)))
+        {
+            // As loaded ("int4 (auto)"), or a named format; "auto" before a load says nothing yet.
+            text += " · " + ShortWeights(weights);                     // the owner, 2026-11-01 ("1a"): "int4 (auto)"
+        }
+
         string draft = found is not null && DraftText(found) is { } drafting ? " · " + drafting : "";
         if (found is { Inherits: { } other, InheritsModel: true })
         {
@@ -422,6 +428,24 @@ public static class ShellText
         }
 
         return found is { Enabled: false } ? text + " · off" : text + draft;
+    }
+
+    /// <summary>The weights' part of a role's weights text for the chip: "int4 (auto)" of "int4 (auto): 4.1 GB of 6.6 GB free".</summary>
+    public static string ShortWeights(string weights)
+    {
+        ArgumentNullException.ThrowIfNull(weights);
+        int colon = weights.IndexOf(':', StringComparison.Ordinal);
+        return colon > 0 ? weights[..colon] : weights;
+    }
+
+    /// <summary>
+    /// The composer's model picker as <see cref="ModelPicks(ModelProviderStatus?, string?)"/>, with "Model settings for
+    /// <paramref name="sessionTitle"/>…" first when the panel shown keeps its own model settings (the owner, 2026-11-01, "2a").
+    /// </summary>
+    public static IReadOnlyList<ModelPick> ModelPicks(ModelProviderStatus? status, string? role, string? sessionTitle)
+    {
+        var picks = ModelPicks(status, role);
+        return sessionTitle is null ? picks : [new ModelPick(ModelPickKind.Session, "", $"Model settings for {sessionTitle}…"), .. picks];
     }
 
     /// <summary>
@@ -607,8 +631,9 @@ public static class ShellText
                 : "";
             string draft = DraftText(role) is { } drafting ? " · " + drafting + (role.Draft is { } named && ShortModelName(named) != named ? $" ({named})" : "")
                 : role.DraftState is { } why ? " · no draft: " + why : "";
+            string weights = role.Weights is { Length: > 0 } held ? " · weights " + held : "";
             lines.Add(!role.Enabled ? $"{role.Role}: off"
-                : $"{role.Role}: {role.Model ?? "none set"}{device} · {role.State}{(role.InheritsModel && role.Inherits is { } other ? $" (same as {other.ToLowerInvariant()})" : "")}{draft}");
+                : $"{role.Role}: {role.Model ?? "none set"}{device}{weights} · {role.State}{(role.InheritsModel && role.Inherits is { } other ? $" (same as {other.ToLowerInvariant()})" : "")}{draft}");
         }
 
         lines.Add("Pick a model with the chip under the chat's or the agent's input; each role's settings are on the settings page.");
@@ -670,6 +695,9 @@ public enum ModelPickKind
 
     /// <summary>Opens the Models and devices page.</summary>
     Page,
+
+    /// <summary>Opens the panel of the shown session's own model settings (the owner, 2026-11-01, "2a").</summary>
+    Session,
 }
 
 /// <summary>What a pick at the composer's model chip writes (<see cref="ShellText.WriteOf"/>).</summary>
@@ -678,7 +706,7 @@ public enum ModelPickKind
 /// <param name="LoadCommand">The command that loads the role's model after the write, or null.</param>
 public sealed record ModelPickWrite(string Variable, string? Value, string? LoadCommand);
 
-/// <summary>A row of the composer's model picker (<see cref="ShellText.ModelPicks"/>).</summary>
+/// <summary>A row of the composer's model picker (<see cref="ShellText.ModelPicks(ModelProviderStatus?, string?)"/>).</summary>
 /// <param name="Kind">What it does.</param>
 /// <param name="Value">The model's or the device's name ("" for the page).</param>
 /// <param name="Label">Its text.</param>

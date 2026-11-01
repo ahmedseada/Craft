@@ -362,6 +362,10 @@ public static class AiTests
             // X part 9 item 23 and X part 11 items 4 and 5: the inline chat, Review changes, Fix with AI.
             ["inlineChat"] = "false", ["inlineChatContextLines"] = "12", ["inlineChatMaxTokens"] = "256", ["reviewModel"] = "loaded", ["reviewPrompt"] = "Be strict.",
             ["reviewMaxTokens"] = "700", ["buildFix"] = "false", ["buildFixContextLines"] = "3",
+            // The owner, 2026-11-01 ("1a", "2a"): weights auto's room, offload per role, each role's sampling.
+            ["offload"] = "true", ["agentOffload"] = "false", ["completionOffload"] = "true", ["weightsAutoContext"] = "4096", ["weightsAutoHeadroom"] = "0.2",
+            ["chatTopK"] = "20", ["chatTopP"] = "0.8", ["chatMinP"] = "0.05", ["chatRepeatPenalty"] = "1.2", ["chatSeed"] = "9",
+            ["agentTopK"] = "30", ["agentTopP"] = "0.7", ["agentMinP"] = "0.1", ["agentRepeatPenalty"] = "1.3", ["agentSeed"] = "11",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -388,6 +392,10 @@ public static class AiTests
             InlineChat: false, InlineChatContextLines: 12, InlineChatMaxTokens: 256, ReviewModel: "loaded", ReviewPrompt: "Be strict.", ReviewMaxTokens: 700,
             BuildFix: false, BuildFixContextLines: 3,
         }, "the inline chat's, the review's and the build fix's settings are read (CRAFT_PLUGIN_AI_INLINECHAT, _REVIEWMODEL, _BUILDFIX)");
+        Check.True(settings is { Offload: true, AgentOffload: false, CompletionOffload: true, WeightsAutoContext: 4096, WeightsAutoHeadroom: 0.2, ChatTopK: 20, ChatSeed: 9, AgentTopK: 30, AgentSeed: 11 }
+                   && settings.ChatRole is { Offload: true, TopK: 20, Seed: 9 } && settings.AgentRole is { Offload: false, TopK: 30, Seed: 11 } && settings.CompletionRole.Offload
+                   && Math.Abs(settings.ChatRole.TopP - 0.8f) < 1e-6 && Math.Abs(settings.AgentRole.RepeatPenalty - 1.3f) < 1e-6 && Math.Abs(settings.ChatRole.MinP - 0.05f) < 1e-6,
+            "offload, weights auto's room and each role's sampling are read (CRAFT_PLUGIN_AI_OFFLOAD, _CHATTOPK, _AGENTSEED)");
         var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "threads" ? "many" : null), "a bad value");
         Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_THREADS", StringComparison.Ordinal), "the error names the variable");
     }

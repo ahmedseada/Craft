@@ -21,7 +21,7 @@ namespace Craft.Ai;
 /// the turn of the most, the tokens, the rate, the elapsed time and the sandbox; Stop cancels; while it runs, what the user
 /// sends is a steering note the agent reads before its next step (<see cref="CodingAgent.Steer"/>).
 /// </summary>
-public sealed class AiAgentPanel : ConversationPanel, IDisposable
+public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDisposable
 {
     /// <summary>The panel's id.</summary>
     public const string PanelId = "ai.agent";
@@ -58,7 +58,38 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _models = models ?? throw new ArgumentNullException(nameof(models));
+        // The owner, 2026-11-01 ("2a"): this agent session's own model settings (kept until Clear or the panel closes).
+        _session = new SessionModel(host, settings, models, ModelRoleKeys.Agent, "this agent session");
+        _session.Changed += (_, _) => ModelSessionChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    private readonly SessionModel _session;
+
+    /// <inheritdoc />
+    public string ModelSessionTitle => _session.Title;
+
+    /// <inheritdoc />
+    public ModelSessionSettings ModelSession => _session.Settings;
+
+    /// <inheritdoc />
+    public ModelSessionShared ModelShared => _session.Shared;
+
+    /// <summary>The session's own model settings and lease (the tests' view).</summary>
+    public SessionModel Session => _session;
+
+    /// <inheritdoc />
+    public event EventHandler? ModelSessionChanged;
+
+    /// <inheritdoc />
+    public Task<ModelMemoryEstimate?> EstimateModelSessionAsync(ModelSessionSettings proposed, CancellationToken cancellationToken = default) =>
+        _session.EstimateAsync(proposed, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<bool> SaveModelSessionAsync(ModelSessionSettings proposed, CancellationToken cancellationToken = default) => _session.SaveAsync(proposed, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<string> ApplyModelSessionToEnvironmentAsync(ModelSessionSettings proposed, ModelSettingsScope scope, CancellationToken cancellationToken = default) =>
+        _session.ApplyToEnvironmentAsync(proposed, scope, cancellationToken);
 
     /// <summary>The run going on, or the last one (the tests await it).</summary>
     public Task Run { get; private set; } = Task.CompletedTask;
@@ -460,6 +491,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
 
         _disposed = true;
         Stop();
+        _session.End();
         _ticker?.Dispose();
         DiscardLater(_copy);
     }
@@ -601,7 +633,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         ModelLease lease;
         try
         {
-            lease = await _models.AgentAsync(token).ConfigureAwait(false);   // the agent's own settings (note 25; empty ones the chat's)
+            lease = await _session.LeaseAsync(token).ConfigureAwait(false);   // the agent's own settings (note 25; empty ones the chat's), the session's over them
         }
         finally
         {
@@ -653,7 +685,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         {
             MaxRounds = settings.AgentMaxTurns,
             TimeLimit = TimeSpan.FromMinutes(settings.AgentMinutes),
-            Sampling = new GenerationOptions { NumPredict = settings.AgentMaxTokens, NumCtx = lease.ContextLength, Stop = settings.AgentStops, Temperature = settings.AgentRole.Temperature },
+            Sampling = _session.Sampling(lease.ContextLength, settings.AgentStops),                // the session's own sampling over the agent's
             Tools = new CodingToolOptions { Sandbox = inner.Name },
             // Note 27: calls the model writes as text (fenced JSON) are read, a reply of calls that cannot be read is
             // corrected agentNudges times in a row, and the correction is worded in the model's own template: the lease
@@ -952,6 +984,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         Title = "Agent";
         ShowChanges();
         Status = null;
+        _session.End();                               // a new session: the shared settings, its own copy let go
     }
 
     /// <summary>A sandbox that refuses every command, saying why (no sandbox registered under the setting's name).</summary>

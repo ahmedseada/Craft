@@ -356,6 +356,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         // X part 9: a file:line link clicked in Output opens the file there.
         _bottom.LinkActivated += (_, e) => _ = _shell.OpenLinkAsync(e.Path, e.Line, e.Column);
         _bottomSplit.Panel = _bottom;
+        // The diagnostics' telemetry (the Claude Code plug-in's craft_telemetry tool) reads the window's table.
+        _host.Diagnostics.MeasureSource = () => [.. _bottom.Metrics.AllRows.Select(r => new TelemetryMeasure(r.Source, r.Measure, r.Last, r.Mean, r.P95, r.Count, r.Unit))];
 
         // Each panel's splitter: a drag kept within what the panel and the editor share, written to the workspace's
         // settings when it ends (not on every move).
@@ -705,15 +707,24 @@ public sealed class ShellPage : ContentPage, IDisposable
     {
         try
         {
+            // 3b: the report actions plug-ins register ("Ask Claude Code") come after Copy report.
+            var actions = EditorReportActions.All.Where(a => a.IsAvailable).ToArray();
             var question = new EditorQuestion(
                 "Something failed; Craft kept running",
                 $"{failure.Error.GetType().Name}: {failure.Error.Message}",
-                ["Copy report", "Continue"])
+                ["Copy report", .. actions.Select(a => a.Label), "Continue"])
             {
                 Details = [$"Where: {failure.Where}", $"Report: {report}"],
-                Dismissed = 1,
+                Dismissed = actions.Length + 1,
             };
-            if (await _dialog.AskAsync(question) == 0)
+            int answer = await _dialog.AskAsync(question);
+            if (answer >= 1 && answer <= actions.Length)
+            {
+                await actions[answer - 1].RunAsync(EditorReportActions.ReportOf(report, DiagnosticReportKinds.Callback));
+                return;
+            }
+
+            if (answer == 0)
             {
                 string text;
                 try
@@ -929,10 +940,19 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.Record("ui.stall", stall.Duration.TotalMilliseconds, "ms");
         string report = stall.ReportPath is { } path ? " Report: " + path : "";
         _host.Log(EditorLogLevel.Warning, $"{line}.{report}");
-        var actions = stall.ReportPath is { } file
-            ? (IReadOnlyList<NotificationAction>)[new NotificationAction("Open report", _ => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(
-                new Microsoft.Maui.ApplicationModel.OpenFileRequest("Stall report", new Microsoft.Maui.Storage.ReadOnlyFile(file))), Dismisses: false)]
-            : [];
+        var actions = new List<NotificationAction>(2);
+        if (stall.ReportPath is { } file)
+        {
+            actions.Add(new NotificationAction("Open report", _ => Microsoft.Maui.ApplicationModel.Launcher.Default.OpenAsync(
+                new Microsoft.Maui.ApplicationModel.OpenFileRequest("Stall report", new Microsoft.Maui.Storage.ReadOnlyFile(file))), Dismisses: false));
+            // 3b: the report actions plug-ins register ("Ask Claude Code"), with the stall's report named.
+            foreach (var action in EditorReportActions.All.Where(a => a.IsAvailable))
+            {
+                var chosen = action;
+                actions.Add(new NotificationAction(chosen.Label, token => chosen.RunAsync(EditorReportActions.ReportOf(file, DiagnosticReportKinds.Stall), token), Primary: true));
+            }
+        }
+
         _host.Notifications.Post(NotificationCenter.WatchdogSource, "The window was blocked", $"{ActivityText.Duration(stall.Duration)} by {stall.Label}"
             + (stall.FullCollections > 0 ? $" · {stall.FullCollections} full collections, {stall.CollectionPause.TotalMilliseconds:F0} ms paused" : ""), NotificationSeverity.Warning, actions);
     }
@@ -1791,7 +1811,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             return;
         }
 
-        if (_shell.ApplySetting(SettingLayer.User, write.Variable, write.Value) is { } problem)
+        // An agent engine's model (Claude Code with an account) is remembered per workspace, as its pick belongs to the project.
+        var layer = write.IsEngine && _shell.Workspace is not null ? SettingLayer.Workspace : SettingLayer.User;
+        if (_shell.ApplySetting(layer, write.Variable, write.Value) is { } problem)
         {
             await _dialog.ShowMessageAsync(pick.Kind == ModelPickKind.Model ? "The model was not set" : "The device was not set", problem);
         }

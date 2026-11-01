@@ -1,0 +1,185 @@
+sealed class Craft.Plugins.ClaudeCode.ClaudeAccount : System.IEquatable<Craft.Plugins.ClaudeCode.ClaudeAccount>
+  Craft.Plugins.ClaudeCode.ClaudeAccount <Clone>$()
+  System.Boolean Equals(Craft.Plugins.ClaudeCode.ClaudeAccount other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
+  System.Int32 GetHashCode()
+  System.String Model { get; }
+  System.String Name { get; init; }
+  System.String Problem { get; init; }
+  System.String Source { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment, out System.String Source)
+  ctor(System.String Name, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment, System.String Source)
+static class Craft.Plugins.ClaudeCode.ClaudeAccounts
+  const System.String ConfigVariable = CLAUDE_CONFIG_DIR
+  const System.String PlainModel = Claude Code
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> Detect(System.String documents, System.String localAppData, System.Func<System.String, System.String> variable, System.Func<System.String, System.String> read)
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> FromPowerShellProfile(System.String text, System.String source, System.Func<System.String, System.String> variable)
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> FromWindowsTerminal(System.String json, System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> functions, System.Func<System.String, System.String> variable)
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> Merge(System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> configured, System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> detected)
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> Parse(System.String setting)
+  static System.Collections.Generic.IReadOnlyList<System.String> ProfilePaths(System.String documents)
+  static System.Collections.Generic.IReadOnlyList<System.String> TerminalSettingsPaths(System.String localAppData)
+  static System.String AccountOf(System.String model)
+  static System.String ModelOf(System.String name)
+  static System.String ReadText(System.String path)
+sealed class Craft.Plugins.ClaudeCode.ClaudeCodePackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  ctor()
+sealed class Craft.Plugins.ClaudeCode.ClaudeCodePlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String BuildCommand = claudeCode.buildAndTest
+  const System.String CrashCommand = claudeCode.diagnoseCrash
+  const System.String FindCommand = claudeCode.find
+  const System.String McpCommand = claudeCode.testMcp
+  const System.String OpenCommand = claudeCode.open
+  const System.String StallCommand = claudeCode.diagnoseStall
+  static Craft.Plugins.ClaudeCode.ClaudeCodePlugin Instance { get; }
+  static Craft.Plugins.ClaudeCode.ClaudeCodeSession Session { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+sealed class Craft.Plugins.ClaudeCode.ClaudeCodeRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+sealed class Craft.Plugins.ClaudeCode.ClaudeCodeSession : System.IDisposable
+  Craft.Plugins.ClaudeCode.ClaudeCodeSettings Settings { get; }
+  Craft.Plugins.ClaudeCode.ClaudeFlags Flags { get; }
+  Craft.Plugins.ClaudeCode.ClaudeProgram Program { get; }
+  System.Boolean IsAllowed(System.String tool)
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> Accounts { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Models { get; }
+  System.String Check(System.String model)
+  System.String CommandModel { get; }
+  System.String Problem { get; }
+  System.Threading.Tasks.Task AskAboutAsync(Craft.Abstractions.DiagnosticReport report)
+  System.Threading.Tasks.Task AskAsync(System.String task)
+  System.Threading.Tasks.Task DiagnoseAsync(System.String kind, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task FindAgainAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task Found { get; }
+  System.Threading.Tasks.Task PromptAsync(System.Func<Craft.Plugins.ClaudeCode.ClaudeCodeSettings, System.String> template)
+  System.Threading.Tasks.Task<Craft.Abstractions.AgentEngineResult> RunAsync(Craft.Abstractions.AgentEngineRequest request, System.Action<Craft.Abstractions.AgentEngineEvent> report, System.Threading.CancellationToken cancellationToken)
+  System.Void Allow(System.String tool)
+  System.Void Dispose()
+  System.Void Start()
+  ctor(Craft.Abstractions.IEditorHost host)
+  static Craft.Abstractions.DiagnosticReport Latest(Craft.Abstractions.IEditorDiagnostics diagnostics, System.String kind)
+  static System.Collections.Generic.IReadOnlyList<System.String> Arguments(Craft.Plugins.ClaudeCode.ClaudeFlags flags, Craft.Plugins.ClaudeCode.ClaudeCodeSettings settings, System.String mcpConfig, System.String resume, System.Collections.Generic.List<System.String> notes)
+  static System.Collections.Generic.IReadOnlyList<System.String> SplitArguments(System.String line)
+  static System.String PromptFor(Craft.Plugins.ClaudeCode.ClaudeCodeSettings settings, Craft.Abstractions.DiagnosticReport report, System.String craft, System.String workspace)
+  static System.Threading.Tasks.Task<Craft.Abstractions.AgentEngineResult> RunProcessAsync(System.Diagnostics.ProcessStartInfo info, System.String task, System.Action<Craft.Abstractions.AgentEngineEvent> report, System.Threading.CancellationToken cancellationToken)
+sealed class Craft.Plugins.ClaudeCode.ClaudeCodeSettings : System.IEquatable<Craft.Plugins.ClaudeCode.ClaudeCodeSettings>
+  Craft.Plugins.ClaudeCode.ClaudeCodeSettings <Clone>$()
+  Craft.Plugins.ClaudeCode.McpWhenOff McpWhenOff { get; init; }
+  System.Boolean Approvals { get; init; }
+  System.Boolean DetectAccounts { get; init; }
+  System.Boolean Equals(Craft.Plugins.ClaudeCode.ClaudeCodeSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 TestMinutes { get; init; }
+  System.Int32 ToolOutputCharacters { get; init; }
+  System.String Account { get; init; }
+  System.String Accounts { get; init; }
+  System.String Arguments { get; init; }
+  System.String CraftRepository { get; init; }
+  System.String CraftRepositoryFrom(System.String start)
+  System.String IdrakRepository { get; init; }
+  System.String IdrakRepositoryFrom(System.String craft)
+  System.String Path { get; init; }
+  System.String PermissionMode { get; init; }
+  System.String PromptBuild { get; init; }
+  System.String PromptCrash { get; init; }
+  System.String PromptMcp { get; init; }
+  System.String PromptStall { get; init; }
+  System.String TestSandbox { get; init; }
+  System.String ToString()
+  const System.String DefaultPromptBuild = Build and test Craft and Idrak on this machine, with its own hardware. In {craft}: run `dotnet build -c Release tests\Craft.Tests`, then `dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt` with CRAFT_FILTER set to the groups to check (never the full suite), and the Windows app: `dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0`. In {idrak}: run `dotnet build -c Release tests\Idrak.Tests`, then Idrak's GPU tests: `dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt` with IDRAK_DEVICES set to this machine's GPU device (as Idrak's tests name it; cpu for the CPU) and IDRAK_FILTER set to the groups to check. Report each failure with its cause, and what you measured.
+  const System.String DefaultPromptCrash = Craft, the code editor you are connected to over MCP as the server 'craft', caught a failure ({kind}). Its report is {report}. Read it with the craft_read_report tool, the crash trail's last lines with craft_trail and Output's with craft_output, and the app's state with craft_app_state. Then find the cause in Craft's source ({craft}) or Idrak's ({idrak}), explain it, and propose the fix. Never run the full test suite: run_tests takes a CRAFT_FILTER of the groups the fix touches.
+  const System.String DefaultPromptMcp = Test Craft's MCP server (the server 'craft'): list its tools, then call each read-only one once (craft_app_state, craft_reports, craft_read_report with name latest, craft_trail with 50 lines, craft_output with 50 lines, craft_telemetry, craft_problems, open_documents, get_diagnostics), check every answer is bounded and makes sense, and report each tool that failed and why. Do not call propose_edit, open_file or run_tests.
+  const System.String DefaultPromptStall = Craft's window was blocked (a UI-thread stall the watchdog saw). The stall report is {report}. Read it with craft_read_report, the crash trail around it with craft_trail, the telemetry with craft_telemetry and Output with craft_output. Find the work that ran on the UI thread in Craft's source ({craft}) or Idrak's ({idrak}), and propose how to move it off the UI thread. Never run the full test suite: run_tests takes a CRAFT_FILTER.
+  const System.String PluginName = claudeCode
+  ctor()
+  static Craft.Plugins.ClaudeCode.ClaudeCodeSettings From(Craft.Abstractions.IPluginSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+  static System.String Fill(System.String template, System.String report, System.String kind, System.String craft, System.String idrak, System.String workspace)
+sealed class Craft.Plugins.ClaudeCode.ClaudeEngine : Craft.Abstractions.IAgentEngine, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Models { get; }
+  System.String Check(System.String model)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.AgentEngineResult> RunAsync(Craft.Abstractions.AgentEngineRequest request, System.Action<Craft.Abstractions.AgentEngineEvent> report, System.Threading.CancellationToken cancellationToken = null)
+  const System.String EngineName = claude-code
+  static Craft.Plugins.ClaudeCode.ClaudeEngine Instance { get; }
+sealed class Craft.Plugins.ClaudeCode.ClaudeFlags : System.IEquatable<Craft.Plugins.ClaudeCode.ClaudeFlags>
+  Craft.Plugins.ClaudeCode.ClaudeFlags <Clone>$()
+  System.Boolean Equals(Craft.Plugins.ClaudeCode.ClaudeFlags other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Has(System.String flag)
+  System.Collections.Generic.IReadOnlyList<System.String> MissingForHeadless()
+  System.Int32 GetHashCode()
+  System.String Help { get; init; }
+  System.String ToString()
+  System.String Version { get; init; }
+  System.Void Deconstruct(out System.String Version, out System.String Help)
+  ctor(System.String Version, System.String Help)
+sealed class Craft.Plugins.ClaudeCode.ClaudeProgram
+  System.Boolean IsScript { get; }
+  System.Diagnostics.ProcessStartInfo StartInfo(System.Collections.Generic.IReadOnlyList<System.String> arguments, System.String folder)
+  System.String Path { get; }
+  System.Threading.Tasks.Task<Craft.Plugins.ClaudeCode.ClaudeFlags> FlagsAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.ValueTuple<System.Int32, System.String>> RunAsync(System.Collections.Generic.IReadOnlyList<System.String> arguments, System.TimeSpan timeout, System.Threading.CancellationToken cancellationToken = null)
+  const System.String InstallHint = Install Claude Code (claude.ai/code: its installer, or npm install -g @anthropic-ai/claude-code), sign in by running claude once in a terminal, or set its program in Settings › Agent (CRAFT_PLUGIN_CLAUDECODE_PATH). Craft installs nothing itself.
+  static Craft.Plugins.ClaudeCode.ClaudeProgram Find(System.String configured, out System.String why, System.String searchPath = null, System.String extensions = null, System.Func<System.String, System.Boolean> exists = null)
+  static System.String Quote(System.String argument)
+  static System.String Unavailable { get; }
+  static System.String VersionOf(System.String output)
+  static System.Void Kill(System.Diagnostics.Process process)
+sealed class Craft.Plugins.ClaudeCode.ClaudeReportAction : Craft.Abstractions.IEditorReportAction, Idrak.Abstraction.IKind
+  System.Boolean IsAvailable { get; }
+  System.String Label { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task RunAsync(Craft.Abstractions.DiagnosticReport report, System.Threading.CancellationToken cancellationToken = null)
+  const System.String ActionName = claude-code
+  static Craft.Plugins.ClaudeCode.ClaudeReportAction Instance { get; }
+sealed class Craft.Plugins.ClaudeCode.ClaudeStream
+  System.Boolean Ended { get; }
+  System.Boolean Failed { get; }
+  System.Boolean? CraftConnected { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.AgentEngineEvent> Read(System.String line)
+  System.String End { get; }
+  System.String Result { get; }
+  System.String Session { get; }
+  ctor()
+  static System.String Cut(System.String text, System.Int32 max)
+static class Craft.Plugins.ClaudeCode.DiagnosticToolNames
+  const System.String AppState = craft_app_state
+  const System.String Approve = claude_code_approve
+  const System.String OpenFile = open_file
+  const System.String Output = craft_output
+  const System.String Problems = craft_problems
+  const System.String ReadReport = craft_read_report
+  const System.String Reports = craft_reports
+  const System.String RunTests = run_tests
+  const System.String Telemetry = craft_telemetry
+  const System.String Trail = craft_trail
+sealed class Craft.Plugins.ClaudeCode.DiagnosticToolSet : Craft.Abstractions.IEditorToolSet, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder)
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String SetName = craft-diagnostics
+  static Craft.Plugins.ClaudeCode.DiagnosticToolSet Instance { get; }
+static class Craft.Plugins.ClaudeCode.McpConfig
+  const System.String ServerName = craft
+  static System.Boolean IsInside(System.String path, System.String folder)
+  static System.String PathIn(System.String dataFolder)
+  static System.String Text(System.String address, System.String token)
+  static System.String Write(System.String dataFolder, System.String workspace, System.String address, System.String token)
+enum Craft.Plugins.ClaudeCode.McpWhenOff : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Ask = 0
+  Start = 1
+  Without = 2

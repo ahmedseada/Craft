@@ -51,6 +51,11 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
     private bool _disposed;
     private string _header = "";
     private TaskCompletionSource<int>? _approval;     // the sandbox's question shown inline on the command's step, while it waits
+    private string? _engineSession;                  // an agent engine's session (Claude Code's): a follow-up resumes it
+    private string? _engineModel;                    // the engine's model of that session
+    private string? _engineOverride;                 // a model asked through AgentEngines.Ask, for the next task
+    private bool _engineRunning;
+    private readonly Dictionary<string, int> _engineTools = new(StringComparer.Ordinal);
 
     /// <summary>An agent panel in <paramref name="host"/>.</summary>
     public AiAgentPanel(IEditorHost host, Func<AiSettings> settings, AiModels models)
@@ -61,6 +66,38 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         // The owner, 2026-11-01 ("2a"): this agent session's own model settings (kept until Clear or the panel closes).
         _session = new SessionModel(host, settings, models, ModelRoleKeys.Agent, "this agent session");
         _session.Changed += (_, _) => ModelSessionChanged?.Invoke(this, EventArgs.Empty);
+        AgentEngines.Asked += OnEngineAsked;
+    }
+
+    /// <summary>The agent engine's model the next task runs with (asked through <see cref="AgentEngines.Ask"/>, or the run continued), or null.</summary>
+    public string? EngineModel => _engineOverride ?? (Continues && _engineSession is not null ? _engineModel : null);
+
+    // A plug-in asks for a task with an engine's model (a report's "Ask Claude Code"): the panel shows and runs it.
+    private void OnEngineAsked(object? sender, AgentEngineAskEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        e.Taken = true;
+        Host.ShowPanel(PanelId);
+        if (IsBusy)
+        {
+            Log(new ConversationEntry(ConversationRole.Note, $"{e.Model} was asked for a task while a run goes on: stop it, then ask again."));
+            return;
+        }
+
+        _engineOverride = e.Model;
+        Subtitle = e.Model;
+        if (e.Task.Trim().Length > 0)
+        {
+            Run = StartAsync(e.Task.Trim(), CancellationToken.None);
+        }
+        else
+        {
+            Log(new ConversationEntry(ConversationRole.Note, $"{e.Model} answers the next task (it works on a copy of the folder; you accept each change as a diff)."));
+        }
     }
 
     private readonly SessionModel _session;
@@ -201,7 +238,7 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
     }
 
     /// <summary>Whether the next message continues the last run (its conversation and working copy) rather than starting a new one.</summary>
-    public bool Continues => _conversation is not null && _copy is { } copy && Host.WorkspaceFolder is { } root
+    public bool Continues => (_conversation is not null || _engineSession is not null) && _copy is { } copy && Host.WorkspaceFolder is { } root
         && string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(copy.Workspace)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), StringComparison.Ordinal)
         && Directory.Exists(copy.Copy);
 
@@ -294,6 +331,12 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         if (message.Equals("/clear", StringComparison.OrdinalIgnoreCase) && !IsBusy)
         {
             Clear();
+            return Task.CompletedTask;
+        }
+
+        if (IsBusy && _engineRunning)
+        {
+            Log(new ConversationEntry(ConversationRole.Note, $"{Subtitle} takes no notes while it works: send this once its run ends (Stop ends it now)."));
             return Task.CompletedTask;
         }
 
@@ -490,6 +533,7 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         }
 
         _disposed = true;
+        AgentEngines.Asked -= OnEngineAsked;
         Stop();
         _session.End();
         _ticker?.Dispose();
@@ -534,11 +578,25 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
             return;
         }
 
+        // An agent engine's model (Claude Code): the one asked for, the session continued, or the agent role's.
+        string? engineModel = EngineModel ?? (AgentEngines.FindModel(settings.AgentRole.Model) is not null ? settings.AgentRole.Model : null);
+        _engineOverride = null;
+        var engine = AgentEngines.FindModel(engineModel);
+        if (engine is not null && engine.Check(engineModel!) is { } unavailable)
+        {
+            Log(new ConversationEntry(ConversationRole.Error, unavailable));
+            return;
+        }
+
+        bool engineContinues = engine is not null && Continues && _engineSession is not null && string.Equals(_engineModel, engineModel, StringComparison.OrdinalIgnoreCase);
+        string? resume = engineContinues ? _engineSession : null;
+
         // A follow-up continues the last run: the same working copy, its changes and log, the conversation so far (the
         // owner's Windows run: each message started a new run on a new copy, remembering nothing). Clear starts afresh.
-        var earlier = Continues ? _conversation : null;
-        if (earlier is null)
+        var earlier = Continues && engine is null ? _conversation : null;
+        if (earlier is null && !engineContinues)
         {
+            _engineSession = null;
             DiscardLater(_copy);
             _copy = null;
             _changes.Clear();
@@ -557,7 +615,8 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _running = source;
         // Phase U: the run shows in the status bar (turn, tokens, tok/s) with Cancel, which stops it as Stop does.
-        var activity = Host.Activities.Start("Agent: " + (task.Length <= 48 ? task : string.Concat(task.AsSpan(0, 47), "…")), ActivityKinds.Agent, cancellable: true, source.Token);
+        var activity = Host.Activities.Start((engine is null ? "Agent: " : engineModel + ": ") + (task.Length <= 48 ? task : string.Concat(task.AsSpan(0, 47), "…")),
+            ActivityKinds.Agent, cancellable: true, source.Token);
         _activity = activity;
         _elapsed.Restart();
         IsBusy = true;
@@ -565,7 +624,7 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         Log(new ConversationEntry(ConversationRole.User, task));
         // The open documents' text as the user sees it, unsaved changes included (read here, on the UI thread).
         var unsaved = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var document in earlier is null ? Host.Documents : Array.Empty<IEditorDocument>())
+        foreach (var document in earlier is null && !engineContinues ? Host.Documents : Array.Empty<IEditorDocument>())
         {
             if (document.FilePath is { } path && document.Document.IsDirty)
             {
@@ -574,12 +633,32 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         }
 
         string end;
-        var copy = earlier is null ? null : _copy;
+        var copy = earlier is null && !engineContinues ? null : _copy;
         try
         {
-            (end, var run) = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, earlier, copy, activity), CancellationToken.None).ConfigureAwait(true);
-            _conversation = run;
-            activity.Complete(end);
+            if (engine is not null)
+            {
+                _engineRunning = true;
+                var result = await Task.Run(() => RunEngineAsync(engine, engineModel!, task, workspace, unsaved, settings, copy, resume, activity), CancellationToken.None).ConfigureAwait(true);
+                _engineSession = result.Session;
+                _engineModel = engineModel;
+                end = result.End;
+                if (result.Failed)
+                {
+                    Log(new ConversationEntry(ConversationRole.Error, result.End));
+                    activity.Fail(result.End);
+                }
+                else
+                {
+                    activity.Complete(end);
+                }
+            }
+            else
+            {
+                (end, var run) = await Task.Run(() => RunAgentAsync(task, workspace, unsaved, settings, earlier, copy, activity), CancellationToken.None).ConfigureAwait(true);
+                _conversation = run;
+                activity.Complete(end);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -599,6 +678,8 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         }
 
         _activity = null;
+        _engineRunning = false;
+        _engineTools.Clear();
 
         _ticker?.Dispose();
         _ticker = null;
@@ -610,6 +691,84 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         Log(new ConversationEntry(ConversationRole.Note, end + (_changes.Count > 0 ? " Review the changed files below, or discard them." : "")));
         IsBusy = false;
         UpdateStatus();
+    }
+
+    // On the thread pool: an agent engine's run (Claude Code) on the working copy (the run's own when it continues): its
+    // steps streamed into the timeline, and every file it wrote listed at its end as diffs to accept (no silent edit).
+    private async Task<AgentEngineResult> RunEngineAsync(IAgentEngine engine, string model, string task, string workspace, Dictionary<string, string> unsaved,
+        AiSettings settings, AgentWorkspace? existing, string? resume, IActivity activity)
+    {
+        var token = activity.CancellationToken;
+        if (existing is null)
+        {
+            activity.Report(null, "copying the folder");
+        }
+
+        var copy = existing ?? AgentWorkspace.Create(workspace, settings.AgentFolder, settings.AgentCopyIgnore, unsaved, token,
+            files => activity.Report(null, string.Create(CultureInfo.InvariantCulture, $"copying the folder: {files:N0} files")));
+        Post(() =>
+        {
+            _copy = copy;
+            _header = model;
+            Subtitle = model;
+            Log(new ConversationEntry(ConversationRole.Note, existing is null
+                ? string.Create(CultureInfo.InvariantCulture, $"{model} works on a copy of the folder ({copy.Files:N0} files, {copy.Copy}) with its own tools on this machine; your files change only when you accept a diff.")
+                : $"{model} continues its session on the same copy of the folder; Clear starts afresh."));
+        });
+        activity.Report(null, model + " is working");
+        try
+        {
+            return await engine.RunAsync(new AgentEngineRequest(model, task, copy.Copy) { Resume = resume, Workspace = workspace }, step => Post(() => EngineStep(step)), token).ConfigureAwait(false);
+        }
+        finally
+        {
+            // What it wrote by any way (its edits, its commands), listed even when it was stopped or failed.
+            var written = Written(copy, settings.AgentChangesIgnore);
+            Post(() => Listed(written));
+        }
+    }
+
+    // One step of an engine's run, on the UI thread: its text streams, each tool call is a step its result completes.
+    private void EngineStep(AgentEngineEvent step)
+    {
+        switch (step.Step)
+        {
+            case AgentEngineStep.Text:
+                Said(step.Text);
+                break;
+            case AgentEngineStep.ToolCall:
+                EndAssistant();
+                _assistant = -1;
+                _text.Clear();
+                int index = Log(new ConversationEntry(ConversationRole.Tool, step.Text) { Detail = step.Detail, Details = step.Details });
+                if (step.Id is { } id)
+                {
+                    _engineTools[id] = index;
+                }
+
+                break;
+            case AgentEngineStep.ToolResult when step.Id is { } done && _engineTools.Remove(done, out int at) && at < _log.Count:
+                SetLog(at, _log[at] with
+                {
+                    Succeeded = step.Ok,
+                    Detail = step.Detail is { Length: > 0 } result ? $"{_log[at].Detail} · {result}" : _log[at].Detail,
+                    Details = step.Details is { Length: > 0 } output ? $"{_log[at].Details}\n{output}".Trim() : _log[at].Details,
+                });
+                break;
+            case AgentEngineStep.ToolResult:
+                Log(new ConversationEntry(ConversationRole.Tool, step.Text) { Detail = step.Detail, Succeeded = step.Ok, Details = step.Details });
+                break;
+            case AgentEngineStep.Error:
+                EndAssistant();
+                Log(new ConversationEntry(ConversationRole.Error, step.Text) { Detail = step.Detail });
+                break;
+            default:
+                EndAssistant();
+                _assistant = -1;
+                _text.Clear();
+                Log(new ConversationEntry(ConversationRole.Note, step.Text) { Detail = step.Detail });
+                break;
+        }
     }
 
     // On the thread pool: the model, the working copy (the run's own when it continues), the sandbox, the tools and the
@@ -974,6 +1133,9 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
     private void Clear()
     {
         _conversation = null;                          // the next message starts a new run and a new conversation
+        _engineSession = null;
+        _engineModel = null;
+        _engineOverride = null;
         _log.Clear();
         if (_changes.Count == 0)
         {

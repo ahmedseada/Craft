@@ -33,6 +33,8 @@ public sealed partial class EditorHost
 
         public string? DataFolder => host.DataFolder;
 
+        public IEditorDiagnostics? Diagnostics => host.Diagnostics;
+
         public Task<bool> OpenExternalAsync(string path) => _closed ? Task.FromResult(false) : host.OpenExternalAsync(path);
 
         public Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default) =>

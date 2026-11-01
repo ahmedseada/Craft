@@ -123,6 +123,12 @@ public interface IEditorHost
     string? DataFolder => null;
 
     /// <summary>
+    /// What the app knows about itself (its version, its reports, the crash trail, Output, its telemetry), for a plug-in
+    /// that diagnoses it (the Claude Code plug-in's MCP tools); null when the host keeps none.
+    /// </summary>
+    IEditorDiagnostics? Diagnostics => null;
+
+    /// <summary>
     /// Opens <paramref name="path"/> (a folder or a file) outside the editor, in the system's own way (a folder in the file
     /// manager); false when the host cannot (a plug-in then shows the path instead).
     /// </summary>

@@ -202,14 +202,17 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     {
         var role = settings.AgentRole;
         string? model = role.Model.Length == 0 ? null : role.Model;
-        string? device = RunningOn(role, loaded);
-        string state = !role.Enabled ? "off (agentEnabled)" : model is null ? "none set" : device is not null ? "loaded" : "loads on the agent's first task";
+        // An agent engine's model (Claude Code) is no local model: nothing loads, it runs on this machine as its own program.
+        bool engine = AgentEngines.FindModel(model) is not null;
+        string? device = engine ? null : RunningOn(role, loaded);
+        string state = !role.Enabled ? "off (agentEnabled)" : model is null ? "none set" : engine ? "an outside agent: runs on this machine, nothing to load"
+            : device is not null ? "loaded" : "loads on the agent's first task";
         return new ModelRole("Agent", model, state)
         {
             Key = ModelRoleKeys.Agent,
             Enabled = role.Enabled,
             Device = device,
-            Weights = model is null ? null : WeightsOf(role, loaded),
+            Weights = model is null || engine ? null : WeightsOf(role, loaded),
             DeviceChoice = role.Device,
             ModelSetting = new ModelSettingField(Variable("agentModel"), "Agent model (empty: the chat's)"),
             DeviceSetting = new ModelSettingField(Variable("agentDevice"), "Agent runs on", "the chat's device"),
@@ -219,7 +222,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             Inherits = "Chat",
             InheritsModel = role.InheritsModel,
             InheritsDevice = role.InheritsDevice,
-            IsLoading = _loading && device is null && model is not null,
+            IsLoading = _loading && device is null && model is not null && !engine,
         };
     }
 
@@ -365,6 +368,11 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Model);
+        if (AgentEngines.FindModel(request.Model) is not null)
+        {
+            return Task.FromResult<ModelMemoryEstimate?>(null);         // an agent engine's model takes no memory of this provider
+        }
+
         var settings = Settings;
         var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
             "", request.Offload ?? settings.Offload);

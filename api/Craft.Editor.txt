@@ -377,6 +377,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   Craft.Editor.Activities.ActivityCenter ActivityCenter { get; }
   Craft.Editor.Activities.NotificationCenter Notifications { get; }
   Craft.Editor.Activities.UiWorkLabels Labels { get; }
+  Craft.Editor.HostDiagnostics Diagnostics { get; }
   System.Boolean CancelPendingChord()
   System.Boolean CopyText(System.String text)
   System.Boolean Deactivate(System.String name)
@@ -861,6 +862,14 @@ sealed class Craft.Editor.FoldMap
   System.Void SetLineCount(System.Int32 lines)
   ctor()
   static System.Int32 FindRange(System.ReadOnlySpan<Craft.Abstractions.FoldingRange> ranges, System.Int32 line)
+sealed class Craft.Editor.HostDiagnostics : Craft.Abstractions.IEditorDiagnostics
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TelemetryMeasure> Measures(System.Int32 max)
+  System.Collections.Generic.IReadOnlyList<System.String> OutputLines(System.Int32 max)
+  System.Collections.Generic.IReadOnlyList<System.String> TrailLines(System.Int32 max)
+  System.Func<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TelemetryMeasure>> MeasureSource { get; set; }
+  System.String AppVersion { get; }
+  System.String ReportFolder { get; }
+  ctor(Craft.Editor.EditorHost host)
 sealed class Craft.Editor.HoverCard
   Craft.Editor.PopupBox Box { get; }
   Craft.Editor.PopupBox? Layout()
@@ -2236,6 +2245,7 @@ sealed class Craft.Editor.Shell.ModelPickWrite : System.IEquatable<Craft.Editor.
   Craft.Editor.Shell.ModelPickWrite <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.ModelPickWrite other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean IsEngine { get; init; }
   System.Int32 GetHashCode()
   System.String LoadCommand { get; init; }
   System.String ToString()

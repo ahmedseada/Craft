@@ -39,6 +39,7 @@ sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstracti
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Ai.AgentChange> Changes { get; }
   System.String EmptyText { get; }
+  System.String EngineModel { get; }
   System.String ModelRoleKey { get; }
   System.String ModelSessionTitle { get; }
   System.String Placeholder { get; }
@@ -167,6 +168,15 @@ sealed class Craft.Ai.AiInlineCompletion : Craft.Abstractions.IInlineCompletionP
   event System.EventHandler<Idrak.Abstraction.Generation.GenerationStats> Completed
   event System.EventHandler<System.String> Unavailable
   static System.Int32 PrefixStart(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 caret, System.Int32 budget)
+sealed class Craft.Ai.AiMcpServer : Craft.Abstractions.IEditorMcpServer, Idrak.Abstraction.IKind
+  System.String Address { get; }
+  System.String Name { get; }
+  System.String StartCommand { get; }
+  System.String Summary { get; }
+  System.String Token { get; }
+  System.Void RaiseChanged()
+  event System.EventHandler Changed
+  static Craft.Ai.AiMcpServer Instance { get; }
 sealed class Craft.Ai.AiModels : System.IDisposable
   Craft.Abstractions.IEditorActivities Activities { get; set; }
   Craft.Ai.AiModels.DraftStatus DraftOf(System.String role)

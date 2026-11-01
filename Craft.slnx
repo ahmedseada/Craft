@@ -26,6 +26,7 @@
     <Project Path="plugins/Craft.Plugins.Html/Craft.Plugins.Html.csproj" />
     <Project Path="plugins/Craft.Plugins.Angular/Craft.Plugins.Angular.csproj" />
     <Project Path="plugins/Craft.Plugins.Lint/Craft.Plugins.Lint.csproj" />
+    <Project Path="plugins/Craft.Plugins.ClaudeCode/Craft.Plugins.ClaudeCode.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />

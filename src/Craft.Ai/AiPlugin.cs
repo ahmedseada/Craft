@@ -35,6 +35,8 @@ public sealed class AiRegistration() : IdrakPlugin(AiSettings.PluginName)
         }
 
         Part(() => ModelProviders.Register(AiPlugin.Local), () => ModelProviders.Unregister(ModelProviders.Local));
+        // The editor's MCP server as plug-ins reach it (the Claude Code plug-in connects an outside agent to it).
+        Part(() => EditorMcpServers.Register(AiMcpServer.Instance), () => EditorMcpServers.Unregister(EditorMcpServers.Editor));
 
         // The editor's context menu (phase X): the actions on the selection and the problem at the caret, each run only
         // when picked (opening the menu asks only whether each can run, which loads nothing).
@@ -378,6 +380,7 @@ public sealed class AiSession : IDisposable
             }
 
             Mcp = server;
+            AiMcpServer.Instance.RaiseChanged();
             _mcpStatus.Text = "MCP " + server.Address;
             _mcpStatus.Tooltip = server.Describe();
             _mcpShown = _host.AddStatusItem(_mcpStatus);
@@ -399,6 +402,7 @@ public sealed class AiSession : IDisposable
         }
 
         Mcp = null;
+        AiMcpServer.Instance.RaiseChanged();
         _mcpShown?.Dispose();
         _mcpShown = null;
         await server.DisposeAsync();
@@ -497,6 +501,7 @@ public sealed class AiSession : IDisposable
         if (Mcp is { } server)
         {
             Mcp = null;
+            AiMcpServer.Instance.RaiseChanged();
             _ = server.DisposeAsync().AsTask();
         }
 
@@ -571,4 +576,39 @@ public sealed class AiSession : IDisposable
         string Name(AiRoleSettings role) => !role.Enabled ? "off" : role.Model.Length == 0 ? "(none set)" : $"{role.Model} · {role.Device}";
         _modelStatus.Update($"Chat: {Name(settings.ChatRole)} · {_modelState}; agent: {(agent.Enabled && agent.InheritsModel && agent.InheritsDevice ? "same as chat" : Name(agent))}; completion: {Name(settings.CompletionRole)}");
     }
+}
+
+/// <summary>
+/// The editor's MCP server as plug-ins reach it (<see cref="EditorMcpServers.Editor"/>): the active AI session's server,
+/// its address and token while it runs, and <see cref="AiPlugin.McpStartCommand"/> to start it.
+/// </summary>
+public sealed class AiMcpServer : IEditorMcpServer
+{
+    private AiMcpServer()
+    {
+    }
+
+    /// <summary>The one instance.</summary>
+    public static AiMcpServer Instance { get; } = new();
+
+    /// <inheritdoc />
+    public string Name => EditorMcpServers.Editor;
+
+    /// <inheritdoc />
+    public string Summary => "The editor's live tools over MCP (the AI plug-in's server; loopback, a bearer token)";
+
+    /// <inheritdoc />
+    public string? Address => AiPlugin.Current?.Mcp?.Address;
+
+    /// <inheritdoc />
+    public string? Token => AiPlugin.Current?.Mcp?.Token;
+
+    /// <inheritdoc />
+    public string StartCommand => AiPlugin.McpStartCommand;
+
+    /// <inheritdoc />
+    public event EventHandler? Changed;
+
+    /// <summary>Says the server started or stopped.</summary>
+    public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 }

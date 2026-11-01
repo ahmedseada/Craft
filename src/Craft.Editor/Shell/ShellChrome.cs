@@ -553,7 +553,11 @@ public static class ShellText
             picks.Add(new ModelPick(ModelPickKind.Model, "", found!.InheritsModel ? "✓ " + label : label));
         }
 
-        foreach (var name in status.Models)
+        // The agent's chip also lists the agent engines' models (the Claude Code plug-in's "Claude Code (claude-work)").
+        IEnumerable<string> names = role == ModelRoleKeys.Agent && found?.Key is not null
+            ? status.Models.Concat(AgentEngines.Models.Where(m => !status.Models.Contains(m, StringComparer.OrdinalIgnoreCase)))
+            : status.Models;
+        foreach (var name in names)
         {
             bool current = model is not null && name.Equals(model, StringComparison.OrdinalIgnoreCase) && found is not { InheritsModel: true };
             picks.Add(new ModelPick(ModelPickKind.Model, name, current ? $"✓ {name}" : name));
@@ -601,7 +605,12 @@ public static class ShellText
         switch (pick.Kind)
         {
             case ModelPickKind.Model when (own ? found!.ModelSetting : status.ModelSetting) is { } setting:
-                return new ModelPickWrite(setting.Variable, pick.Value.Length == 0 ? null : pick.Value, own ? found!.LoadCommand ?? status.LoadCommand : status.LoadCommand);
+                // An agent engine's model loads nothing here: the engine runs it when the agent is given a task.
+                return new ModelPickWrite(setting.Variable, pick.Value.Length == 0 ? null : pick.Value,
+                    AgentEngines.FindModel(pick.Value) is not null ? null : own ? found!.LoadCommand ?? status.LoadCommand : status.LoadCommand)
+                {
+                    IsEngine = AgentEngines.FindModel(pick.Value) is not null,
+                };
             case ModelPickKind.Device when (own ? found!.DeviceSetting : status.DeviceSetting) is { } setting:
                 // "auto" is the default of a role's own device; for a role that inherits, an empty one is the other's, so
                 // auto is written as such.
@@ -704,7 +713,11 @@ public enum ModelPickKind
 /// <param name="Variable">The setting's variable ("CRAFT_PLUGIN_AI_AGENTMODEL").</param>
 /// <param name="Value">Its new value, or null to clear it (its default; for a role that inherits, the other role's).</param>
 /// <param name="LoadCommand">The command that loads the role's model after the write, or null.</param>
-public sealed record ModelPickWrite(string Variable, string? Value, string? LoadCommand);
+public sealed record ModelPickWrite(string Variable, string? Value, string? LoadCommand)
+{
+    /// <summary>Whether the model is an agent engine's (the pick is kept per workspace when a folder is open).</summary>
+    public bool IsEngine { get; init; }
+}
 
 /// <summary>A row of the composer's model picker (<see cref="ShellText.ModelPicks(ModelProviderStatus?, string?)"/>).</summary>
 /// <param name="Kind">What it does.</param>

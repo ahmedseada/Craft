@@ -556,6 +556,77 @@ public static class AiPluginTests
         Check.Throws<NotRegisteredException>(() => InlineCompletionProviders.For(request, "a2-missing"), "an unregistered provider is not registered");
     }
 
+    [Test]
+    public static async Task AnAgentEngineRunsOnTheCopyStreamsItsStepsAndItsChangesComeAsDiffs()
+    {
+        string root = Folder();
+        var engine = new ScriptedEngine();
+        AgentEngines.Register(engine);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "a.txt"), "alpha\nkeep\n");
+            var presenter = new AcceptingPresenter();
+            using var host = new EditorHost(dispatch: Serial(), presenter: presenter) { WorkspaceFolder = root };
+            host.OpenFile = async (path, token) => File.Exists(path) ? host.Open(await TextDocument.OpenAsync(path, cancellationToken: token), null) : host.Open(TextDocument.Create(""), null);
+            using var fixture = new ChatFixture(new ScriptedChatModel(new ChatMessage("assistant", "unused")), agentFolder: root + "-copies", agentModel: ScriptedEngine.Model);
+            using var panel = new AiAgentPanel(host, () => fixture.Settings, fixture.Models);
+            await panel.SubmitAsync("Change alpha");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
+            var first = engine.Requests.Single();
+            Check.True(first.Model == ScriptedEngine.Model && first.Task == "Change alpha" && first.Resume is null && first.Folder != root && first.Workspace == root,
+                "the agent role's engine model runs the task on the working copy, a new session");
+            Check.True(panel.Entries.Any(e => e is { Role: ConversationRole.Tool, Text: "Bash", Succeeded: true } && e.Detail!.Contains("dotnet build", StringComparison.Ordinal)),
+                "a tool call and its result are one step of the timeline");
+            Check.True(panel.Entries.Any(e => e is { Role: ConversationRole.Assistant } && e.Text.Contains("Working on it.", StringComparison.Ordinal)), "its text streams as the agent's message");
+            Check.True(panel.Changes.Select(c => (c.Relative, c.IsNew)).SequenceEqual([("a.txt", false), ("b.txt", true)]), "what it wrote in the copy is listed: a.txt changed, b.txt new");
+            Check.Equal("alpha\nkeep\n", await File.ReadAllTextAsync(Path.Combine(root, "a.txt")), "the user's file is untouched until a diff is accepted");
+            Check.True(!File.Exists(Path.Combine(root, "b.txt")), "no file is made silently");
+            Check.True(panel.Subtitle == ScriptedEngine.Model && panel.Continues, "the panel names the engine's model and continues its session");
+            await panel.SubmitAsync("And the tests");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
+            Check.True(engine.Requests[1].Resume == "session-1" && engine.Requests[1].Folder == first.Folder, "a follow-up resumes the engine's session on the same copy");
+            Check.True(await panel.ReviewAsync(), "Review diff: each change is proposed and accepted");
+            Check.Equal(2, presenter.Proposals.Count, "one diff per file");
+            Check.True(AgentEngines.Ask(ScriptedEngine.Model, "") && panel.EngineModel == ScriptedEngine.Model, "a plug-in's Ask is taken by the agent panel, for its next task");
+            panel.DiscardAll();
+        }
+        finally
+        {
+            await AiAgentPanel.DiscardsDone();
+            AgentEngines.Unregister(engine.Name);
+            Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root + "-copies"))
+            {
+                Directory.Delete(root + "-copies", recursive: true);
+            }
+        }
+    }
+
+    /// <summary>An agent engine that writes a.txt and b.txt in the copy and reports a text, a tool call and its result.</summary>
+    private sealed class ScriptedEngine : IAgentEngine
+    {
+        public const string Model = "Scripted Engine (work)";
+
+        public List<AgentEngineRequest> Requests { get; } = [];
+
+        public string Name => "test-scripted-engine";
+
+        public string Summary => "the tests' engine";
+
+        public IReadOnlyList<string> Models { get; } = [Model];
+
+        public async Task<AgentEngineResult> RunAsync(AgentEngineRequest request, Action<AgentEngineEvent> report, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            report(new AgentEngineEvent(AgentEngineStep.Text, "Working on it."));
+            report(new AgentEngineEvent(AgentEngineStep.ToolCall, "Bash") { Id = "t1", Detail = "dotnet build" });
+            await File.WriteAllTextAsync(Path.Combine(request.Folder, "a.txt"), "beta\nkeep\n", cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(request.Folder, "b.txt"), "new\n", cancellationToken);
+            report(new AgentEngineEvent(AgentEngineStep.ToolResult, "Bash") { Id = "t1", Ok = true, Detail = "Build succeeded." });
+            return new AgentEngineResult("Done in 2 turns.", "session-1");
+        }
+    }
+
     private static string Text(ITextDocument document) => document.Buffer.Current.GetText(0, document.Buffer.Current.Length);
 
     private static string Folder()
@@ -683,11 +754,11 @@ public static class AiPluginTests
     /// <summary>The chat model behind a fake provider, with the settings the panels read.</summary>
     private sealed class ChatFixture : IDisposable
     {
-        public ChatFixture(IChatModel chat, string agentSandbox = "a2-approve", string agentFolder = "")
+        public ChatFixture(IChatModel chat, string agentSandbox = "a2-approve", string agentFolder = "", string agentModel = "")
         {
             ModelProviders.Register(new FakeProvider(chat, null, null));
             EditorToolSets.Register(EditorToolSet.Instance);                     // the tools plug-in's set, which chat offers the model
-            Settings = new AiSettings { ModelProvider = ProviderName, Model = "fake", AgentSandbox = agentSandbox, AgentFolder = agentFolder, AgentMaxTurns = 8 };
+            Settings = new AiSettings { ModelProvider = ProviderName, Model = "fake", AgentModel = agentModel, AgentSandbox = agentSandbox, AgentFolder = agentFolder, AgentMaxTurns = 8 };
             Models = new AiModels(() => Settings);
         }
 

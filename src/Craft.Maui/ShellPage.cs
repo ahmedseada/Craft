@@ -580,6 +580,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         if (_shell.Options.TitleBar == "window")
         {
             _windowTitleBar = new TitleBar { Content = _titleWide, HeightRequest = 40, BackgroundColor = _palette.Ground, ForegroundColor = _palette.Text };
+            _windowTitleBar.Loaded += (_, _) => KeepTitleBarDraggable();
         }
 
         UpdateTitle();
@@ -590,6 +591,26 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             window.HandlerChanged += OnWindowHandler;
         }
+    }
+
+    // MAUI's TitleBar marks its whole Content part click-through, and the title row fills it, so nothing was left to drag
+    // the window by (the owner's run, 2026-11-01). Only the menus and the search box take clicks now; the platform reads
+    // the list again on any property change of the bar, so one is made (its AutomationId, which nothing else reads).
+    private void KeepTitleBarDraggable()
+    {
+        if (_windowTitleBar is not { } bar)
+        {
+            return;
+        }
+
+        var through = bar.PassthroughElements;
+        through.Clear();
+        foreach (var part in _titleWide.InteractiveParts)
+        {
+            through.Add(part);
+        }
+
+        bar.AutomationId = bar.AutomationId == "craft.titlebar" ? "craft.titlebar.parts" : "craft.titlebar";
     }
 
     private void OnWindowHandler(object? sender, EventArgs e)

@@ -244,6 +244,12 @@ public sealed class TitleBarView : ContentView
         Apply(palette);
     }
 
+    /// <summary>
+    /// The bar's parts that take clicks (the menus and the search box): in the window's caption they are its only
+    /// click-through parts, so the rest of the row (the logo, the name, the space around the search) drags the window.
+    /// </summary>
+    public IReadOnlyList<View> InteractiveParts => [_menus, _searchBox];
+
     /// <summary>The search box.</summary>
     public Entry Search { get; }
 

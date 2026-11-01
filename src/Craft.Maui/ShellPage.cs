@@ -78,7 +78,9 @@ public sealed class ShellPage : ContentPage, IDisposable
     private EditorView? _peekSource;
     private readonly FindOverlay _find;
     private readonly QuickOpenOverlay _overlay;
+    private TaskCompletionSource<int>? _quickPickAnswer;
     private readonly UndoBarView _undoBar;
+    private readonly RecoveryCardView _recoveryCard;
     private readonly Grid _editorStack = new();
     private readonly TitleBarView _titleWide;
     private readonly TitleBarView _titleNarrow;
@@ -154,7 +156,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         CallbackGuard.Options = startup.Options;
         CallbackGuard.Failed += OnCallbackFailed;
         _dialog.FallbackFocus = () => _shown;
-        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog), null, startup.Platform.ShellFiles, new MauiEditorClipboard());
+        var shellUi = new MauiShellUi(_dialog) { QuickPick = (request, token) => QuickPickAsync(request, token) };
+        shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, shellUi, null, startup.Platform.ShellFiles, new MauiEditorClipboard());
         _shell = shell;
         // B1: low memory drops the editors' kept line layouts too (the next frame lays out only what it shows).
         shell.MemoryPressure += (_, _) => Dispatcher.DispatchLabelled("editor: drop the kept line layouts (low memory)", () =>
@@ -253,7 +256,16 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         _overlay = new QuickOpenOverlay(_quickOpen, _palette) { VisibleRows = _shell.Options.QuickOpenRows };
-        _overlay.Picked += (_, item) => _ = PickAsync(item);
+        _overlay.Picked += (_, item) =>
+        {
+            if (_quickOpen.Picking is not null)
+            {
+                EndQuickPick(item.PickIndex);
+                return;
+            }
+
+            _ = PickAsync(item);
+        };
         _overlay.EmptyStateFor = text => ShellEmptyStates.Search(_host, text, _shell.Workspace is not null, _shown is not null, _quickOpen.IsIndexing);
         _overlay.EmptyActionChosen += (_, action) =>
         {
@@ -262,15 +274,31 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
         _overlay.Dismissed += (_, _) =>
         {
+            if (_quickOpen.Picking is not null)
+            {
+                EndQuickPick(-1);
+                return;
+            }
+
             _popup.Hide();
             _symbolPreview.Restore();                            // Escape after '@' previews: back where the editor was
             _quickOpen.EndBrowse();
             _shown?.Focus();
         };
-        _overlay.SelectionMoved += (_, item) => _symbolPreview.Show(item);
+        _overlay.SelectionMoved += (_, item) =>
+        {
+            if (_quickOpen.Picking is { Moved: { } moved })
+            {
+                moved(item.PickIndex);                           // X part 9: the theme picker previews the row's theme
+                return;
+            }
+
+            _symbolPreview.Show(item);
+        };
         _popup.Closed += (_, _) =>
         {
             _menu.Close();
+            EndQuickPick(-1);                                    // a click outside an open quick pick cancels it
         };
 
         _rail = new RailView(_host, _palette) { Badge = _shell.RailBadge };
@@ -316,6 +344,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         _undoBar = new UndoBarView(_shell.UndoBar, _palette);
         _editorStack.Add(_groupsView);
         _editorStack.Add(_undoBar);
+        // The recovery prompt: the files an unclean end left unsaved, offered at the top of the editor area (not modal).
+        _recoveryCard = new RecoveryCardView(_shell, _palette);
+        _editorStack.Add(_recoveryCard);
         _bottom = new BottomPanelView(_host, _palette, OnProblemChosen) { CodeActionRequested = OnCodeActionRequested, WindowKeys = _keys };
         // The owner's note 26: Ctrl+F in Output searches its text; its right-click opens the read-only text's menu.
         _bottom.FindRequested += (_, e) => ShowFind(false, e.InitialQuery, e.Model);
@@ -392,6 +423,15 @@ public sealed class ShellPage : ContentPage, IDisposable
         goToLine.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.GoToLine);
         _status.Position.GestureRecognizers.Add(goToLine);
         _palette.States(_status.Position, InteractionKind.Flat).Label = _status.Position;
+        // X part 9, item 26: the indentation, encoding, line ending and language items each open their quick pick.
+        foreach (var (label, command) in (ReadOnlySpan<(Label, string)>)[(_status.Indentation, LookCommands.ChangeIndentation), (_status.Encoding, LookCommands.ChangeEncoding),
+            (_status.LineEnding, LookCommands.ChangeLineEnding), (_status.Language, LookCommands.ChangeLanguage)])
+        {
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(command);
+            label.GestureRecognizers.Add(tap);
+            _palette.States(label, InteractionKind.Flat).Label = label;
+        }
 
         _railLine = _palette.Line(vertical: true);
         _statusLine = _palette.Line();
@@ -482,6 +522,22 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         _shell.ThemeChanged += (_, _) => ApplyTheme();
+        // X part 9, item 25: Zen mode and full screen lay the window out again; the platform's full screen, when it has one.
+        _shell.FullScreenSupported = startup.Platform.FullScreen is not null;
+        _shell.WindowModeChanged += (_, _) =>
+        {
+            ApplyLayout();
+            if (_window is { } window && !(startup.Platform.FullScreen?.Set(window, _shell.IsFullScreen) ?? false) && _shell.IsFullScreen)
+            {
+                _status!.Notice.Text = "The window could not go full screen yet.";
+            }
+        };
+        // CRAFT_THEME "system": the system's light or dark, followed as it changes.
+        if (Application.Current is { } application)
+        {
+            _shell.SetSystemTheme(application.PlatformAppTheme != AppTheme.Light);
+            application.RequestedThemeChanged += (_, _) => UiDispatch.Run("shell: the system's theme changed", () => _shell.SetSystemTheme(application.PlatformAppTheme != AppTheme.Light));
+        }
         _shell.FileSettingsChanged += OnFileSettingsChanged;
         _shell.ViewRequested += (_, view) => OnViewRequested(view);
         _shell.RevealRequested += (_, path) => _tree.ScrollTo(path);
@@ -669,6 +725,8 @@ public sealed class ShellPage : ContentPage, IDisposable
             WatchModels();
         }
 
+        // The recovery copies are kept from the start (every document opened from now on), off the UI thread's work.
+        _shell.StartRecovery();
         if (_initialPath is not null && Directory.Exists(_initialPath))
         {
             // X part 9: the folder's last session (its groups, tabs, carets, scroll, folds, pins), read off the UI thread.
@@ -680,6 +738,16 @@ public sealed class ShellPage : ContentPage, IDisposable
         else if (_initialPath is not null)
         {
             await _shell.OpenFileAsync(_initialPath);
+        }
+
+        // The recovery prompt: the copies an unclean end left for this folder (and the untitled ones), listed off the UI thread.
+        try
+        {
+            await _shell.OfferRecoveryAsync();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _host.Log(EditorLogLevel.Warning, $"The recovery copies could not be listed: {error.Message}", error);
         }
 
         using (UiDispatch.Enter("shell: the first document"))
@@ -1375,6 +1443,43 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _popup.Show(_overlay, at, width);
         _overlay.Start(text);
+    }
+
+    // X part 9: a quick pick in the quick-open overlay (the theme picker, the status bar's pickers): the index picked, or -1.
+    private Task<int> QuickPickAsync(QuickPickRequest request, CancellationToken cancellationToken)
+    {
+        EndQuickPick(-1);                                        // one at a time: an open one is cancelled
+        var answer = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _quickPickAnswer = answer;
+        _quickOpen.BeginPick(request);
+        ShowOverlay("");
+        if (cancellationToken.CanBeCanceled)
+        {
+            var registration = cancellationToken.Register(() => Dispatcher.DispatchLabelled("quick pick: cancelled", () =>
+            {
+                if (ReferenceEquals(_quickPickAnswer, answer))
+                {
+                    EndQuickPick(-1);
+                }
+            }));
+            _ = answer.Task.ContinueWith(_ => registration.Dispose(), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+
+        return answer.Task;
+    }
+
+    private void EndQuickPick(int index)
+    {
+        if (_quickPickAnswer is not { } answer)
+        {
+            return;
+        }
+
+        _quickPickAnswer = null;
+        _quickOpen.EndPick();
+        _popup.Hide();
+        _shown?.Focus();
+        answer.TrySetResult(index);
     }
 
     private async Task PickAsync(QuickOpenItem item)
@@ -2353,7 +2458,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         _titleRow.Content = narrow ? _titleNarrow : windowBar ? null : _titleWide;
         _titleRow.IsVisible = _titleRow.Content is not null;
         _titleLine.IsVisible = _titleRow.IsVisible;
-        _rail.IsVisible = _railLine.IsVisible = !narrow;
+        // X part 9, item 25: Zen mode hides the rail, the side view, the bottom panel, the chat, the status bar and the tabs,
+        // and centres the editor at CRAFT_ZEN_WIDTH (the wide layout only).
+        bool zen = _shell.IsZen && !narrow;
+        _rail.IsVisible = _railLine.IsVisible = !narrow && !zen;
 
         // The side view: the explorer, or (wide only) the plug-in panel the rail chose; the narrow layout's tree as before.
         View side = _explorer;
@@ -2362,7 +2470,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             side = panelView;
         }
 
-        bool sideVisible = narrow ? layout.TreeVisible : panels.IsOpen(ShellPanel.Explorer) && (!ReferenceEquals(side, _explorer) || layout.TreeVisible);
+        bool sideVisible = narrow ? layout.TreeVisible : !zen && panels.IsOpen(ShellPanel.Explorer) && (!ReferenceEquals(side, _explorer) || layout.TreeVisible);
         if (!ReferenceEquals(_sideSplit.Panel, side))
         {
             _sideSplit.Panel = side;
@@ -2375,7 +2483,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _rail.Active = !narrow && sideVisible ? (ReferenceEquals(side, _explorer) ? "craft.explorer" : panels.SideView) : null;
         _center.IsVisible = layout.EditorVisible;
 
-        bool chatOpen = _conversations.HasPanels && (narrow ? _chatSheetOpen : panels.IsOpen(ShellPanel.Chat));
+        bool chatOpen = _conversations.HasPanels && (narrow ? _chatSheetOpen : !zen && panels.IsOpen(ShellPanel.Chat));
         bool expanded = chatOpen && panels.IsChatExpanded(narrow, EditorRoom());
         _conversations.IsExpanded = expanded;
         Place(_chatSplit, expanded && !narrow ? _center : _body);
@@ -2420,13 +2528,23 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _chatSplit.SetVisible(chatOpen, narrow || expanded ? 0 : ShellMotion.Milliseconds);
         _bottomSplit.Size = panels.SizeOf(ShellPanel.Bottom);
-        _bottomSplit.SetVisible(panels.IsOpen(ShellPanel.Bottom) && !narrow, narrow ? 0 : ShellMotion.Milliseconds);
+        _bottomSplit.SetVisible(panels.IsOpen(ShellPanel.Bottom) && !narrow && !zen, narrow ? 0 : ShellMotion.Milliseconds);
         _breadcrumb.IsVisible = !narrow && !expanded && !(ReferenceEquals(_shell.Groups.Focused, _shell.Groups.Groups[0]) && _shell.Pages.Active is not null);
         _body.ColumnDefinitions[2].Width = narrow && layout.TreeVisible ? GridLength.Star : GridLength.Auto;
         _body.ColumnDefinitions[3].Width = layout.EditorVisible ? GridLength.Star : new GridLength(0);
         foreach (var pane in _panes)
         {
             pane.Strip.Compact = narrow;
+            pane.Strip.IsVisible = !zen;
+        }
+
+        _status.IsVisible = _statusLine.IsVisible = !zen;
+        int zenWidth = _shell.Options.ZenWidth;
+        _editorStack.MaximumWidthRequest = zen && zenWidth > 0 ? zenWidth : double.PositiveInfinity;
+        _editorStack.HorizontalOptions = zen && zenWidth > 0 ? LayoutOptions.Center : LayoutOptions.Fill;
+        if (zen)
+        {
+            _breadcrumb.IsVisible = false;
         }
 
         if (_groupsView.Narrow != narrow || _groupsView.Content is null)
@@ -2476,6 +2594,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _find.Apply(p);
         _overlay.Apply(p);
         _undoBar.Apply(p);
+        _recoveryCard.Apply(p);
         _titleNarrow.Apply(p);
         if (_windowTitleBar is not null)
         {

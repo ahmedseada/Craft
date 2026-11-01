@@ -1302,6 +1302,8 @@ public sealed partial class ShellModel : IDisposable
         DisposeTools();
         DisposeBookmarks();                                 // after the panels' event: their removal registers no side view again
         DisposeTimeline();
+        DisposeLook();
+        DisposeRecovery();
         DisposeViews();
         DisposeContext();
         StopWatching();
@@ -1419,14 +1421,16 @@ public sealed partial class ShellModel : IDisposable
         }
     }
 
-    private static ITheme ThemeOf(CraftOptions options) => Accented(EditorThemes.Find(options.Theme) ?? EditorThemes.Get(EditorThemes.Dark), options);
+    // CRAFT_THEME's theme ("system": the system's light or dark, X part 9), CRAFT_ACCENT over it; an unknown name is the dark one.
+    private ITheme ThemeOf(CraftOptions options) => Accented(ResolveTheme(options.Theme), options);
 
     // CRAFT_ACCENT over the theme's own accent.
     private static ITheme Accented(ITheme theme, CraftOptions options) => options.Accent is { } accent ? EditorThemes.WithAccent(theme, accent) : theme;
 
     private void SetTheme(ITheme theme)
     {
-        if (ReferenceEquals(theme, Theme))
+        // The same theme again (a kept preview read back from the settings): no second walk of the window.
+        if (ReferenceEquals(theme, Theme) || (Theme is { } now && string.Equals(now.Name, theme.Name, StringComparison.OrdinalIgnoreCase) && now.Colors == theme.Colors))
         {
             return;
         }
@@ -1604,6 +1608,7 @@ public sealed partial class ShellModel : IDisposable
         RegisterBookmarkCommands();
         RegisterTimelineCommands();
         RegisterNavigationCommands();
+        RegisterLookCommands();
         Rail(new RailItem("craft.settings", "Settings", ShellCommandIds.Settings, RailIcons.Settings, 0, AtBottom: true));
         RegisterContextCommands();
     }

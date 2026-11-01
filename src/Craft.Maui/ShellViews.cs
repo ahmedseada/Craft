@@ -951,6 +951,16 @@ public sealed class MauiShellUi(CraftDialog dialog) : IShellUi
     /// <inheritdoc />
     public Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default) => _dialog.PickAsync(title, items, cancellationToken);
 
+    /// <summary>The window's quick-open list for a quick pick (the page sets it); null asks with the dialog's list.</summary>
+    public Func<QuickPickRequest, CancellationToken, Task<int>>? QuickPick { get; set; }
+
+    /// <inheritdoc />
+    public Task<int> QuickPickAsync(QuickPickRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return QuickPick is { } pick ? pick(request, cancellationToken) : _dialog.PickAsync(request.Title, request.Texts(), cancellationToken);
+    }
+
     /// <inheritdoc />
     public Task ShowMessageAsync(string title, string message) => _dialog.ShowMessageAsync(title, message);
 
@@ -1017,6 +1027,9 @@ public interface IShellPlatform
 
     /// <summary>The pointer's shape and captured drags (B8: the splitters' resize arrows), or null (MAUI's pan gesture serves).</summary>
     IPointerCursor? PointerCursor => null;
+
+    /// <summary>The window's own full screen (X part 9: F11, Zen mode), or null when the platform has none (the shell says so).</summary>
+    IWindowFullScreen? FullScreen => null;
 
     /// <summary>
     /// The platform's terminal profiles (B9: Windows reads the registry for WSL and Git for Windows), registered in

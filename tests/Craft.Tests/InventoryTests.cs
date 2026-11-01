@@ -144,6 +144,8 @@ public static class InventoryTests
             ["CRAFT_LOCAL_HISTORY_DAYS"] = "7", ["CRAFT_LOCAL_HISTORY_FILE_MB"] = "2", ["CRAFT_LINKS_UNDERLINE"] = "always",
             // W-files: the icon theme, the skipped folders in the explorer.
             ["CRAFT_ICON_THEME"] = "mono", ["CRAFT_WORKSPACE_SHOW_IGNORED"] = "false",
+            // X part 9, the look group and the recovery prompt.
+            ["CRAFT_RECOVERY_PROMPT"] = "false", ["CRAFT_ZEN_WIDTH"] = "720", ["CRAFT_ZEN_FULL_SCREEN"] = "false",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -195,6 +197,7 @@ public static class InventoryTests
             LightbulbDelayMilliseconds = 100, RenderWhitespace = "boundary", Rulers = "80,120", TrimTrailingWhitespace = true, InsertFinalNewline = true, EditorConfig = false,
             BookmarksWrap = false, PreviewTabs = false, RestoreSession = false, LocalHistoryMaxMegabytes = 64, LocalHistoryDays = 7, LocalHistoryFileMegabytes = 2,
             LinksUnderline = "always", IconTheme = "mono", WorkspaceShowIgnored = false,
+            RecoveryPrompt = false, ZenWidth = 720, ZenFullScreen = false,
         }, options, "options read from every variable");
         Check.SequenceEqual(["TODO", "BUG"], options.TodoTags, "CRAFT_TODO_TAGS split at ','");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");

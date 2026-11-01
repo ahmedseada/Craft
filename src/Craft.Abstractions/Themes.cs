@@ -431,7 +431,7 @@ public sealed class TableTheme : ITheme
 }
 
 /// <summary>
-/// The themes, by name (ignoring case). The library's: <see cref="Dark"/> and <see cref="Light"/>. Register another with
+/// The themes, by name (ignoring case). The library's: <see cref="Dark"/>, <see cref="Light"/>, <see cref="Dusk"/>, <see cref="Dawn"/> and the high-contrast pair. Register another with
 /// <see cref="Register"/>; one under a library name shadows it, which <see cref="Unregister"/> brings back.
 /// </summary>
 public static class EditorThemes
@@ -485,7 +485,7 @@ public static class EditorThemes
     public static void Register(ITheme theme)
     {
         ArgumentNullException.ThrowIfNull(theme);
-        Table.Register(theme, System.Reflection.Assembly.GetCallingAssembly());
+        Table.Register(theme, global::System.Reflection.Assembly.GetCallingAssembly());
     }
 
     /// <summary>Removes the app's theme of that name (the library's, if any, answers again).</summary>

@@ -228,6 +228,13 @@ public static class ShellText
     /// </summary>
     public static string IndentationTooltip(EditorModel? model)
     {
+        if (model?.IndentationOverride is not null)
+        {
+            return model.FileSettings is { Sources.Count: > 0 } picked && (picked.TabSize is not null || picked.InsertSpaces is not null)
+                ? $"Indentation picked for this editor; {picked.Sources[^1]} wins again when the file is opened again. Click to change it."
+                : "Indentation picked for this editor (CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES when the file is opened again). Click to change it.";
+        }
+
         if (model?.FileSettings is { } settings && (settings.TabSize is not null || settings.InsertSpaces is not null) && settings.Sources.Count > 0)
         {
             return $"Indentation from {settings.Sources[^1]} (.editorconfig wins over CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES)";

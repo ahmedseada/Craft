@@ -500,6 +500,16 @@ public sealed class DocumentTabs : IDisposable
         TabChanged?.Invoke(this, tab);
     }
 
+    /// <summary>Raises <see cref="TabChanged"/> for <paramref name="tab"/>: what its status bar items show changed (X part 9: its indentation, line ending, encoding).</summary>
+    public void NotifyChanged(DocumentTab tab)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        if (_tabs.Contains(tab))
+        {
+            TabChanged?.Invoke(this, tab);
+        }
+    }
+
     /// <summary>Closes every tab at once (unsaved changes are lost: ask first).</summary>
     public void Dispose()
     {

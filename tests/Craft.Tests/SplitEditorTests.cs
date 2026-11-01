@@ -204,6 +204,21 @@ internal sealed class SplitFixture : IDisposable
 
         public Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default) => Task.FromResult(-1);
 
+        /// <summary>X part 9: answers a quick pick (the theme and status bar pickers), seeing its request; null answers -1 (Escape).</summary>
+        public Func<QuickPickRequest, int>? QuickPicks { get; set; }
+
+        public List<QuickPickRequest> QuickPickRequests { get; } = [];
+
+        public bool ConfirmAnswer { get; set; }
+
+        public Task<int> QuickPickAsync(QuickPickRequest request, CancellationToken cancellationToken = default)
+        {
+            QuickPickRequests.Add(request);
+            return Task.FromResult(QuickPicks?.Invoke(request) ?? -1);
+        }
+
+        public Task<bool> ConfirmAsync(string title, string text, string action, bool danger = false, CancellationToken cancellationToken = default) => Task.FromResult(ConfirmAnswer);
+
         public Task ShowMessageAsync(string title, string message)
         {
             Messages.Add(title + ": " + message);

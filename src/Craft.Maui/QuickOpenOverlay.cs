@@ -36,6 +36,7 @@ public sealed record QuickOpenRow(QuickOpenItem Item, FormattedString Title, For
 public sealed class QuickOpenOverlay : ContentView
 {
     private const double RowHeight = 30;
+    private const string SearchPlaceholder = "Search files by name   ·   > commands   ·   @ symbols   ·   : go to a line";
     private readonly QuickOpen _model;
     private readonly RoutedEntry _input;
     private readonly CraftInput _inputBox;
@@ -59,7 +60,7 @@ public sealed class QuickOpenOverlay : ContentView
         ArgumentNullException.ThrowIfNull(palette);
         _model = model;
         _palette = palette;
-        _input = new RoutedEntry { Placeholder = "Search files by name   ·   > commands   ·   @ symbols   ·   : go to a line", HeightRequest = 32, FontSize = palette.FontSize, FontFamily = palette.Font() };
+        _input = new RoutedEntry { Placeholder = SearchPlaceholder, HeightRequest = 32, FontSize = palette.FontSize, FontFamily = palette.Font() };
         _input.RouteKey = OnKey;
         // Debounced (CRAFT_SEARCH_DELAY_MS): typing never waits on a match; a key the overlay takes runs a waiting one first.
         _typing = new TypingDebounce(this, () => _palette.Options.SearchDelayMilliseconds, () => _ = RefreshAsync(_input.Text ?? ""));
@@ -125,6 +126,7 @@ public sealed class QuickOpenOverlay : ContentView
     public void Start(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
+        _input.Placeholder = _model.Picking is { } pick ? (pick.Placeholder.Length > 0 ? pick.Placeholder : pick.Title) : SearchPlaceholder;
         _settingText = true;
         _input.Text = text;
         _settingText = false;
@@ -235,6 +237,24 @@ public sealed class QuickOpenOverlay : ContentView
         _items = items;
         _selection.Reset(items.Count);
         _selection.PageRows = VisibleRows;
+        if (_model.Picking is { } pick)
+        {
+            // X part 9: a quick pick (the theme picker, the status bar's pickers): its title, the current row selected and told.
+            _selection.Select(_model.PickSelection(items));
+            _mode.Text = pick.Title;
+            _hint.Text = items.Count == 0 ? "Nothing matches." : "";
+            _hint.IsVisible = _hint.Text.Length > 0;
+            _empty.IsVisible = false;
+            Rebuild();
+            if (_selection.Selected >= 0)
+            {
+                _list.ScrollTo(_selection.Selected, position: ScrollToPosition.MakeVisible, animate: false);
+                SelectionMoved?.Invoke(this, items[_selection.Selected]);
+            }
+
+            return;
+        }
+
         var mode = QuickOpen.ModeOf(text);
         _mode.Text = mode switch
         {

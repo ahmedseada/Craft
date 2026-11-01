@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.Core.Workspaces;
+using Craft.Editor.Abstractions;
 
 namespace Craft.Editor.Shell;
 
@@ -230,6 +231,9 @@ public sealed record QuickOpenItem(string Text, string? Detail, string? Path, st
 
     /// <summary>For a folder's listing (the breadcrumb's folder part): whether the row is a folder (a pick lists it in turn).</summary>
     public bool IsFolder { get; init; }
+
+    /// <summary>For a quick pick (<see cref="QuickOpen.Picking"/>): the row's index in the request's items, else -1.</summary>
+    public int PickIndex { get; init; } = -1;
 }
 
 /// <summary>
@@ -454,6 +458,76 @@ public sealed class QuickOpen
     }
 
     /// <summary>
+    /// The quick pick the list shows instead of files and commands (X part 9: the theme picker, the status bar's pickers),
+    /// or null: its items filtered by fuzzy text, each row's <see cref="QuickOpenItem.PickIndex"/> its index.
+    /// </summary>
+    public QuickPickRequest? Picking { get; private set; }
+
+    /// <summary>Shows <paramref name="request"/>'s items in place of files and commands until <see cref="EndPick"/>.</summary>
+    public void BeginPick(QuickPickRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        Picking = request;
+    }
+
+    /// <summary>Back to files and commands.</summary>
+    public void EndPick() => Picking = null;
+
+    /// <summary>The row of <see cref="Picking"/>'s rows to select first for <paramref name="items"/>: its <see cref="QuickPickRequest.Selected"/> when listed, else the first.</summary>
+    public int PickSelection(IReadOnlyList<QuickOpenItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        if (Picking is { } pick)
+        {
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (items[i].PickIndex == pick.Selected)
+                {
+                    return i;
+                }
+            }
+        }
+
+        return items.Count > 0 ? 0 : -1;
+    }
+
+    // A quick pick's rows: every item in order for an empty query, else those that match, best first (the order kept on a tie).
+    private static List<QuickOpenItem> PickItems(QuickPickRequest pick, ReadOnlySpan<char> query)
+    {
+        var rows = new List<(QuickOpenItem Item, int Score, int Index)>(pick.Items.Count);
+        var positions = new int[Math.Max(1, query.Length)];
+        for (int i = 0; i < pick.Items.Count; i++)
+        {
+            var item = pick.Items[i];
+            int score = FuzzyMatch.Score(query, item.Text, positions);
+            if (score == FuzzyMatch.None)
+            {
+                continue;
+            }
+
+            rows.Add((new QuickOpenItem(item.Text, item.Detail, null, null, score)
+            {
+                PickIndex = i,
+                Group = item.Mark,
+                TextHighlights = query.IsEmpty ? [] : FuzzyMatch.Runs(positions.AsSpan(0, query.Length)),
+            }, score, i));
+        }
+
+        if (!query.IsEmpty)
+        {
+            rows.Sort(static (a, b) => a.Score != b.Score ? b.Score.CompareTo(a.Score) : a.Index.CompareTo(b.Index));
+        }
+
+        var items = new List<QuickOpenItem>(rows.Count);
+        foreach (var row in rows)
+        {
+            items.Add(row.Item);
+        }
+
+        return items;
+    }
+
+    /// <summary>
     /// The best rows for <paramref name="text"/> on the calling thread: files by fuzzy name (the name scored first, the
     /// path after, shorter paths ahead on a tie, recent ones ahead), after '&gt;' the commands that can run by fuzzy title
     /// with their keys (recent ones first), after ':' the line to go to.
@@ -463,6 +537,11 @@ public sealed class QuickOpen
         ArgumentNullException.ThrowIfNull(text);
         LastQueryInBackground = false;
         var span = text.AsSpan().Trim();
+        if (Picking is { } pick)
+        {
+            return PickItems(pick, span);
+        }
+
         return ModeOf(text) switch
         {
             QuickOpenMode.Line => GoToLine(span[1..].Trim()),
@@ -480,6 +559,11 @@ public sealed class QuickOpen
     public async Task<IReadOnlyList<QuickOpenItem>> QueryInBackgroundAsync(string text, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
+        if (Picking is not null)
+        {
+            return Query(text);
+        }
+
         var mode = ModeOf(text);
         if (mode == QuickOpenMode.Symbols)
         {

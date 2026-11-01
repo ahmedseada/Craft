@@ -25,7 +25,27 @@ interface Craft.Editor.Abstractions.IShellUi
   System.Threading.Tasks.Task<Craft.Editor.Abstractions.UnsavedChoice> AskUnsavedAsync(System.String title, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ConfirmAsync(System.String title, System.String text, System.String action, System.Boolean danger = false, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> PickAsync(System.String title, System.Collections.Generic.IReadOnlyList<System.String> items, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> QuickPickAsync(Craft.Editor.Abstractions.QuickPickRequest request, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PromptAsync(System.String title, System.String text, System.String placeholder, System.String initial = "", System.String ok = "OK", System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Editor.Abstractions.QuickPickItem : System.IEquatable<Craft.Editor.Abstractions.QuickPickItem>
+  Craft.Editor.Abstractions.QuickPickItem <Clone>$()
+  System.Boolean Equals(Craft.Editor.Abstractions.QuickPickItem other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Detail { get; init; }
+  System.String Mark { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Text, out System.String Detail)
+  ctor(System.String Text, System.String Detail = null)
+sealed class Craft.Editor.Abstractions.QuickPickRequest
+  System.Action<System.Int32> Moved { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Abstractions.QuickPickItem> Items { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Texts()
+  System.Int32 Selected { get; init; }
+  System.String Placeholder { get; init; }
+  System.String Title { get; }
+  ctor(System.String title, System.Collections.Generic.IReadOnlyList<Craft.Editor.Abstractions.QuickPickItem> items)
 enum Craft.Editor.Abstractions.UnsavedChoice : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Cancel = 2
   Discard = 1
@@ -482,6 +502,8 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean CollapseCarets()
   System.Boolean ColumnSelect(Craft.Abstractions.EditorKey key)
   System.Boolean CommentLines()
+  System.Boolean ConvertIndentation(System.Boolean toSpaces)
+  System.Boolean ConvertLineEndings(System.String newLine)
   System.Boolean CopyLines(Craft.Editor.LineDirection direction)
   System.Boolean DeleteLines()
   System.Boolean DetectsLinks { get; set; }
@@ -567,6 +589,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Threading.Tasks.Task<System.Boolean> FormatDocumentAsync(System.Boolean automatic, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> FormatDocumentAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> FormatSelectionAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.ValueTuple<System.Boolean, System.Int32>? IndentationOverride { get; }
   System.ValueTuple<System.Int32, Craft.Abstractions.OutputLink>? HoveredLink { get; }
   System.ValueTuple<System.Int32, Craft.Abstractions.OutputLink>? LinkAt(System.Single viewX, System.Single viewY)
   System.ValueTuple<System.Int32, System.Int32> VisualOf(System.Int32 position)
@@ -595,6 +618,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Void ResetTelemetry()
   System.Void ScrollToOffsets(System.Single x, System.Single y, System.Boolean instant = false)
   System.Void Select(System.Int32 anchor, System.Int32 caret)
+  System.Void SetIndentation(System.Boolean insertSpaces, System.Int32 tabSize)
   System.Void SetSelections(System.ReadOnlySpan<Craft.Abstractions.SelectionState> selections, System.Int32 primary)
   System.Void ShowInlineCard(Craft.Abstractions.InlineCard card)
   System.Void UpdateViewport(System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight)
@@ -1674,6 +1698,7 @@ sealed class Craft.Editor.Shell.DocumentTabs : System.IDisposable
   System.Int32 PinnedCount { get; }
   System.Void Activate(Craft.Editor.Shell.DocumentTab tab)
   System.Void Dispose()
+  System.Void NotifyChanged(Craft.Editor.Shell.DocumentTab tab)
   System.Void Remove(Craft.Editor.Shell.DocumentTab tab)
   System.Void SetLanguage(Craft.Editor.Shell.DocumentTab tab, Craft.Abstractions.ILanguage language, System.String languageName = null)
   ctor(Craft.Editor.EditorHost host)
@@ -1820,6 +1845,20 @@ sealed class Craft.Editor.Shell.EmptyState : System.IEquatable<Craft.Editor.Shel
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String Text, out System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions)
   ctor(System.String Title, System.String Text, System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions)
+sealed class Craft.Editor.Shell.EncodingChoice : System.IEquatable<Craft.Editor.Shell.EncodingChoice>
+  Craft.Editor.Shell.EncodingChoice <Clone>$()
+  System.Boolean Bom { get; init; }
+  System.Boolean Equals(Craft.Editor.Shell.EncodingChoice other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Text.Encoding Encoding { get; init; }
+  System.Void Deconstruct(out System.String Name, out System.Text.Encoding Encoding, out System.Boolean Bom)
+  ctor(System.String Name, System.Text.Encoding Encoding, System.Boolean Bom)
+static class Craft.Editor.Shell.EncodingChoices
+  static Craft.Editor.Shell.EncodingChoice Of(System.Text.Encoding encoding, System.Boolean bom)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EncodingChoice> All { get; }
 sealed class Craft.Editor.Shell.FileSettingsChangedEventArgs : System.EventArgs
   System.String Path { get; }
   ctor(System.String path)
@@ -1981,6 +2020,15 @@ static class Craft.Editor.Shell.LogText
   const System.Int32 LevelColumn = 10
   static Craft.Abstractions.EditorLogLevel? LevelOf(System.ReadOnlySpan<System.Char> line)
   static System.String Line(Craft.Editor.EditorLogEntry entry)
+static class Craft.Editor.Shell.LookCommands
+  const System.String ChangeEncoding = craft.changeEncoding
+  const System.String ChangeIndentation = craft.changeIndentation
+  const System.String ChangeLanguage = craft.changeLanguage
+  const System.String ChangeLineEnding = craft.changeLineEnding
+  const System.String SelectIconTheme = craft.selectIconTheme
+  const System.String SelectTheme = craft.selectTheme
+  const System.String ToggleFullScreen = craft.toggleFullScreen
+  const System.String ToggleZenMode = craft.toggleZenMode
 sealed class Craft.Editor.Shell.MenuModel : Craft.Editor.Abstractions.IEditorKeyHandler
   Craft.Abstractions.ContextMenuTarget Target { get; }
   Craft.Editor.Abstractions.IEditorKeyHandler Before(Craft.Editor.Abstractions.IEditorKeyHandler inner)
@@ -2337,6 +2385,7 @@ sealed class Craft.Editor.Shell.ProblemsList : Craft.Editor.Shell.PanelList
   static System.String ButtonAt(Craft.Abstractions.FontMetrics metrics, System.Single viewX, System.Single width, System.String fixTitle)
   static System.String FixTitleOf(Craft.Editor.Shell.ProblemItem item)
 sealed class Craft.Editor.Shell.QuickOpen
+  Craft.Editor.Abstractions.QuickPickRequest Picking { get; }
   Craft.Editor.SymbolIndex Symbols { get; }
   System.Boolean Capped { get; }
   System.Boolean IsIndexing { get; }
@@ -2349,6 +2398,7 @@ sealed class Craft.Editor.Shell.QuickOpen
   System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<Craft.Editor.SymbolIndex>> SymbolSource { get; set; }
   System.Int32 BackgroundFiles { get; set; }
   System.Int32 CraftOptionsLimit { get; set; }
+  System.Int32 PickSelection(System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.QuickOpenItem> items)
   System.Int32 RecentLimit { get; set; }
   System.Int32 Rows { get; set; }
   System.Int32? SymbolsUnder { get; set; }
@@ -2357,7 +2407,9 @@ sealed class Craft.Editor.Shell.QuickOpen
   System.Threading.Tasks.Task BrowseAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task IndexAsync(Craft.Core.Workspaces.Workspace workspace)
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.QuickOpenItem>> QueryInBackgroundAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Void BeginPick(Craft.Editor.Abstractions.QuickPickRequest request)
   System.Void EndBrowse()
+  System.Void EndPick()
   System.Void NoteChosen(Craft.Editor.Shell.QuickOpenItem item)
   System.Void NoteFile(System.String path)
   System.Void SetFiles(System.String root, System.Collections.Generic.IEnumerable<System.String> relativePaths)
@@ -2379,6 +2431,7 @@ sealed class Craft.Editor.Shell.QuickOpenItem : System.IEquatable<Craft.Editor.S
   System.Int32 Column { get; init; }
   System.Int32 GetHashCode()
   System.Int32 Line { get; init; }
+  System.Int32 PickIndex { get; init; }
   System.Int32 Score { get; init; }
   System.Int32 SymbolLength { get; init; }
   System.Int32 SymbolStart { get; init; }
@@ -2399,6 +2452,29 @@ enum Craft.Editor.Shell.QuickOpenMode : System.IComparable, System.IConvertible,
 sealed class Craft.Editor.Shell.ReadOnlySurfaceKeys : Craft.Editor.Abstractions.IEditorKeyHandler
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
   ctor(System.Func<Craft.Editor.Abstractions.IEditorKeyHandler> window)
+sealed class Craft.Editor.Shell.RecoveredFile : System.IEquatable<Craft.Editor.Shell.RecoveredFile>
+  Craft.Core.Documents.RecoveryEntry Entry { get; init; }
+  Craft.Editor.Shell.RecoveredFile <Clone>$()
+  System.Boolean Equals(Craft.Editor.Shell.RecoveredFile other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean FileExists { get; init; }
+  System.Int32 GetHashCode()
+  System.Int64 Bytes { get; init; }
+  System.String Describe(System.DateTimeOffset now)
+  System.String Folder { get; init; }
+  System.String Name { get; init; }
+  System.String Path { get; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Core.Documents.RecoveryEntry Entry, out System.String Name, out System.String Folder, out System.Int64 Bytes, out System.Boolean FileExists)
+  ctor(Craft.Core.Documents.RecoveryEntry Entry, System.String Name, System.String Folder, System.Int64 Bytes, System.Boolean FileExists)
+sealed class Craft.Editor.Shell.RecoveryOffer
+  System.Boolean CardVisible { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.RecoveredFile> Files { get; }
+  System.String Title { get; }
+  System.Void HideCard()
+  System.Void ShowCard()
+  ctor()
+  event System.EventHandler Changed
 enum Craft.Editor.Shell.RenameKeyAction : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Cancel = 2
   Commit = 1
@@ -2668,6 +2744,8 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Abstractions.ViewPanel TimelineView { get; }
   Craft.Core.CraftOptions Options { get; }
   Craft.Core.Documents.LocalHistory History { get; }
+  Craft.Core.Documents.RecoveryStore RecoveryStore { get; }
+  Craft.Core.Documents.RecoveryStore StartRecovery()
   Craft.Core.Settings.CraftSettings Settings { get; }
   Craft.Core.Workspaces.RecentList Recent { get; }
   Craft.Core.Workspaces.Workspace Workspace { get; }
@@ -2692,16 +2770,22 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Editor.Shell.PageTab OpenMarkdownPreview(Craft.Editor.Shell.DocumentTab tab = null, System.Boolean beside = false)
   Craft.Editor.Shell.PageTabs Pages { get; }
   Craft.Editor.Shell.PanelLayout Panels { get; }
+  Craft.Editor.Shell.RecoveryOffer Recovery { get; }
   Craft.Editor.Shell.RenameRequest PendingRename { get; }
   Craft.Editor.Shell.ShellLayout Layout { get; }
   Craft.Editor.Shell.TreeEdit TreeEdit { get; }
   Craft.Editor.Shell.UndoBar UndoBar { get; }
   Craft.Editor.Testing.TestExplorerView Tests { get; }
   Craft.Editor.Tools.TodoListView Todo { get; }
+  System.Boolean DiscardRecovered(Craft.Editor.Shell.RecoveredFile file)
+  System.Boolean FullScreenSupported { get; set; }
   System.Boolean InlineTreeEdits { get; set; }
+  System.Boolean IsFullScreen { get; }
+  System.Boolean IsZen { get; }
   System.Boolean KeepTab(Craft.Editor.Shell.DocumentTab tab = null)
   System.Boolean RemoveRecent(System.String path)
   System.Boolean SessionToWrite { get; }
+  System.Boolean SystemPrefersDark { get; }
   System.Boolean ToggleBookmark()
   System.Boolean WelcomeAtStart { get; }
   System.Collections.Generic.IReadOnlyDictionary<System.String, Craft.Editor.Preview.ImagePreview> ImagePreviews { get; }
@@ -2711,10 +2795,12 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> SettingRows()
   System.Collections.Generic.IReadOnlyList<System.String> ClosedFiles { get; }
   System.Collections.Generic.IReadOnlyList<System.String> OptionsProblems { get; }
+  System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, Craft.Editor.Abstractions.QuickPickItem>> ThemeChoices()
   System.Func<Craft.Editor.Shell.DocumentTab, Craft.Editor.EditorModel> EditorOf { get; set; }
   System.Func<System.String, System.String, System.Boolean> SameVolumeOf { get; set; }
   System.Int32 ClearBookmarks()
   System.Int32 ClearNotifications()
+  System.Int32 DiscardAllRecovered()
   System.Int32 MemoryReleases { get; }
   System.String ApplySetting(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
   System.String Branch { get; }
@@ -2731,6 +2817,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Threading.Tasks.Task LabelBookmarkAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task LayoutSaved { get; }
   System.Threading.Tasks.Task OpenRecentAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task RecoveryDiscarded { get; }
   System.Threading.Tasks.Task RefreshTimeline()
   System.Threading.Tasks.Task RefreshTreeAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task RevertAsync(Craft.Editor.Shell.DocumentTab tab, System.Threading.CancellationToken cancellationToken = null)
@@ -2755,20 +2842,31 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Threading.Tasks.Task<System.Boolean> CloseGroupAsync(Craft.Editor.Shell.EditorGroup group = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> CloseTabAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> CommitTreeEditAsync(System.String name, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> CompareRecoveredAsync(Craft.Editor.Shell.RecoveredFile file, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> CompareWithSnapshotAsync(Craft.Core.Documents.LocalHistoryEntry entry, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ConfirmCloseAllAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> GoToBookmarkAsync(System.Boolean forward, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> OpenAtLineAsync(System.String path, System.Int32 line, System.Int32 column, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> OpenFolderAsync(System.String path)
   System.Threading.Tasks.Task<System.Boolean> OpenLinkAsync(System.String path, System.Int32 line, System.Int32 column, System.String runFolder = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> PickEncodingAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> PickIndentationAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> PickLanguageAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> PickLineEndingAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ReopenClosedTabAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ReopenWithEncodingAsync(Craft.Editor.Shell.DocumentTab tab, Craft.Core.Documents.TextDocument document, Craft.Editor.Shell.EncodingChoice choice, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> RestoreEditorLayoutAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> RestoreRecoveredAsync(Craft.Editor.Shell.RecoveredFile file, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> RestoreSnapshotAsync(Craft.Core.Documents.LocalHistoryEntry entry, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> SaveAllAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> SaveAsAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> SaveAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> OfferRecoveryAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> RestoreAllRecoveredAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> MoveEntryAsync(System.String source, System.String targetFolder, System.Boolean copy, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PasteAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PickIconThemeAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PickThemeAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> StoreSettingAsync(System.String variable, System.String value)
   System.Threading.Tasks.Task<System.String> ZoomAsync(System.Int32 steps)
   System.ValueTuple<System.Collections.Generic.IReadOnlyList<System.String>, System.Boolean> FileClipboard { get; }
@@ -2779,12 +2877,17 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Void Dispose()
   System.Void OnConfigurationFileChanged(System.String path)
   System.Void OnMemoryPressure(Craft.Abstractions.MemoryPressureLevel level)
+  System.Void PreviewTheme(System.String name)
   System.Void ReloadOptions()
   System.Void RepickLanguages()
+  System.Void SetSystemTheme(System.Boolean dark)
+  System.Void SetZen(System.Boolean on)
   System.Void ShowImageStatus(System.String text)
   System.Void ShowSettings(System.String section = null)
   System.Void ShowWelcome()
+  System.Void ToggleFullScreen()
   System.Void ToggleTheme()
+  System.Void ToggleZen()
   const System.String BookmarksPanelId = craft.bookmarks
   const System.String ImagePagePrefix = image:
   const System.String MarkdownPagePrefix = preview:
@@ -2796,6 +2899,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   event System.EventHandler SourceControlChanged
   event System.EventHandler ThemeChanged
   event System.EventHandler TreeEditChanged
+  event System.EventHandler WindowModeChanged
   event System.EventHandler WorkspaceChanged
   event System.EventHandler<Craft.Abstractions.MemoryPressureLevel> MemoryPressure
   event System.EventHandler<Craft.Editor.Shell.FileSettingsChangedEventArgs> FileSettingsChanged

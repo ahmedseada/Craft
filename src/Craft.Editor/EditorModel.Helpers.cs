@@ -53,8 +53,8 @@ public sealed partial class EditorModel
         FileSettings = settings;
         var options = _baseOptions with
         {
-            TabSize = settings.TabSize ?? _baseOptions.TabSize,
-            InsertSpaces = settings.InsertSpaces ?? _baseOptions.InsertSpaces,
+            TabSize = IndentationOverride?.TabSize ?? settings.TabSize ?? _baseOptions.TabSize,
+            InsertSpaces = IndentationOverride?.InsertSpaces ?? settings.InsertSpaces ?? _baseOptions.InsertSpaces,
             NewLine = settings.NewLine ?? _baseOptions.NewLine,
             TrimTrailingWhitespace = settings.TrimTrailingWhitespace ?? _baseOptions.TrimTrailingWhitespace,
             InsertFinalNewline = settings.InsertFinalNewline ?? _baseOptions.InsertFinalNewline,

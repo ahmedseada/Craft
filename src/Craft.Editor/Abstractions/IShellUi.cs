@@ -49,6 +49,15 @@ public interface IShellUi
     /// <summary>Asks for one of <paramref name="items"/> under <paramref name="title"/>; its index, or -1 when none was picked.</summary>
     Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Asks for one of <paramref name="request"/>'s items in a quick-open list (X part 9: the theme picker, the status bar's
+    /// pickers): typing filters it, the arrows move and each row moved to is told to <see cref="QuickPickRequest.Moved"/>
+    /// (a live preview), Enter picks, Escape cancels; its index, or -1. A UI without such a list answers with
+    /// <see cref="PickAsync"/> (no preview).
+    /// </summary>
+    Task<int> QuickPickAsync(QuickPickRequest request, CancellationToken cancellationToken = default) =>
+        request is null ? Task.FromResult(-1) : PickAsync(request.Title, request.Texts(), cancellationToken);
+
     /// <summary>Shows a message; completes when the user dismissed it.</summary>
     Task ShowMessageAsync(string title, string message);
 

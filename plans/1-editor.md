@@ -18,7 +18,7 @@ Windows run (2026-11-01)" at the end.
 | 6 | X part 9 item 23 and part 11 items 4-5 (inline AI chat, AI review, fix the build) | Stopped for W, half written, not pushed; for later, after W |
 | 7 | X part 9: language 3-5, 10-12 (snippets, inlay hints, code lens, linked tags, Outline, hierarchy) and two C# session speed fixes | Stopped for W, tests being fixed (one real bug found: a mirrored `$1` must repeat its placeholder's text), not pushed; for later, after W |
 | 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test) | Built (46d6e17) |
-| 8b | The recovery prompt at start, X part 9's look group 24-26 | Stopped for W, just begun; for later, after W |
+| 8b | The recovery prompt at start, X part 9's look group 24-26 | Built on `slot/x-look` (2026-11-01): "Main's health, the recovery prompt and X part 9's look group as built" |
 | 9 | Phase W, the web languages | Built 2026-11-01: W0, W-files, W-npm, W-style, W-script, W-tools, W-markup (phase W complete; W-semantic waits for the owner's word) |
 | 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); left of W-tools: a closed file's Fix in Problems, ESLint's multi-pass fix, ESLint and Angular output in the Run view's problems (lint as you type waits for W-semantic); W-script's "Left, for later" line (re-reading a project on WorkspaceChanged, a contextual word split across lines, generics in a JSX tag, Prettier-style layout) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan; W-markup's "Left, for later" line (open tabs re-picked when angular.json changes, a JSON script by the JSON plug-in's lexer, block parameters over lines) |
 | 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned; starts only on the owner's word |
@@ -4358,6 +4358,120 @@ listed before any build), Run all (asked once, "Test: Tests" tab), a failing tes
 opening the file, the gutter's ▶ and ✓/✗, Problems' "(tests)" group; write a README.md, Ctrl+Shift+V and Ctrl+K V (the
 preview follows the scroll and updates as you type); open a .png and an .svg from the tree (zoom, status bar); View › TODO
 list; a misspelled word in a comment (Ctrl+. for suggestions, Add to dictionary); light and dark themes.
+
+### Main's health, the recovery prompt and X part 9's look group as built (2026-11-01)
+
+Slot s4. Craft only; Idrak unchanged (nothing in the library was needed: themes, settings and the recovery store are
+Craft's). Main's health went to `main` first (46d6e17); the recovery prompt and items 24-26 are on `slot/x-look`.
+- **Main's health** (46d6e17): `Lightbulb.Ask` awaits its probe in an `async` method and posts the answer (no `.Result`
+  left, so `Ui.TheUiSideHasNoSynchronousWait` passes with no new allowed line); the program-tab test
+  (`Terminal.TheManagerReplaces…`) waits, bounded by its 30 s, until the prompt is on the screen before it types (it typed
+  before the prompt arrived); what it checks is unchanged.
+- **The recovery prompt** (`ShellModel.Recovery.cs`, `RecoveryOffer`, `RecoveredFile`, `Craft.Maui/RecoveryCardView.cs`).
+  The app starts the shell's `RecoveryStore` at start (`StartRecovery`: every open document tracked once, its copy written
+  every `CRAFT_AUTOSAVE_SECONDS` on the thread pool while it has unsaved changes, deleted on save and close); after the
+  folder opens and its session is restored, `OfferRecoveryAsync` lists the copies off the UI thread: this workspace's files
+  and the untitled documents (all of them with no folder open), newest first, each with its folder, time and size, and
+  whether its file is on the disk. A card at the top of the editor area ("2 unsaved files were recovered", a row per file
+  with Restore, Compare, Discard; Restore all, Discard all; × hides it) and a notification (Restore all, Show). Restore
+  opens the file and puts the recovered text over it as one undo step (unsaved; Ctrl+Z goes back to the disk's text); an
+  untitled document, or a file that is gone, opens as a new unsaved tab of the recovered text (a gone file saves to its
+  path); its old copy is deleted off the UI thread, and the tab joins the session. Compare shows the existing diff view
+  (the disk's text against the recovered one). Discard takes the file off at once with the Undo bar; its copy is deleted
+  when the bar goes. `CRAFT_RECOVERY_PROMPT` (on). The recovery folder now defaults to the data folder's "recovery" (the
+  same place as before unless `CRAFT_DATA_FOLDER` moves it), so a shell under test keeps its copies in its temp folder.
+- **24 The theme picker** (`ShellModel.Look.cs`, `QuickPickRequest`/`QuickPickItem` and `IShellUi.QuickPickAsync`, a
+  default member falling back to `PickAsync`; `QuickOpen.BeginPick`). Ctrl+K Ctrl+T and the palette's "Preferences: Color
+  theme": the quick-open overlay lists "system" and every registered theme (summary; "current"; a plug-in's "from
+  ASSEMBLY", `EditorThemes.Origin`, `IsBuiltIn`); each row moved to re-themes the window at once (the existing
+  `ThemeChanged` walk, one per move; a theme equal to the one shown walks nothing), Enter writes `CRAFT_THEME` to the user's
+  settings, Escape brings the theme before back. Four new built-in themes, each made by `Fitted` (every text-like colour
+  moved by `ColorContrast.Ensure` until it reads on every ground it is drawn on): `dusk` (a slate dark, the teal accent),
+  `dawn` (a warm paper light, a blue accent), `high-contrast-dark` and `high-contrast-light` (text, every code class, the
+  accent as focus and caret, the line numbers at 7:1, `ColorContrast.Enhanced`, on the grounds and the text selection;
+  strong borders). `CRAFT_THEME` "system" follows the system's light or dark (`EditorThemes.ForSystem`; the app reads
+  MAUI's `PlatformAppTheme` and its change). "Preferences: File icon theme" puts W's icon themes in the same quick pick
+  (each shown as you move, `CRAFT_ICON_THEME` written on Enter).
+- **25 Zen and full screen**. Ctrl+K Z (`craft.toggleZenMode`, the wide layout): the rail, the side view, the bottom
+  panel, the chat, the status bar, the tab strips and the breadcrumb hidden, the editor centred at `CRAFT_ZEN_WIDTH` (960
+  units; 0 the whole width); with `CRAFT_ZEN_FULL_SCREEN` (on) the window goes full screen too and back out when Zen
+  ends (unless it was full screen before). Escape twice in a row leaves (the host's `KeyPressed`; another key between
+  starts the count again). F11 (`craft.toggleFullScreen`): the window's own full screen through `IWindowFullScreen`
+  (`IShellPlatform.FullScreen`, a default member returning null; Windows: `WindowsFullScreen`, the app window's
+  full-screen presenter and the overlapped one back); a platform without one says so.
+- **26 Status bar pickers**: the indentation, encoding, line ending and language items are clickable, each opening a
+  quick pick (also commands in the palette). Indentation: spaces or tabs (then the size 1-8), the tab size, convert the
+  indentation to spaces or tabs (one undo step; `EditorModel.SetIndentation`, `IndentationOverride`,
+  `ConvertIndentation`). Line ending: LF or CRLF, every break converted as one undo step (`ConvertLineEndings`) and the
+  document's line ending set for new lines and the save. Encoding: reopen with an encoding (the bytes read again off the UI
+  thread, the text replaced as one undo step, the document clean; asked first when it has unsaved changes) or save with
+  one (`EncodingChoices`: the UTF forms, then 15 code pages the runtime's `CodePagesEncodingProvider` makes). Language:
+  Auto (by the file's name), every registered language, plain text (`EditorGroups.SetLanguage`). A file's
+  `.editorconfig` value is said in the rows where it wins (indent_style and indent_size at the next open, end_of_line for
+  the lines Enter inserts, charset for a new file's first save); the indentation tooltip says when a pick holds.
+- **Decisions on the recommendation (the owner asleep; one line each)**:
+  - The lightbulb's site is an `async` method awaiting the probe, not an allowed line in the UI scan.
+  - The program-tab test waits for the prompt on the screen (bounded by its 30 s), it does not loosen a check.
+  - The shell starts its recovery store only when asked (`StartRecovery`: the app at start, a test when it wants copies), so a shell under test writes no copy by default.
+  - The recovery folder defaults to the data folder's "recovery" (the same folder as before by default; tests stay in their temp folder).
+  - A workspace is offered its own files' copies and the untitled ones; another folder's copies wait for that folder; with no folder all are offered.
+  - Restore onto a file on the disk is one undo step over the opened file (unsaved); a gone file or an untitled draft opens as a new unsaved tab.
+  - A restored file's old copy is deleted at once; the open document keeps its own copy from then on.
+  - Discard holds the copy until the Undo bar goes (one Undo for Discard all).
+  - The card sits at the top of the editor area (over the welcome page too), not modal; × hides it, the notification keeps the files.
+  - `CRAFT_RECOVERY_PROMPT` turns the prompt off; the copies stay in the folder.
+  - The pickers use the quick-open overlay (a quick pick), not the dialog's list, so the window stays visible for the live preview.
+  - The theme picker lists "system" first, then the registry's names in order; a plug-in's theme says its assembly.
+  - Previews are not written; only Enter writes `CRAFT_THEME` (an environment's `CRAFT_THEME` still wins at the next start; this run keeps the pick).
+  - New themes: dusk (second dark), dawn (second light), high-contrast-dark and -light; names in the design's lower-case style.
+  - The high-contrast pair is fitted to 7:1 for text, every code class, the accent (focus ring, caret) and the line numbers, also on the text selection.
+  - "system" follows light or dark only; a high-contrast theme is picked by name (not followed from the system's high-contrast mode).
+  - The icon theme picker reuses the same quick pick (W had none; one command).
+  - Zen hides the chat column and the breadcrumb too; it works in the wide layout only.
+  - Zen goes full screen by default (`CRAFT_ZEN_FULL_SCREEN`, VS Code's), and gives back only the full screen it took.
+  - Escape twice means two Escapes in a row, no time window (nothing to tune).
+  - `CRAFT_ZEN_WIDTH` is in units (960), 0 the whole width.
+  - An indentation pick holds for the editor in hand (over `.editorconfig`), until the file is opened again.
+  - Converting the indentation also sets the editor's style to the one converted to.
+  - Reopen with an encoding leaves the document clean (it is the file's text) with one undo step back.
+  - Save with an encoding saves at once (VS Code's).
+  - The encodings listed are the UTF forms and the common code pages this runtime can make; one it cannot is not offered.
+- **Windows-only lines**: `src/Craft.Maui/Platforms/Windows/WindowsFullScreen.cs` (new) and the `FullScreen` member of
+  `WindowsShellPlatform.cs`; not compiled here (Craft.Maui's Windows target). The page's wiring (`ShellPage.cs`, the card,
+  the status bar's taps, Zen's layout, `PlatformAppTheme`) is shared code, compiled here for net10.0; not run here.
+- **Tests**: new groups `ThemePicker` (3: live preview per move, Escape back, Enter written, one walk each; the
+  high-contrast pair's 7:1 for every text role, every code class, the accent's ink, the caret and the line numbers, and
+  dusk and dawn at 4.5:1; a plug-in's theme listed with its origin and picked, "system" following the system, the icon
+  theme picker), `ZenMode` (2: Ctrl+K Z and F11 bound, full screen taken and given back, Escape twice, a key between, a
+  platform without full screen; `CRAFT_ZEN_FULL_SCREEN` off, `CRAFT_ZEN_WIDTH`), `StatusPickers` (3: indentation picked
+  and converted to spaces and to tabs as one undo step each, the `.editorconfig` said; LF and CRLF converted as one undo
+  step, end_of_line said; reopen as Windows-1252 clean with one undo step, save as UTF-16 LE with its mark, the language
+  picked, plain text, Auto), `RecoveryPrompt` (3: copies found for this workspace and the untitled one, another folder's
+  left, the card's rows and the notification, Compare's diff, Restore as unsaved with one undo step to the disk, the old
+  copy gone, the session keeps it, Discard with Undo and for good, the notification gone; Restore all of an untitled and a
+  gone file, the shell's own copies; nothing shown with none or with the prompt off, the folder following
+  `CRAFT_DATA_FOLDER`). Updated: `Inventory.OptionsReadEveryVariable` (the three options); the shared test UI answers
+  quick picks. First run of the new groups: 26 of 26 passed. The full filter
+  (`ThemePicker|ZenMode|StatusPickers|Recovery|SessionRestore|Design|LookAndFeel|Shell|Settings|Keys|Ui|Terminal|Experience|Paint|ApiGuard|Inventory|EditorConfigApplied|Lightbulb|Editor|Layout|ContextMenus|EditorGroups|Workspace|Document`):
+  279 passed, 0 failed. The API dumps of Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and
+  `plans/inventory.md` regenerated (additions only; the themes' row lists the four new names).
+- **Options added** (each with its shape on the settings page): Files › Recovery: `CRAFT_RECOVERY_PROMPT` (on);
+  Appearance › Zen mode: `CRAFT_ZEN_WIDTH` (960), `CRAFT_ZEN_FULL_SCREEN` (on); Appearance › Theme: `CRAFT_THEME` takes
+  "system" and the four new names.
+- **Left, for later**: an indentation pick is lost when the editor's model is made again (an options change); the card's
+  rows are not keyboard-navigable; Zen mode's narrow layout; following the system's high-contrast mode.
+- **The owner's check** on `test-output\CarftTestPOC`: Ctrl+K Ctrl+T, move through the themes (the window follows), Escape,
+  then pick high-contrast-dark with Enter; set Settings › Appearance › Theme to "system" and switch Windows' light/dark;
+  Ctrl+K Z (full screen, centred, Escape twice), F11; click the status bar's Spaces, LF/CRLF, UTF-8 and language items;
+  type in `Program.cs` without saving, wait 30 s, end the process from the Task Manager, start again: the card offers it
+  (Compare, Restore, Ctrl+Z).
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="ThemePicker|ZenMode|StatusPickers|Recovery|SessionRestore|Design|LookAndFeel|Shell|Settings|Keys|Ui|Terminal|Experience|Paint|ApiGuard|Inventory|EditorConfigApplied|Lightbulb|Editor|Layout|ContextMenus|EditorGroups|Workspace|Document"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
 
 ### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
 good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow

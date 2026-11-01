@@ -43,7 +43,7 @@ public sealed class RecoveryStore : IDisposable
     public RecoveryStore(CraftOptions? options = null)
     {
         _options = options ?? new CraftOptions();
-        Folder = Path.GetFullPath(_options.RecoveryFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft", "recovery"));
+        Folder = FolderOf(_options);
         Directory.CreateDirectory(Folder);
         if (_options.AutosaveSeconds > 0)
         {
@@ -159,11 +159,30 @@ public sealed class RecoveryStore : IDisposable
         return files;
     }
 
-    /// <summary>The recovery folder <paramref name="options"/> name (<see cref="CraftOptions.RecoveryFolder"/>, else the local application data's).</summary>
+    /// <summary>
+    /// The recovery folder <paramref name="options"/> name: <see cref="CraftOptions.RecoveryFolder"/>, else the data folder's
+    /// "recovery" (<see cref="CraftOptions.ResolveDataFolder"/>: the local application data's "Craft" unless
+    /// <c>CRAFT_DATA_FOLDER</c> moves it).
+    /// </summary>
     public static string FolderOf(CraftOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return Path.GetFullPath(options.RecoveryFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft", "recovery"));
+        return Path.GetFullPath(options.RecoveryFolder ?? Path.Combine(options.ResolveDataFolder(), "recovery"));
+    }
+
+    /// <summary>The text of <paramref name="entry"/>'s copy (read from the disk: call it off the UI thread).</summary>
+    public string ReadText(RecoveryEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return File.ReadAllText(CopyPath(entry.Id), Encoding.UTF8);
+    }
+
+    /// <summary>The bytes <paramref name="entry"/>'s copy takes on the disk, or 0 when it is gone (reads the disk).</summary>
+    public long SizeOf(RecoveryEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        var file = new FileInfo(CopyPath(entry.Id));
+        return file.Exists ? file.Length : 0;
     }
 
     /// <summary>Deletes <paramref name="entry"/>'s copy and sidecar.</summary>

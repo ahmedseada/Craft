@@ -245,6 +245,7 @@ Craft.Abstractions.CodeReviewRequest  System.Void Deconstruct(out System.String 
 Craft.Abstractions.CodeReviewRequest  ctor(System.String Diff)
 Craft.Abstractions.CodeReviewRequest : System.IEquatable<Craft.Abstractions.CodeReviewRequest>
 Craft.Abstractions.ColorContrast
+Craft.Abstractions.ColorContrast  const System.Double Enhanced = 7
 Craft.Abstractions.ColorContrast  const System.Double Line = 3
 Craft.Abstractions.ColorContrast  const System.Double Text = 4.5
 Craft.Abstractions.ColorContrast  static System.Double Luminance(System.UInt32 argb)
@@ -985,12 +986,20 @@ Craft.Abstractions.EditorTerminalRequest  ctor()
 Craft.Abstractions.EditorTerminalRequest : System.IEquatable<Craft.Abstractions.EditorTerminalRequest>
 Craft.Abstractions.EditorThemes
 Craft.Abstractions.EditorThemes  const System.String Dark = dark
+Craft.Abstractions.EditorThemes  const System.String Dawn = dawn
+Craft.Abstractions.EditorThemes  const System.String Dusk = dusk
+Craft.Abstractions.EditorThemes  const System.String HighContrastDark = high-contrast-dark
+Craft.Abstractions.EditorThemes  const System.String HighContrastLight = high-contrast-light
 Craft.Abstractions.EditorThemes  const System.String Light = light
+Craft.Abstractions.EditorThemes  const System.String System = system
 Craft.Abstractions.EditorThemes  static Craft.Abstractions.ITheme Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.EditorThemes  static Craft.Abstractions.ITheme ForSystem(System.Boolean dark)
 Craft.Abstractions.EditorThemes  static Craft.Abstractions.ITheme Get(System.ReadOnlySpan<System.Char> name)
 Craft.Abstractions.EditorThemes  static Craft.Abstractions.ITheme WithAccent(Craft.Abstractions.ITheme theme, System.UInt32 accent)
+Craft.Abstractions.EditorThemes  static System.Boolean IsBuiltIn(System.String name)
 Craft.Abstractions.EditorThemes  static System.Boolean Unregister(System.String name)
 Craft.Abstractions.EditorThemes  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.EditorThemes  static System.String Origin(System.String name)
 Craft.Abstractions.EditorThemes  static System.Void Register(Craft.Abstractions.ITheme theme)
 Craft.Abstractions.EditorToolSets
 Craft.Abstractions.EditorToolSets  const System.String Editor = editor

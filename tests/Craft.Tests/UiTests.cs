@@ -479,6 +479,7 @@ public static class UiTests
         ("src/Craft.Maui/Platforms/Windows/ConPtyTerminalHost.cs", "_ = unregistered.WaitOne(TimeSpan.FromSeconds(5));", "Release runs in Task.Run (Dispose hands it off), never on the UI thread: it waits for a running exit callback before the handles close"),
         ("src/Craft.App/Platforms/Windows/CrashDialog.cs", "_ = trail.FlushAsync().Wait(TimeSpan.FromMilliseconds(500));", "the crash path only, the app already closing: the trail's last lines are flushed, bounded to 500 ms, before the message box"),
         ("src/Craft.Editor/DispatchedClipboard.cs", "done.TrySetResult(task.Result);", "a continuation of the completed clipboard call (neither faulted nor cancelled)"),
+        ("src/Craft.Ai/CopyGate.cs", "if (!_door.Wait(0))", "a zero-timeout try-enter never blocks (a draft skips the copy rather than wait for it)"),
     ];
 
     private static readonly Regex SynchronousWait = new(@"\.Result\b(?!s)|\.Wait\(|\.WaitOne\(|\.WaitAll\(|GetAwaiter\(\)\.GetResult\(\)|Monitor\.Wait\(|Thread\.Sleep\(|SpinWait\.SpinUntil\(",

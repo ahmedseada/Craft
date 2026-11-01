@@ -224,6 +224,9 @@ public static class ColorContrast
     /// <summary>The ratio large text and lines need.</summary>
     public const double Line = 3.0;
 
+    /// <summary>The ratio WCAG's enhanced level (AAA) asks of normal text, which the high-contrast themes give text and focus.</summary>
+    public const double Enhanced = 7.0;
+
     /// <summary>The relative luminance of <paramref name="argb"/> (0 black, 1 white; alpha ignored).</summary>
     public static double Luminance(uint argb) =>
         (0.2126 * Channel((argb >> 16) & 0xFF)) + (0.7152 * Channel((argb >> 8) & 0xFF)) + (0.0722 * Channel(argb & 0xFF));
@@ -427,6 +430,21 @@ public static class EditorThemes
     /// <summary>The library's light theme.</summary>
     public const string Light = "light";
 
+    /// <summary>The library's second dark theme: a slate ground, the teal accent.</summary>
+    public const string Dusk = "dusk";
+
+    /// <summary>The library's second light theme: a warm paper ground, the blue accent.</summary>
+    public const string Dawn = "dawn";
+
+    /// <summary>The library's high-contrast dark theme: text, every code class and the focus at 7:1 or more (WCAG AAA).</summary>
+    public const string HighContrastDark = "high-contrast-dark";
+
+    /// <summary>The library's high-contrast light theme: text, every code class and the focus at 7:1 or more (WCAG AAA).</summary>
+    public const string HighContrastLight = "high-contrast-light";
+
+    /// <summary>The name a setting gives to follow the system's light or dark (<see cref="ForSystem"/>); no theme is registered under it.</summary>
+    public const string System = "system";
+
     private static readonly KindTable<ITheme> Table = BuiltIn();
 
     private static KindTable<ITheme> BuiltIn()
@@ -435,8 +453,21 @@ public static class EditorThemes
             comparer: StringComparer.OrdinalIgnoreCase, unguarded: "a theme is data, read as it is");
         table.RegisterDefault(MakeDark());
         table.RegisterDefault(MakeLight());
+        table.RegisterDefault(MakeDusk());
+        table.RegisterDefault(MakeDawn());
+        table.RegisterDefault(MakeHighContrastDark());
+        table.RegisterDefault(MakeHighContrastLight());
         return table;
     }
+
+    /// <summary>Who registered the theme <paramref name="name"/>: the library ("library"), or the assembly of the app or plug-in; null when none is.</summary>
+    public static string? Origin(string name) => Table.Origin(name);
+
+    /// <summary>Whether the theme <paramref name="name"/> is one of the library's own (not shadowed by an app's or a plug-in's).</summary>
+    public static bool IsBuiltIn(string name) => Table.Default(name) is { } builtIn && ReferenceEquals(Table.Find(name), builtIn);
+
+    /// <summary>The theme the system's preference asks for (<see cref="System"/>): <see cref="Dark"/> or <see cref="Light"/>.</summary>
+    public static ITheme ForSystem(bool dark) => Get(dark ? Dark : Light);
 
     /// <summary>Registers <paramref name="theme"/> under its name (over the library's of that name, which stays behind it).</summary>
     public static void Register(ITheme theme)
@@ -531,6 +562,89 @@ public static class EditorThemes
                 local: 0xFF2A4A75, preprocessor: 0xFF6F42C1, excluded: 0xFF8C959F, punctuation: 0xFF1F2328,
                 new Semantic(Value: 0xFF0E7A6B, Interface: 0xFF0E7A6B, TypeParameter: 0xFF16697F, Member: 0xFF0B5C8E, Parameter: 0xFF2A4A75,
                     Namespace: 0xFF404852, Constant: 0xFF9C2F6B)));
+    }
+
+    private static TableTheme MakeDusk() => Fitted(Dusk, "Dusk: a slate ground, teal accent", isDark: true, ColorContrast.Text, new Roles(
+        Ground: 0xFF151821, Surface: 0xFF1B1F2A, Raised: 0xFF20242F, RaisedHigh: 0xFF262B37, Selection: 0xFF2D3342, CaretLine: 0xFF222734,
+        TextSelection: 0xFF33415C, Border: 0xFF2F3544, BorderStrong: 0xFF3C4354, Text: 0xFFDCE1EA, Secondary: 0xFFA0A8B8, Accent: AccentColors.Teal,
+        Success: 0xFF7FD69A, Warning: 0xFFE8C07A, Error: 0xFFF2838A, Info: 0xFF7FB2FF, GutterText: 0xFF838CA0, DiffAdded: 0xFF17332E,
+        DiffRemoved: 0xFF3B2029, BracketMatch: 0xFF374357, FindMatch: 0xFF5A4A22),
+        new Code(Keyword: 0xFFC3A6FF, Type: 0xFF5FC9B4, String: 0xFFE8C07A, Comment: 0xFF8B93A6, Number: 0xFFF0A3B5, Method: 0xFF82AAFF, Local: 0xFFC3CEDE,
+            Preprocessor: 0xFFB7A2E8, Excluded: 0xFF6F778A, Punctuation: 0xFFDCE1EA,
+            new Semantic(Value: 0xFF7AD3C0, Interface: 0xFF7AD3C0, TypeParameter: 0xFF8ADBEA, Member: 0xFFA6CCF2, Parameter: 0xFFC3CEDE, Namespace: 0xFFCBD1DC, Constant: 0xFFE6ABC8)));
+
+    private static TableTheme MakeDawn() => Fitted(Dawn, "Dawn: a warm paper ground, blue accent", isDark: false, ColorContrast.Text, new Roles(
+        Ground: 0xFFF6F3EE, Surface: 0xFFFFFDF9, Raised: 0xFFF9F6F1, RaisedHigh: 0xFFF1EDE6, Selection: 0xFFE4DED3, CaretLine: 0xFFF6F2EA,
+        TextSelection: 0xFFD3E2F7, Border: 0xFFDDD6CA, BorderStrong: 0xFF948B7D, Text: 0xFF26231F, Secondary: 0xFF5E584F, Accent: 0xFF1F5FBF,
+        Success: 0xFF2A7A4B, Warning: 0xFF8F5F00, Error: 0xFFB8323C, Info: 0xFF1F5FBF, GutterText: 0xFF7A7266, DiffAdded: 0xFFDFF2E3,
+        DiffRemoved: 0xFFF8E1E1, BracketMatch: 0xFFE6E0D5, FindMatch: 0xFFFFE2A0),
+        new Code(Keyword: 0xFF8A3FB8, Type: 0xFF0E6E80, String: 0xFF9A5B0A, Comment: 0xFF6E6759, Number: 0xFFB0306A, Method: 0xFF1F5FBF, Local: 0xFF374A66,
+            Preprocessor: 0xFF6F42C1, Excluded: 0xFF948B7D, Punctuation: 0xFF26231F,
+            new Semantic(Value: 0xFF0E6E80, Interface: 0xFF0E6E80, TypeParameter: 0xFF16697F, Member: 0xFF2F5C8A, Parameter: 0xFF374A66, Namespace: 0xFF4A453E, Constant: 0xFF9C2F6B)));
+
+    // The high-contrast pair: every text colour, every code class, the accent (the focus ring, the caret) and the line
+    // numbers fitted to 7:1 (WCAG AAA) on every ground they are drawn on, the text selection included; borders strong.
+    private static TableTheme MakeHighContrastDark() => Fitted(HighContrastDark, "High contrast dark: black ground, 7:1 text and focus (WCAG AAA)", isDark: true, ColorContrast.Enhanced, new Roles(
+        Ground: 0xFF000000, Surface: 0xFF000000, Raised: 0xFF0A0A0A, RaisedHigh: 0xFF141414, Selection: 0xFF1C2E4A, CaretLine: 0xFF101010,
+        TextSelection: 0xFF1F3F6B, Border: 0xFF7A7A7A, BorderStrong: 0xFFE0E0E0, Text: 0xFFFFFFFF, Secondary: 0xFFD4D4D4, Accent: 0xFFFFD60A,
+        Success: 0xFF7CF0B0, Warning: 0xFFFFC266, Error: 0xFFFF8A8A, Info: 0xFF8CC8FF, GutterText: 0xFFC8C8C8, DiffAdded: 0xFF0F3A1E,
+        DiffRemoved: 0xFF4A1414, BracketMatch: 0xFF2A3A55, FindMatch: 0xFF5A4600),
+        new Code(Keyword: 0xFF8CC8FF, Type: 0xFF7CF0D0, String: 0xFFFFD27A, Comment: 0xFFB8C4B0, Number: 0xFFF5B8FF, Method: 0xFFFFF09A, Local: 0xFFE6EEFF,
+            Preprocessor: 0xFFD5C2FF, Excluded: 0xFFB0B0B0, Punctuation: 0xFFFFFFFF,
+            new Semantic(Value: 0xFF7CF0D0, Interface: 0xFF7CF0D0, TypeParameter: 0xFF9EF2FF, Member: 0xFFC2E2FF, Parameter: 0xFFE6EEFF, Namespace: 0xFFEDEDED, Constant: 0xFFFFC2E2)));
+
+    private static TableTheme MakeHighContrastLight() => Fitted(HighContrastLight, "High contrast light: white ground, 7:1 text and focus (WCAG AAA)", isDark: false, ColorContrast.Enhanced, new Roles(
+        Ground: 0xFFFFFFFF, Surface: 0xFFFFFFFF, Raised: 0xFFFAFAFA, RaisedHigh: 0xFFF0F0F0, Selection: 0xFFD6E6FF, CaretLine: 0xFFF4F4F4,
+        TextSelection: 0xFFC4DCFF, Border: 0xFF6B6B6B, BorderStrong: 0xFF1A1A1A, Text: 0xFF000000, Secondary: 0xFF2E2E2E, Accent: 0xFF0B3D91,
+        Success: 0xFF0A5C2E, Warning: 0xFF6B4100, Error: 0xFF9E0F1E, Info: 0xFF0B3D91, GutterText: 0xFF3A3A3A, DiffAdded: 0xFFD4F2DC,
+        DiffRemoved: 0xFFFBD9D9, BracketMatch: 0xFFD0DCEF, FindMatch: 0xFFFFE07A),
+        new Code(Keyword: 0xFF0B3D91, Type: 0xFF00585E, String: 0xFF7A3B00, Comment: 0xFF3D4A34, Number: 0xFF7A1E6E, Method: 0xFF5A4200, Local: 0xFF1A2A44,
+            Preprocessor: 0xFF4B2A8F, Excluded: 0xFF4A4A4A, Punctuation: 0xFF000000,
+            new Semantic(Value: 0xFF00585E, Interface: 0xFF00585E, TypeParameter: 0xFF0A4F66, Member: 0xFF0A3E6B, Parameter: 0xFF1A2A44, Namespace: 0xFF2A2A2A, Constant: 0xFF7A1446)));
+
+    /// <summary>A theme's role colours before fitting: the interface's grounds, its text and status colours, the editor's fills.</summary>
+    private sealed record Roles(uint Ground, uint Surface, uint Raised, uint RaisedHigh, uint Selection, uint CaretLine, uint TextSelection,
+        uint Border, uint BorderStrong, uint Text, uint Secondary, uint Accent, uint Success, uint Warning, uint Error, uint Info, uint GutterText,
+        uint DiffAdded, uint DiffRemoved, uint BracketMatch, uint FindMatch);
+
+    /// <summary>A theme's code classes before fitting.</summary>
+    private sealed record Code(uint Keyword, uint Type, uint String, uint Comment, uint Number, uint Method, uint Local, uint Preprocessor,
+        uint Excluded, uint Punctuation, Semantic Semantic);
+
+    // A theme whose every text-like colour is moved (ColorContrast.Ensure) until it reads at `ratio` on every ground it is
+    // drawn on: the interface's text, status colours and accent on the ground, the surfaces, the raised fills and the
+    // selected row; the code classes on the editor, its caret line (and, at the enhanced ratio, its selection); the line
+    // numbers on the editor and its gutter; the accent's ink on the accent.
+    private static TableTheme Fitted(string name, string summary, bool isDark, double ratio, Roles r, Code c)
+    {
+        bool enhanced = ratio >= ColorContrast.Enhanced;
+        uint[] interfaceGrounds = enhanced
+            ? [r.Ground, r.Surface, r.Raised, r.RaisedHigh, r.Selection, r.CaretLine, r.TextSelection]
+            : [r.Ground, r.Surface, r.Raised, r.RaisedHigh, r.Selection, r.CaretLine];
+        uint[] codeGrounds = enhanced ? [r.Surface, r.CaretLine, r.TextSelection] : [r.Surface, r.CaretLine];
+        uint Ui(uint color) => ColorContrast.Ensure(color, ratio, interfaceGrounds);
+        uint Ink(uint color) => ColorContrast.Ensure(color, ratio, codeGrounds);
+        uint accent = Ui(r.Accent);
+        uint ink = ColorContrast.Ratio(0xFF000000u, accent) >= ColorContrast.Ratio(0xFFFFFFFFu, accent) ? 0xFF000000u : 0xFFFFFFFFu;
+        uint text = Ui(r.Text);
+        uint secondary = Ui(r.Secondary);
+        uint gutterText = ColorContrast.Ensure(r.GutterText, ratio, [r.Surface, r.CaretLine]);
+        var semantic = c.Semantic;
+        return new TableTheme(name, summary, isDark,
+            new EditorColors(Background: r.Surface, Foreground: text, Selection: r.TextSelection, CurrentLine: r.CaretLine, Caret: accent,
+                Gutter: r.Surface, GutterText: gutterText, GutterCurrentText: text, BracketMatch: r.BracketMatch, FindMatch: r.FindMatch)
+            {
+                Error = Ui(r.Error), Warning = Ui(r.Warning), Info = Ui(r.Info),
+                PopupBackground = r.Raised, PopupBorder = r.BorderStrong, PopupSelection = r.TextSelection, PopupText = text,
+                Ground = r.Ground, Surface = r.Surface, Border = r.Border, SecondaryText = secondary, Accent = accent, Success = Ui(r.Success),
+                DiffAdded = r.DiffAdded, DiffRemoved = r.DiffRemoved,
+                Raised = r.Raised, RaisedHigh = r.RaisedHigh, InterfaceSelection = r.Selection, BorderStrong = r.BorderStrong, Text = text,
+                AccentInk = ink, GhostText = Ink(c.Comment),
+            },
+            Styles(keyword: Ink(c.Keyword), type: Ink(c.Type), @string: Ink(c.String), comment: Ink(c.Comment), number: Ink(c.Number), method: Ink(c.Method),
+                local: Ink(c.Local), preprocessor: Ink(c.Preprocessor), excluded: Ink(c.Excluded), punctuation: Ink(c.Punctuation),
+                new Semantic(Value: Ink(semantic.Value), Interface: Ink(semantic.Interface), TypeParameter: Ink(semantic.TypeParameter), Member: Ink(semantic.Member),
+                    Parameter: Ink(semantic.Parameter), Namespace: Ink(semantic.Namespace), Constant: Ink(semantic.Constant))));
     }
 
     /// <summary>

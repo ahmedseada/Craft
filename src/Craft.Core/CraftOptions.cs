@@ -59,7 +59,7 @@ public sealed record CraftOptions
     /// <summary>Whether Tab inserts spaces rather than a tab character (<c>CRAFT_INSERT_SPACES</c>).</summary>
     public bool InsertSpaces { get; init; } = true;
 
-    /// <summary>The theme's name in <c>EditorThemes</c> (<c>CRAFT_THEME</c>).</summary>
+    /// <summary>The theme's name in <c>EditorThemes</c>, or "system" for the system's light or dark (<c>CRAFT_THEME</c>).</summary>
     public string Theme { get; init; } = "dark";
 
     /// <summary>Seconds between autosaves of a recovery copy; 0 turns autosave off (<c>CRAFT_AUTOSAVE_SECONDS</c>).</summary>
@@ -68,7 +68,7 @@ public sealed record CraftOptions
     /// <summary>Typing with pauses shorter than this many milliseconds is one undo step (<c>CRAFT_UNDO_GROUP_MS</c>).</summary>
     public int UndoGroupMilliseconds { get; init; } = 1000;
 
-    /// <summary>Where recovery copies are kept; null for the user's local application data folder, under "Craft/recovery" (<c>CRAFT_RECOVERY_FOLDER</c>).</summary>
+    /// <summary>Where recovery copies are kept; null for the data folder's "recovery" (the user's local application data, "Craft/recovery", unless <c>CRAFT_DATA_FOLDER</c> moves it; <c>CRAFT_RECOVERY_FOLDER</c>).</summary>
     public string? RecoveryFolder { get; init; }
 
     /// <summary>Where crash reports are written; null for the user's local application data folder, under "Craft/crashes" (<c>CRAFT_CRASH_FOLDER</c>).</summary>
@@ -797,6 +797,18 @@ public sealed record CraftOptions
     /// </summary>
     public string LinksUnderline { get; init; } = "hover";
 
+    /// <summary>
+    /// Whether the start offers the recovery copies an unclean end left (<c>CRAFT_RECOVERY_PROMPT</c>): a card in the editor
+    /// area and a notification, with Restore, Compare and Discard; off, the copies stay in the recovery folder.
+    /// </summary>
+    public bool RecoveryPrompt { get; init; } = true;
+
+    /// <summary>The width Zen mode centres the editor in, in units (<c>CRAFT_ZEN_WIDTH</c>); 0 uses the whole width.</summary>
+    public int ZenWidth { get; init; } = 960;
+
+    /// <summary>Whether Zen mode also puts the window in full screen, and takes it back out when it ends (<c>CRAFT_ZEN_FULL_SCREEN</c>).</summary>
+    public bool ZenFullScreen { get; init; } = true;
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -813,10 +825,10 @@ public sealed record CraftOptions
         new("CRAFT_ACCENT", "(the theme's)", "The accent: amber, teal, blue, rose, or #RRGGBB; moved until it reads at 4.5:1 on the theme.") { Shape = SettingShape.From(SettingSections.Appearance, "Accent", SettingChoiceSources.Accents, [""], true, "Theme") },
         new("CRAFT_TAB_SIZE", "4", "The columns a tab spans.") { Shape = SettingShape.Whole(SettingSections.Editor, "Tab size", 1, 32, "columns", "Typing") },
         new("CRAFT_INSERT_SPACES", "true", "Whether Tab inserts spaces rather than a tab character.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Insert spaces for Tab", "Typing") },
-        new("CRAFT_THEME", "dark", "The theme's name (dark, light, or a registered one).") { Shape = SettingShape.From(SettingSections.Appearance, "Theme", SettingChoiceSources.Themes, null, false, "Theme") },
+        new("CRAFT_THEME", "dark", "The theme's name (dark, light, dusk, dawn, high-contrast-dark, high-contrast-light, a plug-in's), or system to follow the system's light or dark; Ctrl+K Ctrl+T picks one with a live preview.") { Shape = SettingShape.From(SettingSections.Appearance, "Theme", SettingChoiceSources.Themes, ["system"], false, "Theme") },
         new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off.") { Shape = SettingShape.Whole(SettingSections.Files, "Autosave a recovery copy every", 0, 86_400, "s", "Recovery") },
         new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step.") { Shape = SettingShape.Whole(SettingSections.Editor, "Undo groups typing paused less than", 0, 60_000, "ms", "Typing", step: 100) },
-        new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept.") { Shape = SettingShape.PathTo(SettingSections.Files, "Recovery folder", "Recovery") },
+        new("CRAFT_RECOVERY_FOLDER", "(data folder)/recovery", "Where recovery copies are kept (the data folder's recovery by default).") { Shape = SettingShape.PathTo(SettingSections.Files, "Recovery folder", "Recovery") },
         new("CRAFT_CRASH_FOLDER", "(local app data)/Craft/crashes", "Where crash reports are written (the crash dialog names the file).") { Shape = SettingShape.PathTo(SettingSections.Files, "Crash reports folder", "Recovery") },
         new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by.") { Shape = SettingShape.Whole(SettingSections.Editor, "Text buffer block", 16, 64 * 1024 * 1024, "characters", "Advanced", step: 4096) },
         new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's).") { Shape = SettingShape.Choice(SettingSections.Files, "Line ending of a new file", ["auto", "lf", "crlf"], "Files") },
@@ -1002,6 +1014,10 @@ public sealed record CraftOptions
         new("CRAFT_LOCAL_HISTORY_DAYS", "30", "The days a local history snapshot is kept.") { Shape = SettingShape.Whole(SettingSections.Files, "Keep local history for", 1, 3650, "days", "Local history") },
         new("CRAFT_LOCAL_HISTORY_FILE_MB", "16", "A file larger than this gets no local history snapshot when saved.") { Shape = SettingShape.Whole(SettingSections.Files, "Local history skips files over", 1, 4096, "MB", "Local history") },
         new("CRAFT_LINKS_UNDERLINE", "hover", "How file:line links show in the terminal and Output: hover (the link under the pointer; in the terminal while Ctrl is held), always (every link on screen), off (no links).") { Shape = SettingShape.Choice(SettingSections.Terminal, "Links in output", ["hover", "always", "off"], "Links") },
+        // X part 9, items 24-26 and the recovery prompt.
+        new("CRAFT_RECOVERY_PROMPT", "true", "Whether the start offers the recovery copies of files an unclean end left unsaved (a card and a notification with Restore, Compare and Discard).") { Shape = SettingShape.Toggle(SettingSections.Files, "Offer recovered files at start", "Recovery") },
+        new("CRAFT_ZEN_WIDTH", "960", "The width Zen mode (Ctrl+K Z) centres the editor in, in units; 0 uses the whole width.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Zen mode's text width", 0, 10_000, "units", "Zen mode", step: 20) },
+        new("CRAFT_ZEN_FULL_SCREEN", "true", "Whether Zen mode also puts the window in full screen (and takes it back out when it ends).") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Zen mode goes full screen", "Zen mode") },
     ];
 
     /// <summary>
@@ -1974,6 +1990,21 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_LINKS_UNDERLINE") is { } linksUnderline)
         {
             options = options with { LinksUnderline = OneOf(linksUnderline, "CRAFT_LINKS_UNDERLINE", "hover", "always", "off") };
+        }
+
+        if (Text(read, "CRAFT_RECOVERY_PROMPT") is { } recoveryPrompt)
+        {
+            options = options with { RecoveryPrompt = Flag(recoveryPrompt, "CRAFT_RECOVERY_PROMPT") };
+        }
+
+        if (Text(read, "CRAFT_ZEN_WIDTH") is { } zenWidth)
+        {
+            options = options with { ZenWidth = Whole(zenWidth, "CRAFT_ZEN_WIDTH", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_ZEN_FULL_SCREEN") is { } zenFullScreen)
+        {
+            options = options with { ZenFullScreen = Flag(zenFullScreen, "CRAFT_ZEN_FULL_SCREEN") };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

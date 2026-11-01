@@ -31,7 +31,8 @@ public static class ClaudeCodePluginTests
             exists: p => p == Path.Combine(@"C:\Users\me\AppData\Roaming\npm", "claude.cmd"));
         Check.True(windows is { IsScript: true } && windows.Path == Path.Combine(@"C:\Users\me\AppData\Roaming\npm", "claude.cmd") && why is null,
             "on Windows the npm claude.cmd is found with PATHEXT, and started through cmd");
-        var unix = ClaudeProgram.Find("", out _, searchPath: "/usr/local/bin:/usr/bin", extensions: "", exists: p => p == Path.Combine("/usr/bin", "claude"));
+        // The platform's own PATH separator (';' on Windows, where a ':'-joined PATH is one entry: the owner's run 2026-11-01).
+        var unix = ClaudeProgram.Find("", out _, searchPath: string.Join(Path.PathSeparator, "/usr/local/bin", "/usr/bin"), extensions: "", exists: p => p == Path.Combine("/usr/bin", "claude"));
         Check.True(unix is { IsScript: false } && unix.Path == Path.Combine("/usr/bin", "claude"), "elsewhere claude itself");
         Check.True(ClaudeProgram.Find("", out var none, searchPath: "/nowhere", extensions: "", exists: _ => false) is null && none!.Contains("npm install -g @anthropic-ai/claude-code", StringComparison.Ordinal),
             "not found: said with the install hint (nothing installed)");
@@ -295,7 +296,7 @@ public static class ClaudeCodePluginTests
         var crash = new DiagnosticReport(DiagnosticReportKinds.Crash, Path.Combine("crashes", "crash-1.txt"), DateTimeOffset.Now.AddMinutes(-2), 10);
         string onStall = ClaudeCodeSession.PromptFor(settings, stall, "D:/Projects/Craft", null);
         Check.True(onStall.Contains(stall.Path, StringComparison.Ordinal) && onStall.Contains("window was blocked", StringComparison.Ordinal) && onStall.Contains("craft_read_report", StringComparison.Ordinal)
-            && onStall.Contains(Path.Combine("D:/Projects", "Idrak"), StringComparison.Ordinal), "a stall: the stall's prompt, the report and the tools named, Idrak beside Craft");
+            && onStall.Contains(Path.Combine(Directory.GetParent("D:/Projects/Craft")!.FullName, "Idrak"), StringComparison.Ordinal), "a stall: the stall's prompt, the report and the tools named, Idrak beside Craft");
         string onFailure = ClaudeCodeSession.PromptFor(settings, callback, null, null);
         Check.True(onFailure.Contains(callback.Path, StringComparison.Ordinal) && onFailure.Contains("a failure it caught", StringComparison.Ordinal) && onFailure.Contains("CRAFT_FILTER", StringComparison.Ordinal),
             "a caught failure: the crash's prompt, never the full suite");

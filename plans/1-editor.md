@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B10: the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus) | Parts 6 and 7 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control) | Parts 6-8 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -2891,16 +2891,44 @@ in File Explorer: plain text rows.
   runner; Add to chat context.
 - Every action that touches the disk runs off the UI thread and shows as an activity when it lasts; every destructive
   one is undoable (the Undo bar) instead of a dialog where it can be.
-- Decisions (recommended, noted): no git items until a git plug-in exists; Compare uses the existing diff view; Reopen
+- Decisions (recommended, noted): the git items come with X part 8's git plug-in; Compare uses the existing diff view; Reopen
   closed keeps the last `CRAFT_TABS_REOPEN_LIMIT` (20) closed tabs with their carets.
 - Tests: `ContextMenus` (each target's rows and their enabled state, submenus and keys, a plug-in's rich item with its
   "when", paste, duplicate and delete with Undo, inline rename, pin and close-others, reopen closed, compare with
   saved).
 - Slot: slot 3 after X part 6.
 
+### X part 8: the Source Control view (the owner, 2026-11-01: "no source control side bar tool")
+- A pre-installed, removable plug-in `Craft.Plugins.Git` on public contracts: `ISourceControlProvider : IKind` and
+  `SourceControlProviders` in `Craft.Abstractions` (another system can register its own), a rail item "Source
+  Control" with the count of changes as a badge, its side view, and the status bar's branch item (exists) clickable.
+- It runs the user's own `git` (found on PATH or `CRAFT_PLUGIN_GIT_PATH`, MachineOnly; nothing native, no libgit2),
+  every call off the UI thread, `--porcelain=v2 -z` output parsed as bytes (rule 74), refreshed by the folder watcher
+  and on save, debounced (`CRAFT_PLUGIN_GIT_REFRESH_MS`, 500); the user's own actions in this view run without the
+  sandbox's question (they are the user's, not a model's), each as an activity; the agent's git stays through its
+  sandbox as now. No git: the view says so with what to do.
+- **The view**: Changes and Staged changes grouped, each file with its icon, its state letter and colour (modified,
+  added, deleted, renamed, untracked, conflict), a click opens the diff (the existing diff view, side by side, working
+  copy against the index or HEAD), Stage, Unstage, Discard (with Undo where it can: the discarded text kept for the
+  Undo bar's time), stage all, a commit message box (Ctrl+Enter commits, amend as a toggle), Pull, Push, Fetch, Sync,
+  branches (switch, create, the current one with ahead and behind), stash and pop; merge conflicts listed with Accept
+  current, Accept incoming, Accept both inline in the editor.
+- **In the editor**: gutter marks for added, changed and deleted lines against the index (from `git diff` of the open
+  file, recomputed off the UI thread after a pause), a click on a mark shows the change inline with Revert and Stage;
+  the overview ruler (X part 4) shows them too.
+- **In the menus** (X part 7): the tree's and the tab's Stage, Unstage, Discard, Open changes, Copy remote link
+  (later), Reveal in Source Control; the tree's file names coloured by their state.
+- Options: `CRAFT_PLUGIN_GIT_PATH`, `_REFRESH_MS`, `_AUTOFETCH_MINUTES` (0: off), `_GUTTER` (on), `_CONFIRMSYNC` (on).
+- Decisions (recommended, noted): the git CLI, not a native library; the user's own git actions without the sandbox's
+  question; blame and history views later (not asked); GitHub and pull requests not part of this step.
+- Tests: `SourceControl` (porcelain v2 fixtures parsed, including renames, conflicts, untracked and spaces in names;
+  a real git repository made in a temp folder when git is on the machine, skipped with its reason when not: stage,
+  unstage, commit, discard with Undo, branch switch; gutter marks from a fixture diff; the rail badge count).
+- Slot: slot 1 after 1b (before 1c).
+
 ### Slots and merge order
-- Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; 1c (last) the interaction
-  times.
+- Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 8 (Source
+  Control); 1c (last) the interaction times.
 - Slot 2, the surface: 2a batched build, hover cards and fold preview, ruler, sticky scroll; 2b minimap, completion at
   several carets.
 - Slot 3, language and shell: 3a split editor first (the owner asked for it directly, 2026-11-01: "I need to split the

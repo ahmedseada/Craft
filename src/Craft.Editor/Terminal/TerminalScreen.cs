@@ -170,6 +170,11 @@ public sealed partial class TerminalScreen
     private int _bottom;
     private bool[] _tabs = [];
     private int _lastPrinted = ' ';
+    private int _commandRunning = -1;
+    private bool _bracketedPaste;
+    private string? _title;
+    private string? _workingDirectory;
+    private int _uiWaiting;
 
     /// <summary>A screen of <paramref name="columns"/> by <paramref name="rows"/> keeping <paramref name="scrollback"/> lines above it.</summary>
     public TerminalScreen(int columns, int rows, int scrollback)
@@ -259,9 +264,14 @@ public sealed partial class TerminalScreen
 
     /// <summary>
     /// Whether a command runs, as a shell that marks its prompts and commands says (OSC 133: C starts a command, D or A
-    /// ends it); null while the shell has marked none (the tab's busy dot then follows the output, B9).
+    /// ends it); null while the shell has marked none (the tab's busy dot then follows the output, B9). Published by the
+    /// feeding thread: read without <see cref="Sync"/> (the UI thread never waits on the parser for it).
     /// </summary>
-    public bool? CommandRunning { get; private set; }
+    public bool? CommandRunning
+    {
+        get => Volatile.Read(ref _commandRunning) switch { 1 => true, 0 => false, _ => null };
+        private set => Volatile.Write(ref _commandRunning, value switch { true => 1, false => 0, null => -1 });
+    }
 
     /// <summary>Whether the alternate screen is shown (mode 1049, 1047 or 47).</summary>
     public bool IsAlternate => _altActive;
@@ -272,8 +282,12 @@ public sealed partial class TerminalScreen
     /// <summary>Whether the keypad is in application mode (DECKPAM).</summary>
     public bool ApplicationKeypad { get; private set; }
 
-    /// <summary>Whether a paste is bracketed (mode 2004).</summary>
-    public bool BracketedPaste { get; private set; }
+    /// <summary>Whether a paste is bracketed (mode 2004). Published by the feeding thread: read without <see cref="Sync"/>.</summary>
+    public bool BracketedPaste
+    {
+        get => Volatile.Read(ref _bracketedPaste);
+        private set => Volatile.Write(ref _bracketedPaste, value);
+    }
 
     /// <summary>Whether text wraps at the right margin (DECAWM, mode 7).</summary>
     public bool AutoWrap { get; private set; } = true;
@@ -281,11 +295,40 @@ public sealed partial class TerminalScreen
     /// <summary>The mouse tracking mode the shell asked for (1000, 1002, 1003; 0 for none). Kept, not reported yet.</summary>
     public int MouseTracking { get; private set; }
 
-    /// <summary>The title the shell set (OSC 0 or 2), or null.</summary>
-    public string? Title { get; private set; }
+    /// <summary>The title the shell set (OSC 0 or 2), or null. Published by the feeding thread: read without <see cref="Sync"/>.</summary>
+    public string? Title
+    {
+        get => Volatile.Read(ref _title);
+        private set => Volatile.Write(ref _title, value);
+    }
 
-    /// <summary>The working folder the shell reported (OSC 7, or OSC 9;9), or null.</summary>
-    public string? WorkingDirectory { get; private set; }
+    /// <summary>The working folder the shell reported (OSC 7, or OSC 9;9), or null. Published by the feeding thread: read without <see cref="Sync"/>.</summary>
+    public string? WorkingDirectory
+    {
+        get => Volatile.Read(ref _workingDirectory);
+        private set => Volatile.Write(ref _workingDirectory, value);
+    }
+
+    /// <summary>
+    /// Takes <see cref="Sync"/> for the UI thread (a paint, a scroll, a click): while it waits, the feeding thread yields
+    /// after its slice (<see cref="UiWaiting"/>) instead of taking the lock again, so a frame waits for one slice at most,
+    /// never for a whole burst of output.
+    /// </summary>
+    public Lock.Scope EnterForUi()
+    {
+        Interlocked.Increment(ref _uiWaiting);
+        try
+        {
+            return Sync.EnterScope();
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _uiWaiting);
+        }
+    }
+
+    /// <summary>Whether the UI thread waits for <see cref="Sync"/> now (<see cref="EnterForUi"/>): the feeder lets it go first.</summary>
+    public bool UiWaiting => Volatile.Read(ref _uiWaiting) != 0;
 
     /// <summary>How many times the shell rang the bell.</summary>
     public int Bells { get; private set; }

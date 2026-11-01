@@ -817,25 +817,54 @@ public sealed class ShellPage : ContentPage, IDisposable
             WatchModels();
         }
 
-        // The recovery copies are kept from the start (every document opened from now on), off the UI thread's work.
-        _shell.StartRecovery();
+        // The recovery copies are kept from the start (every document opened from now on), off the UI thread's work. Each
+        // step's part before its first await runs under its own label (they ran unlabelled after the rail's), the awaits outside it.
+        using (UiDispatch.Enter("shell: start the recovery copies"))
+        {
+            _shell.StartRecovery();
+        }
+
         if (_initialPath is not null && Directory.Exists(_initialPath))
         {
             // X part 9: the folder's last session (its groups, tabs, carets, scroll, folds, pins), read off the UI thread.
-            if (await _shell.OpenFolderAsync(_initialPath))
+            Task<bool> opening;
+            using (UiDispatch.Enter("shell: open the folder"))
             {
-                await _shell.RestoreSessionAsync();
+                opening = _shell.OpenFolderAsync(_initialPath);
+            }
+
+            if (await opening)
+            {
+                Task restoring;
+                using (UiDispatch.Enter("shell: restore the folder's session"))
+                {
+                    restoring = _shell.RestoreSessionAsync();
+                }
+
+                await restoring;
             }
         }
         else if (_initialPath is not null)
         {
-            await _shell.OpenFileAsync(_initialPath);
+            Task opening;
+            using (UiDispatch.Enter("shell: open the file"))
+            {
+                opening = _shell.OpenFileAsync(_initialPath);
+            }
+
+            await opening;
         }
 
         // The recovery prompt: the copies an unclean end left for this folder (and the untitled ones), listed off the UI thread.
         try
         {
-            await _shell.OfferRecoveryAsync();
+            Task offering;
+            using (UiDispatch.Enter("shell: offer the recovery copies"))
+            {
+                offering = _shell.OfferRecoveryAsync();
+            }
+
+            await offering;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {

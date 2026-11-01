@@ -112,12 +112,7 @@ public sealed class TerminalInstance : IDisposable
                 return _name;
             }
 
-            string? title;
-            lock (Screen.Sync)
-            {
-                title = Screen.Title;
-            }
-
+            var title = Screen.Title;                       // published by the reader: no lock on the UI thread
             var fallback = Profile?.Short ?? TerminalProgram.FileName(Shell.Program);
             return title is null ? fallback : TerminalLaunch.ShortTitle(title, fallback);
         }
@@ -136,13 +131,8 @@ public sealed class TerminalInstance : IDisposable
             return false;
         }
 
-        bool? marked;
-        lock (Screen.Sync)
-        {
-            marked = Screen.CommandRunning;
-        }
-
-        if (marked is { } running)
+        // The shell's OSC 133 mark, published by the reader: the UI thread never waits on the parser's lock for it.
+        if (Screen.CommandRunning is { } running)
         {
             return running;
         }
@@ -158,7 +148,7 @@ public sealed class TerminalInstance : IDisposable
     /// <summary>Selects everything it keeps: the scrollback and the screen.</summary>
     public void SelectAll()
     {
-        lock (Screen.Sync)
+        using (Screen.EnterForUi())
         {
             Selection = new TerminalSelection(Screen.FirstLine, 0, Screen.ScreenTop + Screen.Rows - 1, Screen.Columns);
         }
@@ -181,14 +171,8 @@ public sealed class TerminalInstance : IDisposable
                 return _name;
             }
 
-            string? title;
-            string? folder;
-            lock (Screen.Sync)
-            {
-                title = Screen.Title;
-                folder = Screen.WorkingDirectory;
-            }
-
+            var title = Screen.Title;                       // both published by the reader: no lock on the UI thread
+            var folder = Screen.WorkingDirectory;
             return title ?? TerminalLaunch.TitleOf(Shell, folder ?? WorkingDirectory);
         }
     }
@@ -217,7 +201,7 @@ public sealed class TerminalInstance : IDisposable
         get => _scrollBack;
         set
         {
-            lock (Screen.Sync)
+            using (Screen.EnterForUi())
             {
                 _scrollBack = Math.Clamp(value, 0, Screen.ScrollbackLines);
                 _scrolledSeen = Screen.LinesScrolled;
@@ -361,12 +345,7 @@ public sealed class TerminalInstance : IDisposable
             return;
         }
 
-        bool bracketed;
-        lock (Screen.Sync)
-        {
-            bracketed = Screen.BracketedPaste;
-        }
-
+        bool bracketed = Screen.BracketedPaste;             // published by the reader
         ScrollBack = 0;
         Write(TerminalKeys.EncodePaste(text, bracketed));
     }
@@ -379,7 +358,7 @@ public sealed class TerminalInstance : IDisposable
             return null;
         }
 
-        lock (Screen.Sync)
+        using (Screen.EnterForUi())
         {
             return Screen.TextOf(selection.StartLine, selection.StartColumn, selection.EndLine, selection.EndColumn);
         }
@@ -402,7 +381,7 @@ public sealed class TerminalInstance : IDisposable
     {
         size = size.Clamped();
         bool changed;
-        lock (Screen.Sync)
+        using (Screen.EnterForUi())
         {
             changed = size.Columns != Screen.Columns || size.Rows != Screen.Rows;
             if (changed)
@@ -421,7 +400,7 @@ public sealed class TerminalInstance : IDisposable
     /// <summary>Clears the scrollback and the screen but the cursor's row (the Clear command).</summary>
     public void Clear()
     {
-        lock (Screen.Sync)
+        using (Screen.EnterForUi())
         {
             Screen.Clear();
             _scrollBack = 0;
@@ -526,6 +505,11 @@ public sealed class TerminalInstance : IDisposable
         Interlocked.Exchange(ref _lastOutputTicks, Clock.GetTimestamp());
         while (!data.IsEmpty)
         {
+            if (Screen.UiWaiting)
+            {
+                YieldToUi();                                 // a frame asked for the screen: it goes first
+            }
+
             var slice = data[..Math.Min(SliceBytes, data.Length)];
             lock (Screen.Sync)
             {
@@ -537,6 +521,24 @@ public sealed class TerminalInstance : IDisposable
 
         RequestInvalidate();
     }
+
+    /// <summary>
+    /// The UI thread waits for the screen (<see cref="TerminalScreen.EnterForUi"/>): the reader lets it take the lock
+    /// before parsing its next slice (an unfair lock taken again at once would keep a frame waiting for the whole burst).
+    /// Bounded by <see cref="UiYieldLimit"/>, so a waiter that never comes cannot stop the output.
+    /// </summary>
+    private void YieldToUi()
+    {
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        var spin = default(SpinWait);
+        while (Screen.UiWaiting && System.Diagnostics.Stopwatch.GetElapsedTime(start) < UiYieldLimit)
+        {
+            spin.SpinOnce();
+        }
+    }
+
+    /// <summary>How long the reader waits at most for a UI thread that asked for the screen before it parses on.</summary>
+    internal static readonly TimeSpan UiYieldLimit = TimeSpan.FromMilliseconds(100);
 
     private void RequestInvalidate()
     {
@@ -551,7 +553,7 @@ public sealed class TerminalInstance : IDisposable
             if (_scrollBack > 0)
             {
                 // Scrolled back: stay on the same text while new lines push the screen up.
-                lock (Screen.Sync)
+                using (Screen.EnterForUi())
                 {
                     long scrolled = Screen.LinesScrolled;
                     _scrollBack = (int)Math.Min(Screen.ScrollbackLines, _scrollBack + (scrolled - _scrolledSeen));

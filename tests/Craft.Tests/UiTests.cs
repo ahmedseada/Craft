@@ -381,6 +381,32 @@ public static class UiTests
     }
 
     [Test]
+    public static void AStallWithNoLabelRunningIsNamedByTheWorkBeforeIt()
+    {
+        using var ui = new FakeUiThread();
+        var labels = new UiWorkLabels();
+        using var watchdog = new UiWatchdog(ui.Dispatch, labels, 20, 150);
+        var stalls = new ConcurrentQueue<UiStall>();
+        watchdog.Stalled += (_, stall) => stalls.Enqueue(stall);
+        watchdog.Start();
+        // The start-up's two stalls: a labelled step ends, then the window's own layout blocks with no label running.
+        ui.Dispatch(() =>
+        {
+            labels.Run("test: the rail and menus", static () => { });
+            Thread.Sleep(700);
+        });
+        var until = Stopwatch.StartNew();
+        while (stalls.IsEmpty && until.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            Thread.Sleep(20);
+        }
+
+        Check.True(stalls.TryPeek(out var stall), "the block was seen");
+        Check.True(stall!.Label.Contains("after \"test: the rail and menus\"", StringComparison.Ordinal),
+            $"a stall with no label running names the labelled work it followed, not only \"unlabelled UI work\" ({stall.Label})");
+    }
+
+    [Test]
     public static void TheWatchdogStaysSilentThroughTypingALoadAnAgentRunAndATerminalFlood()
     {
         using var ui = new FakeUiThread();

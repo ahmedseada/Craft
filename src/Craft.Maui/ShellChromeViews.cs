@@ -202,6 +202,8 @@ public sealed class TitleBarView : ContentView
     private readonly List<(Button Button, string Name, string Command)> _narrowTips = [];
     private ShellPalette _palette;
     private readonly TypingDebounce _typing;
+    private string[]? _menusShown;
+    private ShellPalette? _menusPalette;
 
     /// <summary>The bar in <paramref name="palette"/>'s colours.</summary>
     public TitleBarView(ShellPalette palette)
@@ -294,8 +296,18 @@ public sealed class TitleBarView : ContentView
     /// <summary>Makes the menus' buttons again (a plug-in added a menu).</summary>
     public void RebuildMenus()
     {
+        // Start-up rebuilt the same buttons several times (the bar's construction, its palette, each plug-in's menus, the
+        // page's appearing), each a layout of the window: nothing is made again while the menus and the palette are the same.
+        var menus = EditorMenus.Menus();
+        if (ReferenceEquals(_menusPalette, _palette) && _menusShown is { } shown && shown.SequenceEqual(menus, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        _menusShown = [.. menus];
+        _menusPalette = _palette;
         _menus.Children.Clear();
-        foreach (var menu in EditorMenus.Menus())
+        foreach (var menu in menus)
         {
             var button = _palette.Flat(menu, _palette.Secondary, 28);
             button.Padding = new Thickness(8, 0);
@@ -470,6 +482,8 @@ public sealed class RailView : ContentView
     private readonly VerticalStackLayout _bottom = new() { Spacing = 4, Padding = new Thickness(0, 0, 0, 8) };
     private ShellPalette _palette;
     private string? _active;
+    private string? _builtKey;
+    private ShellPalette? _builtPalette;
 
     /// <summary>The rail of <paramref name="host"/>'s commands.</summary>
     public RailView(EditorHost host, ShellPalette palette)
@@ -519,20 +533,35 @@ public sealed class RailView : ContentView
     public void Rebuild()
     {
         BackgroundColor = _palette.Ground;
-        _top.Children.Clear();
-        _bottom.Children.Clear();
+        // Start-up rebuilt the same buttons again and again (each plug-in's items, its key bindings, the page's appearing),
+        // each a layout of the window: nothing is made again while every button would be the same.
+        var shown = new List<(RailItem Item, string? Badge, string Tip)>();
         foreach (var item in EditorRailItems.All)
         {
-            if (EditorCommands.Find(item.CommandId) is null)
+            if (EditorCommands.Find(item.CommandId) is not null)
             {
-                continue;
+                shown.Add((item, Badge?.Invoke(item.Id), ShellTooltips.For(_host, item.Title, item.CommandId)));
             }
+        }
 
-            (item.AtBottom ? _bottom : _top).Children.Add(Button(item));
+        var key = string.Join("\u0001", shown.Select(s => $"{s.Item.Id}\u0002{s.Item.Icon}\u0002{s.Item.AtBottom}\u0002{s.Badge}\u0002{s.Tip}\u0002{s.Item.Title}"))
+            + "\u0003" + _active;
+        if (ReferenceEquals(_builtPalette, _palette) && string.Equals(key, _builtKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _builtKey = key;
+        _builtPalette = _palette;
+        _top.Children.Clear();
+        _bottom.Children.Clear();
+        foreach (var (item, badge, tip) in shown)
+        {
+            (item.AtBottom ? _bottom : _top).Children.Add(Button(item, badge, tip));
         }
     }
 
-    private Grid Button(RailItem item)
+    private Grid Button(RailItem item, string? badge, string tip)
     {
         bool active = string.Equals(item.Id, _active, StringComparison.OrdinalIgnoreCase);
         // The icon (a stroked Path) and the accent line are input-transparent, so a click anywhere on the button reaches the
@@ -546,7 +575,6 @@ public sealed class RailView : ContentView
         }
 
         // X part 8: a count on the item (the changes of the Source Control view), a pill at the icon's top right.
-        string? badge = Badge?.Invoke(item.Id);
         if (badge is { Length: > 0 })
         {
             var count = _palette.Label(badge, _palette.AccentInk, _palette.CaptionSize - 1, FontWeight.SemiBold);
@@ -572,7 +600,7 @@ public sealed class RailView : ContentView
         var states = _palette.States(cell, InteractionKind.Rail);
         states.Icon = icon;
         states.Selected = active;
-        ToolTipProperties.SetText(cell, ShellTooltips.For(_host, item.Title, item.CommandId) + (badge is { Length: > 0 } ? $" ({badge})" : ""));
+        ToolTipProperties.SetText(cell, tip + (badge is { Length: > 0 } ? $" ({badge})" : ""));
         SemanticProperties.SetDescription(cell, badge is { Length: > 0 } ? $"{item.Title}, {badge}" : item.Title);
         var tap = new TapGestureRecognizer();
         string command = item.CommandId;

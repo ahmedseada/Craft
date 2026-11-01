@@ -7414,3 +7414,50 @@ completion.
   Inventory|DraftModel|SessionModel|Learning|InlineChat`: 82 passed, 0 failed. No public API changed.
 - **Left:** Idrak's `ModelHost` fix; a role on device "auto" and another on the device auto picks are two load keys (two
   copies), as are weights "auto" and the format it picked: named, not changed here.
+
+### Start-up and UI stalls as built (2026-11-01)
+
+`slot/startup`, measured on the owner's machine (`dotnet-trace`, sampled thread time, the app opened on `CarftTestPOC`).
+
+**1. The terminal's lock on the UI thread.** The busy tick (`TerminalManager.Rows()` → `IsBusy`, the titles, `Describe`)
+no longer takes `Screen.Sync`: the screen publishes what the UI reads (OSC 133's `CommandRunning`, `Title`,
+`WorkingDirectory`, `BracketedPaste`) through volatile fields written by the output thread, read without the lock
+(`IsBusy`, `Title`, `ShortTitle`, `Paste`, `Split`). What still needs the screen on the UI thread (the paint, the scroll,
+a click, a resize) enters through `TerminalScreen.EnterForUi()`: while it waits, the output thread yields before its next
+16 KB slice instead of taking the unfair lock again at once (bounded at 100 ms), so a frame waits for one slice at most,
+never for a whole burst. The code font is not measured per paint: `CodeFontPicker.Ensure` already keeps its pick until
+the family, the fallback or the size change; nothing changed there.
+
+**2. The 2.6 s plug-in load before the window.** Read in the traces, it is the first open of each plug-in DLL after a
+build, not Craft's or Idrak's code:
+- the owner's trace, the first run of a new build: `CraftPlugins.LoadInstalled` 2.61 s, of it 2.37 s unmanaged inside
+  `AssemblyLoadContext.LoadFromAssemblyPath` (the lazy loads appear under `IdrakPlugin.Part`/`AsRegisteredBy` only because
+  a part's first use of a type loads its assembly there); Idrak's own registration code (`SlotTable.Register`,
+  `KindTable.Register`, `PackageOf`) is about 35 ms of it. Nothing to fix in Idrak, so nothing changed there.
+- the same unchanged build run again (warm): `LoadInstalled` 163-168 ms, `CreateMauiApp` 294-297 ms.
+- the unchanged build copied to a new folder (cold, new files): `LoadInstalled` 3.21 s, 2.93 s of it in
+  `LoadFromAssemblyPath`, 48 ms CPU.
+- tried: each plug-in's assembly and the dependencies its folder carries loaded in parallel off the main thread, then
+  registered in order as before. Cold 4.04 s (worse: the loads did not overlap, and it loaded assemblies the start never
+  needed), warm 166 ms (no gain). Not taken (rule 79); `CraftPlugins` is unchanged.
+
+**3. The two unlabelled start-up stalls.** A stall while no label runs is now named by the work it followed:
+`unlabelled UI work after "<label>": the window's own layout and drawing of what it changed, or a handler without a label`
+(`UiWatchdog`). `ShellPage.OnAppearing` labels the synchronous starts it ran unlabelled ("start the recovery copies",
+"open the folder", "restore the folder's session", "open the file", "offer the recovery copies"). The repeated Craft
+work is cut: the title bar's menus (made in its constructor twice, again for each plug-in's menu and in `OnAppearing`)
+and the rail (again for each item, key binding and `OnAppearing`) are made again only when their menus, items, active
+item, badges, tooltips or palette changed. Stalls on the new build, warm: 390-510 ms after "shell: open the folder"
+(the trace: MAUI making the page's platform views, `Element.SetHandler`/`ToPlatform`, about 300 ms, then the first
+measure and arrange) and 278 ms after "shell: the window resized"; before, 387-388 ms "unlabelled" and 225 ms. The
+durations are the framework's and did not move.
+
+**Tests** (`tests/Craft.Tests`): `TheBusyDotAndTheTitlesNeverWaitOnTheScreensLock` and
+`TheUiThreadsWaitForTheScreenIsSeenByTheReader` (Terminal), `AStallWithNoLabelRunningIsNamedByTheWorkBeforeIt` (Ui);
+`api/Craft.Editor.txt` regenerated (`TerminalScreen.EnterForUi`, `UiWaiting`). Filter
+`Terminal|Plugins|PluginKit|Ui|LookAndFeel|ApiGuard|Inventory`: 128 of 128 passed, 0 failed (22.6 s).
+
+**Left.** A cold start pays for opening every plug-in DLL for the first time (about 3 s after each build); only fewer
+files at start-up would cut it (one copy of `Craft.Web` instead of five, plug-ins loaded on first use), which changes
+plug-in loading and is for the owner's word. The first stall is MAUI making the whole page's platform views; fewer views
+at start (panels made when first shown) would cut it.

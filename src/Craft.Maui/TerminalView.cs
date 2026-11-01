@@ -86,7 +86,7 @@ public sealed class TerminalDrawable : IDrawable
             step = "draw the screen";
             float width = ViewportWidth > 0 ? ViewportWidth : dirtyRect.Width;
             float height = ViewportHeight > 0 ? ViewportHeight : dirtyRect.Height;
-            lock (terminal.Screen.Sync)
+            using (terminal.Screen.EnterForUi())
             {
                 _renderer.Draw(_canvas, terminal.Screen, palette, metrics, width, height, terminal.ScrollBack, terminal.Selection, Focused, CursorOn);
             }
@@ -294,7 +294,7 @@ public sealed class TerminalView : ContentView, IDisposable
         int lines = 0;
         if (_terminal is { } terminal)
         {
-            lock (terminal.Screen.Sync)
+            using (terminal.Screen.EnterForUi())
             {
                 lines = terminal.Screen.ScrollbackLines;
             }
@@ -313,7 +313,7 @@ public sealed class TerminalView : ContentView, IDisposable
 
         float line = Math.Max(1, _drawable.Metrics.LineHeight);
         int scrollback;
-        lock (terminal.Screen.Sync)
+        using (terminal.Screen.EnterForUi())
         {
             scrollback = terminal.Screen.ScrollbackLines;
         }
@@ -346,7 +346,7 @@ public sealed class TerminalView : ContentView, IDisposable
         {
             float line = Math.Max(1, _drawable.Metrics.LineHeight);
             int scrollback;
-            lock (terminal.Screen.Sync)
+            using (terminal.Screen.EnterForUi())
             {
                 scrollback = terminal.Screen.ScrollbackLines;
             }
@@ -361,7 +361,7 @@ public sealed class TerminalView : ContentView, IDisposable
     {
         var metrics = _drawable.Metrics;
         var terminal = _terminal!;
-        lock (terminal.Screen.Sync)
+        using (terminal.Screen.EnterForUi())
         {
             long top = terminal.Screen.ScreenTop - terminal.ScrollBack;
             long line = top + (long)Math.Floor(point.Y / Math.Max(1, metrics.LineHeight));
@@ -398,7 +398,7 @@ public sealed class TerminalView : ContentView, IDisposable
             _anchor = null;
             var terminal = _terminal;
             string? folder;
-            lock (terminal.Screen.Sync)
+            using (terminal.Screen.EnterForUi())
             {
                 folder = terminal.Screen.WorkingDirectory;
             }
@@ -424,7 +424,7 @@ public sealed class TerminalView : ContentView, IDisposable
         }
 
         var metrics = _drawable.Metrics;
-        lock (terminal.Screen.Sync)
+        using (terminal.Screen.EnterForUi())
         {
             long line = terminal.Screen.ScreenTop - terminal.ScrollBack + (long)Math.Floor(point.Y / Math.Max(1, metrics.LineHeight));
             int column = (int)Math.Floor(point.X / Math.Max(1, metrics.CellWidth));

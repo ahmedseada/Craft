@@ -310,7 +310,7 @@ public static class TestExplorerTests
         """;
 
     // The C# provider's discovery under another name, its command a fixed one (no .NET SDK needed), its results its own.
-    private sealed class WrappedProvider : ITestProvider
+    internal sealed class WrappedProvider : ITestProvider
     {
         private readonly DotnetTestProvider _inner = new();
 
@@ -324,6 +324,8 @@ public static class TestExplorerTests
 
         public IReadOnlyList<TestItem> Discover(RunWorkspace workspace, CancellationToken cancellationToken = default) =>
             [.. _inner.Discover(workspace, cancellationToken).Select(t => t with { Provider = Name })];
+
+        public bool IsResultLine(ReadOnlySpan<char> line) => _inner.IsResultLine(line);
 
         public RunCommand Command(TestRunRequest request)
         {

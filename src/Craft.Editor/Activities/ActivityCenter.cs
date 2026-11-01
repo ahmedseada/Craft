@@ -46,6 +46,19 @@ public sealed class ActivityCenter : IEditorActivities
     /// <inheritdoc />
     public event EventHandler? Changed;
 
+    /// <summary>The activity the user picked for the status bar (the centre's "Show in the status bar"), or null: the newest shows.</summary>
+    public long? Pinned { get; private set; }
+
+    /// <summary>Shows <paramref name="id"/>'s activity in the status bar while it runs (null: the newest again); raises <see cref="Changed"/>.</summary>
+    public void Pin(long? id)
+    {
+        if (Pinned != id)
+        {
+            Pinned = id;
+            _frame.Request();
+        }
+    }
+
     /// <summary>A kept activity ended (completed after the minimum, failed, or cancelled after the minimum): raised on the UI thread, once each.</summary>
     public event EventHandler<ActivitySnapshot>? Ended;
 

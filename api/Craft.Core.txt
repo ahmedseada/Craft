@@ -80,6 +80,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean SourceGenerators { get; init; }
   System.Boolean SpellCheck { get; init; }
   System.Boolean SplitterSnap { get; init; }
+  System.Boolean StatusProgress { get; init; }
   System.Boolean StickyScroll { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
   System.Boolean TerminalCursorBlink { get; init; }
@@ -183,6 +184,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SpellMinLength { get; init; }
   System.Int32 SpellSuggestions { get; init; }
   System.Int32 SplitterHoverMilliseconds { get; init; }
+  System.Int32 StatusProgressWidth { get; init; }
   System.Int32 StickyScrollLines { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 TabsReopenLimit { get; init; }

@@ -16,7 +16,7 @@ namespace Craft.Editor.Testing;
 /// project › class › method with Run all, Run failed, a project's, a class's and a test's Run; each test's last result
 /// (passed, failed, skipped, its time) in the tree and in the gutter of its file (▶ to run it, ✓ or ✗ after), a failure's
 /// message and stack with its <c>file:line</c> frames clickable, and the failures in Problems. A run is the provider's
-/// command (<c>dotnet test --filter</c>) through the Run view (<see cref="RunView.RunCommandAsync"/>: the user's approval,
+/// command (<c>dotnet test --filter</c>) through the Run view (<see cref="RunView.RunCommandAsync(string, RunCommand, RunActions, Action{string}?, Func{double?}?, CancellationToken)"/>: the user's approval,
 /// the registered sandbox, a terminal tab, an activity with Cancel), its results read from the results file (a TRX) or
 /// the console's lines off the UI thread. Headless; every member is called on the UI thread.
 /// </summary>
@@ -166,19 +166,25 @@ public sealed class TestExplorerView : IEditorViewPanel, IDisposable
         Publish();
         var ignore = _options().WorkspaceIgnore;
         var providers = TestProviders.All;
+        // The owner, 2026-11-01: finding the tests shows in the status bar: listing the files (no share known yet), then each
+        // provider's discovery, the providers done of all.
+        var activity = _host.Activities.Start("Tests: finding the tests", ActivityKinds.Search, cancellable: true, cancel.Token, keep: false);
         _ = Task.Run(() =>
         {
             var problems = new List<string>();
             var tests = new List<TestItem>();
             try
             {
-                var files = WorkspaceFiles.Enumerate(root, ignore, useIgnoreFiles: true, null, null, cancel.Token).Select(path => WorkspaceFiles.Relative(root, path)).ToList();
+                activity.Report(null, "listing the workspace's files");
+                var files = WorkspaceFiles.Enumerate(root, ignore, useIgnoreFiles: true, null, null, activity.CancellationToken).Select(path => WorkspaceFiles.Relative(root, path)).ToList();
                 var workspace = new RunWorkspace(root, files);
-                foreach (var provider in providers)
+                for (int i = 0; i < providers.Count; i++)
                 {
+                    var provider = providers[i];
+                    activity.Report((double)i / providers.Count, string.Create(Culture, $"{provider.Title}: {files.Count:N0} files"));
                     try
                     {
-                        tests.AddRange(provider.Discover(workspace, cancel.Token));
+                        tests.AddRange(provider.Discover(workspace, activity.CancellationToken));
                     }
                     catch (OperationCanceledException)
                     {
@@ -194,9 +200,11 @@ public sealed class TestExplorerView : IEditorViewPanel, IDisposable
             }
             catch (OperationCanceledException)
             {
+                activity.Complete("cancelled");
                 return;
             }
 
+            activity.Complete(string.Create(Culture, $"{tests.Count} tests"));
             _host.Dispatch("tests: what the workspace tests", () =>
             {
                 if (cancel.IsCancellationRequested || _disposed)
@@ -218,7 +226,7 @@ public sealed class TestExplorerView : IEditorViewPanel, IDisposable
                 UpdateMarks();
                 done.TrySetResult();
             });
-        }, CancellationToken.None);
+        }, CancellationToken.None).ContinueWith(_ => activity.Dispose(), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         return done.Task;
     }
 
@@ -276,16 +284,26 @@ public sealed class TestExplorerView : IEditorViewPanel, IDisposable
             UpdateMarks();
             var output = new System.Text.StringBuilder();
             RunOutcome outcome;
+            // The owner, 2026-11-01: the run's share is the results seen of the tests it runs, when the provider can tell a
+            // result line; else none (the run's bar moves without a share).
+            int total = whole ? _tests.Count(t => t.Provider == group.Key.Provider && t.Project == group.Key.Project) : chosen.Count;
+            int seen = 0;
+            Func<double?>? share = total > 0 ? () => Math.Min(1, (double)Volatile.Read(ref seen) / total) : null;
             try
             {
                 Directory.CreateDirectory(folder);
                 outcome = await _run.RunCommandAsync("Tests: " + name, command, RunActions.Test, line =>
                 {
+                    if (provider.IsResultLine(line))
+                    {
+                        Interlocked.Increment(ref seen);
+                    }
+
                     lock (output)
                     {
                         output.Append(line).Append('\n');
                     }
-                }, cancellationToken).ConfigureAwait(true);
+                }, share, cancellationToken).ConfigureAwait(true);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {

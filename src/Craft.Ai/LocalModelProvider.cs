@@ -351,8 +351,12 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         var watch = Stopwatch.StartNew();
         // Phase U: every stage also becomes the provider's state (the status bar's model text and the chip follow
         // StatusChanged), whoever asked for the lease: the load command, the chat, the agent or completion.
+        // The owner, 2026-11-01: the download's bytes and the load's tensors give the stage its share; the ticker keeps the
+        // last share known (it never invents one) and says the time so far.
+        var last = new ModelLoadStatus("loading", null, $"loading {key.Model} on {key.Device}");
         void Report(ModelLoadStatus status)
         {
+            Volatile.Write(ref last, status);
             progress?.Report(status);
             SetState(status.Message, isProblem: false);
         }
@@ -362,7 +366,8 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         {
             try
             {
-                Report(new ModelLoadStatus("loading", null, string.Create(CultureInfo.InvariantCulture, $"loading {key.Model} on {key.Device}, {watch.Elapsed.TotalSeconds:F1} s")));
+                var now = Volatile.Read(ref last);
+                progress?.Report(now with { Message = string.Create(CultureInfo.InvariantCulture, $"{now.Message}, {watch.Elapsed.TotalSeconds:F1} s") });
             }
 #pragma warning disable CA1031 // Nothing may leave a timer's callback (the owner, 2026-11-01: never end the app).
             catch (Exception error)
@@ -385,7 +390,15 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         try
         {
             LetIdleGo(host, key.Text);
-            lease = host.Acquire(key.Text, keepAlive ?? _keepAlive);        // the role's keep-alive (note 25), else the chat's
+            Reporting.Value = Report;                                       // the load (on this flow) tells its download and its tensors
+            try
+            {
+                lease = host.Acquire(key.Text, keepAlive ?? _keepAlive);    // the role's keep-alive (note 25), else the chat's
+            }
+            finally
+            {
+                Reporting.Value = null;
+            }
         }
         catch (Exception error)
         {
@@ -455,11 +468,15 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         IdrakLibraries.EnsureIncluded();
         RegisterIdrakPlugins(settings);
         ApplyLimits(settings);
-        string folder = ModelSource.Resolve(key.Model);
+        var report = Reporting.Value;
+        // The download's bytes of all its files (Idrak's ModelSourceOptions.Progress; a cached model reports nothing).
+        string folder = ModelSource.Resolve(key.Model, ModelSource.Options() with { Progress = report is null ? null : new PullReport(key.Model, report) });
         var device = key.Device.Equals("auto", StringComparison.OrdinalIgnoreCase) ? Device.Default : Device.Parse(key.Device);
         string weights = key.Weights.ToLowerInvariant();
         var model = PretrainedModel.Load(folder, new PretrainedOptions
         {
+            // The checkpoint's values read of all of them (Idrak's PretrainedOptions.Progress).
+            Progress = report is null ? null : new LoadReport(key.Model, device.ToString(), report),
             Device = device,
             Int8 = weights == "int8",
             Int4 = weights == "int4",
@@ -492,6 +509,29 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             model.Dispose();
             throw;
         }
+    }
+
+    // The stage reporter of the load running on this flow (Acquire sets it around the host's load; the host's factory reads it).
+    private static readonly AsyncLocal<Action<ModelLoadStatus>?> Reporting = new();
+
+    // A download's bytes of all its files as the load's stage: "downloading NAME: 1.2 of 15.2 GB, file 2 of 4".
+    private sealed class PullReport(string model, Action<ModelLoadStatus> report) : IProgress<Idrak.Abstraction.Formats.ModelPullProgress>
+    {
+        public void Report(Idrak.Abstraction.Formats.ModelPullProgress value) =>
+            report(new ModelLoadStatus("downloading", value.Fraction < 1 ? value.Fraction : null, string.Create(CultureInfo.InvariantCulture,
+                $"downloading {model}: {Gigabytes(value.Received)} of {Gigabytes(value.Total)}, file {Math.Min(value.Files, value.FilesDone + 1)} of {value.Files}")));
+
+        private static string Gigabytes(long bytes) => bytes >= 1L << 30
+            ? string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 30):0.0} GB")
+            : string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 20):0} MB");
+    }
+
+    // A load's tensors read of all of them as the load's stage: "loading NAME on cuda:0: 120 of 339 tensors".
+    private sealed class LoadReport(string model, string device, Action<ModelLoadStatus> report) : IProgress<PretrainedLoadProgress>
+    {
+        public void Report(PretrainedLoadProgress value) =>
+            report(new ModelLoadStatus("loading", value.Fraction < 1 ? value.Fraction : null, string.Create(CultureInfo.InvariantCulture,
+                $"loading {model} on {device}: {value.Tensors} of {value.TotalTensors} tensors")));
     }
 
     // The user's limits on Idrak's ComputeResources (process-wide, as the library has them); 0 leaves the library's own.

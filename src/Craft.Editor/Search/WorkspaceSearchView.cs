@@ -461,11 +461,24 @@ public sealed class WorkspaceSearchView : IEditorViewPanel, IDisposable
             Publish();
             using var activity = _host.Activities.Start($"Searching for '{Shorten(query.Text, 40)}'", ActivityKinds.Search, cancellable: true, cancellationToken, keep: false);
             int files = 0;
+            long share = -1;                                           // the share searched in millionths, -1 until the listing ended
+            // The owner, 2026-11-01: the files searched of all once the folder's listing ended (none before: nothing invented).
+            request = request with
+            {
+                Progress = progress =>
+                {
+                    long now = progress.Fraction is { } f ? (long)(f * 1_000_000) : -1;
+                    Volatile.Write(ref share, now);
+                    int count = Volatile.Read(ref files);
+                    activity.Report(Share(now), string.Create(Culture, $"{progress.Searched:N0}{(progress.Total is { } total ? string.Create(Culture, $" of {total:N0}") : "")} files searched · {count} with matches"));
+                },
+            };
+            static double? Share(long millionths) => millionths < 0 ? null : millionths / 1_000_000.0;
             var summary = await Task.Run(() => provider.SearchAsync(request, file =>
             {
                 _arrived.Enqueue((generation, file));
                 int count = Interlocked.Increment(ref files);
-                activity.Report(null, string.Create(Culture, $"{count} {(count == 1 ? "file" : "files")} with matches"));
+                activity.Report(Share(Volatile.Read(ref share)), string.Create(Culture, $"{count} {(count == 1 ? "file" : "files")} with matches"));
                 if (Interlocked.Exchange(ref _flushPending, 1) == 0)
                 {
                     _host.Dispatch("search: show a batch of results", Flush);       // one UI turn takes every file found since the last

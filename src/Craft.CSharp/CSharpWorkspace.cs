@@ -46,6 +46,7 @@ internal sealed class CSharpWorkspace
     private int _releaseRequested;
     private int _generation;
     private string? _reader;
+    private IActivity? _building;
     private long _referenceBytes;
     private long _heapBytes;
     private TimeSpan _buildTime;
@@ -411,6 +412,7 @@ internal sealed class CSharpWorkspace
         string name = _root is null ? "loose files" : Path.GetFileName(_root);
         using var activity = _activities.Start($"C#: building the workspace of {name}", ActivityKinds.Workspace, keep: false);
         activity.Report(null, "reading the projects (" + string.Join(", ", _settings.WorkspaceReaders) + ")");
+        _building = activity;                                    // the projects added, of those the reader found, are its share
         try
         {
             long start = Stopwatch.GetTimestamp();
@@ -433,6 +435,10 @@ internal sealed class CSharpWorkspace
             Volatile.Write(ref _failure, string.IsNullOrWhiteSpace(error.Message) ? error.GetType().Name : error.Message.Trim());
             activity.Fail("the workspace could not be built: " + error.Message, error);
             throw;
+        }
+        finally
+        {
+            _building = null;
         }
     }
 
@@ -505,8 +511,11 @@ internal sealed class CSharpWorkspace
     private void Add(WorkspaceModel model, string? path)
     {
         var solution = _solution!;
+        int count = model.Projects.Count, done = 0;
         foreach (var project in model.Projects)
         {
+            // The owner, 2026-11-01: the build's share is the projects added of those the reader found (each its references read).
+            _building?.Report((double)done++ / Math.Max(1, count), string.Create(System.Globalization.CultureInfo.InvariantCulture, $"project {done} of {count}: {project.Name}"));
             if (project.ProjectFile is { } file ? _projectFiles.ContainsKey(file) : _madeUp.ContainsKey(model.Reader + "|" + project.Name))
             {
                 continue;

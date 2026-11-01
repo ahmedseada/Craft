@@ -7032,3 +7032,78 @@ hierarchy, Run, Learning, Source Control, Test explorer, TODO, Timeline, Bookmar
   dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
+
+## The status bar's progress bar as built (2026-11-01)
+
+The owner: "add a progress bar to the status bar and use it in any progress related work, like loading a model, loading
+Roslyn, downloading a model, learning progress, building, running, compiling etc., and please don't use the default one".
+His screenshot: a spinner and "Loading Qwen/… · 1:40 · loading … on c…", no bar; a 7B load ran past 100 s with no sense
+of how far it was. Slot s4; Idrak changed too (the load and the download had no progress to give).
+- **Craft's bar** (`Craft.Editor.Activities.ProgressBarModel`, headless; `Craft.Maui/ProgressBarView.cs`): a thin bar
+  of the accent on a track with rounded ends, drawn on a canvas, never MAUI's or WinUI's `ProgressBar` or
+  `ActivityIndicator` (both gone from the window). Determinate with a share (the fill eases to it, at least a dot once
+  anything is done; work that goes back jumps back), indeterminate without one (a segment of 30% crosses the bar every
+  `CRAFT_LOADER_CYCLE_MS`); reduced motion: the fill jumps, the indeterminate bar stands still at half strength. Its
+  frame timer (16 ms) runs only while the bar moves and is shown (visible and loaded), and stops when it settles or is
+  hidden; a frame allocates nothing (measured: 0 B over 10,000 warm frames of two bars and the status bar's choice).
+- **The status bar's activity** (`ActivityStatusView`): the bar (`CRAFT_STATUS_PROGRESS`, on; `CRAFT_STATUS_PROGRESS_WIDTH`,
+  72 units) and the line: the activity's title, its percent and time left when it reports a share, else the time so far;
+  "+N" for the others. The activity shown is the newest, or the one picked in the notification centre ("Show in the status
+  bar" on a running row; `ActivityCenter.Pin`, `ActivityStatus.Chosen`) while it runs. A click opens the centre, whose
+  running rows each have their own bar (filled or moving) and Cancel.
+- **The same bar elsewhere**: the window's global loader (a trackless 2-unit line), the notification centre's rows, the
+  Models page (its progress rows, and a new in-place list of the running downloads and loads, `ActivityBarsView`, each
+  with its share, rate, time left and Cancel), and every panel's meter (`PanelMeter`: the Learning view's training, and
+  the Run view's running items, new: a meter per run, moving, or filled for a test run).
+- **Real shares, through `IActivity.Report`, where they can be known** (none is invented; the rest stay indeterminate):
+  a model's download (Idrak: `ModelSourceOptions.Progress`, the bytes received of all its files to download, file k of n),
+  a model's load (Idrak: `PretrainedOptions.Progress`, the checkpoint's values read of all, tensor k of n; Craft's
+  `LocalModelProvider` feeds both to its stages, and its 500 ms ticker keeps the last share known instead of clearing it);
+  the C# workspace's build (the projects added of those the reader found, after an indeterminate "reading the
+  projects"); a workspace search (the files searched of all once the folder's listing has ended,
+  `WorkspaceSearchRequest.Progress`, every 32 files and at the end); finding the tests (each provider's turn of all, after
+  an indeterminate listing; a new activity "Tests: finding the tests"); a test run (the result lines seen of the tests run,
+  `ITestProvider.IsResultLine`, a default member: the dotnet provider reads its console logger's "Passed/Failed/Skipped"
+  lines; `RunView.RunCommandAsync` takes the share as a new overload); the TODO scan and learning reported shares already.
+  Indeterminate and said so: a build and a run (no honest share), compiling the diagnostics, npm install (npm tells no total).
+- **Idrak** (`slot/progress`): `ModelSourceOptions.Progress` with `ModelPullProgress`; `HuggingFaceModels.DownloadFolderAsync`
+  with a progress (each file's bytes through a downloader of the same cache and client, once per file with another
+  downloader; nothing when cached); `ModelSource.Resolve(model, options)`; `PretrainedOptions.Progress` with
+  `PretrainedLoadProgress` (the header's tensors and their values counted once, only when someone listens; a report as
+  each stored tensor is begun, and at the end). The model download test checks both (the bytes never go back, every file
+  done; nothing read first, the share only grows, all at the end). `IDRAK_DEVICES=cpu IDRAK_FILTER="models: |inventory|public API|model sources"`:
+  15 passed. API dumps of Idrak, Idrak.Abstraction and Idrak.Data regenerated (additions only).
+- **Decisions on the recommendation (one line each)**:
+  - The bar is drawn on a canvas from a headless model (the same in every place), not a platform control styled.
+  - One timer per visible, moving bar, stopped when it settles or hides; no shared animation clock.
+  - The status bar shows the newest activity unless one is picked in the centre ("Show in the status bar").
+  - A share of 1 from a stage (ready) ends the activity; it is not shown as 100% while the work goes on.
+  - The load's share is by values read (a large projection counts for what it holds), not by tensors.
+  - A search's share waits for the listing's end (the total), so no share is shown before it is known.
+  - A test run's share counts the console logger's result lines; a provider that cannot tell one shows none.
+  - Builds, runs, compiling and npm install stay indeterminate: no total is known, none is made up.
+  - The Run view shows a meter per running item; the Models page lists the downloads and loads with their bars.
+- **Tests**: new group `Progress` (7: the bar's model, determinate, indeterminate and reduced motion; a warm frame 0 B; the
+  status bar's choice, percent, time left and "+N", the pick; a model's download and load shares to its activity; the C#
+  workspace's projects of all; a search's files of all; the tests found and run). `Inventory` takes the two options;
+  the Test explorer's fixture provider reads result lines. First run: 13 of 15 (the run's activity is titled "Test: Tests: …";
+  the `csproj` reader is the C# plug-in's to register), then all passed. The filter
+  `Progress|ModelLoading|WorkspaceSearch|TestExplorer|TodoList|RunView|Learning|Notifications|Activities|WorkspaceLoader|Ui|Design|Shell|Settings|PanelLayout|Experience|ApiGuard|Inventory`:
+  166 passed, 0 failed. Craft's dumps (Abstractions, Core, Editor, CSharp) and the contract list (1.1) regenerated, additions only.
+- **Windows-only lines**: none (the views are shared code, compiled here for net10.0); not run here.
+- **Left, for later**: npm install's packages fetched of all (npm tells no total until it ends); a share for a build from
+  MSBuild's project count; the first compilation's share from Roslyn.
+- **The owner's check** on `test-output\CarftTestPOC`: load the 7B model (the status bar's bar fills with "loading … on
+  cuda: n of m tensors", its percent and time left; downloading a model not cached shows its bytes of all); open the
+  folder (the loader and the bar for "C#: building the workspace", project k of n); search a word in the Search view; run
+  the tests in the Test explorer (the bar fills as results come); build and run (the moving segment); open the centre
+  with two activities running and pick one; Settings › Appearance › Notifications: the progress bar off and its width.
+  ```powershell
+  cd D:\Projects\Idrak; git checkout main; git pull origin main
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="Progress|ModelLoading|WorkspaceSearch|TestExplorer|TodoList|RunView|Learning|Notifications|Activities|WorkspaceLoader|Ui|Design|Shell|Settings|PanelLayout|Experience|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  Idrak's own check: `cd D:\Projects\Idrak; dotnet build -c Release tests\Idrak.Tests; $env:IDRAK_DEVICES="cpu"; $env:IDRAK_FILTER="models: |inventory|public API|model sources"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt`.

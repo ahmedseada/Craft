@@ -354,7 +354,15 @@ public sealed partial class RunView : IEditorViewPanel, IDisposable
     /// ("Test: NAME"), an activity whose Cancel (and Stop) ends its tree, its compilers' problems in Problems; each output
     /// line also handed to <paramref name="tap"/> (on the sandbox's thread). It never takes the keyboard.
     /// </summary>
-    public async Task<RunOutcome> RunCommandAsync(string name, RunCommand command, RunActions action, Action<string>? tap = null, CancellationToken cancellationToken = default)
+    public Task<RunOutcome> RunCommandAsync(string name, RunCommand command, RunActions action, Action<string>? tap = null, CancellationToken cancellationToken = default) =>
+        RunCommandAsync(name, command, action, tap, null, cancellationToken);
+
+    /// <summary>
+    /// <see cref="RunCommandAsync(string, RunCommand, RunActions, Action{string}?, CancellationToken)"/> whose activity reports
+    /// the share <paramref name="progress"/> answers after each output line (the Test explorer: the results seen of the
+    /// tests run); null, or a null answer, keeps it without a share (a build, a run: nothing honest to tell).
+    /// </summary>
+    public async Task<RunOutcome> RunCommandAsync(string name, RunCommand command, RunActions action, Action<string>? tap, Func<double?>? progress, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(command);
@@ -370,7 +378,7 @@ public sealed partial class RunView : IEditorViewPanel, IDisposable
             return NotStarted(why);
         }
 
-        var item = new RunningItem(name);
+        var item = new RunningItem(name) { Progress = progress };
         _running[name] = item;
         Changed2();
         try
@@ -751,7 +759,7 @@ public sealed partial class RunView : IEditorViewPanel, IDisposable
 
                 output.Line(text, error);
                 tap?.Invoke(text);
-                item.Activity?.Report(null, text.Length <= 80 ? text.Trim() : string.Concat(text.AsSpan(0, 79), "…").Trim());
+                item.Activity?.Report(item.Progress?.Invoke(), text.Length <= 80 ? text.Trim() : string.Concat(text.AsSpan(0, 79), "…").Trim());
             },
         };
         if (sandbox.Check(limits) is { } refused)
@@ -1307,6 +1315,13 @@ public sealed partial class RunView : IEditorViewPanel, IDisposable
             new PanelButton("Add configuration", "run.add", PanelButtonKind.Flat) { Icon = RailIcons.Add, Enabled = _targets.Count > 0, Tooltip = "A configuration: arguments, variables, folder, build first; saved in .craft/run.json" },
             new PanelButton("Refresh", "run.refresh", PanelButtonKind.Flat) { Icon = RailIcons.Refresh, Tooltip = "Find again what the workspace runs" },
         ]));
+        // The owner, 2026-11-01: each run under way with Craft's progress bar: its share when it reports one (a test run),
+        // else the moving segment (a build or a run has no honest share).
+        foreach (var (name, running) in _running)
+        {
+            blocks.Add(new PanelMeter(name, running.Progress?.Invoke() ?? -1) { Detail = "running", Tooltip = "Stop it with Shift+F5 or the Stop button" });
+        }
+
         AddFailure(blocks);
         foreach (var problem in _providerProblems)
         {
@@ -1519,6 +1534,9 @@ public sealed partial class RunView : IEditorViewPanel, IDisposable
         public CancellationToken Token => _stop.Token;
 
         public IActivity? Activity { get; set; }
+
+        // The share done, asked after each output line (a test run's results seen of its tests), or null: none known.
+        public Func<double?>? Progress { get; init; }
 
         public void Cancel()
         {

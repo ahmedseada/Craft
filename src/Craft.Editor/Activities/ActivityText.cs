@@ -76,7 +76,14 @@ public static class ActivityText
     /// The status bar's line for the running activities (the newest first): the newest one's title and progress, and
     /// "+N" for the others; empty when none runs.
     /// </summary>
-    public static string StatusLine(IReadOnlyList<ActivitySnapshot> running)
+    public static string StatusLine(IReadOnlyList<ActivitySnapshot> running) => StatusLine(running, 0);
+
+    /// <summary>
+    /// The status bar's line for the running activities (the newest first) showing the one at <paramref name="chosen"/> (the
+    /// one the user picked, <see cref="ActivityStatus.Chosen"/>): its title and progress (its percent and time left when it
+    /// reports a fraction), and "+N" for the others; empty when none runs.
+    /// </summary>
+    public static string StatusLine(IReadOnlyList<ActivitySnapshot> running, int chosen)
     {
         ArgumentNullException.ThrowIfNull(running);
         if (running.Count == 0)
@@ -84,7 +91,7 @@ public static class ActivityText
             return "";
         }
 
-        var newest = running[0];
+        var newest = running[Math.Clamp(chosen, 0, running.Count - 1)];
         string line = newest.Title + " · " + Progress(newest);
         return running.Count > 1 ? string.Create(CultureInfo.InvariantCulture, $"{line}  +{running.Count - 1}") : line;
     }

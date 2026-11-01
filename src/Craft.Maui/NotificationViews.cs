@@ -11,16 +11,19 @@ using Microsoft.Maui.Graphics;
 namespace Craft.Maui;
 
 /// <summary>
-/// The status bar's activity (phase U): the newest running operation with a spinner (or a bar when its share is known),
-/// its text, rate and time left, and "+N" for the others; hidden when none runs. A tap opens the notification centre on
-/// the running list, each with Cancel. Updated from <see cref="ActivityCenter.Changed"/> (on the UI thread, at most once a frame).
+/// The status bar's activity (phase U; the owner, 2026-11-01: a progress bar, never the platform's): Craft's drawn bar
+/// (<see cref="ProgressBarView"/>, <c>CRAFT_STATUS_PROGRESS</c>, <c>CRAFT_STATUS_PROGRESS_WIDTH</c>) filled to the share
+/// when the activity reports one, with its percent and time left in the text, a moving segment when it does not; the
+/// activity shown is the one the user picked in the centre while it runs, else the newest, with "+N" for the others;
+/// hidden when none runs. A tap opens the notification centre on the running list, each with its own bar and Cancel.
+/// Updated from <see cref="ActivityCenter.Changed"/> (on the UI thread, at most once a frame).
 /// </summary>
 public sealed class ActivityStatusView : ContentView, IDisposable
 {
     private readonly ActivityCenter _activities;
-    private readonly ActivityIndicator _spinner = new() { IsRunning = false, WidthRequest = 12, HeightRequest = 12, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly ProgressBar _bar = new() { WidthRequest = 56, HeightRequest = 4, Margin = new Thickness(0, 0, 6, 0), IsVisible = false };
+    private readonly ProgressBarView _bar = new(4) { WidthRequest = 72, Margin = new Thickness(0, 0, 8, 0), VerticalOptions = LayoutOptions.Center, IsVisible = false };
     private readonly Label _text;
+    private bool _showBar = true;
 
     /// <summary>The activity of <paramref name="activities"/>, in <paramref name="palette"/>'s colours.</summary>
     public ActivityStatusView(ActivityCenter activities, ShellPalette palette)
@@ -30,7 +33,7 @@ public sealed class ActivityStatusView : ContentView, IDisposable
         _activities = activities;
         _text = palette.Label("", palette.Secondary, palette.CaptionSize);
         _text.MaximumWidthRequest = 520;
-        var row = new HorizontalStackLayout { Spacing = 0, VerticalOptions = LayoutOptions.Center, Children = { _spinner, _bar, _text } };
+        var row = new HorizontalStackLayout { Spacing = 0, VerticalOptions = LayoutOptions.Center, Children = { _bar, _text } };
         Content = row;
         Margin = new Thickness(12, 0);
         IsVisible = false;
@@ -44,41 +47,47 @@ public sealed class ActivityStatusView : ContentView, IDisposable
     /// <summary>Raised when the activity is tapped (the page opens the centre).</summary>
     public event EventHandler? Tapped;
 
-    /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
+    /// <summary>The bar (the tests of the page read it).</summary>
+    public ProgressBarView Bar => _bar;
+
+    /// <summary>Takes <paramref name="palette"/>'s colours and its options (the bar on or off, its width, reduced motion, the cycle).</summary>
     public void Apply(ShellPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
-        _spinner.Color = palette.Accent;
-        _bar.ProgressColor = palette.Accent;
-        _bar.BackgroundColor = palette.Border;
+        var options = palette.Options;
+        _bar.Fill = palette.Accent;
+        _bar.Track = palette.Border;
+        _bar.WidthRequest = options.StatusProgressWidth;
+        _bar.ReducedMotion = options.ReducedMotion || Craft.Editor.Motion.Duration(options) == 0;
+        _bar.CycleMilliseconds = options.LoaderCycleMilliseconds;
+        _showBar = options.StatusProgress;
         _text.TextColor = palette.Secondary;
+        Refresh();
     }
 
     /// <summary>Shows the activities as they are now.</summary>
     public void Refresh()
     {
         var running = _activities.Visible;
-        if (running.Count == 0)
+        int chosen = ActivityStatus.Chosen(running, _activities.Pinned);
+        if (chosen < 0)
         {
             IsVisible = false;
-            _spinner.IsRunning = false;
+            _bar.IsVisible = false;
             return;
         }
 
-        var newest = running[0];
+        var shown = running[chosen];
         IsVisible = true;
-        bool known = newest.Fraction is not null;
-        _bar.IsVisible = known;
-        _bar.Progress = newest.Fraction ?? 0;
-        _spinner.IsVisible = !known;
-        _spinner.IsRunning = !known;
-        string text = ActivityText.StatusLine(running);
+        _bar.IsVisible = _showBar;
+        _bar.Fraction = shown.Fraction;
+        string text = ActivityText.StatusLine(running, chosen);
         if (!string.Equals(_text.Text, text, StringComparison.Ordinal))
         {
             _text.Text = text;
         }
 
-        ToolTipProperties.SetText(this, string.Join("\n", running.Select(a => $"{a.Title}: {ActivityText.Progress(a)}")));
+        ToolTipProperties.SetText(this, string.Join("\n", running.Select(a => $"{a.Title}: {ActivityText.Progress(a)}")) + (running.Count > 1 ? "\nThe centre lists each with its bar; pick one there to show it here." : ""));
     }
 
     /// <inheritdoc />
@@ -408,7 +417,7 @@ public sealed class NotificationCenterView : ContentView, IDisposable
         private readonly Label _title;
         private readonly Label _text;
         private readonly Label _when;
-        private readonly ProgressBar _bar = new() { HeightRequest = 3, IsVisible = false };
+        private readonly ProgressBarView _bar = new(3) { IsVisible = false, Margin = new Thickness(0, 3) };
         private readonly HorizontalStackLayout _buttons = new() { Spacing = 6 };
         private readonly Button _dismiss;
         private string _actionsKey = "";
@@ -426,8 +435,9 @@ public sealed class NotificationCenterView : ContentView, IDisposable
             _text.LineBreakMode = LineBreakMode.WordWrap;
             _text.MaxLines = 4;
             _when = palette.Label("", palette.Secondary, palette.CaptionSize);
-            _bar.ProgressColor = palette.Accent;
-            _bar.BackgroundColor = palette.Border;
+            _bar.Fill = palette.Accent;
+            _bar.Track = palette.Border;
+            _bar.ReducedMotion = palette.Options.ReducedMotion || Craft.Editor.Motion.Duration(palette.Options) == 0;
             _dismiss = palette.Flat("✕", palette.Secondary, 22, palette.CaptionSize);
             _dismiss.Clicked += (_, _) =>
             {
@@ -460,10 +470,12 @@ public sealed class NotificationCenterView : ContentView, IDisposable
             Set(_text, entry.Text);
             _text.IsVisible = entry.Text.Length > 0;
             Set(_when, entry.IsRunning ? "running" : When(entry));
-            _bar.IsVisible = entry is { IsRunning: true, Activity.Fraction: not null };
-            _bar.Progress = entry.Activity?.Fraction ?? 0;
+            _bar.IsVisible = entry.IsRunning;                        // each running activity with its own bar: filled, or the moving segment
+            _bar.Fraction = entry.Activity?.Fraction;
             _dismiss.IsVisible = !entry.IsRunning && entry.Kind != NotificationKind.Status;
-            string key = string.Join("|", entry.Actions.Select(a => a.Label)) + (entry is { IsRunning: true, Activity.Cancellable: true } ? "|cancel" : "");
+            bool pinned = entry.IsRunning && _owner._activities.Pinned == entry.Id;
+            string key = string.Join("|", entry.Actions.Select(a => a.Label)) + (entry is { IsRunning: true, Activity.Cancellable: true } ? "|cancel" : "")
+                + (entry.IsRunning ? (pinned ? "|pinned" : "|pin") : "");
             if (key != _actionsKey)
             {
                 _actionsKey = key;
@@ -474,6 +486,16 @@ public sealed class NotificationCenterView : ContentView, IDisposable
                     long id = entry.Id;
                     cancel.Clicked += (_, _) => _owner._activities.Cancel(id);
                     _buttons.Children.Add(cancel);
+                }
+
+                if (entry.IsRunning)
+                {
+                    // The owner, 2026-11-01: the status bar shows the newest activity, or the one picked here.
+                    var pin = _owner._palette.Flat(pinned ? "Shown in the status bar" : "Show in the status bar", pinned ? _owner._palette.Secondary : _owner._palette.Accent, 24, _owner._palette.CaptionSize);
+                    long shown = entry.Id;
+                    pin.Clicked += (_, _) => _owner._activities.Pin(pinned ? null : shown);
+                    ToolTipProperties.SetText(pin, pinned ? "Click to show the newest activity again" : "The status bar's bar follows this activity while it runs");
+                    _buttons.Children.Add(pin);
                 }
 
                 foreach (var action in entry.Actions)

@@ -17,6 +17,7 @@ Craft.Abstractions.ActivityKinds  const System.String Indexing = indexing
 Craft.Abstractions.ActivityKinds  const System.String ModelLoad = model-load
 Craft.Abstractions.ActivityKinds  const System.String Plugin = plugin
 Craft.Abstractions.ActivityKinds  const System.String Save = save
+Craft.Abstractions.ActivityKinds  const System.String Search = search
 Craft.Abstractions.ActivityKinds  const System.String Training = training
 Craft.Abstractions.ActivityKinds  const System.String Voice = voice
 Craft.Abstractions.ActivityKinds  const System.String Workspace = workspace
@@ -828,6 +829,11 @@ Craft.Abstractions.FontMetrics  System.String ToString()
 Craft.Abstractions.FontMetrics  System.Void Deconstruct(out System.Single CellWidth, out System.Single LineHeight, out System.Single Baseline)
 Craft.Abstractions.FontMetrics  ctor(System.Single CellWidth, System.Single LineHeight, System.Single Baseline)
 Craft.Abstractions.FontMetrics : System.IEquatable<Craft.Abstractions.FontMetrics>
+Craft.Abstractions.GitIgnore
+Craft.Abstractions.GitIgnore  Craft.Abstractions.GitIgnore Parent { get; }
+Craft.Abstractions.GitIgnore  System.Boolean Ignores(System.ReadOnlySpan<System.Char> relativePath, System.Boolean isFolder)
+Craft.Abstractions.GitIgnore  System.String Folder { get; }
+Craft.Abstractions.GitIgnore  static Craft.Abstractions.GitIgnore Parse(System.String text, System.String folder, Craft.Abstractions.GitIgnore parent)
 Craft.Abstractions.HoverInfo
 Craft.Abstractions.HoverInfo  Craft.Abstractions.HoverInfo <Clone>$()
 Craft.Abstractions.HoverInfo  System.Boolean Equals(Craft.Abstractions.HoverInfo other)
@@ -1038,6 +1044,13 @@ Craft.Abstractions.IPluginSettings
 Craft.Abstractions.IPluginSettings  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
 Craft.Abstractions.IPluginSettings  System.String Get(System.String plugin, System.String key)
 Craft.Abstractions.IPluginSettings  System.Threading.Tasks.Task<System.String> SetAsync(System.String plugin, System.String key, System.String value)
+Craft.Abstractions.IRunProvider
+Craft.Abstractions.IRunProvider  Craft.Abstractions.RunCommand Command(Craft.Abstractions.RunTarget target, Craft.Abstractions.RunActions action, Craft.Abstractions.RunConfiguration configuration, System.String root)
+Craft.Abstractions.IRunProvider  System.Boolean TryParseProblem(System.ReadOnlySpan<System.Char> line, System.String folder, out Craft.Abstractions.RunProblem problem)
+Craft.Abstractions.IRunProvider  System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
+Craft.Abstractions.IRunProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunTarget> Find(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IRunProvider  System.String Title { get; }
+Craft.Abstractions.IRunProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.ISemanticLanguageSession
 Craft.Abstractions.ISemanticLanguageSession  Craft.Abstractions.DiagnosticSet Diagnostics { get; }
 Craft.Abstractions.ISemanticLanguageSession  Craft.Abstractions.SemanticTelemetry Telemetry { get; }
@@ -1122,6 +1135,10 @@ Craft.Abstractions.ITheme : Idrak.Abstraction.IKind
 Craft.Abstractions.IWorkspaceReader
 Craft.Abstractions.IWorkspaceReader  Craft.Abstractions.WorkspaceModel Read(Craft.Abstractions.WorkspaceReadRequest request, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.IWorkspaceReader : Idrak.Abstraction.IKind
+Craft.Abstractions.IWorkspaceSearchProvider
+Craft.Abstractions.IWorkspaceSearchProvider  System.String Title { get; }
+Craft.Abstractions.IWorkspaceSearchProvider  System.Threading.Tasks.Task<Craft.Abstractions.WorkspaceSearchSummary> SearchAsync(Craft.Abstractions.WorkspaceSearchRequest request, System.Action<Craft.Abstractions.WorkspaceSearchFile> found, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IWorkspaceSearchProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.IdrakInPlugins
 Craft.Abstractions.IdrakInPlugins  static System.Void IncludeLibraries(System.Reflection.Assembly plugin)
 Craft.Abstractions.IdrakInPlugins  static System.Void IncludePackages(System.Reflection.Assembly plugin, System.Collections.Generic.IEnumerable<System.String> packages)
@@ -1533,6 +1550,7 @@ Craft.Abstractions.PanelButton  System.Boolean Equals(Craft.Abstractions.PanelBu
 Craft.Abstractions.PanelButton  System.Boolean Equals(System.Object obj)
 Craft.Abstractions.PanelButton  System.Int32 GetHashCode()
 Craft.Abstractions.PanelButton  System.String ActionId { get; init; }
+Craft.Abstractions.PanelButton  System.String Icon { get; init; }
 Craft.Abstractions.PanelButton  System.String Title { get; init; }
 Craft.Abstractions.PanelButton  System.String ToString()
 Craft.Abstractions.PanelButton  System.String Tooltip { get; init; }
@@ -1758,6 +1776,101 @@ Craft.Abstractions.PanelPicker  protected System.Boolean PrintMembers(System.Tex
 Craft.Abstractions.PanelPicker : Craft.Abstractions.PanelBlock
 Craft.Abstractions.PanelPicker : System.IEquatable<Craft.Abstractions.PanelBlock>
 Craft.Abstractions.PanelPicker : System.IEquatable<Craft.Abstractions.PanelPicker>
+Craft.Abstractions.PanelQuery
+Craft.Abstractions.PanelQuery  Craft.Abstractions.PanelQuery <Clone>$()
+Craft.Abstractions.PanelQuery  System.Boolean Code { get; init; }
+Craft.Abstractions.PanelQuery  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+Craft.Abstractions.PanelQuery  System.Boolean Equals(Craft.Abstractions.PanelQuery other)
+Craft.Abstractions.PanelQuery  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelQuery  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelButton> Buttons { get; init; }
+Craft.Abstractions.PanelQuery  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelToggle> Toggles { get; init; }
+Craft.Abstractions.PanelQuery  System.Int32 Focus { get; init; }
+Craft.Abstractions.PanelQuery  System.Int32 GetHashCode()
+Craft.Abstractions.PanelQuery  System.String ActionId { get; init; }
+Craft.Abstractions.PanelQuery  System.String Placeholder { get; init; }
+Craft.Abstractions.PanelQuery  System.String Problem { get; init; }
+Craft.Abstractions.PanelQuery  System.String SubmitActionId { get; init; }
+Craft.Abstractions.PanelQuery  System.String ToString()
+Craft.Abstractions.PanelQuery  System.String Value { get; init; }
+Craft.Abstractions.PanelQuery  System.Type EqualityContract { get; }
+Craft.Abstractions.PanelQuery  System.Void Deconstruct(out System.String ActionId, out System.String Placeholder, out System.String Value)
+Craft.Abstractions.PanelQuery  ctor(System.String ActionId, System.String Placeholder, System.String Value)
+Craft.Abstractions.PanelQuery  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+Craft.Abstractions.PanelQuery : Craft.Abstractions.PanelBlock
+Craft.Abstractions.PanelQuery : System.IEquatable<Craft.Abstractions.PanelBlock>
+Craft.Abstractions.PanelQuery : System.IEquatable<Craft.Abstractions.PanelQuery>
+Craft.Abstractions.PanelResultGroup
+Craft.Abstractions.PanelResultGroup  Craft.Abstractions.PanelResultGroup <Clone>$()
+Craft.Abstractions.PanelResultGroup  System.Boolean Collapsed { get; init; }
+Craft.Abstractions.PanelResultGroup  System.Boolean Equals(Craft.Abstractions.PanelResultGroup other)
+Craft.Abstractions.PanelResultGroup  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelResultGroup  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelButton> Buttons { get; init; }
+Craft.Abstractions.PanelResultGroup  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelResultRow> Rows { get; init; }
+Craft.Abstractions.PanelResultGroup  System.Int32 GetHashCode()
+Craft.Abstractions.PanelResultGroup  System.String Badge { get; init; }
+Craft.Abstractions.PanelResultGroup  System.String Detail { get; init; }
+Craft.Abstractions.PanelResultGroup  System.String Glyph { get; init; }
+Craft.Abstractions.PanelResultGroup  System.String Icon { get; init; }
+Craft.Abstractions.PanelResultGroup  System.String Id { get; init; }
+Craft.Abstractions.PanelResultGroup  System.String Title { get; init; }
+Craft.Abstractions.PanelResultGroup  System.String ToString()
+Craft.Abstractions.PanelResultGroup  System.String ToggleActionId { get; init; }
+Craft.Abstractions.PanelResultGroup  System.String Tooltip { get; init; }
+Craft.Abstractions.PanelResultGroup  System.UInt32 GlyphArgb { get; init; }
+Craft.Abstractions.PanelResultGroup  System.Void Deconstruct(out System.String Id, out System.String Title, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelResultRow> Rows)
+Craft.Abstractions.PanelResultGroup  ctor(System.String Id, System.String Title, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelResultRow> Rows)
+Craft.Abstractions.PanelResultGroup : System.IEquatable<Craft.Abstractions.PanelResultGroup>
+Craft.Abstractions.PanelResultRow
+Craft.Abstractions.PanelResultRow  Craft.Abstractions.PanelResultRow <Clone>$()
+Craft.Abstractions.PanelResultRow  Craft.Abstractions.PanelTone Tone { get; init; }
+Craft.Abstractions.PanelResultRow  System.Boolean Code { get; init; }
+Craft.Abstractions.PanelResultRow  System.Boolean Equals(Craft.Abstractions.PanelResultRow other)
+Craft.Abstractions.PanelResultRow  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelResultRow  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelButton> Buttons { get; init; }
+Craft.Abstractions.PanelResultRow  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelSpan> Highlights { get; init; }
+Craft.Abstractions.PanelResultRow  System.Int32 GetHashCode()
+Craft.Abstractions.PanelResultRow  System.String ActionId { get; init; }
+Craft.Abstractions.PanelResultRow  System.String Badge { get; init; }
+Craft.Abstractions.PanelResultRow  System.String Detail { get; init; }
+Craft.Abstractions.PanelResultRow  System.String Icon { get; init; }
+Craft.Abstractions.PanelResultRow  System.String Id { get; init; }
+Craft.Abstractions.PanelResultRow  System.String Prefix { get; init; }
+Craft.Abstractions.PanelResultRow  System.String Text { get; init; }
+Craft.Abstractions.PanelResultRow  System.String ToString()
+Craft.Abstractions.PanelResultRow  System.String Value { get; init; }
+Craft.Abstractions.PanelResultRow  System.Void Deconstruct(out System.String Id, out System.String Text)
+Craft.Abstractions.PanelResultRow  ctor(System.String Id, System.String Text)
+Craft.Abstractions.PanelResultRow : System.IEquatable<Craft.Abstractions.PanelResultRow>
+Craft.Abstractions.PanelResults
+Craft.Abstractions.PanelResults  Craft.Abstractions.PanelResults <Clone>$()
+Craft.Abstractions.PanelResults  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+Craft.Abstractions.PanelResults  System.Boolean Equals(Craft.Abstractions.PanelResults other)
+Craft.Abstractions.PanelResults  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelResults  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelResultGroup> Groups { get; init; }
+Craft.Abstractions.PanelResults  System.Int32 GetHashCode()
+Craft.Abstractions.PanelResults  System.Int32 Version { get; init; }
+Craft.Abstractions.PanelResults  System.String Empty { get; init; }
+Craft.Abstractions.PanelResults  System.String Id { get; init; }
+Craft.Abstractions.PanelResults  System.String ToString()
+Craft.Abstractions.PanelResults  System.Type EqualityContract { get; }
+Craft.Abstractions.PanelResults  System.Void Deconstruct(out System.String Id, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelResultGroup> Groups)
+Craft.Abstractions.PanelResults  ctor(System.String Id, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelResultGroup> Groups)
+Craft.Abstractions.PanelResults  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+Craft.Abstractions.PanelResults : Craft.Abstractions.PanelBlock
+Craft.Abstractions.PanelResults : System.IEquatable<Craft.Abstractions.PanelBlock>
+Craft.Abstractions.PanelResults : System.IEquatable<Craft.Abstractions.PanelResults>
+Craft.Abstractions.PanelSpan
+Craft.Abstractions.PanelSpan  Craft.Abstractions.PanelSpan <Clone>$()
+Craft.Abstractions.PanelSpan  System.Boolean Equals(Craft.Abstractions.PanelSpan other)
+Craft.Abstractions.PanelSpan  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelSpan  System.Int32 GetHashCode()
+Craft.Abstractions.PanelSpan  System.Int32 Length { get; init; }
+Craft.Abstractions.PanelSpan  System.Int32 Start { get; init; }
+Craft.Abstractions.PanelSpan  System.String Replacement { get; init; }
+Craft.Abstractions.PanelSpan  System.String ToString()
+Craft.Abstractions.PanelSpan  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length)
+Craft.Abstractions.PanelSpan  ctor(System.Int32 Start, System.Int32 Length)
+Craft.Abstractions.PanelSpan : System.IEquatable<Craft.Abstractions.PanelSpan>
 Craft.Abstractions.PanelStep
 Craft.Abstractions.PanelStep  Craft.Abstractions.PanelStep <Clone>$()
 Craft.Abstractions.PanelStep  Craft.Abstractions.PanelStepState State { get; init; }
@@ -1840,6 +1953,20 @@ Craft.Abstractions.PanelTextStyle : System.IComparable
 Craft.Abstractions.PanelTextStyle : System.IConvertible
 Craft.Abstractions.PanelTextStyle : System.IFormattable
 Craft.Abstractions.PanelTextStyle : System.ISpanFormattable
+Craft.Abstractions.PanelToggle
+Craft.Abstractions.PanelToggle  Craft.Abstractions.PanelToggle <Clone>$()
+Craft.Abstractions.PanelToggle  System.Boolean Equals(Craft.Abstractions.PanelToggle other)
+Craft.Abstractions.PanelToggle  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelToggle  System.Boolean On { get; init; }
+Craft.Abstractions.PanelToggle  System.Int32 GetHashCode()
+Craft.Abstractions.PanelToggle  System.String ActionId { get; init; }
+Craft.Abstractions.PanelToggle  System.String Glyph { get; init; }
+Craft.Abstractions.PanelToggle  System.String Keys { get; init; }
+Craft.Abstractions.PanelToggle  System.String Title { get; init; }
+Craft.Abstractions.PanelToggle  System.String ToString()
+Craft.Abstractions.PanelToggle  System.Void Deconstruct(out System.String ActionId, out System.String Glyph, out System.String Title, out System.Boolean On)
+Craft.Abstractions.PanelToggle  ctor(System.String ActionId, System.String Glyph, System.String Title, System.Boolean On)
+Craft.Abstractions.PanelToggle : System.IEquatable<Craft.Abstractions.PanelToggle>
 Craft.Abstractions.PanelTone
 Craft.Abstractions.PanelTone  Accent = 1
 Craft.Abstractions.PanelTone  Error = 4
@@ -1903,13 +2030,23 @@ Craft.Abstractions.ProposedEdits  System.Void Deconstruct(out System.Collections
 Craft.Abstractions.ProposedEdits  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits, System.String Title)
 Craft.Abstractions.ProposedEdits : System.IEquatable<Craft.Abstractions.ProposedEdits>
 Craft.Abstractions.RailIcons
+Craft.Abstractions.RailIcons  const System.String Add = M12 5v14M5 12h14
 Craft.Abstractions.RailIcons  const System.String Agent = M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z
+Craft.Abstractions.RailIcons  const System.String Build = M14 6l4 4M4 20l9-9M12 4l8 8l-2 2l-8-8z
+Craft.Abstractions.RailIcons  const System.String Close = M6 6l12 12M18 6L6 18
+Craft.Abstractions.RailIcons  const System.String Collapse = M4 6h16M8 12h8M10 18h4
+Craft.Abstractions.RailIcons  const System.String Edit = M4 20h4L19 9l-4-4L4 16zM14 6l4 4
 Craft.Abstractions.RailIcons  const System.String Explorer = M4 4h6l2 2h8v13H4z
 Craft.Abstractions.RailIcons  const System.String Panel = M4 6h16M4 12h16M4 18h10
 Craft.Abstractions.RailIcons  const System.String Plugins = M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4
+Craft.Abstractions.RailIcons  const System.String Refresh = M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6
+Craft.Abstractions.RailIcons  const System.String Replace = M4 7h11a4 4 0 0 1 0 8H8M8 15l3-3M8 15l3 3
+Craft.Abstractions.RailIcons  const System.String Run = M7 4.5v15l12-7.5z
 Craft.Abstractions.RailIcons  const System.String Search = M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5
 Craft.Abstractions.RailIcons  const System.String Settings = M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1
 Craft.Abstractions.RailIcons  const System.String SourceControl = M4 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M4 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M16 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M6 7v10M18 11c0 4-6 3-12 6
+Craft.Abstractions.RailIcons  const System.String Stop = M6 6h12v12H6z
+Craft.Abstractions.RailIcons  const System.String Test = M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3
 Craft.Abstractions.RailItem
 Craft.Abstractions.RailItem  Craft.Abstractions.RailItem <Clone>$()
 Craft.Abstractions.RailItem  System.Boolean AtBottom { get; init; }
@@ -1928,6 +2065,111 @@ Craft.Abstractions.RailItem  System.Void Deconstruct(out System.String Id, out S
 Craft.Abstractions.RailItem  ctor(System.String Id, System.String Title, System.String CommandId, System.String Icon, System.Int32 Order = 0, System.Boolean AtBottom = false)
 Craft.Abstractions.RailItem : Idrak.Abstraction.IKind
 Craft.Abstractions.RailItem : System.IEquatable<Craft.Abstractions.RailItem>
+Craft.Abstractions.RunActions
+Craft.Abstractions.RunActions  Build = 2
+Craft.Abstractions.RunActions  None = 0
+Craft.Abstractions.RunActions  Publish = 8
+Craft.Abstractions.RunActions  Run = 1
+Craft.Abstractions.RunActions  Test = 4
+Craft.Abstractions.RunActions : System.IComparable
+Craft.Abstractions.RunActions : System.IConvertible
+Craft.Abstractions.RunActions : System.IFormattable
+Craft.Abstractions.RunActions : System.ISpanFormattable
+Craft.Abstractions.RunCommand
+Craft.Abstractions.RunCommand  Craft.Abstractions.RunCommand <Clone>$()
+Craft.Abstractions.RunCommand  System.Boolean Equals(Craft.Abstractions.RunCommand other)
+Craft.Abstractions.RunCommand  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.RunCommand  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
+Craft.Abstractions.RunCommand  System.Collections.Generic.IReadOnlyList<System.String> Command { get; init; }
+Craft.Abstractions.RunCommand  System.Int32 GetHashCode()
+Craft.Abstractions.RunCommand  System.String Folder { get; init; }
+Craft.Abstractions.RunCommand  System.String Line { get; }
+Craft.Abstractions.RunCommand  System.String Problem { get; init; }
+Craft.Abstractions.RunCommand  System.String ToString()
+Craft.Abstractions.RunCommand  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<System.String> Command, out System.String Folder)
+Craft.Abstractions.RunCommand  ctor(System.Collections.Generic.IReadOnlyList<System.String> Command, System.String Folder)
+Craft.Abstractions.RunCommand  static Craft.Abstractions.RunCommand Unavailable(System.String why, System.String folder)
+Craft.Abstractions.RunCommand : System.IEquatable<Craft.Abstractions.RunCommand>
+Craft.Abstractions.RunCommandLine
+Craft.Abstractions.RunCommandLine  static System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> ParseEnvironment(System.String text)
+Craft.Abstractions.RunCommandLine  static System.Collections.Generic.IReadOnlyList<System.String> Split(System.String line)
+Craft.Abstractions.RunCommandLine  static System.String FormatEnvironment(System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> variables)
+Craft.Abstractions.RunCommandLine  static System.String Join(System.Collections.Generic.IReadOnlyList<System.String> words)
+Craft.Abstractions.RunConfiguration
+Craft.Abstractions.RunConfiguration  Craft.Abstractions.RunActions Action { get; init; }
+Craft.Abstractions.RunConfiguration  Craft.Abstractions.RunConfiguration <Clone>$()
+Craft.Abstractions.RunConfiguration  System.Boolean BuildFirst { get; init; }
+Craft.Abstractions.RunConfiguration  System.Boolean Equals(Craft.Abstractions.RunConfiguration other)
+Craft.Abstractions.RunConfiguration  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.RunConfiguration  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
+Craft.Abstractions.RunConfiguration  System.Int32 GetHashCode()
+Craft.Abstractions.RunConfiguration  System.String Arguments { get; init; }
+Craft.Abstractions.RunConfiguration  System.String Folder { get; init; }
+Craft.Abstractions.RunConfiguration  System.String Name { get; init; }
+Craft.Abstractions.RunConfiguration  System.String Provider { get; init; }
+Craft.Abstractions.RunConfiguration  System.String Target { get; init; }
+Craft.Abstractions.RunConfiguration  System.String ToString()
+Craft.Abstractions.RunConfiguration  System.Void Deconstruct(out System.String Name, out System.String Provider, out System.String Target)
+Craft.Abstractions.RunConfiguration  ctor(System.String Name, System.String Provider, System.String Target)
+Craft.Abstractions.RunConfiguration  static System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> NoEnvironment { get; }
+Craft.Abstractions.RunConfiguration : System.IEquatable<Craft.Abstractions.RunConfiguration>
+Craft.Abstractions.RunProblem
+Craft.Abstractions.RunProblem  Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
+Craft.Abstractions.RunProblem  Craft.Abstractions.RunProblem <Clone>$()
+Craft.Abstractions.RunProblem  System.Boolean Equals(Craft.Abstractions.RunProblem other)
+Craft.Abstractions.RunProblem  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.RunProblem  System.Int32 Column { get; init; }
+Craft.Abstractions.RunProblem  System.Int32 GetHashCode()
+Craft.Abstractions.RunProblem  System.Int32 Line { get; init; }
+Craft.Abstractions.RunProblem  System.String Code { get; init; }
+Craft.Abstractions.RunProblem  System.String File { get; init; }
+Craft.Abstractions.RunProblem  System.String Message { get; init; }
+Craft.Abstractions.RunProblem  System.String ToString()
+Craft.Abstractions.RunProblem  System.Void Deconstruct(out System.String File, out System.Int32 Line, out System.Int32 Column, out Craft.Abstractions.DiagnosticSeverity Severity, out System.String Code, out System.String Message)
+Craft.Abstractions.RunProblem  ctor(System.String File, System.Int32 Line, System.Int32 Column, Craft.Abstractions.DiagnosticSeverity Severity, System.String Code, System.String Message)
+Craft.Abstractions.RunProblem : System.IEquatable<Craft.Abstractions.RunProblem>
+Craft.Abstractions.RunProblems
+Craft.Abstractions.RunProblems  static System.Boolean TryParse(System.ReadOnlySpan<System.Char> line, System.String folder, out Craft.Abstractions.RunProblem problem)
+Craft.Abstractions.RunProviders
+Craft.Abstractions.RunProviders  const System.String Scripts = scripts
+Craft.Abstractions.RunProviders  event System.EventHandler Changed
+Craft.Abstractions.RunProviders  static Craft.Abstractions.IRunProvider Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.RunProviders  static Craft.Abstractions.IRunProvider Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.RunProviders  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.RunProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IRunProvider> All { get; }
+Craft.Abstractions.RunProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.RunProviders  static System.Void Register(Craft.Abstractions.IRunProvider provider)
+Craft.Abstractions.RunTarget
+Craft.Abstractions.RunTarget  Craft.Abstractions.RunActions Actions { get; init; }
+Craft.Abstractions.RunTarget  Craft.Abstractions.RunActions DefaultAction { get; }
+Craft.Abstractions.RunTarget  Craft.Abstractions.RunTarget <Clone>$()
+Craft.Abstractions.RunTarget  System.Boolean Equals(Craft.Abstractions.RunTarget other)
+Craft.Abstractions.RunTarget  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.RunTarget  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
+Craft.Abstractions.RunTarget  System.Int32 GetHashCode()
+Craft.Abstractions.RunTarget  System.String Arguments { get; init; }
+Craft.Abstractions.RunTarget  System.String Detail { get; init; }
+Craft.Abstractions.RunTarget  System.String File { get; init; }
+Craft.Abstractions.RunTarget  System.String Id { get; init; }
+Craft.Abstractions.RunTarget  System.String Program { get; init; }
+Craft.Abstractions.RunTarget  System.String Provider { get; init; }
+Craft.Abstractions.RunTarget  System.String Title { get; init; }
+Craft.Abstractions.RunTarget  System.String ToString()
+Craft.Abstractions.RunTarget  System.String Url { get; init; }
+Craft.Abstractions.RunTarget  System.Void Deconstruct(out System.String Provider, out System.String Id, out System.String Title, out System.String File, out Craft.Abstractions.RunActions Actions)
+Craft.Abstractions.RunTarget  ctor(System.String Provider, System.String Id, System.String Title, System.String File, Craft.Abstractions.RunActions Actions)
+Craft.Abstractions.RunTarget : System.IEquatable<Craft.Abstractions.RunTarget>
+Craft.Abstractions.RunWorkspace
+Craft.Abstractions.RunWorkspace  Craft.Abstractions.RunWorkspace <Clone>$()
+Craft.Abstractions.RunWorkspace  System.Boolean Equals(Craft.Abstractions.RunWorkspace other)
+Craft.Abstractions.RunWorkspace  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.RunWorkspace  System.Collections.Generic.IReadOnlyList<System.String> Files { get; init; }
+Craft.Abstractions.RunWorkspace  System.Int32 GetHashCode()
+Craft.Abstractions.RunWorkspace  System.String Root { get; init; }
+Craft.Abstractions.RunWorkspace  System.String ToString()
+Craft.Abstractions.RunWorkspace  System.Void Deconstruct(out System.String Root, out System.Collections.Generic.IReadOnlyList<System.String> Files)
+Craft.Abstractions.RunWorkspace  ctor(System.String Root, System.Collections.Generic.IReadOnlyList<System.String> Files)
+Craft.Abstractions.RunWorkspace : System.IEquatable<Craft.Abstractions.RunWorkspace>
 Craft.Abstractions.ScopeKind
 Craft.Abstractions.ScopeKind  Member = 3
 Craft.Abstractions.ScopeKind  Method = 2
@@ -2378,6 +2620,20 @@ Craft.Abstractions.TextLine  System.String ToString()
 Craft.Abstractions.TextLine  System.Void Deconstruct(out System.Int32 Index, out System.Int32 Start, out System.Int32 Length, out System.Int32 BreakLength)
 Craft.Abstractions.TextLine  ctor(System.Int32 Index, System.Int32 Start, System.Int32 Length, System.Int32 BreakLength)
 Craft.Abstractions.TextLine : System.IEquatable<Craft.Abstractions.TextLine>
+Craft.Abstractions.TextPattern
+Craft.Abstractions.TextPattern  System.Boolean IsRegex { get; }
+Craft.Abstractions.TextPattern  System.Boolean IsText { get; }
+Craft.Abstractions.TextPattern  System.Boolean MatchCase { get; }
+Craft.Abstractions.TextPattern  System.Boolean Searchable { get; }
+Craft.Abstractions.TextPattern  System.Boolean TimedOut { get; }
+Craft.Abstractions.TextPattern  System.Boolean WholeWord { get; }
+Craft.Abstractions.TextPattern  System.Int32 NextIn(System.ReadOnlySpan<System.Char> line, System.Int32 from, out System.Int32 length)
+Craft.Abstractions.TextPattern  System.Int32 PreviousIn(System.ReadOnlySpan<System.Char> line, System.Int32 limit, out System.Int32 length)
+Craft.Abstractions.TextPattern  System.String Problem { get; }
+Craft.Abstractions.TextPattern  System.String Query { get; }
+Craft.Abstractions.TextPattern  System.String Replacement(System.ReadOnlySpan<System.Char> line, System.Int32 start, System.String replacement)
+Craft.Abstractions.TextPattern  ctor(System.String query, System.Boolean matchCase, System.Boolean wholeWord, System.Boolean regex, System.TimeSpan regexTimeout, System.Boolean compiled = false)
+Craft.Abstractions.TextPattern  static System.Boolean IsWordChar(System.Char c)
 Craft.Abstractions.TextStyle
 Craft.Abstractions.TextStyle  System.Boolean Bold { get; init; }
 Craft.Abstractions.TextStyle  System.Boolean Equals(Craft.Abstractions.TextStyle other)
@@ -2459,6 +2715,13 @@ Craft.Abstractions.ViewPanel  ctor(System.String id, System.String title, System
 Craft.Abstractions.ViewPanel  event System.EventHandler Changed
 Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorPanel
 Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorViewPanel
+Craft.Abstractions.WorkspaceFiles
+Craft.Abstractions.WorkspaceFiles  static System.Collections.Generic.IEnumerable<System.String> Enumerate(System.String root, System.Collections.Generic.IReadOnlyList<System.String> ignoredFolders, System.Boolean useIgnoreFiles, Craft.Abstractions.WorkspaceGlob include, Craft.Abstractions.WorkspaceGlob exclude, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.WorkspaceFiles  static System.String Relative(System.String root, System.String path)
+Craft.Abstractions.WorkspaceGlob
+Craft.Abstractions.WorkspaceGlob  System.Boolean Matches(System.ReadOnlySpan<System.Char> relativePath)
+Craft.Abstractions.WorkspaceGlob  System.String Text { get; }
+Craft.Abstractions.WorkspaceGlob  static Craft.Abstractions.WorkspaceGlob Parse(System.String text)
 Craft.Abstractions.WorkspaceModel
 Craft.Abstractions.WorkspaceModel  Craft.Abstractions.WorkspaceModel <Clone>$()
 Craft.Abstractions.WorkspaceModel  System.Boolean Equals(Craft.Abstractions.WorkspaceModel other)
@@ -2518,3 +2781,105 @@ Craft.Abstractions.WorkspaceReaders  static Craft.Abstractions.WorkspaceModel Re
 Craft.Abstractions.WorkspaceReaders  static System.Boolean Unregister(System.String name)
 Craft.Abstractions.WorkspaceReaders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.WorkspaceReaders  static System.Void Register(Craft.Abstractions.IWorkspaceReader reader)
+Craft.Abstractions.WorkspaceSearchDocument
+Craft.Abstractions.WorkspaceSearchDocument  Craft.Abstractions.ITextSnapshot Text { get; init; }
+Craft.Abstractions.WorkspaceSearchDocument  Craft.Abstractions.WorkspaceSearchDocument <Clone>$()
+Craft.Abstractions.WorkspaceSearchDocument  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchDocument other)
+Craft.Abstractions.WorkspaceSearchDocument  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceSearchDocument  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceSearchDocument  System.String Path { get; init; }
+Craft.Abstractions.WorkspaceSearchDocument  System.String ToString()
+Craft.Abstractions.WorkspaceSearchDocument  System.Void Deconstruct(out System.String Path, out Craft.Abstractions.ITextSnapshot Text)
+Craft.Abstractions.WorkspaceSearchDocument  ctor(System.String Path, Craft.Abstractions.ITextSnapshot Text)
+Craft.Abstractions.WorkspaceSearchDocument : System.IEquatable<Craft.Abstractions.WorkspaceSearchDocument>
+Craft.Abstractions.WorkspaceSearchFile
+Craft.Abstractions.WorkspaceSearchFile  Craft.Abstractions.WorkspaceSearchFile <Clone>$()
+Craft.Abstractions.WorkspaceSearchFile  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchFile other)
+Craft.Abstractions.WorkspaceSearchFile  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceSearchFile  System.Boolean FromOpenDocument { get; init; }
+Craft.Abstractions.WorkspaceSearchFile  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceSearchHit> Hits { get; init; }
+Craft.Abstractions.WorkspaceSearchFile  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceSearchFile  System.String Path { get; init; }
+Craft.Abstractions.WorkspaceSearchFile  System.String ToString()
+Craft.Abstractions.WorkspaceSearchFile  System.Void Deconstruct(out System.String Path, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceSearchHit> Hits)
+Craft.Abstractions.WorkspaceSearchFile  ctor(System.String Path, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceSearchHit> Hits)
+Craft.Abstractions.WorkspaceSearchFile : System.IEquatable<Craft.Abstractions.WorkspaceSearchFile>
+Craft.Abstractions.WorkspaceSearchHit
+Craft.Abstractions.WorkspaceSearchHit  Craft.Abstractions.WorkspaceSearchHit <Clone>$()
+Craft.Abstractions.WorkspaceSearchHit  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchHit other)
+Craft.Abstractions.WorkspaceSearchHit  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceSearchHit  System.Int32 Column { get; init; }
+Craft.Abstractions.WorkspaceSearchHit  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceSearchHit  System.Int32 Length { get; init; }
+Craft.Abstractions.WorkspaceSearchHit  System.Int32 Line { get; init; }
+Craft.Abstractions.WorkspaceSearchHit  System.Int32 PreviewColumn { get; init; }
+Craft.Abstractions.WorkspaceSearchHit  System.String Preview { get; init; }
+Craft.Abstractions.WorkspaceSearchHit  System.String ToString()
+Craft.Abstractions.WorkspaceSearchHit  System.Void Deconstruct(out System.Int32 Line, out System.Int32 Column, out System.Int32 Length, out System.String Preview, out System.Int32 PreviewColumn)
+Craft.Abstractions.WorkspaceSearchHit  ctor(System.Int32 Line, System.Int32 Column, System.Int32 Length, System.String Preview, System.Int32 PreviewColumn)
+Craft.Abstractions.WorkspaceSearchHit : System.IEquatable<Craft.Abstractions.WorkspaceSearchHit>
+Craft.Abstractions.WorkspaceSearchProviders
+Craft.Abstractions.WorkspaceSearchProviders  const System.String Text = text
+Craft.Abstractions.WorkspaceSearchProviders  static Craft.Abstractions.IWorkspaceSearchProvider Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.WorkspaceSearchProviders  static Craft.Abstractions.IWorkspaceSearchProvider Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.WorkspaceSearchProviders  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.WorkspaceSearchProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IWorkspaceSearchProvider> All { get; }
+Craft.Abstractions.WorkspaceSearchProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.WorkspaceSearchProviders  static System.Void Register(Craft.Abstractions.IWorkspaceSearchProvider provider)
+Craft.Abstractions.WorkspaceSearchQuery
+Craft.Abstractions.WorkspaceSearchQuery  Craft.Abstractions.TextPattern Pattern(System.TimeSpan regexTimeout, System.Boolean compiled = false)
+Craft.Abstractions.WorkspaceSearchQuery  Craft.Abstractions.WorkspaceSearchQuery <Clone>$()
+Craft.Abstractions.WorkspaceSearchQuery  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchQuery other)
+Craft.Abstractions.WorkspaceSearchQuery  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceSearchQuery  System.Boolean MatchCase { get; init; }
+Craft.Abstractions.WorkspaceSearchQuery  System.Boolean Regex { get; init; }
+Craft.Abstractions.WorkspaceSearchQuery  System.Boolean UseIgnoreFiles { get; init; }
+Craft.Abstractions.WorkspaceSearchQuery  System.Boolean WholeWord { get; init; }
+Craft.Abstractions.WorkspaceSearchQuery  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceSearchQuery  System.String Exclude { get; init; }
+Craft.Abstractions.WorkspaceSearchQuery  System.String Include { get; init; }
+Craft.Abstractions.WorkspaceSearchQuery  System.String Text { get; init; }
+Craft.Abstractions.WorkspaceSearchQuery  System.String ToString()
+Craft.Abstractions.WorkspaceSearchQuery  System.Void Deconstruct(out System.String Text, out System.Boolean MatchCase, out System.Boolean WholeWord, out System.Boolean Regex)
+Craft.Abstractions.WorkspaceSearchQuery  ctor(System.String Text, System.Boolean MatchCase = false, System.Boolean WholeWord = false, System.Boolean Regex = false)
+Craft.Abstractions.WorkspaceSearchQuery : System.IEquatable<Craft.Abstractions.WorkspaceSearchQuery>
+Craft.Abstractions.WorkspaceSearchRequest
+Craft.Abstractions.WorkspaceSearchRequest  Craft.Abstractions.WorkspaceSearchQuery Query { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  Craft.Abstractions.WorkspaceSearchRequest <Clone>$()
+Craft.Abstractions.WorkspaceSearchRequest  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchRequest other)
+Craft.Abstractions.WorkspaceSearchRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceSearchRequest  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.WorkspaceSearchDocument> OpenDocuments { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.Collections.Generic.IReadOnlyList<System.String> IgnoredFolders { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceSearchRequest  System.Int32 MaxResults { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.Int32 PreviewCharacters { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.Int32 Threads { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.Int64 MaxFileBytes { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.String Root { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.String ToString()
+Craft.Abstractions.WorkspaceSearchRequest  System.TimeSpan RegexTimeout { get; init; }
+Craft.Abstractions.WorkspaceSearchRequest  System.Void Deconstruct(out System.String Root, out Craft.Abstractions.WorkspaceSearchQuery Query)
+Craft.Abstractions.WorkspaceSearchRequest  ctor(System.String Root, Craft.Abstractions.WorkspaceSearchQuery Query)
+Craft.Abstractions.WorkspaceSearchRequest : System.IEquatable<Craft.Abstractions.WorkspaceSearchRequest>
+Craft.Abstractions.WorkspaceSearchSummary
+Craft.Abstractions.WorkspaceSearchSummary  Craft.Abstractions.WorkspaceSearchSummary <Clone>$()
+Craft.Abstractions.WorkspaceSearchSummary  System.Boolean Capped { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Boolean Equals(Craft.Abstractions.WorkspaceSearchSummary other)
+Craft.Abstractions.WorkspaceSearchSummary  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.WorkspaceSearchSummary  System.Boolean TimedOut { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Int32 FilesMatched { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Int32 FilesSearched { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Int32 GetHashCode()
+Craft.Abstractions.WorkspaceSearchSummary  System.Int32 Matches { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Int32 SkippedBinary { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Int32 SkippedLarge { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Int32 Unreadable { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.String Problem { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.String ToString()
+Craft.Abstractions.WorkspaceSearchSummary  System.TimeSpan Elapsed { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.TimeSpan? FirstResult { get; init; }
+Craft.Abstractions.WorkspaceSearchSummary  System.Void Deconstruct(out System.Int32 FilesSearched, out System.Int32 FilesMatched, out System.Int32 Matches)
+Craft.Abstractions.WorkspaceSearchSummary  ctor(System.Int32 FilesSearched, System.Int32 FilesMatched, System.Int32 Matches)
+Craft.Abstractions.WorkspaceSearchSummary : System.IEquatable<Craft.Abstractions.WorkspaceSearchSummary>
+Craft.Abstractions.WorkspaceTextScan
+Craft.Abstractions.WorkspaceTextScan  static System.Int32 Scan(System.ReadOnlySpan<System.Char> text, Craft.Abstractions.TextPattern pattern, System.Int32 previewCharacters, System.Int32 limit, System.Collections.Generic.List<Craft.Abstractions.WorkspaceSearchHit> hits)

@@ -121,6 +121,29 @@ sealed class Craft.CSharp.RazorFolding : Craft.Abstractions.IFoldingRangeProvide
   const System.String ProviderName = razor
   ctor()
   static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.CSharp.Run.DotnetRunProvider : Craft.Abstractions.IRunProvider, Idrak.Abstraction.IKind
+  Craft.Abstractions.RunCommand Command(Craft.Abstractions.RunTarget target, Craft.Abstractions.RunActions action, Craft.Abstractions.RunConfiguration configuration, System.String root)
+  System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunTarget> Find(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String Title { get; }
+  const System.String ProviderName = dotnet
+  ctor()
+  static Craft.CSharp.Run.DotnetRunProvider.ProjectFacts ReadProject(System.String path)
+  static System.String FrameworkFor(System.Collections.Generic.IReadOnlyList<System.String> frameworks)
+sealed class Craft.CSharp.Run.DotnetRunProvider.ProjectFacts : System.IEquatable<Craft.CSharp.Run.DotnetRunProvider.ProjectFacts>
+  Craft.CSharp.Run.DotnetRunProvider.ProjectFacts <Clone>$()
+  System.Boolean Equals(Craft.CSharp.Run.DotnetRunProvider.ProjectFacts other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Runs { get; init; }
+  System.Boolean Tests { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Frameworks { get; init; }
+  System.Int32 GetHashCode()
+  System.String OutputType { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String OutputType, out System.Collections.Generic.IReadOnlyList<System.String> Frameworks, out System.Boolean Runs, out System.Boolean Tests)
+  ctor(System.String OutputType, System.Collections.Generic.IReadOnlyList<System.String> Frameworks, System.Boolean Runs, System.Boolean Tests)
 sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.SourceText
   Craft.Abstractions.ITextSnapshot Snapshot { get; }
   System.Char Item[System.Int32] { get; }

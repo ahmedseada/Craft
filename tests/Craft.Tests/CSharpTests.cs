@@ -577,7 +577,7 @@ public static class PluginTests
             var result = CraftPlugins.LoadFolder(folder);
             Check.True(result.Loaded, $"the C# plug-in loads from its folder ({result.Error})");
             Check.Equal("Craft.CSharp", result.Name, "the result names the plug-in");
-            Check.True(result is { Outdated: false, Manifest.ContractVersion: "1.0" }, "its plugin.json is read: built against this contract version");
+            Check.True(result is { Outdated: false, Manifest.ContractVersion: "1.1" }, "its plugin.json is read: built against this contract version (1.1: the Run view's RunProviders)");
             var language = EditorLanguages.ForFile("a.cs");
             Check.Equal("csharp", language?.Name, "with it, .cs opens as C#");
             Check.True(AssemblyLoadContext.GetLoadContext(language!.GetType().Assembly) != AssemblyLoadContext.Default, "the language comes from the plug-in's own load context");

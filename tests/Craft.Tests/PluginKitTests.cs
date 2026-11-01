@@ -118,7 +118,7 @@ public static class PluginKitTests
             CopySample(newer);
             WriteManifest(newer, "2.0");
             var refused = CraftPlugins.LoadFolder(newer);
-            Check.True(!refused.Loaded && refused.Error!.Contains("newer than this Craft's 1.0", StringComparison.Ordinal), $"a newer major contract is refused with the reason ({refused.Error})");
+            Check.True(!refused.Loaded && refused.Error!.Contains($"newer than this Craft's {CraftContracts.Version.Major}.{CraftContracts.Version.Minor}", StringComparison.Ordinal), $"a newer major contract is refused with the reason ({refused.Error})");
             Check.True(EditorPlugins.Find("sample") is null, "a refused plug-in registers nothing");
             WriteManifest(newer, "1.5");
             Check.True(CraftPlugins.LoadFolder(newer) is { Loaded: false, Error: not null }, "a newer minor contract is refused too (it may use members this Craft lacks)");

@@ -11,6 +11,7 @@ using Craft.Core.Workspaces;
 using Craft.CSharp;
 using Craft.Editor;
 using Craft.Editor.Abstractions;
+using Craft.Editor.Search;
 using Craft.Editor.Shell;
 using Craft.Tests.Runner;
 
@@ -149,7 +150,8 @@ public static class DesignTests
                 Check.True(rows.Any(r => r is { Title: "Undo", Chord: "Ctrl+Z", Enabled: false }), "Edit: Undo shows the editor's own key, disabled with no editor");
             }
 
-            Check.True(!ShellMenus.Rows(EditorMenus.Edit, host).Any(), "the edit commands are taken back");
+            Check.True(ShellMenus.Rows(EditorMenus.Edit, host).All(r => r.CommandId is SearchCommands.Show or SearchCommands.Replace),
+                "the edit commands are taken back (Find and Replace in files stay: the shell's, X part 6)");
         }
 
         Check.Equal(menusBefore, EditorMenus.Names.Count, "the shell's menu items are taken back");

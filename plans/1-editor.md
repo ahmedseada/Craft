@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
 | 5 | X rest: minimap, completion at several carets, peek (built in piece 3a), measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -3120,6 +3120,150 @@ Craft only; nothing in Idrak (no cause there).
   dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
+
+### X part 6 as built (2026-11-01): the Search view and the Run view
+
+Slot s2. Craft only; Idrak unchanged (its process sandbox was checked for what the Run view needs: an infinite time
+limit, `Timeout.InfiniteTimeSpan`, is taken, and a cancel kills the whole process tree; no cause was in the library).
+- **Contracts** (`Craft.Abstractions`, additive, contract 1.1 already stepped by piece 1b): `TextPattern` (the find
+  overlay's matcher, moved from `FindPattern`, which now wraps it with the same API, so a find in files finds what the
+  find overlay finds); `WorkspaceSearch.cs`: `WorkspaceSearchQuery` (text, case, whole word, regex, include and exclude
+  globs, ignore files), `WorkspaceSearchRequest`, `WorkspaceSearchHit`, `WorkspaceSearchFile`, `WorkspaceSearchSummary`,
+  `IWorkspaceSearchProvider : IKind` and `WorkspaceSearchProviders` ("text" built in), `WorkspaceGlob`, `GitIgnore`,
+  `WorkspaceFiles` (the walk) and `WorkspaceTextScan` (the matching any text provider shares); `Run.cs`: `RunActions`,
+  `RunTarget`, `RunCommand`, `RunConfiguration`, `RunWorkspace`, `RunProblem`, `IRunProvider : IKind` and `RunProviders`
+  ("scripts" built in, newest first), `RunCommandLine`, `RunProblems` (MSBuild's and the compilers'
+  `file(line,col): error CODE:` lines); the blocks `PanelQuery` (a live search field with toggles and icon buttons),
+  `PanelResults`/`PanelResultGroup`/`PanelResultRow`/`PanelSpan` (a grouped, virtualized results list) and
+  `PanelButton.Icon`; `RailIcons.Run`, `Build`, `Stop`, `Test`, `Replace`, `Close`, `Edit`, `Add`, `Collapse`, `Refresh`;
+  `ActivityKinds.Search`.
+- **The "text" provider**: the workspace's files walked folder by folder (the ignored folders and links never entered,
+  each folder's `.gitignore` read as it is reached, an excluded folder not entered), searched in parallel (one file per
+  processor, `CRAFT_SEARCH_THREADS`), each read as bytes into its worker's pooled buffer, passed over when binary (a zero
+  byte in its first 8,000) or larger than `CRAFT_SEARCH_MAX_FILE_MB`, decoded once (UTF-8 with or without its mark,
+  UTF-16 by its mark) into a pooled character buffer; plain text whose case matters is first looked for in the UTF-8 bytes
+  (a file without it is never decoded); plain text is found over the whole text at once (vectorized `IndexOf`) with the
+  lines counted as it goes, a regular expression (compiled for a workspace search) one line span at a time; a line
+  without a match allocates nothing. Open documents are searched in their current text, their files not read. Each
+  file's matches are reported as soon as found; the search stops at `CRAFT_SEARCH_MAX_RESULTS` and says so.
+- **The Search view** (`Craft.Editor.Search.WorkspaceSearchView`, the shell's own side view drawn from the blocks): the
+  rail's Search opens it (it ran quick open before; a second click folds the side), Ctrl+Shift+F (the one-line selection
+  as the query, the keyboard in the field), Ctrl+Shift+H (with the replace field); the query with Aa, ab and .* inside the
+  field (Alt+C, Alt+W, Alt+R in the tooltips), the replace field with Replace all, the files to include and exclude with
+  the `.gitignore` toggle; a status line (results in files, searching, capped, files passed over, the expression's
+  problem, with the time and the first result's time in its tooltip); Collapse all, Refresh, Clear; results grouped by
+  file in path order (the file's icon from `FileIcons`, its folder, its count; a click folds it; Replace in this file and
+  Dismiss on hover), each line with its number and its match highlighted in the find colour (with a replacement typed:
+  the match struck through and the replacement after it); a click opens the place with the match selected. The search
+  waits `CRAFT_SEARCH_DELAY_MS` after a keystroke, the next keystroke cancels it, it runs as an activity (Cancel in the
+  status bar), and its files arrive in batches (one UI turn takes every file found since the last).
+- **Replace in files as one review** (`EditorHost.ProposeFilesAsync`, `FileChange`, `FilesEditResult`;
+  `IEditorPresenter.ChooseFilesAsync`, a default member that asks each file in turn; `ProposalDiffPage` over several
+  files, each hunk under its file's name): the matches are found again in the text the host reads (the open document's
+  current text, or the file read off the UI thread into a document of its own, never a tab), so no position is stale;
+  accepted, each open document takes its hunks as one undo step and each closed file is saved with them (its encoding,
+  mark and line breaks kept); a file that changed while the user was asked is left and said; the shell's Undo bar takes
+  everything back (each open document's step while it is its last, each file written back while the disk still holds
+  what was written). Replace one match and Replace in this file go through the same review.
+- **The Run view** (`Craft.Editor.Run.RunView`, `RunFile`): a rail item "Run"; what the workspace runs, found by every
+  registered provider off the UI thread and found again when its folder watcher (`CRAFT_WORKSPACE_WATCHER`, a burst
+  gathered for `CRAFT_WORKSPACE_WATCH_MS`) sees a file a provider watches change, an editor saves one, or a provider is
+  registered; Run, Build, Test and Stop per row (on hover), "running" and "default" badges, a click makes the row the
+  default; the header's Run (F5), Build (Ctrl+Shift+B), Stop (Shift+F5), Add configuration, Refresh; the configuration
+  editor in the view (name, target, action, arguments, variables `A=1|B=2`, folder, build first; Save, Cancel, Delete),
+  kept in `.craft/run.json` (`default`, `configurations`). Every run: the provider's command, the user's approval
+  (`EditorQuestion` with the command line, folder, variables, sandbox and time limit; `CRAFT_RUN_APPROVAL` once a
+  session for the same command line, or each run), the registered sandbox `CRAFT_RUN_SANDBOX` (Idrak's
+  `CommandSandboxes`; "not registered" said, nothing runs), its output in a read-only terminal tab of its own ("Run:
+  App", "Build: App", the command first, error lines in red, the end with exit code and time), an activity whose Cancel
+  (and Stop) ends the process tree, its time limit `CRAFT_RUN_TIME_LIMIT_MINUTES` (0: none), and its problems (each once)
+  in Problems as "File.cs (build)" groups, a click opening the file at the place.
+- **The C# plug-in's provider** (`Craft.CSharp.Run.DotnetRunProvider`, "dotnet", registered in `CSharpPlugin`): every
+  `.csproj` read as an XML stream (an Exe, WinExe, a web or worker SDK, or a MAUI app runs and publishes; a test project
+  by `IsTestProject` or a test framework's package tests; every project builds; kind and frameworks in its detail),
+  `.sln` and `.slnx` (build, test), `Properties/launchSettings.json` profiles ("Project": `dotnet run --launch-profile`
+  with its arguments, variables and address; "Executable": its program; IIS Express and Docker left out); `dotnet run
+  --project` (a multi-targeted project with this system's framework), `dotnet build/test/publish -nologo`, a
+  configuration's arguments after `--` for a run. The "scripts" provider: `.ps1` (pwsh, else Windows PowerShell),
+  `.cmd`/`.bat` (cmd.exe, Windows only), `.sh` (bash, else sh) at the root and in `scripts/`; a script without its
+  program here says so instead of running.
+- **Options** (each a `CRAFT_*` variable on the settings page): `CRAFT_SEARCH_MAX_RESULTS` (20,000),
+  `CRAFT_SEARCH_MAX_FILE_MB` (20), `CRAFT_SEARCH_THREADS` (0: every processor), `CRAFT_SEARCH_IGNORE_FILES` (true),
+  `CRAFT_SEARCH_PROVIDER` (text) under Files › Search; `CRAFT_RUN_SANDBOX` (process), `CRAFT_RUN_TIME_LIMIT_MINUTES` (0),
+  `CRAFT_RUN_APPROVAL` (once) under Terminal › Run; the debounce is the existing `CRAFT_SEARCH_DELAY_MS`.
+
+**Decisions on the recommendation (the owner asleep; one line each).**
+- Both views are the shell's own side views drawn from the public block contract (added through `IEditorHost.AddPanel`), so they look and act as a plug-in's view; what they search and run comes from the registries.
+- Two new general blocks (a search field, a grouped results list) in `Craft.Abstractions` rather than shell-only views: P6's code search and X part 8's Source Control draw with them too.
+- `FindPattern`'s matcher moved to `Craft.Abstractions` as `TextPattern` (`FindPattern` wraps it, its API unchanged), so every provider matches as the find overlay does.
+- The "text" provider is built into `Craft.Abstractions`, as `FolderWatchers`' "system" is.
+- Plain text over the whole text, a regular expression line by line (exact line semantics: `^`, `$`, a CRLF's `\r` left out), a case-sensitive query looked for in the bytes first.
+- Results sorted by path as batches arrive (the same order every search); results are as of the search (Refresh, a replace or the next keystroke searches again), not edited live.
+- Replace re-finds the matches in the current text the host reads; a dismissed match is not replaced; a file changed meanwhile is left and said.
+- `.gitignore`: each folder's read as reached, the last matching rule wins, a deeper file's after its parents'; on by default (`CRAFT_SEARCH_IGNORE_FILES`); the ignored folders always.
+- Globs ignore case; a glob without '/' matches a name anywhere (a folder's name: everything in it), one with '/' is taken from the root; commas inside braces belong to the braces.
+- The Run view asks itself, once a session for each exact command line (command, folder, variables), with no setting that runs without asking; a workspace cannot set `CRAFT_RUN_SANDBOX` or `CRAFT_RUN_APPROVAL` (what runs is code).
+- The default sandbox is "process" (Idrak.Text's), not "approve-each" (whose words address the agent and which would ask a second time); any registered one through `CRAFT_RUN_SANDBOX`.
+- No time limit by default (Stop ends a run); `CRAFT_RUN_TIME_LIMIT_MINUTES` sets one.
+- One read-only terminal tab per configuration and action, its output batched per UI turn; a running program gets no input (the process sandbox closes standard input).
+- F5 and Ctrl+F5 both run the default (there is no debugger); Ctrl+Shift+B builds the default's target; Shift+F5 stops every run; registered bindings, so both keymaps have them (Visual Studio's keys are the same).
+- No default set: the first configuration, else the first target that runs; providers newest first, so a project's runner comes before the library's scripts.
+- `.craft/run.json` read and written with the runtime's JSON reader and writer (no reflection, AOT-safe), a temporary file moved over it.
+- The last run's problems replace the previous run's, shown beside the language's as "File.cs (build)"; a tool's own line (`CSC : error CS2001`) is not one.
+- The C# plug-in's `plugin.json` declares contract 1.1 (it registers a run provider); the restart's one contract step was already taken.
+- A failing expectation outside this work, met in the filter, was fixed: PluginKit's "newer contract" message now reads the running version (it said 1.0 after the step to 1.1).
+
+**Measured** (`WorkspaceSearch.ColdAndWarmSearchesOverCraftsSourceSize`, the 4-core Linux container, Release; a fixture
+of Craft's source size: 300 files, 105,000 lines, 4.6 MB; warm the median of 5; written to
+`test-output/benches/workspace-search.txt`; every search found the same):
+| Query | Matches | Cold | First result (cold) | Warm | First result (warm) |
+|---|---|---|---|---|---|
+| `search` (case ignored) | 104,976 | 37.6 ms | 11.6 ms | 18.7 ms | 0.6 ms |
+| `Search` (case, whole word) | 35,061 | 16.5 ms | 0.4 ms | 16.3 ms | 0.3 ms |
+| `x\d+ = ` (regex) | 105,000 | 76.6 ms | 3.9 ms | 39.9 ms | 3.2 ms |
+The scan allocates 0 bytes for 100,000 lines without a match (text, whole word, compiled regex; warm). The owner's
+Windows numbers (the test project and Craft's own source in the app) are still to be taken.
+
+**Tests**: `WorkspaceSearch` (7: the provider equals a plain scan for six queries over generated files with a BOM, UTF-16,
+CRLF, a binary and a 5,000-character line, the cap and the size limit; globs, the ignored folders and `.gitignore`;
+open documents in their current text, the view's groups, highlights and a click opening the place, folding, match case,
+an expression that does not parse; the next keystroke cancelling a running search; Replace all as one review of both
+files, the open document one undo step, the closed file saved with its mark, Undo, a dismissed match left, a rejected
+review; 0 bytes per line; the cold and warm numbers), `RunView` (5: the fixture's solution, two projects and a test
+project, launch profiles and scripts with their actions and commands; a run asked first, through a fake registered
+sandbox, its output tab, its errors in Problems, asked once a session or each time, a sandbox not registered; Stop
+ending a real script's process tree through the process sandbox; `.craft/run.json` round trip, the configuration edited
+in the view, the default, the watcher finding a new project; the keys in both keymaps, the rail's Search and Run, the
+workspace's refusal). First run: 8 of 13 passed; the five failures were two bugs (an `XmlReader` loop skipped the element
+after each value it read, losing a project's frameworks; a Windows folder taken on Linux threw in the problem parser)
+and three wrong expectations of the tests; one more (the glob list split inside braces) after. The full filter after the
+rebase onto pieces 1b, 3a and 2a: 195 of 199 passed; the four (the Edit menu now holds Find and Replace in files, the C#
+plug-in's contract 1.1, an allowed wait that moved to `TextPattern`, PluginKit's 1.0 message) fixed, then all passed.
+API dumps of Craft.Abstractions, Craft.Core, Craft.Editor, Craft.CSharp, the contract list and the inventory regenerated
+(lines added only).
+
+**Not compiled here**: nothing; no file under `Platforms/` changed and Craft.Maui compiled on its net10.0 target. **Not
+run here** (the owner's run): both views on WinUI (the icon buttons' hover, the toggles, the virtualized results list
+and its scroll as batches arrive, the field keeping the keyboard while the view redraws), the diff page across files, a
+real `dotnet run` and `dotnet build` of the test project with its errors in Problems, cmd and PowerShell scripts.
+
+**Left**: input to a running program (the process sandbox closes standard input; a run through a terminal host would
+need a sandbox that keeps one, an Idrak contract to add if asked); debugging (not asked); npm scripts (W's plug-in);
+P6's code search through the same view; the results do not follow edits made after the search.
+
+**The owner's commands** (Craft only; Idrak unchanged):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WorkspaceSearch.|RunView.|Shell.|Inline.|Keys.|Settings.|Terminal.|Plugins.|CSharp.|Semantic.|Ui.|Experience.|ApiGuard.|Inventory.|Design.|Layout.|Editor.|PluginKit.|PhaseP."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: the rail's Search (or Ctrl+Shift+F) and a query typed (results as you type, Aa, ab, .*, the files to
+include and exclude), a click on a result, Replace all (one review of every file, then Undo at the window's bottom);
+the rail's Run: CarftTestPOC's project, F5 (asked once, its output in "Run: CarftTestPOC"), a typo in Program.cs then
+Ctrl+Shift+B (the error in Problems as "Program.cs (build)", a click opens it), Shift+F5 on a long run, Add
+configuration with arguments, saved in `.craft\run.json`.
 
 ### X part 4
 - **Document symbols**: a default member `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by default) and

@@ -2,6 +2,6 @@
   "name": "Craft.CSharp",
   "version": "0.1.0",
   "summary": "C# on Roslyn: colours (syntactic and semantic), errors and warnings, completion, signature help, hover, go to definition and format for .cs files; colours for .csx; colours of .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig and .json, and format for the XML ones and JSON; the Run view's projects, solutions and launch profiles (dotnet run, build, test, publish)",
-  "contractVersion": "1.0",
+  "contractVersion": "1.1",
   "capabilities": []
 }

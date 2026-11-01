@@ -153,6 +153,23 @@ public sealed class ScriptTokenizer : LineTokenizer
         return Frames.KindOf(top);
     }
 
+    // The state with its innermost frame's token before set to a value (an embedding language read a literal the lexer did not see).
+    internal ulong WithPrevValue(ulong state)
+    {
+        if (!LineStates.IsInterned(state))
+        {
+            return Frames.KindOf(state) is FrameKind.Code or FrameKind.TemplateExpr or FrameKind.JsxExpr ? SetValue(state) : state;
+        }
+
+        var frames = States.Frames(state);
+        Span<ulong> copy = stackalloc ulong[Math.Min(frames.Length, 128)];
+        frames[..copy.Length].CopyTo(copy);
+        copy[^1] = SetValue(copy[^1]);
+        return States.Intern(copy);
+
+        static ulong SetValue(ulong frame) => (frame & ~(0x1FUL << 6)) | ((ulong)Prev.Value << 6);
+    }
+
     internal ulong Lex(ReadOnlySpan<char> line, int lineStart, ulong state, TokenSpanBuffer? into, IScriptTokenSink? sink)
     {
         Span<ulong> stack = stackalloc ulong[_depth];
@@ -767,7 +784,7 @@ public sealed class ScriptTokenizer : LineTokenizer
                 return false;
             }
 
-            if (t.Angular && word.Rule != WordRule.Always && word.Rule != WordRule.AfterValue)
+            if (t.Angular && word.Rule is not (WordRule.Always or WordRule.AfterValue or WordRule.Of))
             {
                 return false;
             }
@@ -824,7 +841,7 @@ public sealed class ScriptTokenizer : LineTokenizer
                     }
 
                 case WordRule.Of:
-                    return _prev == Prev.Value && _parens > 0;
+                    return _prev == Prev.Value && (_parens > 0 || t.Angular);   // for (x of xs); Angular's let x of xs
                 case WordRule.Out:
                     return _prev is Prev.OperatorStart or Prev.KeywordExpr && NamedAfter(end, allowBrace: false, nameOnly: true);
                 case WordRule.ImportPhase:

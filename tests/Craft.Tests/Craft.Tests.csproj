@@ -40,6 +40,8 @@
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Css\Craft.Plugins.Css.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.JavaScript\Craft.Plugins.JavaScript.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.TypeScript\Craft.Plugins.TypeScript.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Html\Craft.Plugins.Html.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Angular\Craft.Plugins.Angular.csproj" />
     <!-- Phase W's lint plug-in (group WebLint): its API dump and its tests; also loaded from a copy of its output. -->
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Lint\Craft.Plugins.Lint.csproj" />
     <!-- Idrak's conformance suites (FillInMiddleFormatSuite, TokenSamplerSuite, TextMatcherSuite) for the plug-ins of phase P. -->

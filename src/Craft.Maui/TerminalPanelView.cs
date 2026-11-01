@@ -341,7 +341,9 @@ public sealed class TerminalPanelView : ContentView, IDisposable
         }
 
         _paneSignature = panes;
-        while (_views.Count < group.Count)
+        // At least one view, as the panes below lay out (with no terminal it waits, empty, for the first): the panel's
+        // first build (its constructor's Apply, before any terminal exists) read a view it had not made.
+        while (_views.Count < Math.Max(1, group.Count))
         {
             var view = new TerminalView(_manager);
             view.Apply(_palette.Theme, _palette.Options);

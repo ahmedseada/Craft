@@ -38,6 +38,10 @@ the session), each pushed to its `slot/<piece>` branch and merged by the session
   `slot/x-timings` (1c, measured input-to-response times).
 - Decision (noted): the one agent takes the pieces in that order without a pause (XL2 follows XL1 as a slot frees);
   nothing outside this list starts.
+- **Status:** XL1 built and merged (x-tools 914eec3, x-ai a9080dc, x-look acbdd6d, x-language 5774e9a). XL2 stopped
+  before it wrote anything (the owner, 2026-11-01: "stop the xl2 for now"); 5 and 6 were to run together in one cycle
+  (`slot/x-completion`, its agent had found that P6 is not built and that Idrak's BM25 indexes and encoders are to be
+  used, not reimplemented); waits for the owner's word.
 
 **The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
 before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a

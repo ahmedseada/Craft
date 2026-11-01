@@ -66,7 +66,8 @@ public static class WebPluginTests
             Check.True(FoldingRangeProviders.Find(JsonFolding.ProviderName) is { } folding && folding.Languages.Contains(JsonLanguage.LanguageName),
                 "its folding provider is registered for \"json\"");
             Check.Equal("JSON with comments", FileIcons.Find(".jsonc")?.Language, "its icons are registered (.jsonc, which the library has none for)");
-            Check.Equal("JSON", FileIcons.For("package.json").Language, "package.json shows the JSON icon");
+            Check.True(FileIcons.For("data.json") is { Language: "JSON", Shape: not null }, "a .json file shows the plug-in's JSON icon, drawn (W-files: Craft's shape kept)");
+            Check.Equal("npm package", FileIcons.For("package.json").Language, "package.json shows its own icon (W-files: an exact name over the plug-in's .json)");
 
             Check.True(IdrakPlugins.Unregister(JsonLanguage.LanguageName), "the plug-in unregisters");
             foreach (var file in JsonFiles)

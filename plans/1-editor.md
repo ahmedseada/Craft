@@ -4829,6 +4829,116 @@ Slot w1, on Craft `main` 0f14e72 and Idrak `main` 9e63a92. Craft only: no cause 
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
 
+### W-files as built (2026-11-01)
+
+Slot w2, Craft only (nothing in Idrak was needed: the icons' paths are parsed by MAUI Graphics, the registries are Idrak's
+`KindTable`). Contracts 3, 4 and 5 and the rich icon theme.
+- **Languages by name** (contract 3): `ILanguage.FilePatterns` (a default member, none: exact names and `*`/`?` globs);
+  `EditorLanguages.ForFile` ranks an exact name, then the longest pattern (its characters other than wildcards), then the
+  extension; the first language registered wins a tie. `FilePatternTable<T>` (public, any plug-in can use it) holds names,
+  compound suffixes (".d.ts", and a star with a literal suffix: "*.component.html"), globs and extensions, each ignoring
+  case: a walk over the name's dots with alternate lookups (rules 15, 17), the globs longest first, made again only when a
+  registration changed the registry (its list is then a new array). Measured: 0 bytes over 230,000 warm lookups of
+  languages, file icons and folder icons together (`WebFiles.MatchingNamesAllocatesNothing`).
+- **Languages by workspace** (contract 4): `ILanguageSelector : IKind` (`Select(path, workspaceRoot)` from its own cache,
+  no I/O; `PrepareAsync(root)` off the UI thread) and `LanguageSelectors` (`PrepareAsync` runs them together, a failing one
+  named and skipped); `ForFile(path, workspaceRoot)` asks them first. The shell's call sites (open, new, save as, rename,
+  peek, session restore, groups, the context menu's "Open with" and Format) go through `ShellModel.LanguageFor`, which
+  passes the open folder; opening a folder prepares the selectors off the UI thread and then `RepickLanguages` gives the
+  open tabs their languages again.
+- **Rich icons** (contract 5): `FileIcon` gains `Shape`, `OpenShape` (a folder's open look) and `LightArgb`;
+  `FileIconShape` (layers on a 16-unit box; `Problem` checks SVG path data, `Transform` places a glyph) and
+  `FileIconLayer` (path data, dark and light colours, fill or a round stroke). `FileIcons` matches by exact name, compound
+  suffix, glob and extension (the same table as the languages), `ForFolder(name)` by folder name, `RegisterFolder`,
+  `PlainFolder`; a shape that cannot be drawn fails at registration. `FileIconThemes : IKind` (`IFileIconTheme`, and
+  `FileIconTheme` for a plug-in made of icons by key) with the library's "craft"; `CRAFT_ICON_THEME` (Settings ›
+  Appearance › Theme, its choices the registered themes) picks one, a theme's gaps drawn from Craft's set.
+- **Craft's own set** (`CraftIcons`, 112 file keys, 31 folders, 417 layers): original drawings in the design's style (the
+  logo's rounded tile with an ink mark): sources on a rounded tile, documents and data on a page with a folded corner,
+  Angular's parts on a hexagon of Craft's own, each in the design's hues with a monogram of stroked letters or a small
+  drawing (cube, gear, globe, branch, lock, tick, crates); folders open and closed with an emblem. The C# set redrawn
+  (.cs .csx .csproj .props .targets .sln .slnx .razor .cshtml .xaml .xml .config .resx .json appsettings*.json
+  launchSettings.json global.json .editorconfig .md images .svg .ps1 .cmd .bat .sh .gitignore .gitattributes Dockerfile
+  .yml .txt) and the web set (.html/.htm, .css .scss .sass .less, .js .mjs .cjs .jsx jsconfig.json, .ts .mts .cts .tsx
+  .d.ts tsconfig*.json, the Angular parts and angular.json, package.json, package-lock.json, .npmrc, .nvmrc,
+  eslint.config.*, .eslintrc*, tslint.json, .prettierrc*, .spec/.test files); folders src, test(s), docs, .git, .github,
+  .vscode, .vs, .craft, node_modules, dist/out/build, bin, obj, assets/images, public/wwwroot, components, services, scripts,
+  .angular, Properties. Light: each base moved to 3:1 on the light theme's grounds (`ColorContrast`), a white ink; dark:
+  the design's hues, a near-black ink. Checked here: every layer parsed by MAUI Graphics' own `PathBuilder` (a scratch
+  program against the package's net10.0 assembly: 417 of 417, all inside the box) and drawn to a preview sheet.
+- **Drawing**: `IconPathCache<TPath>` (Craft.Editor) keeps each layer's parsed path per size, by the layer's identity,
+  bounded (4,096); `MauiFileIcons` builds them with `PathBuilder.Build` scaled once and caches each colour; `FileIconView`
+  (a bindable `GraphicsView`) shows one; the badge is the fallback (no shape, or a path the parser refused). `IIconCanvas`
+  (optional on an `IEditorCanvas`, MAUI's implements it) and `FileIconDrawing.Draw` let a drawn list (Problems) draw icons.
+  Measured with the cache and a recording canvas: the first frame parses each layer once, 0 bytes and no parse over 1,000
+  warm frames of 22 icons, a new size parses once more.
+- **Where they show**: the tree (the chevron, then the folder's open or closed icon or the file's), the tabs, quick open
+  (folders too), the breadcrumb's file, the welcome page's recent folders, Problems' file headers, search, bookmark,
+  history and Run results (`PanelResultGroup.FileIcon`), the menus' "file:" icons, the Source Control file lists.
+- **node_modules**: `Workspace.ListFolder` keeps the skipped folders (`CRAFT_WORKSPACE_IGNORE`) marked
+  `WorkspaceEntry.IsIgnored` (and every entry listed inside one) when `CRAFT_WORKSPACE_SHOW_IGNORED` is on (the default):
+  the tree draws them at half opacity, closed, read only when opened; `EnumerateFiles` (quick open's list, indexing) and
+  the search's walk never enter them, as before; `Workspace.IsInIgnoredFolder`.
+
+**Decisions on the recommendation (the owner away; one line each).**
+- A star followed by a literal suffix is a compound suffix (found by the dot walk), any other wildcard a glob; both rank as patterns, above every extension.
+- An extension a language lists keeps its rank as an extension even when it has two dots (".d.ts" listed as an extension ranks as a suffix-pattern).
+- A selector returns the language itself (not a name); a disabled plug-in takes its selector with it, so nothing names a missing language.
+- The selectors learn a folder when it opens, not on every call; the host re-picks the open tabs after (a later change of angular.json waits for W-npm's `WorkspaceChanged`).
+- The icon set is one registry keyed by any kind of key (`FileIcons`), and is the "craft" theme; a theme a plug-in registers answers first and Craft's set fills its gaps.
+- An unregistered `CRAFT_ICON_THEME` keeps Craft's own, said in the log (as `CRAFT_THEME` falls back), while `FileIconThemes.Use` itself fails with "not registered".
+- Shapes are 16-unit boxes of SVG path data per layer (fill or round stroke), not a font or images: no package, any plug-in can draw its own, light and dark per layer.
+- The library's set is built once from bases and glyphs placed by a path transform (one walk, InvariantCulture), so each glyph is drawn once and reused.
+- Light icons: the base moved to 3:1 (a graphic's contrast) on the light theme's grounds, white ink; the badge's text colour to 4.5:1.
+- The path cache is by the layer's identity and the size, bounded, cleared when the icon theme changes; a layer the platform's parser refuses draws the badge from then on.
+- Problems draws icons through an optional canvas interface (as `IStyledLineCanvas`), so the headless tests and any canvas without shapes keep the badge.
+- The tree's folder rows keep their chevron and add the folder icon; file rows leave the chevron's place empty so names line up.
+- Skipped folders show by default (VS Code shows git-ignored folders dimmed); off, the tree is as before.
+- The JSON plug-in's .json and .jsonc icons take Craft's drawn JSON shape (its registration over the library's had turned them back into badges); package.json keeps its own icon (an exact name above .json).
+- Angular's parts use a hexagon of Craft's own and letters, never Angular's mark; no vendor logo anywhere in the set.
+
+**Tests**: new group `WebFiles` (7): `ForFile` by name, longest pattern, extension and tie, the table's grammar and globs, a
+registration changing the table; 0 bytes warm for languages and icons by name; a selector first from its cache, a failing
+one named, the shell's folder passed and the open tab re-picked; icons by name, suffix, glob, extension and folder, open and
+closed, light at 3:1, a plug-in's icons and Unregister; every built-in shape parses and is written again the same, the bad
+forms refused, the C# and web lists covered; quick open, the tree and Problems on the same table (the badge without shapes,
+the icon with them); warm icon frames parse once and allocate nothing, per size, bounded; a plug-in's icon theme picked by
+`CRAFT_ICON_THEME`, an unknown name kept to Craft's, `Use` failing loudly; node_modules listed dimmed and closed, never in the
+workspace's files or a search, hidden with the switch off. First run of the group and the touched ones: all 7 passed;
+`Inventory` wanted the regeneration. After the rebase onto W0, the full filter
+(`WebFiles|Inline|Shell|ContextMenus|SourceControl|WorkspaceSearch|Breadcrumb|Settings|Design|LookAndFeel|Ui|ApiGuard|Inventory|ProblemsPanel|WebKit|WebPlugins|ProjectLanguages`,
+153): 150 passed; two expectations this work changes on purpose were updated (`Shell.TheFolderTreeListsAFolderWhenItOpens`:
+bin now shows dimmed by default, the old order kept with the switch off; `WebPlugins`: package.json shows its npm icon, a
+.json file the plug-in's drawn one), and `Layout.TheTreeFollowsTheDisk…` (bin's own row now shows, still no batch for the
+churn inside it); then those and `Experience|TreeMove|Layout|EditorGroups|Navigation|Plugins` passed. One failure is not
+this work's: `LookAndFeel.NoPlatformMessageBoxIsLeft` matches X part 8's `PanelMessageBox` (`MessageBox(box)` in
+`src/Craft.Maui/PanelBlocksView.cs` and `plugins/Craft.Plugins.Git/SourceControlView.cs`), left to its owner. API dumps of
+Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and `plans/inventory.md` regenerated, lines added only.
+
+**Windows only (not run here; Craft.Maui compiled on net10.0)**: `FileIconView` and `MauiFileIcons` on Win2D (the look, the
+antialiasing at 16 units, whether Win2D's `FillPath` allocates per call), the tree's chevron and icon row, the tabs',
+breadcrumb's, quick open's, welcome page's, menus' and panels' icons, Problems' icons through `MauiEditorCanvas`, the dimmed
+node_modules. No file under `Platforms/` changed.
+
+**Left**: folder icons in the breadcrumb's folder parts; a tab's icon follows a rename only when the strip is rebuilt; the
+selectors re-read a folder only when it opens (W-npm's `WorkspaceChanged` can drive it); files inside an opened skipped
+folder do not follow the disk (the watcher drops them, as before); the closed file of a review (`BackgroundDocument`) is
+named by its file name only.
+
+**The owner's commands:**
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebFiles|Inline|Shell|ContextMenus|SourceControl|WorkspaceSearch|Breadcrumb|Settings|Design|LookAndFeel|Ui|ApiGuard|Inventory|ProblemsPanel|WebKit|WebPlugins|ProjectLanguages|Layout|Experience|Plugins"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: the explorer's icons beside every file and folder (open a folder: its icon opens), `bin` and `obj` dimmed and
+closed (open one: its files dimmed); the tabs', quick open's (Ctrl+P, and a folder browsed), the breadcrumb's, the welcome
+page's and Problems' icons; the light theme (Settings › Appearance › Theme) for the light variants; Settings ›
+Appearance › File icon theme lists "craft"; Settings › Files › "Show skipped folders in the explorer, dimmed" off hides them.
+With W's web project (`test-output\WebTestPOC`), node_modules dimmed, package.json, angular.json, the component parts.
+
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 
 Planned by a read-only agent from `wip/p-batch-2` (`74a5c21` on `e04652c`; `main` 47 commits ahead). The WIP holds P6

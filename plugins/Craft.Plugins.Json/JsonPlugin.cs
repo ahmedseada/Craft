@@ -61,10 +61,14 @@ public static class JsonLanguage
         "JSON with comments and trailing commas (package.json, tsconfig.json, appsettings.json, launchSettings.json, global.json, .jsonc): colours, folding and format",
         [".json", ".jsonc"], Rules, new JsonTokenizer(), new JsonFormatter());
 
-    /// <summary>The icons of its files, registered over the library's.</summary>
+    /// <summary>The icons of its files, registered over the library's (W: with Craft's drawn JSON shape, so they stay rich).</summary>
     public static IReadOnlyList<FileIcon> Icons { get; } =
     [
-        new(".json", "{}", 0xFFE3B27A, "JSON"),
-        new(".jsonc", "{}", 0xFFE3B27A, "JSON with comments"),
+        Drawn(new(".json", "{}", 0xFFE3B27A, "JSON")),
+        Drawn(new(".jsonc", "{}", 0xFFE3B27A, "JSON with comments")),
     ];
+
+    // The library's drawn .json icon's shape on the plug-in's icon (made before the plug-in registers its own over it).
+    private static FileIcon Drawn(FileIcon icon) =>
+        FileIcons.Find(".json") is { Shape: { } shape } library ? icon with { Shape = shape, LightArgb = library.LightArgb } : icon;
 }

@@ -112,8 +112,9 @@ public static class LayoutTests
 
         await Task.Delay(200);
         fixture.Pump();
-        Check.True(shell.TreeWatch.Batches == binBatches && tree.IndexOf(Path.Combine(F("src"), "bin")) < 0,
-            $"twenty files written inside bin (CRAFT_WORKSPACE_IGNORE): no batch, no row ({shell.TreeWatch.Batches - binBatches} more)");
+        Check.True(shell.TreeWatch.Batches == binBatches && tree.IndexOf(Path.Combine(F("src"), "bin")) is var binRow && binRow >= 0
+            && tree.Rows[binRow] is { Entry.IsIgnored: true, IsExpanded: false } && tree.IndexOf(Path.Combine(F("src"), "bin", "out0.dll")) < 0,
+            $"twenty files written inside bin (CRAFT_WORKSPACE_IGNORE): no batch; bin's own row dimmed and closed (W-files), none of its files ({shell.TreeWatch.Batches - binBatches} more)");
         File.Move(F("a.txt"), F("b.txt"));
         await fixture.PumpUntil(() => tree.IndexOf(F("b.txt")) >= 0 && tree.IndexOf(F("a.txt")) < 0, "a rename shows");
         Directory.Delete(F("src"), recursive: true);

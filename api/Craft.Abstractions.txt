@@ -472,7 +472,15 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 Background { get; init; }
   System.UInt32 Border { get; init; }
   System.UInt32 BorderStrong { get; init; }
+  System.UInt32 BracketDepth(System.Int32 depth)
+  System.UInt32 BracketDepth1 { get; init; }
+  System.UInt32 BracketDepth2 { get; init; }
+  System.UInt32 BracketDepth3 { get; init; }
+  System.UInt32 BracketDepth4 { get; init; }
+  System.UInt32 BracketDepth5 { get; init; }
+  System.UInt32 BracketDepth6 { get; init; }
   System.UInt32 BracketMatch { get; init; }
+  System.UInt32 BracketUnmatched { get; init; }
   System.UInt32 Caret { get; init; }
   System.UInt32 CurrentLine { get; init; }
   System.UInt32 DiffAdded { get; init; }
@@ -489,7 +497,11 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 GutterText { get; init; }
   System.UInt32 IndentGuide { get; init; }
   System.UInt32 Info { get; init; }
+  System.UInt32 InlineError { get; init; }
+  System.UInt32 InlineInfo { get; init; }
+  System.UInt32 InlineWarning { get; init; }
   System.UInt32 InterfaceSelection { get; init; }
+  System.UInt32 Lightbulb { get; init; }
   System.UInt32 MinimapSlider { get; init; }
   System.UInt32 MinimapSliderActive { get; init; }
   System.UInt32 PopupBackground { get; init; }
@@ -507,7 +519,9 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 Success { get; init; }
   System.UInt32 Surface { get; init; }
   System.UInt32 Text { get; init; }
+  System.UInt32 VerticalRuler { get; init; }
   System.UInt32 Warning { get; init; }
+  System.UInt32 Whitespace { get; init; }
   System.UInt32 WordHighlight { get; init; }
   System.Void Deconstruct(out System.UInt32 Background, out System.UInt32 Foreground, out System.UInt32 Selection, out System.UInt32 CurrentLine, out System.UInt32 Caret, out System.UInt32 Gutter, out System.UInt32 GutterText, out System.UInt32 GutterCurrentText, out System.UInt32 BracketMatch, out System.UInt32 FindMatch)
   ctor(System.UInt32 Background, System.UInt32 Foreground, System.UInt32 Selection, System.UInt32 CurrentLine, System.UInt32 Caret, System.UInt32 Gutter, System.UInt32 GutterText, System.UInt32 GutterCurrentText, System.UInt32 BracketMatch, System.UInt32 FindMatch)
@@ -802,6 +816,34 @@ static class Craft.Abstractions.FileIcons
   static System.Boolean Unregister(System.String extension)
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.FileIcon icon)
+sealed class Craft.Abstractions.FileSettings : System.IEquatable<Craft.Abstractions.FileSettings>
+  Craft.Abstractions.FileSettings <Clone>$()
+  Craft.Abstractions.FileSettings Over(Craft.Abstractions.FileSettings under)
+  System.Boolean Equals(Craft.Abstractions.FileSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsEmpty { get; }
+  System.Boolean? InsertFinalNewline { get; init; }
+  System.Boolean? InsertSpaces { get; init; }
+  System.Boolean? TrimTrailingWhitespace { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Sources { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32? MaxLineLength { get; init; }
+  System.Int32? TabSize { get; init; }
+  System.String Charset { get; init; }
+  System.String NewLine { get; init; }
+  System.String ToString()
+  ctor()
+  static Craft.Abstractions.FileSettings None { get; }
+static class Craft.Abstractions.FileSettingsProviders
+  const System.String EditorConfig = editorconfig
+  static Craft.Abstractions.FileSettings Cached(System.String path, System.Func<Craft.Abstractions.IFileSettingsProvider, System.Boolean> use = null)
+  static Craft.Abstractions.IFileSettingsProvider Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IFileSettingsProvider Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IFileSettingsProvider> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Threading.Tasks.Task<Craft.Abstractions.FileSettings> ForFileAsync(System.String path, System.Func<Craft.Abstractions.IFileSettingsProvider, System.Boolean> use = null, System.Threading.CancellationToken cancellationToken = null)
+  static System.Void Register(Craft.Abstractions.IFileSettingsProvider provider)
 struct Craft.Abstractions.FolderChange : System.IEquatable<Craft.Abstractions.FolderChange>
   Craft.Abstractions.FolderChangeKind Kind { get; init; }
   System.Boolean Equals(Craft.Abstractions.FolderChange other)
@@ -1054,6 +1096,11 @@ interface Craft.Abstractions.IEditorToolSet : Idrak.Abstraction.IKind
 interface Craft.Abstractions.IEditorViewPanel : Craft.Abstractions.IEditorPanel
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
   System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
+interface Craft.Abstractions.IFileSettingsProvider : Idrak.Abstraction.IKind
+  Craft.Abstractions.FileSettings Cached(System.String path)
+  System.Boolean IsConfigurationFile(System.String path)
+  System.Threading.Tasks.Task<Craft.Abstractions.FileSettings> ForFileAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Invalidate()
 interface Craft.Abstractions.IFolderWatcher : Idrak.Abstraction.IKind
   System.IDisposable Watch(System.String folder, System.Action<Craft.Abstractions.FolderChange> changed)
 interface Craft.Abstractions.IFoldingRangeProvider : Idrak.Abstraction.IKind
@@ -1328,11 +1375,13 @@ sealed class Craft.Abstractions.LanguageRules : System.IEquatable<Craft.Abstract
   Craft.Abstractions.LanguageRules <Clone>$()
   System.Boolean Equals(Craft.Abstractions.LanguageRules other)
   System.Boolean Equals(System.Object obj)
+  System.Char StringEscape { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets { get; init; }
   System.Int32 GetHashCode()
   System.String BlockCommentClose { get; init; }
   System.String BlockCommentOpen { get; init; }
   System.String LineComment { get; init; }
+  System.String StringDelimiters { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String LineComment, out System.String BlockCommentOpen, out System.String BlockCommentClose, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
   ctor(System.String LineComment, System.String BlockCommentOpen, System.String BlockCommentClose, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)

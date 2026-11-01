@@ -540,7 +540,15 @@ Craft.Abstractions.EditorColors  System.UInt32 AccentInk { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Background { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Border { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 BorderStrong { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 BracketDepth(System.Int32 depth)
+Craft.Abstractions.EditorColors  System.UInt32 BracketDepth1 { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 BracketDepth2 { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 BracketDepth3 { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 BracketDepth4 { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 BracketDepth5 { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 BracketDepth6 { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 BracketMatch { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 BracketUnmatched { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Caret { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 CurrentLine { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 DiffAdded { get; init; }
@@ -557,7 +565,11 @@ Craft.Abstractions.EditorColors  System.UInt32 GutterCurrentText { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 GutterText { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 IndentGuide { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Info { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 InlineError { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 InlineInfo { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 InlineWarning { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 InterfaceSelection { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 Lightbulb { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 MinimapSlider { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 MinimapSliderActive { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 PopupBackground { get; init; }
@@ -575,7 +587,9 @@ Craft.Abstractions.EditorColors  System.UInt32 Selection { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Success { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Surface { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Text { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 VerticalRuler { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Warning { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 Whitespace { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 WordHighlight { get; init; }
 Craft.Abstractions.EditorColors  System.Void Deconstruct(out System.UInt32 Background, out System.UInt32 Foreground, out System.UInt32 Selection, out System.UInt32 CurrentLine, out System.UInt32 Caret, out System.UInt32 Gutter, out System.UInt32 GutterText, out System.UInt32 GutterCurrentText, out System.UInt32 BracketMatch, out System.UInt32 FindMatch)
 Craft.Abstractions.EditorColors  ctor(System.UInt32 Background, System.UInt32 Foreground, System.UInt32 Selection, System.UInt32 CurrentLine, System.UInt32 Caret, System.UInt32 Gutter, System.UInt32 GutterText, System.UInt32 GutterCurrentText, System.UInt32 BracketMatch, System.UInt32 FindMatch)
@@ -891,6 +905,35 @@ Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon Plain { get; }
 Craft.Abstractions.FileIcons  static System.Boolean Unregister(System.String extension)
 Craft.Abstractions.FileIcons  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.FileIcons  static System.Void Register(Craft.Abstractions.FileIcon icon)
+Craft.Abstractions.FileSettings
+Craft.Abstractions.FileSettings  Craft.Abstractions.FileSettings <Clone>$()
+Craft.Abstractions.FileSettings  Craft.Abstractions.FileSettings Over(Craft.Abstractions.FileSettings under)
+Craft.Abstractions.FileSettings  System.Boolean Equals(Craft.Abstractions.FileSettings other)
+Craft.Abstractions.FileSettings  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.FileSettings  System.Boolean IsEmpty { get; }
+Craft.Abstractions.FileSettings  System.Boolean? InsertFinalNewline { get; init; }
+Craft.Abstractions.FileSettings  System.Boolean? InsertSpaces { get; init; }
+Craft.Abstractions.FileSettings  System.Boolean? TrimTrailingWhitespace { get; init; }
+Craft.Abstractions.FileSettings  System.Collections.Generic.IReadOnlyList<System.String> Sources { get; init; }
+Craft.Abstractions.FileSettings  System.Int32 GetHashCode()
+Craft.Abstractions.FileSettings  System.Int32? MaxLineLength { get; init; }
+Craft.Abstractions.FileSettings  System.Int32? TabSize { get; init; }
+Craft.Abstractions.FileSettings  System.String Charset { get; init; }
+Craft.Abstractions.FileSettings  System.String NewLine { get; init; }
+Craft.Abstractions.FileSettings  System.String ToString()
+Craft.Abstractions.FileSettings  ctor()
+Craft.Abstractions.FileSettings  static Craft.Abstractions.FileSettings None { get; }
+Craft.Abstractions.FileSettings : System.IEquatable<Craft.Abstractions.FileSettings>
+Craft.Abstractions.FileSettingsProviders
+Craft.Abstractions.FileSettingsProviders  const System.String EditorConfig = editorconfig
+Craft.Abstractions.FileSettingsProviders  static Craft.Abstractions.FileSettings Cached(System.String path, System.Func<Craft.Abstractions.IFileSettingsProvider, System.Boolean> use = null)
+Craft.Abstractions.FileSettingsProviders  static Craft.Abstractions.IFileSettingsProvider Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.FileSettingsProviders  static Craft.Abstractions.IFileSettingsProvider Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.FileSettingsProviders  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.FileSettingsProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IFileSettingsProvider> All { get; }
+Craft.Abstractions.FileSettingsProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.FileSettingsProviders  static System.Threading.Tasks.Task<Craft.Abstractions.FileSettings> ForFileAsync(System.String path, System.Func<Craft.Abstractions.IFileSettingsProvider, System.Boolean> use = null, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.FileSettingsProviders  static System.Void Register(Craft.Abstractions.IFileSettingsProvider provider)
 Craft.Abstractions.FolderChange
 Craft.Abstractions.FolderChange  Craft.Abstractions.FolderChangeKind Kind { get; init; }
 Craft.Abstractions.FolderChange  System.Boolean Equals(Craft.Abstractions.FolderChange other)
@@ -1168,6 +1211,12 @@ Craft.Abstractions.IEditorViewPanel
 Craft.Abstractions.IEditorViewPanel  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
 Craft.Abstractions.IEditorViewPanel  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorViewPanel : Craft.Abstractions.IEditorPanel
+Craft.Abstractions.IFileSettingsProvider
+Craft.Abstractions.IFileSettingsProvider  Craft.Abstractions.FileSettings Cached(System.String path)
+Craft.Abstractions.IFileSettingsProvider  System.Boolean IsConfigurationFile(System.String path)
+Craft.Abstractions.IFileSettingsProvider  System.Threading.Tasks.Task<Craft.Abstractions.FileSettings> ForFileAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IFileSettingsProvider  System.Void Invalidate()
+Craft.Abstractions.IFileSettingsProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.IFolderWatcher
 Craft.Abstractions.IFolderWatcher  System.IDisposable Watch(System.String folder, System.Action<Craft.Abstractions.FolderChange> changed)
 Craft.Abstractions.IFolderWatcher : Idrak.Abstraction.IKind
@@ -1487,11 +1536,13 @@ Craft.Abstractions.LanguageRules
 Craft.Abstractions.LanguageRules  Craft.Abstractions.LanguageRules <Clone>$()
 Craft.Abstractions.LanguageRules  System.Boolean Equals(Craft.Abstractions.LanguageRules other)
 Craft.Abstractions.LanguageRules  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LanguageRules  System.Char StringEscape { get; init; }
 Craft.Abstractions.LanguageRules  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets { get; init; }
 Craft.Abstractions.LanguageRules  System.Int32 GetHashCode()
 Craft.Abstractions.LanguageRules  System.String BlockCommentClose { get; init; }
 Craft.Abstractions.LanguageRules  System.String BlockCommentOpen { get; init; }
 Craft.Abstractions.LanguageRules  System.String LineComment { get; init; }
+Craft.Abstractions.LanguageRules  System.String StringDelimiters { get; init; }
 Craft.Abstractions.LanguageRules  System.String ToString()
 Craft.Abstractions.LanguageRules  System.Void Deconstruct(out System.String LineComment, out System.String BlockCommentOpen, out System.String BlockCommentClose, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
 Craft.Abstractions.LanguageRules  ctor(System.String LineComment, System.String BlockCommentOpen, System.String BlockCommentClose, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)

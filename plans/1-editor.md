@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps; items 1, 2, 6-9 built 2026-11-01: "X part 9, editing helpers 1, 2, 6-9, as built"), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
 | 5 | X rest: minimap, completion at several carets (both built 2026-11-01, "X restart piece 2b as built"), peek (built in piece 3a), measured response times on Windows | Response times left |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -3950,6 +3950,136 @@ variable, drawn through B1's cached layouts, and a contract where a plug-in may 
   `LocalHistory`, `OutputLinks`, `TestExplorer`, `MarkdownPreview`, `ImagePreview`, `TodoList`, `SpellCheck`,
   `InlineChat`, `ThemePicker`, `ZenMode`, `StatusPickers`). Slots: split by area over the three slots as each frees
   (editing helpers, navigation, tools and look).
+
+### X part 9, editing helpers 1, 2, 6-9, as built (2026-11-01)
+
+Slot s2: X part 9's word wrap (1), bracket pair colours (2), diagnostics at the line end (6), the lightbulb (7), rendered
+white space, rulers, trim and final newline on save (8), and `.editorconfig` applied per file (9). Craft only; nothing in
+Idrak (no cause there).
+- **Word wrap** (`Craft.Editor/WordWrap.cs`, `EditorModel.Helpers.cs`). `CRAFT_WORD_WRAP` (off, on, column),
+  `CRAFT_WORD_WRAP_COLUMN` (80), Alt+Z (`craft.editor.toggleWordWrap`; Visual Studio's keymap Ctrl+E Ctrl+W) for the editor
+  in hand, the line at the top kept. `WrappedLine`: a line's row starts (a character index and its column), the indent its
+  continuation rows keep (the line's own, when at most half the width), made from the line's text and kept while that text,
+  the width and the tab size stay (whatever the snapshot's version). Rows break after white space; inside a word only when it
+  is wider than a row; white space may hang past the width. The rows of all lines are a binary indexed tree over the lines
+  (a folded line counts none): a line's row and a row's line are each one walk of the tree's height; a line never shown counts
+  one row until it is, so a frame wraps only the lines it shows (`PrepareFrame`: the viewport's lines wrapped until their rows
+  stop moving), the kept wraps are trimmed like the run cache, and an edit splices the counts of the lines it touched
+  (`LineEdits`, shared with the bracket states). A new width wraps again keeping the top line where it was. The model's row
+  API (`RowCount`, `RowOfLine`, `LineAtRow`, `RowsOfLine`, `VisualOf`, `PositionAtVisual`, `PointFromPosition`,
+  `PositionFromPoint`, `EnsureCaretVisible`) follows the rows, so the hit tests, the popups' anchors, sticky scroll, the
+  overview ruler and the line marks need no change of their own. Up/Down (and PageUp/Down, Ctrl+Alt+Up/Down) move by visual
+  row at the screen's column; Home on a continuation row goes to the row's start, again to the line's Home; End on a row
+  before the last goes to the row's end, again to the line's end. The renderer draws a wrapped line row by row, each row a
+  kept `StyledLine` of its own (B1's one layout a shown line becomes one a shown row), and splits the selection, find hits,
+  the current word, the bracket match and squiggles per row; a folded header's "..." and the line-end message follow its last
+  row; the line number and the chevron stay on the first.
+- **Bracket pair colours** (`Craft.Editor/BracketColors.cs`). `CRAFT_BRACKET_COLORS` (on), `CRAFT_BRACKET_COLORS_SCAN_LINES`
+  (20,000). New theme tokens `BracketDepth1..6` (the theme's accent, info and success, then those three mixed a third toward
+  the text's colour), `BracketUnmatched` (the error colour) and `EditorColors.BracketDepth(int)`. The state at each line's
+  start (the depth, a block comment open) is kept per line; strings and comments are found by the language's rules, so a
+  depth needs no parse: new `LanguageRules.StringDelimiters` and `StringEscape` (contract 1.1, additions), set by the C#
+  plug-in's languages (C# `"'`, Razor, JSON `"`; XML and .sln `"` with no escape). A frame reads at most the option's lines of
+  states it does not know (a jump deep into a long file colours over a few frames, asking for each next frame, never one long
+  one); an edit splices the states and the lines after it are read again only until one starts in the state it had. Each
+  coloured bracket is a run of its own colour in the run cache, its key holding the colours, so a warm frame builds nothing.
+  An opening bracket is unmatched when the depth never comes back below it before the file's end (known once every line was
+  read: the least depth from each line to the end, one pass back); a closing one with nothing open at once.
+- **Diagnostics at the line end**. `CRAFT_INLINE_DIAGNOSTICS` (off, errors, all; errors). The first line of the message of the
+  line's most severe diagnostic (those starting on the line), italic, in new faded tokens `InlineError`, `InlineWarning`,
+  `InlineInfo`, two cells after the text (after the fold marker), cut with an ellipsis to the room left of the overview ruler;
+  a cut message is kept per line, so a warm frame makes no string.
+- **The lightbulb** (`Craft.Editor/Lightbulb.cs`). `CRAFT_LIGHTBULB` (on), `CRAFT_LIGHTBULB_DELAY_MS` (250). After the caret and
+  the diagnostics stop changing for the delay, the host's probe is asked off the UI thread about the diagnostics at the caret,
+  else those on its line, else the selection; the answer is kept per text version and range (a caret coming back asks
+  nothing). The shell's probe (`ShellModel.LightbulbProbe(tab)`) asks the registered code action providers on the tab's
+  document. Drawn at the gutter's left on the caret's line (new token `Lightbulb`, the warning colour); a click puts the caret
+  on the problem when the bulb was for one elsewhere on the line, then `EditorModel.QuickFixRequested` runs `craft.quickFix`.
+- **White space, rulers, save actions**. `CRAFT_RENDER_WHITESPACE` (none, boundary, selection, all; selection): a dot a
+  space, an arrow a tab, token `Whitespace`, only on the columns and rows on screen. `CRAFT_RULERS` ("80,120"; empty, the
+  default, none) plus a file's `max_line_length`, token `VerticalRuler`, under the text, the columns parsed once per value.
+  `CRAFT_TRIM_TRAILING_WHITESPACE` and `CRAFT_INSERT_FINAL_NEWLINE` (both off): Save (after format on save) trims and ends the
+  text with a break, each one undo step, through the tab's editor (`TrimTrailingWhitespace`, `InsertFinalNewline`, also the
+  command `craft.editor.trimTrailingWhitespace`) or, with no editor, on the document (`SaveActions`).
+- **`.editorconfig` applied** (new contract `FileSettings`, `IFileSettingsProvider` and the `FileSettingsProviders` registry in
+  `Craft.Abstractions`, the library's `editorconfig` provider its default; `CRAFT_EDITORCONFIG`, on). The files from the file's
+  folder up to the first `root = true`, sections matched per file (`*`, `**`, `?`, `[set]`, `[!set]`, `{a,b}`, `{1..9}`; a glob
+  without '/' at any depth), the nearer file and the later section winning, `unset` taking a value back. Read off the UI thread
+  and kept per folder with its write time (`ForFileAsync` reads again a file whose time changed; `Cached` answers at once
+  when every folder was read). `indent_style`, `indent_size`/`tab_width` (the tab size), `end_of_line` (the break the editor
+  inserts), `charset` (a new file's encoding on its first save), `trim_trailing_whitespace`, `insert_final_newline`,
+  `max_line_length` (a ruler), each over Craft's options (`EditorModel.ApplyFileSettings`; the model is not made again). The page
+  applies them when a tab's view is made (at once when cached, else when read) and again when the shell says a file's settings
+  changed: an `.editorconfig` saved in the editor or made, removed or renamed in the workspace (`FolderTreeWatch.EntryChanged`),
+  and any file saved (its path may be new). The status bar's Spaces and line ending items name the `.editorconfig` in their
+  tooltips (`ShellText.IndentationTooltip`, `LineEndingTooltip`).
+- **Measured** (headless, Linux container, Release, the tests' fixed metrics; `WordWrap.AWarmFrameOfAWrapped100000Line...`,
+  written to `test-output/benches/editing-helpers.txt`): a wrapped 100,000-line file (each line about 115 characters, two rows
+  at 800 wide) with bracket colours, inline diagnostics (10,000 of them) and two rulers, 800 x 600, scrolled to line 50,000:
+  cold frame 76.1 ms alone (the JIT, 20,000 bracket states read) and 16.2 ms in the full filter's run; the rest of the states
+  in 5 frames (24.6-26.9 ms in all); **warm frame median 14.4-22.7 us, p99 37.8-49.3 us, 0 B a frame** (1,000 frames), nothing
+  wrapped, read or laid out; 16 lines in 32 rows drawn, 16 lines' wraps kept of 100,000. B1's C# paint test (bracket colours on
+  by default now) still 0 B a warm frame.
+- **Decisions on the recommendation (one line each)**:
+  - Unshown lines count one row until shown (a height map, as CodeMirror's), not a whole-file wrap at a width change.
+  - The rows are a binary indexed tree over the lines, rebuilt in one pass when the folds or the line count change.
+  - Rows break after white space; white space hangs past the width; a continuation row keeps the line's indent when it is at most half the width.
+  - "on" wraps at the editor's width less the gutter, the ruler and a cell, never under 8 columns; "column" wraps at the option's column and keeps sideways scrolling.
+  - Alt+Z switches the editor in hand (a settings change makes the model again with the options' mode).
+  - End on a wrapped row stops before its last character (the next row's start is drawn at the row's end; no caret affinity).
+  - Column selection and the line commands stay by line under wrap; the sticky header and a fold's preview show a wrapped line's first row.
+  - Bracket depth is one counter for every pair (a ')' closing a '[' is not told apart), as VS Code's default.
+  - Strings and comments for the depth come from new `LanguageRules` members, not the classifier (no parse, the same answer on every frame).
+  - A string never spans a line for the depth (a verbatim or raw string over lines is approximate there; a block comment does span).
+  - The budget per frame is an option (20,000); the frames that could not finish ask for the next frame.
+  - Unmatched openings are told once every line is read; until then they take their depth's colour.
+  - Inline messages: the line's most severe diagnostic that starts on it, its first line, italic, two cells after the text.
+  - The lightbulb asks after a pause off the UI thread (the providers' `ActionsFor` is cheap and touches no UI) and is drawn at the gutter's left.
+  - Render white space defaults to "selection" (VS Code's); rulers default to none.
+  - Trim and the final newline run after format on save, each its own undo step.
+  - `.editorconfig` is the library's default `IFileSettingsProvider` in `Craft.Abstractions` (as `FolderWatchers` keeps its defaults), in its registry.
+  - `indent_size` sets the tab size with spaces, `tab_width` with tabs (Craft has one tab size).
+  - `end_of_line` sets the breaks the editor inserts; the file's own breaks are kept (no silent edit).
+  - `charset` applies to a new file's first save only; an existing file keeps the encoding it was read in.
+  - A content change to an `.editorconfig` outside the editor is seen when a file's settings are next read (its write time); the folder watcher reports names only.
+- **Found on the way**: a lambda over `Draw`'s `model` parameter made a closure at every frame's start (32 B a frame) even
+  where it never ran; the post moved into a method of its own (rule 63's warm frame caught it).
+- **Windows-only lines**: none. `EditorView` (the file settings and the probe kept over a model's rebuild, Quick fix forwarded)
+  and `ShellPage` (applying the settings, the tooltips) are shared code, compiled here for `net10.0`. Not run here: the drawing
+  on Windows, Alt+Z reaching the editor through WinUI (an Alt chord may open the menu bar's access keys: the owner's check).
+- **Left**: hanging white space past the width is not drawn in the selection's colour beyond the row; the minimap (piece 2b)
+  draws lines unwrapped; ghost text at a wrapped caret is drawn unwrapped; Razor's and XAML's strings inside markup text are
+  approximate for the depth.
+- **Tests**: new groups `WordWrap` (6: rows, indent and row-by-row drawing; Up/Down/Home/End; hit tests and points; folds and
+  sticky scroll; 300 random edits against a fresh wrap and a fresh editor; Alt+Z and the option; the measured 100,000-line warm
+  frame), `BracketColors` (4: depth colours, strings and comments skipped and unmatched, 200 random edits against a fresh read
+  and a keystroke reading one line, the per-frame budget and 0 B warm), `InlineDiagnostics` (2), `Lightbulb` (2), `Whitespace`
+  (4: modes, rulers and 0 B warm, trim and final newline as one undo step each, Save with the options), `EditorConfigApplied`
+  (4: globs and precedence, read off the UI thread and refreshed, applied to the editor and the tooltips, Save's trim, final
+  newline and a new file's charset); `StickyScroll` (a header's brackets are runs of their depth's colour now), `Inventory`
+  (the twelve options). The full filter (`WordWrap|BracketColors|InlineDiagnostics|Lightbulb|Whitespace|EditorConfigApplied|Editor|Surface|Folding|StickyScroll|OverviewRuler|MultiCaret|Document|Settings|ProjectLanguages|ApiGuard|Inventory`):
+  159 passed, 0 failed (after the rebase over pieces 2b and 3b); `Paint|Shell|CSharp|Plugins|Keys|ReadOnly|Metrics|OutputLog|ProblemsPanel`:
+  114 passed, 0 failed. The API dumps of Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and
+  `plans/inventory.md` regenerated: lines added only.
+- **Options added** (each with its shape on the settings page): Editor › Display: `CRAFT_WORD_WRAP` (off), `CRAFT_WORD_WRAP_COLUMN`
+  (80), `CRAFT_BRACKET_COLORS` (on), `CRAFT_INLINE_DIAGNOSTICS` (errors), `CRAFT_LIGHTBULB` (on), `CRAFT_LIGHTBULB_DELAY_MS`
+  (250), `CRAFT_RENDER_WHITESPACE` (selection), `CRAFT_RULERS` (none); Editor › Files: `CRAFT_TRIM_TRAILING_WHITESPACE` (off),
+  `CRAFT_INSERT_FINAL_NEWLINE` (off), `CRAFT_EDITORCONFIG` (on); Editor › Advanced: `CRAFT_BRACKET_COLORS_SCAN_LINES` (20,000).
+- **The owner's check** on `test-output\CarftTestPOC`: open `Program.cs`, Alt+Z (and Settings › Editor › Display › Word wrap "on"
+  and "column"), make a long line and narrow the window: the rows follow, Up/Down/Home/End move by row, a click on a
+  continuation row, fold a method holding a wrapped line, scroll so the class header sticks; see the brackets' colours (a
+  `)` too many in red); make an error: its message faded at the line's end, the lightbulb in the gutter, click it; Settings ›
+  Editor › Display: render white space "all", rulers "80,120"; add `.editorconfig` beside the project with `[*.cs]`
+  `indent_style = tab`, `trim_trailing_whitespace = true`, `insert_final_newline = true`, `max_line_length = 100`: reopen
+  `Program.cs`, the status bar's Spaces item and its tooltip, Tab, a ruler at 100, type trailing spaces and save, then Ctrl+Z
+  twice.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "WordWrap|BracketColors|InlineDiagnostics|Lightbulb|Whitespace|EditorConfigApplied|Editor|Surface|Folding|StickyScroll|OverviewRuler|MultiCaret|Document|Settings|ProjectLanguages|Paint|Shell|CSharp|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
 
 ### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
 good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow

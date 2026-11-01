@@ -930,6 +930,8 @@ interface Craft.Abstractions.IStatusItem
   System.String Text { get; }
   System.String Tooltip { get; }
   event System.EventHandler Changed
+interface Craft.Abstractions.IStyledLineCanvas
+  System.Void DrawStyledLine(Craft.Abstractions.StyledLine line, System.Single x, System.Single top, System.Single cell, System.Single clipLeft, System.Single clipRight)
 interface Craft.Abstractions.ITerminalHost : Idrak.Abstraction.IKind
   Craft.Abstractions.ITerminalSession Start(Craft.Abstractions.TerminalStartInfo start)
   Craft.Abstractions.TerminalShell DefaultShell()
@@ -1610,6 +1612,32 @@ sealed class Craft.Abstractions.StatusItem : Craft.Abstractions.IStatusItem
   System.String Tooltip { get; set; }
   ctor(System.String id, System.String text, Craft.Abstractions.StatusAlignment alignment = Right, System.Int32 priority = 0, System.String commandId = null)
   event System.EventHandler Changed
+sealed class Craft.Abstractions.StyledLine
+  System.IDisposable Layout { get; }
+  System.Int32 Columns { get; set; }
+  System.Int32 Count { get; }
+  System.Int32 LayoutKey { get; }
+  System.Int32 TextColumns { get; }
+  System.Int32 TextIndexOf(System.Int32 index)
+  System.ReadOnlySpan<Craft.Abstractions.StyledRun> Runs { get; }
+  System.String Text { get; }
+  System.Void Add(Craft.Abstractions.StyledRun run)
+  System.Void KeepLayout(System.IDisposable layout, System.Int32 key)
+  System.Void ReleaseLayout()
+  ctor()
+static class Craft.Abstractions.StyledLines
+  static System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.StyledLine line, System.Single x, System.Single top, System.Single cell, System.Single clipLeft, System.Single clipRight)
+  static System.Void DrawRuns(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.StyledLine line, System.Single x, System.Single top, System.Single cell, System.Single clipLeft, System.Single clipRight)
+struct Craft.Abstractions.StyledRun : System.IEquatable<Craft.Abstractions.StyledRun>
+  Craft.Abstractions.TextStyle Style { get; init; }
+  System.Boolean Equals(Craft.Abstractions.StyledRun other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Column { get; init; }
+  System.Int32 GetHashCode()
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Text, out System.Int32 Column, out Craft.Abstractions.TextStyle Style)
+  ctor(System.String Text, System.Int32 Column, Craft.Abstractions.TextStyle Style)
 sealed class Craft.Abstractions.SymbolLocation : System.IEquatable<Craft.Abstractions.SymbolLocation>
   Craft.Abstractions.SymbolLocation <Clone>$()
   System.Boolean Equals(Craft.Abstractions.SymbolLocation other)

@@ -64,7 +64,7 @@ public static class CSharpClassifier
         int end = range.End;
         for (var token = root.FindToken(start); token.RawKind != 0 && token.FullSpan.Start < end; token = token.GetNextToken(includeZeroWidth: true))
         {
-            TokenWithTrivia(token, range, into);
+            TokenWithTrivia(token, range, into, false);
         }
     }
 
@@ -74,11 +74,11 @@ public static class CSharpClassifier
         var range = new TextSpan(start, length);
         foreach (var token in root.DescendantTokens(range))
         {
-            TokenWithTrivia(token, range, into);
+            TokenWithTrivia(token, range, into, true);
         }
     }
 
-    private static void TokenWithTrivia(SyntaxToken token, TextSpan range, TokenSpanBuffer into)
+    private static void TokenWithTrivia(SyntaxToken token, TextSpan range, TokenSpanBuffer into, bool byDescendants)
     {
         if (token.HasLeadingTrivia)
         {
@@ -86,7 +86,7 @@ public static class CSharpClassifier
             {
                 if (trivia.FullSpan.IntersectsWith(range))
                 {
-                    Trivia(trivia, range, into);
+                    Trivia(trivia, range, into, byDescendants);
                 }
             }
         }
@@ -102,13 +102,13 @@ public static class CSharpClassifier
             {
                 if (trivia.FullSpan.IntersectsWith(range))
                 {
-                    Trivia(trivia, range, into);
+                    Trivia(trivia, range, into, byDescendants);
                 }
             }
         }
     }
 
-    private static void Trivia(SyntaxTrivia trivia, TextSpan range, TokenSpanBuffer into)
+    private static void Trivia(SyntaxTrivia trivia, TextSpan range, TokenSpanBuffer into, bool byDescendants)
     {
         switch (trivia.Kind())
         {
@@ -129,9 +129,16 @@ public static class CSharpClassifier
             case SyntaxKind.SkippedTokensTrivia:
                 if (trivia.GetStructure() is { } skipped)
                 {
-                    foreach (var token in skipped.DescendantTokens())
+                    if (byDescendants)
                     {
-                        TokenWithTrivia(token, range, into);
+                        foreach (var token in skipped.DescendantTokens())
+                        {
+                            TokenWithTrivia(token, range, into, true);
+                        }
+                    }
+                    else
+                    {
+                        Structure(skipped, default, StructureKind.Skipped, range, into);
                     }
                 }
 
@@ -139,9 +146,16 @@ public static class CSharpClassifier
             case SyntaxKind.SingleLineDocumentationCommentTrivia or SyntaxKind.MultiLineDocumentationCommentTrivia:
                 if (trivia.GetStructure() is { } documentation)
                 {
-                    foreach (var token in documentation.DescendantTokens(range))
+                    if (byDescendants)
                     {
-                        DocumentationToken(token, range, into);
+                        foreach (var token in documentation.DescendantTokens(range))
+                        {
+                            DocumentationToken(token, range, into, true);
+                        }
+                    }
+                    else
+                    {
+                        Structure(documentation, range, StructureKind.Documentation, range, into);
                     }
                 }
 
@@ -156,22 +170,94 @@ public static class CSharpClassifier
                 return;
             }
 
-            foreach (var token in directive.DescendantTokens(range))
+            if (byDescendants)
             {
-                DirectiveToken(token, range, into);
+                foreach (var token in directive.DescendantTokens(range))
+                {
+                    DirectiveToken(token, range, into, true);
+                }
+            }
+            else
+            {
+                Structure(directive, range, StructureKind.Directive, range, into);
+            }
+        }
+    }
+
+    // Whether the token belongs to the structure (its parents reach it): a structured trivia's root has no parent.
+    private static bool Inside(SyntaxToken token, SyntaxNode structure)
+    {
+        for (var node = token.Parent; node is not null; node = node.Parent)
+        {
+            if (ReferenceEquals(node, structure))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private enum StructureKind
+    {
+        Skipped,
+        Documentation,
+        Directive,
+    }
+
+    // The tokens of a structured trivia (skipped tokens, a documentation comment, a directive), as DescendantTokens gives
+    // them (all of them, or with `filter` those Roslyn's span filter keeps: full span overlapping it, or empty and touching
+    // it), walked from token to token inside the structure (FindToken, GetNextToken): no iterator is made, so a frame with
+    // a documentation comment on screen allocates nothing (B1, rule 63). Proven equal by "TheTokenWalkEqualsDescendantTokens".
+    private static void Structure(SyntaxNode structure, TextSpan filter, StructureKind kind, TextSpan range, TokenSpanBuffer into)
+    {
+        var full = structure.FullSpan;
+        if (full.Length == 0)
+        {
+            return;
+        }
+
+        bool all = kind == StructureKind.Skipped;
+        int from = all ? full.Start : Math.Clamp(filter.Start, full.Start, full.End - 1);
+        for (var token = structure.FindToken(from); token.RawKind != 0; token = token.GetNextToken(includeZeroWidth: true))
+        {
+            var span = token.FullSpan;
+            if (span.Start < full.Start || span.End > full.End || (!all && span.Start > filter.End) || !Inside(token, structure))
+            {
+                // Out of the structure (GetNextToken goes on into the tree: the token that holds this trivia, which in
+                // broken code can be a missing token as wide as the trivia itself), or past the range.
+                break;
+            }
+
+            if (!all && !(filter.OverlapsWith(span) || (span.Length == 0 && filter.IntersectsWith(span))))
+            {
+                continue;
+            }
+
+            switch (kind)
+            {
+                case StructureKind.Skipped:
+                    TokenWithTrivia(token, range, into, false);
+                    break;
+                case StructureKind.Documentation:
+                    DocumentationToken(token, range, into, false);
+                    break;
+                default:
+                    DirectiveToken(token, range, into, false);
+                    break;
             }
         }
     }
 
     // ---- documentation comments: text vs tags and delimiters; a cref's code as code ----
 
-    private static void DocumentationToken(SyntaxToken token, TextSpan range, TokenSpanBuffer into)
+    private static void DocumentationToken(SyntaxToken token, TextSpan range, TokenSpanBuffer into, bool byDescendants)
     {
         foreach (var trivia in token.LeadingTrivia)
         {
             if (trivia.FullSpan.IntersectsWith(range))
             {
-                Trivia(trivia, range, into);
+                Trivia(trivia, range, into, byDescendants);
             }
         }
 
@@ -202,7 +288,7 @@ public static class CSharpClassifier
         {
             if (trivia.FullSpan.IntersectsWith(range))
             {
-                Trivia(trivia, range, into);
+                Trivia(trivia, range, into, byDescendants);
             }
         }
     }
@@ -222,13 +308,13 @@ public static class CSharpClassifier
 
     // ---- preprocessor directives: keywords vs text; a condition's code as code ----
 
-    private static void DirectiveToken(SyntaxToken token, TextSpan range, TokenSpanBuffer into)
+    private static void DirectiveToken(SyntaxToken token, TextSpan range, TokenSpanBuffer into, bool byDescendants)
     {
         foreach (var trivia in token.LeadingTrivia)
         {
             if (trivia.FullSpan.IntersectsWith(range))
             {
-                Trivia(trivia, range, into);
+                Trivia(trivia, range, into, byDescendants);
             }
         }
 
@@ -253,7 +339,7 @@ public static class CSharpClassifier
         {
             if (trivia.FullSpan.IntersectsWith(range))
             {
-                Trivia(trivia, range, into);
+                Trivia(trivia, range, into, byDescendants);
             }
         }
     }

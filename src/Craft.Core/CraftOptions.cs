@@ -276,6 +276,21 @@ public sealed record CraftOptions
     /// <summary>The most carets (and selections) one editor holds; adding more is refused and said (<c>CRAFT_MAX_CARETS</c>).</summary>
     public int MaxCarets { get; init; } = 10_000;
 
+    // The owner's third Windows run (B1): the paint.
+
+    /// <summary>
+    /// Whether the editor, the panels' lists and the terminal draw each shown line from a layout the platform keeps (one per
+    /// line, made again only when the line, the theme or the font changes) where the platform has one (Windows); off draws
+    /// each coloured run on its own every frame, as before (<c>CRAFT_PAINT_LINE_LAYOUTS</c>).
+    /// </summary>
+    public bool PaintLineLayouts { get; init; } = true;
+
+    /// <summary>
+    /// The lines above and below the screen whose drawn form (their runs and the platform's layout) the editor keeps, so a
+    /// scroll back lays nothing out; 0 keeps only the lines on screen (<c>CRAFT_PAINT_CACHE_LINES</c>).
+    /// </summary>
+    public int PaintCacheLines { get; init; } = 64;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -590,6 +605,9 @@ public sealed record CraftOptions
         new("CRAFT_FOLDING", "true", "Whether documents whose language folds show fold chevrons (Ctrl+Shift+[ and ] fold and unfold).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Code folding", "Display") },
         new("CRAFT_FOLDING_DELAY_MS", "300", "Milliseconds after the last change before the folding ranges are asked for again (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.Editor, "Folding ranges follow edits after", 0, 60_000, "ms", "Advanced", step: 50) },
         new("CRAFT_MAX_CARETS", "10000", "The most carets one editor holds (Alt+click, Ctrl+D, select all occurrences, column selection).") { Shape = SettingShape.Whole(SettingSections.Editor, "Most carets", 1, 1_000_000, "carets", "Carets", step: 100) },
+        // The owner's third Windows run (B1): the paint.
+        new("CRAFT_PAINT_LINE_LAYOUTS", "true", "Whether the editor, the panels' lists and the terminal draw each shown line from a layout the platform keeps (made again only when the line, the theme or the font changes); off draws each coloured run on its own every frame.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Keep each shown line's layout", "Advanced") },
+        new("CRAFT_PAINT_CACHE_LINES", "64", "The lines above and below the screen whose drawn form the editor keeps, so scrolling back lays nothing out; 0 keeps only the lines on screen.") { Shape = SettingShape.Whole(SettingSections.Editor, "Keep drawn lines around the screen", 0, 100_000, "lines", "Advanced", step: 16) },
         // Phase X slice 3: inline, not modal; the welcome page.
         new("CRAFT_WELCOME_AT_START", "true", "Whether the welcome page (open a folder, a new file, the recent folders, the main shortcuts) opens at start when no folder is open; Help › Welcome opens it any time.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Show the welcome page at start", "Welcome") },
         new("CRAFT_UNDO_BAR_MS", "5000", "Milliseconds the inline bar with Undo stays after a change that can be taken back (the notification centre cleared, a recent folder removed).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Undo bar stays for", 500, 600_000, "ms", "Notifications", step: 500) },
@@ -833,6 +851,16 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_MAX_CARETS") is { } maxCarets)
         {
             options = options with { MaxCarets = Whole(maxCarets, "CRAFT_MAX_CARETS", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_PAINT_LINE_LAYOUTS") is { } lineLayouts)
+        {
+            options = options with { PaintLineLayouts = Flag(lineLayouts, "CRAFT_PAINT_LINE_LAYOUTS") };
+        }
+
+        if (Text(read, "CRAFT_PAINT_CACHE_LINES") is { } cacheLines)
+        {
+            options = options with { PaintCacheLines = Whole(cacheLines, "CRAFT_PAINT_CACHE_LINES", 0, 100_000) };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)

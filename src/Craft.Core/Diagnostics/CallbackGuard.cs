@@ -54,7 +54,13 @@ public static class CallbackGuard
         {
             ArgumentNullException.ThrowIfNull(where);
             ArgumentNullException.ThrowIfNull(error);
-            CrashWatch.CurrentTrail?.Note($"A platform callback failed and was caught ({where}): {error.GetType().FullName}: {error.Message}");
+            if (CrashWatch.CurrentTrail is { } trail)
+            {
+                // B2: the inner exceptions too (the cause of a wrapped one).
+                var text = new System.Text.StringBuilder(256).Append("A platform callback failed and was caught (").Append(where).Append("): ");
+                trail.Note(CrashTrail.AppendWithInner(text, error).ToString());
+            }
+
             bool first;
             lock (Gate)
             {

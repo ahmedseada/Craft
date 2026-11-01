@@ -3676,3 +3676,110 @@ In the app: the old sample DLL in `test-output\plugins` (not rebuilt) loads and 
 Train now before any chat trains the 7B's adapter on the chat's copy, its line naming the batch, and the status bar's
 device memory is the same after the round as before (B4, B7: the numbers to write here); the agent asked to create a
 class shows the new file and any edited file under the changed files, and Review diff writes them into the folder (B6).
+
+## B1 and B2 as built (2026-11-01)
+
+- **One kept layout per shown line (B1).** New contract in `Craft.Abstractions` (`Surface.cs`): `StyledRun`, `StyledLine`
+  (a line's runs; `Text` joins them at their columns once; `Layout`/`LayoutKey` hold the canvas's layout, disposed when the
+  line changes or is dropped) and `IStyledLineCanvas` with `StyledLines.Draw` (a canvas without it gets one `DrawText` per
+  run, exactly as before). `EditorRenderer` keeps each line's runs as a `StyledLine` (its run cache, keyed as before by the
+  line's characters and spans, cleared on a new theme or model) and draws a line with one call; the cache keeps the lines on
+  screen and `CRAFT_PAINT_CACHE_LINES` (64) above and below, trimmed once it holds half as many again, and releases a dropped
+  line's layout (`ReleaseLayouts` for memory pressure). The platform-neutral decision of what to lay out and keep is
+  `Craft.Editor.TextLayoutCache` (a line's layout kept on the line for the canvas's font-and-measures key; a lone run, such
+  as a line number, a panel's row, the terminal's text or a popup's, kept by its characters and style while drawn in every
+  frame and dropped at the end of a frame that drew text without it; a line whose layout would not keep its columns, a wide
+  or fallback glyph, is drawn run by run from the runs' own layouts). The platform's half is `ITextLayoutSurface`
+  (`Craft.Editor`), reached in Craft.Maui through `IDrawnTextLayouts`/`IDrawnTextSurface` and `IShellPlatform.TextLayouts`;
+  `MauiEditorCanvas` implements `IStyledLineCanvas` and sends every `DrawText` and every line through the cache when the
+  platform has a surface, else draws with MAUI's `DrawString` as before. So the editor's text, its gutter numbers, the panel
+  lists (Problems, telemetry) and the terminal all take the same path. Windows: `Platforms/Windows/Win2DTextLayouts.cs`, a
+  Win2D `CanvasTextLayout` per line (each run's colour, and family, weight and slant for bold or italic, on its range) on the
+  drawing session of MAUI's Windows canvas (`PlatformCanvas.Session`), its text formats made as MAUI's internal
+  `FontExtensions.ToCanvasTextFormat` makes them (read from its IL: name, size, weight clamped 1-999, style). Win2D 1.4.0
+  comes with MAUI on Windows (a dependency of Microsoft.Maui.Graphics): rule 0, no package added.
+- **The caret on its own layer (B1).** `EditorView` has a second, transparent, input-transparent `GraphicsView` over the
+  text (`CaretDrawable`, `EditorRenderer.DrawCarets`: the carets read from the model, so the layer is right whichever view
+  draws first); the blink invalidates that layer only. While ghost text, the completion list or a tooltip shows
+  (`EditorRenderer.CaretsOnTextLayer`), the text frame draws the carets under them as before and the layer draws none.
+- **`CodeFontPicker.Ensure`** compares the family, fallback and size instead of building a key string every frame (rule 75),
+  and disposes the canvas it replaces (its kept layouts with it).
+- **The C# classifier allocated in every frame with a documentation comment on screen** (found by B1's allocation test:
+  3,256 B a frame on `EditorModel.cs`, the old run path too): `DescendantTokens(range)` over a documentation comment, a
+  directive or skipped tokens made iterators each frame. `CSharpClassifier` now walks a structured trivia's tokens from
+  `FindToken` with `GetNextToken`, applying Roslyn's span filter and stopping at the first token whose parents do not reach
+  the structure (in broken code `GetNextToken` goes on to the token holding the trivia, a missing token as wide as the
+  trivia: without that check the walk recursed until the stack overflowed, caught by `CSharp.IncrementalParsesEqualFreshParses`);
+  `ClassifyByDescendants` keeps Roslyn's walk as the reference, and `CSharp.TheTokenWalkEqualsDescendantTokens` (12,000
+  random ranges over edited texts with comments, docs and directives) proves the spans equal (rule 71). 0 B a frame after.
+- **A frame that throws (B2).** `Craft.Core.Diagnostics.PaintGuard`: the editor's frame, its caret layer's, the panel
+  lists' and the terminal's catch what their body throws, report it through `CallbackGuard` (trail, a callback report once
+  per place and type, Output) with the surface and the step (`editor: paint (at: render: draw the lines; the frame was
+  skipped)`; `EditorRenderer.Step` names the renderer's step, rule 90) and skip the frame; nothing leaves the platform's draw
+  callback into WinUI. The one exception let through is a lost graphics device (DXGI's removed, hung, reset, internal error;
+  Direct2D's recreate-target, by HRESULT number, no platform API), which Win2D's CanvasControl catches itself to make its
+  device again; the surface drops its layouts first and the trail notes it. The trail writes inner exceptions
+  (`CrashTrail.AppendWithInner`: "| inner: Type: message", three deep, an aggregate's first) for first-chance exceptions and
+  for the callback guard's notes.
+- **`RouteKeys` at start (B2's trail).** `IShellPlatform.IsReady(window)` (Windows: the native window has its content);
+  `ShellPage.HookPlatform` asks it first and tries again later, so "The window has no WinUI content yet" is no longer thrown
+  (and no longer a first-chance exception in the trail).
+- **Telemetry (rules 76, 78).** Each editor frame is timed (`EditorView.LastFrameMilliseconds`) and recorded in the telemetry
+  table as `editor.paint.cold` (it laid text out or built runs) or `editor.paint.warm`.
+- **Options added** (each with its shape on the settings page, Editor › Advanced): `CRAFT_PAINT_LINE_LAYOUTS` (true; off draws
+  each run with `DrawString` every frame, as before), `CRAFT_PAINT_CACHE_LINES` (64).
+- **Proven unchanged (rule 71).** Once, before any change, the old renderer's draws on a fixed C# file (a copy of
+  `EditorRenderer.cs`, six views: scrolled down and right, a selection, the caret) were dumped (1,488 draws, 1,107 texts);
+  after the change the same dump is byte-identical. Kept as tests: `Paint.ALineDrawnWholeHoldsTheSameRunsPlacesAndColoursAsRunByRun`
+  (the line path through a real `TextLayoutCache` draws the same kinds, places, colours and texts as the run path on
+  `EditorModel.cs`, six views), `Paint.TheCaretLayerDrawsTheCaretsTheTextFrameDrew...` (the layer's fills equal the text
+  frame's, overwrite too), and the classifier's walk above.
+- **Measured** (headless, Linux container, Release, the tests' fixed metrics, 1200 × 800, 41 lines shown; written to
+  `test-output/benches/paint.txt`): before, the run path on the fixed file: warm blink frame median 210 µs, p99 370 µs,
+  0 B (the renderer itself was never the 53-68 ms: that is Windows' `DrawString` per run). After, the line path on
+  `EditorModel.cs`: cold first frame 82.9 ms (the first C# parse waited for, the run strings, 30 layouts, the JIT), warm frame
+  median 151.7 µs, p99 263.2 µs, **0 B a frame**, no layout made; a 3-line scroll 1.13 ms (2 layouts: the lines it brought in
+  that hold text); scrolling back lays out nothing (the margin). In the full filter's run (the parse and the JIT already
+  warm in the process): cold 1.6-5.6 ms, warm median 111.7-117.1 µs, p99 175.7-295.8 µs, 0 B, a 3-line scroll 273-365 µs. Under other slots'
+  builds the p99 rose to 4-8 ms (the machine, not the frame: the median stayed 0.11-0.36 ms). The Windows numbers are the
+  owner's (below).
+- **Rule 90 on the way**: in a long test run (the JIT compiling in the background) the warm frame showed 88 then 176 bytes
+  over 1,000 frames, and 0 with `DOTNET_TieredCompilation=0`: unoptimized code boxing a value type (rule 89) in the lone
+  runs' lookup (`HashCode.Combine` over `TextStyle`, and a `Dictionary` keyed by a struct of Craft's: its `key == null`
+  test). The lone runs are now keyed by their string (the dictionary's shared precompiled code) with a short chain of
+  styles, each style compared field by field. Then 88 B once in a long run with the JIT off too: not a frame's work but a
+  garbage collection in the window. Shown by the test itself: the first frame after a forced collection allocates 984 B and
+  the next ones 0 (Roslyn keeps some red nodes only weakly, large member lists and `GetStructure`'s cache, to save memory,
+  and rebuilds them when next walked). `Paint.AWarmFrame...` now asserts 0 B for every frame with no collection in or just
+  before it, 0 B for the frames after the first one past a collection, and under 4 KB for that first one.
+- **Compiled here**: the whole Windows target of Craft.Maui (with a local, uncommitted `TargetFrameworks` change and
+  `EnableWindowsTargeting`: the Windows App SDK and Win2D restored from NuGet; `Craft.Maui.dll` for
+  `net10.0-windows10.0.19041.0` built with no error or warning; only the PRI resource step after it, `MakePri.exe`, cannot run
+  on Linux). **Not run here**: the Windows drawing itself (Win2D's layouts on screen, their pixels against `DrawString`'s, the
+  device-lost recovery) and the caret layer's transparency over the text: the owner's run.
+- **Decisions on the recommendation (one line each)**: the full fix, one layout per line (the owner's 4a); the cache logic in
+  `Craft.Editor` (headless-tested), only the Win2D drawing in `Platforms/Windows`; the platform's layouts reached like its
+  drawn fonts (an `IShellPlatform` member), not a new registry; lone runs keyed by their characters, so a string made again
+  each frame still finds its layout; a line whose layout would not keep its columns falls back to its runs (never drawn off
+  its cells); the lone runs keyed by string, never by a struct of Craft's (rule 89); the caret layer as a second GraphicsView,
+  the carets back on the text frame while a popup or ghost text shows;
+  a lost device rethrown to Win2D (its documented recovery), every other failure swallowed; `PaintGuard` in `Craft.Core`
+  beside `CallbackGuard` (no MAUI type in it); the classifier's allocation fixed in Craft.CSharp, where it lives.
+- **Left**: the fills (`FillRect`, `DrawLine`) still go through MAUI's canvas state (a brush per colour change), not measured
+  on Windows yet; the terminal's paint still holds the screen's lock while it draws (as before); the "WinRT
+  InvalidOperationException at start" and the three start-up stalls of the trail are not traced in this slot.
+- **Tests**: group `Paint` (9) with `CSharp`, `Editor`, `Surface`, `Folding`, `MultiCaret`, `Experience`, `Layout`, `Ui`,
+  `Design`, `LookAndFeel`, `CrashWatch`, `Settings`, `Shell`, `ApiGuard`, `Inventory`: 174 passed, 0 failed (after the rebase
+  over B3-B7, against Idrak `main` 7a20d5f, which B5's `Plugins.EveryPreinstalledPluginLoadsFromTheAppsLayout` needs). The
+  API dumps of Craft.Abstractions, Craft.Core and Craft.Editor and B3's contract list regenerated (lines added only).
+- **The owner's commands** (the app on the test project, a long C# file: scroll with the wheel and by dragging the bar,
+  leave it idle a few seconds, open Problems and the terminal; then View › Idrak telemetry: `editor.paint.warm` and
+  `editor.paint.cold`, and the trail in `test-output\crashes` should show no 0.2-0.4 s "editor: paint" stalls; the text
+  should look exactly as before; `$env:CRAFT_PAINT_LINE_LAYOUTS="false"` gives the old path to compare):
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "Paint|CSharp|Editor|Surface|Folding|MultiCaret|Experience|Layout|Ui|Design|LookAndFeel|CrashWatch|Settings|Shell|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```

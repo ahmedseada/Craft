@@ -64,23 +64,26 @@ public sealed class TerminalDrawable : IDrawable
         }
 
         using var label = UiDispatch.Enter("terminal: paint");
-        bool picked;
-        using (UiDispatch.Enter("terminal: pick and measure the code font"))
-        {
-            picked = _picker.Ensure(canvas, Options.FontFamily, Options.FontFallback, Options.FontSize, _measurer);
-        }
-
-        if (picked)
-        {
-            Measured?.Invoke(this, EventArgs.Empty);
-        }
-
-        _canvas = _picker.Canvas!;
-        var metrics = Metrics;
-        _canvas.SetMetrics(metrics);
-        _canvas.Target = canvas;
+        string step = "pick and measure the code font";
         try
         {
+            bool picked;
+            using (UiDispatch.Enter("terminal: pick and measure the code font"))
+            {
+                picked = _picker.Ensure(canvas, Options.FontFamily, Options.FontFallback, Options.FontSize, _measurer);
+            }
+
+            if (picked)
+            {
+                Measured?.Invoke(this, EventArgs.Empty);
+            }
+
+            step = "bind the canvas";
+            _canvas = _picker.Canvas!;
+            var metrics = Metrics;
+            _canvas.SetMetrics(metrics);
+            _canvas.Target = canvas;
+            step = "draw the screen";
             float width = ViewportWidth > 0 ? ViewportWidth : dirtyRect.Width;
             float height = ViewportHeight > 0 ? ViewportHeight : dirtyRect.Height;
             lock (terminal.Screen.Sync)
@@ -88,9 +91,20 @@ public sealed class TerminalDrawable : IDrawable
                 _renderer.Draw(_canvas, terminal.Screen, palette, metrics, width, height, terminal.ScrollBack, terminal.Selection, Focused, CursorOn);
             }
         }
+#pragma warning disable CA1031 // B2: nothing may leave the platform's draw callback (a stowed exception ends the process); reported with its step and skipped.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            if (PaintGuard.Handle("terminal: paint", step, error))
+            {
+                _canvas?.Target = null;
+                _canvas?.ReleaseLayouts();
+                throw;                                   // a lost device: Win2D's control makes it again
+            }
+        }
         finally
         {
-            _canvas.Target = null;
+            _canvas?.Target = null;
         }
     }
 }

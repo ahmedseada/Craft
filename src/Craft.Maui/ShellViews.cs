@@ -660,6 +660,19 @@ public interface IShellPlatform
     IDrawnFonts? DrawnFonts => null;
 
     /// <summary>
+    /// The platform's laid-out text for the drawn surfaces (B1: Win2D's text layouts on Windows, one kept per shown line),
+    /// or null (each run drawn with MAUI's <c>DrawString</c>).
+    /// </summary>
+    IDrawnTextLayouts? TextLayouts => null;
+
+    /// <summary>
+    /// Whether <paramref name="window"/> has its platform view and content, so <see cref="RouteKeys"/> and
+    /// <see cref="GuardClose"/> can hook it; the shell asks again later while it has not (B2's trail: no exception thrown
+    /// at start for a window WinUI has not filled yet).
+    /// </summary>
+    bool IsReady(Window window) => window?.Handler?.PlatformView is not null;
+
+    /// <summary>
     /// The platform's own record of a crash (the owner's note 21: Windows' Application event log), registered in
     /// <see cref="Craft.Core.Abstractions.CrashRecordSources"/> while the shell runs; null when it has none.
     /// </summary>

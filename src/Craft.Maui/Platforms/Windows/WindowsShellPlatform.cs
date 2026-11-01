@@ -40,6 +40,12 @@ public sealed class WindowsShellPlatform : IShellPlatform
     public IDrawnFonts? DrawnFonts { get; } = new WindowsDrawnFonts();
 
     /// <inheritdoc />
+    public IDrawnTextLayouts? TextLayouts { get; } = new Win2DTextLayouts();
+
+    /// <inheritdoc />
+    public bool IsReady(MauiWindow window) => window?.Handler?.PlatformView is NativeWindow { Content: UIElement };
+
+    /// <inheritdoc />
     public Craft.Core.Abstractions.ICrashRecordSource? CrashRecords { get; } = new WindowsEventLogCrashRecords();
 
     /// <inheritdoc />

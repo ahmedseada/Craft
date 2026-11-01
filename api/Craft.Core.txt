@@ -51,6 +51,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean FormatOnSave { get; init; }
   System.Boolean IndentGuides { get; init; }
   System.Boolean InsertSpaces { get; init; }
+  System.Boolean PaintLineLayouts { get; init; }
   System.Boolean ReducedMotion { get; init; }
   System.Boolean SourceGenerators { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
@@ -91,6 +92,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 MaxCarets { get; init; }
   System.Int32 MotionMilliseconds { get; init; }
   System.Int32 NotificationsKeep { get; init; }
+  System.Int32 PaintCacheLines { get; init; }
   System.Int32 ParseWaitMilliseconds { get; init; }
   System.Int32 ProblemsListLimit { get; init; }
   System.Int32 ProposalPreviewCharacters { get; init; }
@@ -215,6 +217,7 @@ sealed class Craft.Core.Diagnostics.CrashTrail : System.IDisposable
   ctor(System.String path, System.Int32 kilobytes = 256, System.Int32 exceptionsPerSecond = 20)
   static System.Collections.Generic.IReadOnlyList<System.String> Read(System.String path, System.Int32 lastLines = 2147483647)
   static System.String OlderOf(System.String path)
+  static System.Text.StringBuilder AppendWithInner(System.Text.StringBuilder text, System.Exception error)
 enum Craft.Core.Diagnostics.CrashTrailKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Command = 2
   Exception = 4
@@ -242,6 +245,10 @@ static class Craft.Core.Diagnostics.EventLogCrashXml
   static Craft.Core.Abstractions.CrashRecord Parse(System.String xml, Craft.Core.Abstractions.CrashRecordQuery query)
   static System.String Meaning(System.String code)
   static System.String XPath(Craft.Core.Abstractions.CrashRecordQuery query)
+static class Craft.Core.Diagnostics.PaintGuard
+  static System.Boolean Handle(System.String surface, System.String step, System.Exception error)
+  static System.Boolean IsDeviceLost(System.Exception error)
+  static System.Int64 Failures { get; }
 sealed class Craft.Core.Diagnostics.RunMarker : System.IEquatable<Craft.Core.Diagnostics.RunMarker>
   Craft.Core.Diagnostics.RunMarker <Clone>$()
   System.Boolean Equals(Craft.Core.Diagnostics.RunMarker other)

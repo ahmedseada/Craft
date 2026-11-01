@@ -144,6 +144,36 @@ public sealed class CrashTrail : IDisposable
         Put(new Entry(DateTime.UtcNow.Ticks, CrashTrailKind.Note, text, null, 0, 0));
     }
 
+    /// <summary>
+    /// Writes <paramref name="error"/>'s type and message and then each inner exception's ("| inner: Type: message", up to
+    /// three deep; an aggregate's first ones), each message cut at the trail's limit (B2: a stowed exception's cause is
+    /// often the inner one, a TargetInvocationException's or a TypeInitializationException's).
+    /// </summary>
+    public static StringBuilder AppendWithInner(StringBuilder text, Exception error)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(error);
+        AppendOne(text, error);
+        var inner = Inner(error);
+        for (int depth = 0; inner is not null && depth < InnerKept; depth++, inner = Inner(inner))
+        {
+            text.Append(" | inner: ");
+            AppendOne(text, inner);
+        }
+
+        return text;
+
+        static Exception? Inner(Exception e) => e is AggregateException { InnerExceptions.Count: > 0 } aggregate ? aggregate.InnerExceptions[0] : e.InnerException;
+
+        static void AppendOne(StringBuilder text, Exception e)
+        {
+            var message = e.Message.ReplaceLineEndings(" ");
+            text.Append(e.GetType().FullName).Append(": ").Append(message.Length > MessageLimit ? message.AsSpan(0, MessageLimit) : message);
+        }
+    }
+
+    private const int InnerKept = 3;
+
     /// <summary>The label of UI work that starts (a string the caller already holds: nothing is allocated).</summary>
     public void Label(string label) => Put(new Entry(DateTime.UtcNow.Ticks, CrashTrailKind.Label, label, null, 0, 0));
 
@@ -184,8 +214,8 @@ public sealed class CrashTrail : IDisposable
         t_inException = true;
         try
         {
-            var message = error.Message.ReplaceLineEndings(" ");
-            var text = new StringBuilder(256).Append(error.GetType().FullName).Append(": ").Append(message.Length > MessageLimit ? message.AsSpan(0, MessageLimit) : message);
+            var text = new StringBuilder(256);
+            AppendWithInner(text, error);
             // The throwing thread's stack (this handler runs on it, above the throw): its top frames, the handler's own skipped.
             var frames = new StackTrace(2, false).GetFrames();
             int kept = 0;

@@ -496,16 +496,23 @@ sealed class Craft.Editor.EditorRenderer : System.IDisposable
   System.Boolean GhostHintDrawn { get; }
   System.Boolean LastFrameClassified { get; }
   System.Int32 CaretsDrawn { get; }
+  System.Int32 CaretsDrawnAlone { get; }
   System.Int32 GhostLinesDrawn { get; }
   System.Int32 GuidesDrawn { get; }
+  System.Int32 LayoutsHeld { get; }
   System.Int32 LinesDrawn { get; }
+  System.Int32 LinesHeld { get; }
   System.Int32 SquiggleSegmentsDrawn { get; }
   System.Int32 WordHighlightsDrawn { get; }
   System.Int64 ParseWaitsExceeded { get; }
   System.Int64 RunStringsBuilt { get; }
+  System.String Step { get; }
   System.Void Dispose()
   System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Editor.EditorModel model, System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight, System.Boolean caretVisible)
+  System.Void DrawCarets(Craft.Abstractions.IEditorCanvas canvas, Craft.Editor.EditorModel model, System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight)
+  System.Void ReleaseLayouts()
   ctor()
+  static System.Boolean CaretsOnTextLayer(Craft.Editor.EditorModel model)
 sealed class Craft.Editor.EditorScrollEventArgs : System.EventArgs
   System.Boolean Instant { get; init; }
   System.Single X { get; }
@@ -576,6 +583,9 @@ sealed class Craft.Editor.FoldMap
   System.Void SetLineCount(System.Int32 lines)
   ctor()
   static System.Int32 FindRange(System.ReadOnlySpan<Craft.Abstractions.FoldingRange> ranges, System.Int32 line)
+interface Craft.Editor.ITextLayoutSurface
+  System.IDisposable Lay(Craft.Abstractions.StyledLine line, System.Boolean wholeLine)
+  System.Void Draw(System.IDisposable layout, System.Single x, System.Single top)
 sealed class Craft.Editor.InlineCompletionController : System.IDisposable
   System.Boolean AcceptAll()
   System.Boolean AcceptWord()
@@ -1507,6 +1517,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   event System.EventHandler SettingsSectionChanged
   event System.EventHandler ThemeChanged
   event System.EventHandler WorkspaceChanged
+  event System.EventHandler<Craft.Abstractions.MemoryPressureLevel> MemoryPressure
   event System.EventHandler<System.String> RevealRequested
   event System.EventHandler<System.String> SettingApplied
   event System.EventHandler<System.String> ViewRequested
@@ -1896,3 +1907,18 @@ enum Craft.Editor.Terminal.TerminalViewRequest : System.IComparable, System.ICon
   Reveal = 2
   Show = 0
   Toggle = 1
+sealed class Craft.Editor.TextLayoutCache : System.IDisposable
+  System.Int32 Key { get; }
+  System.Int32 LastFrameBuilt { get; }
+  System.Int32 RunsHeld { get; }
+  System.Int64 LayoutsBuilt { get; }
+  System.Int64 LinesByRuns { get; }
+  System.Int64 RunsDropped { get; }
+  System.Void BeginFrame()
+  System.Void Dispose()
+  System.Void DrawLine(Craft.Editor.ITextLayoutSurface surface, Craft.Abstractions.StyledLine line, System.Single x, System.Single top, System.Single cell, System.Single clipLeft, System.Single clipRight)
+  System.Void DrawText(Craft.Editor.ITextLayoutSurface surface, System.String text, in Craft.Abstractions.TextStyle style, System.Single x, System.Single top)
+  System.Void EndFrame()
+  System.Void Invalidate()
+  System.Void ReleaseRuns()
+  ctor()

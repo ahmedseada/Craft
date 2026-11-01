@@ -1047,6 +1047,8 @@ Craft.Abstractions.IStatusItem  System.String Id { get; }
 Craft.Abstractions.IStatusItem  System.String Text { get; }
 Craft.Abstractions.IStatusItem  System.String Tooltip { get; }
 Craft.Abstractions.IStatusItem  event System.EventHandler Changed
+Craft.Abstractions.IStyledLineCanvas
+Craft.Abstractions.IStyledLineCanvas  System.Void DrawStyledLine(Craft.Abstractions.StyledLine line, System.Single x, System.Single top, System.Single cell, System.Single clipLeft, System.Single clipRight)
 Craft.Abstractions.ITerminalHost
 Craft.Abstractions.ITerminalHost  Craft.Abstractions.ITerminalSession Start(Craft.Abstractions.TerminalStartInfo start)
 Craft.Abstractions.ITerminalHost  Craft.Abstractions.TerminalShell DefaultShell()
@@ -1804,6 +1806,33 @@ Craft.Abstractions.StatusItem  System.String Tooltip { get; set; }
 Craft.Abstractions.StatusItem  ctor(System.String id, System.String text, Craft.Abstractions.StatusAlignment alignment = Right, System.Int32 priority = 0, System.String commandId = null)
 Craft.Abstractions.StatusItem  event System.EventHandler Changed
 Craft.Abstractions.StatusItem : Craft.Abstractions.IStatusItem
+Craft.Abstractions.StyledLine
+Craft.Abstractions.StyledLine  System.IDisposable Layout { get; }
+Craft.Abstractions.StyledLine  System.Int32 Columns { get; set; }
+Craft.Abstractions.StyledLine  System.Int32 Count { get; }
+Craft.Abstractions.StyledLine  System.Int32 LayoutKey { get; }
+Craft.Abstractions.StyledLine  System.Int32 TextColumns { get; }
+Craft.Abstractions.StyledLine  System.Int32 TextIndexOf(System.Int32 index)
+Craft.Abstractions.StyledLine  System.ReadOnlySpan<Craft.Abstractions.StyledRun> Runs { get; }
+Craft.Abstractions.StyledLine  System.String Text { get; }
+Craft.Abstractions.StyledLine  System.Void Add(Craft.Abstractions.StyledRun run)
+Craft.Abstractions.StyledLine  System.Void KeepLayout(System.IDisposable layout, System.Int32 key)
+Craft.Abstractions.StyledLine  System.Void ReleaseLayout()
+Craft.Abstractions.StyledLine  ctor()
+Craft.Abstractions.StyledLines
+Craft.Abstractions.StyledLines  static System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.StyledLine line, System.Single x, System.Single top, System.Single cell, System.Single clipLeft, System.Single clipRight)
+Craft.Abstractions.StyledLines  static System.Void DrawRuns(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.StyledLine line, System.Single x, System.Single top, System.Single cell, System.Single clipLeft, System.Single clipRight)
+Craft.Abstractions.StyledRun
+Craft.Abstractions.StyledRun  Craft.Abstractions.TextStyle Style { get; init; }
+Craft.Abstractions.StyledRun  System.Boolean Equals(Craft.Abstractions.StyledRun other)
+Craft.Abstractions.StyledRun  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.StyledRun  System.Int32 Column { get; init; }
+Craft.Abstractions.StyledRun  System.Int32 GetHashCode()
+Craft.Abstractions.StyledRun  System.String Text { get; init; }
+Craft.Abstractions.StyledRun  System.String ToString()
+Craft.Abstractions.StyledRun  System.Void Deconstruct(out System.String Text, out System.Int32 Column, out Craft.Abstractions.TextStyle Style)
+Craft.Abstractions.StyledRun  ctor(System.String Text, System.Int32 Column, Craft.Abstractions.TextStyle Style)
+Craft.Abstractions.StyledRun : System.IEquatable<Craft.Abstractions.StyledRun>
 Craft.Abstractions.SymbolLocation
 Craft.Abstractions.SymbolLocation  Craft.Abstractions.SymbolLocation <Clone>$()
 Craft.Abstractions.SymbolLocation  System.Boolean Equals(Craft.Abstractions.SymbolLocation other)

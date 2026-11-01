@@ -31,7 +31,9 @@ public sealed class CodeFontPicker
     private const int Sample = 64;
     private static readonly string Wide = new('M', Sample);
     private static readonly string Narrow = new('i', Sample);
-    private string? _key;
+    private string? _family;
+    private string? _fallback;
+    private float _size;
     private MauiEditorCanvas? _canvas;
 
     /// <summary>The platform's drawn fonts (set by the shell from its platform at start), or null.</summary>
@@ -55,8 +57,8 @@ public sealed class CodeFontPicker
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(measurer);
-        string key = string.Concat(family, "\n", fallback, "\n", size.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        if (_canvas is not null && key == _key)
+        // Compared field by field (B1, rule 75: no key string made in every frame).
+        if (_canvas is not null && size == _size && string.Equals(family, _family, StringComparison.Ordinal) && string.Equals(fallback, _fallback, StringComparison.Ordinal))
         {
             return false;
         }
@@ -79,9 +81,16 @@ public sealed class CodeFontPicker
             measured = last.Wide;
         }
 
-        _key = key;
+        _family = family;
+        _fallback = fallback;
+        _size = size;
         Picked = picked;
         FellBackFrom = picked.AdvanceEm is not null || picked.Regular.Equals(family.Trim(), StringComparison.OrdinalIgnoreCase) ? null : family;
+        if (_canvas is { Target: null } old)
+        {
+            old.Dispose();                                   // its kept layouts go with it (a canvas inside a frame is left to that frame)
+        }
+
         _canvas = new MauiEditorCanvas(picked, size);
         measurer.SetMeasured(new EditorFont(family, size), measured.Width / Sample, measured.Height);
         return true;

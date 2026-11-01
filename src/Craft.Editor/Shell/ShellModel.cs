@@ -477,10 +477,16 @@ public sealed partial class ShellModel : IDisposable
     /// </summary>
     public void OnMemoryPressure(MemoryPressureLevel level)
     {
-        _ = level;
         Interlocked.Increment(ref _memoryReleases);
         MemoryPressureMonitors.ReleaseLanguages();
+        MemoryPressure?.Invoke(this, level);
     }
+
+    /// <summary>
+    /// Raised by <see cref="OnMemoryPressure"/>, on the monitor's thread (B1: the views drop what they can draw again, the
+    /// kept line layouts, on the UI thread).
+    /// </summary>
+    public event EventHandler<MemoryPressureLevel>? MemoryPressure;
 
     /// <summary>Starts the options' memory monitor; an unknown name is an options problem (nothing is watched), never a crash.</summary>
     private void WatchMemory()

@@ -129,6 +129,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _initialPath = path;
         ShellModel? shell = null;
         CodeFontPicker.DrawnFonts = startup.Platform.DrawnFonts;
+        // B1: the platform's kept line layouts (Win2D on Windows) unless CRAFT_PAINT_LINE_LAYOUTS is off.
+        MauiEditorCanvas.TextLayouts = startup.Options.PaintLineLayouts ? startup.Platform.TextLayouts : null;
         // The owner's note 10: every question, message and choice is Craft's dialog over the window (themed in ApplyTheme).
         _dialog = new CraftDialog(new ShellPalette(EditorThemes.Get(EditorThemes.Dark), startup.Options), action => Dispatcher.DispatchLabelled("dialog: next", action));
         _host = new EditorHost(startup.Options, action => Dispatcher.Dispatch(action), new MauiEditorPresenter(this, _dialog, () => shell?.Theme ?? EditorThemes.Get(EditorThemes.Dark)), startup.Settings.Read);
@@ -144,6 +146,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         _dialog.FallbackFocus = () => _shown;
         shell = new ShellModel(_host, startup.Settings, startup.Recent, startup.Platform.FileDialogs, new MauiShellUi(_dialog), null, startup.Platform.ShellFiles, new MauiEditorClipboard());
         _shell = shell;
+        // B1: low memory drops the editors' kept line layouts too (the next frame lays out only what it shows).
+        shell.MemoryPressure += (_, _) => Dispatcher.DispatchLabelled("editor: drop the kept line layouts (low memory)", () =>
+        {
+            foreach (var view in _views)
+            {
+                view.ReleaseDrawingMemory();
+            }
+        });
         _shell.EditorOf = tab => (tab.View as EditorView)?.Model;     // format on save goes through the tab's editor
         _palette = new ShellPalette(_shell.Theme, _shell.Options);
         ShellMotion.Milliseconds = Motion.Duration(_shell.Options);
@@ -712,7 +722,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         string? missing = null;
-        if (!_keysRouted)
+        if (!_startup.Platform.IsReady(_window))
+        {
+            // B2's trail: WinUI had not filled the window yet; asked again below, nothing thrown.
+            missing = "The window has no platform content yet: the keys outside the editor and the unsaved-changes question are hooked once it has.";
+        }
+        else if (!_keysRouted)
         {
             try
             {
@@ -725,7 +740,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         }
 
-        if (!_closeGuarded)
+        if (!_closeGuarded && _startup.Platform.IsReady(_window))
         {
             try
             {
@@ -1367,6 +1382,8 @@ public sealed class ShellPage : ContentPage, IDisposable
             if (ReferenceEquals(view, _shown))
             {
                 UpdatePaintTime();
+                // B1 (rules 76, 78): each frame's time in the telemetry table, cold (it laid text out) apart from warm.
+                _host.Record(view.LastFrameCold ? "editor.paint.cold" : "editor.paint.warm", view.LastFrameMilliseconds, "ms");
             }
         };
         _views.Add(view);
@@ -1503,6 +1520,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         // A folder opened with no setting of its own reloads options equal to the ones in use: nothing is rebuilt then
         // (each editor's model and language session, the whole window's theme), which took the UI thread at start-up.
         bool same = Equals(options, _appliedOptions) && ReferenceEquals(_shell.Theme, _appliedTheme);
+        MauiEditorCanvas.TextLayouts = options.PaintLineLayouts ? _startup.Platform.TextLayouts : null;
         _appliedOptions = options;
         _appliedTheme = _shell.Theme;
         if (same)

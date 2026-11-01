@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using System.Diagnostics;
 using Craft.Abstractions;
+using Craft.Core.Diagnostics;
 using Craft.Editor;
 using Craft.Editor.Activities;
 using Microsoft.Maui.Graphics;
@@ -11,6 +13,9 @@ namespace Craft.Maui;
 /// <summary>
 /// The <see cref="IDrawable"/> of the editor's GraphicsView: measures the font on the first frame (and after a font
 /// change), then draws the model through <see cref="EditorRenderer"/> at the view's scroll offsets and viewport.
+/// B1: with <see cref="CaretsOnOwnLayer"/> the carets are left to the view's caret layer (<see cref="CaretDrawable"/>)
+/// unless a popup or ghost text shows; each frame is timed (<see cref="LastFrameMilliseconds"/>, cold when it laid text
+/// out). B2: a frame that throws is reported with its step and skipped (<see cref="PaintGuard"/>).
 /// </summary>
 public sealed class EditorDrawable : IDrawable, IDisposable
 {
@@ -66,6 +71,28 @@ public sealed class EditorDrawable : IDrawable, IDisposable
     /// <summary>Raised at the end of each frame, inside it (a handler that changes the UI dispatches the change).</summary>
     public event EventHandler? Drawn;
 
+    /// <summary>Whether a caret layer draws the carets (the text frame then draws them only while a popup or ghost text shows).</summary>
+    public bool CaretsOnOwnLayer { get; set; }
+
+    /// <summary>Whether the last frame drew the carets with the text (no caret layer, or a popup or ghost text showed).</summary>
+    public bool LastFrameDrewCarets { get; private set; } = true;
+
+    /// <summary>The last frame's time in milliseconds (the paint's telemetry: <c>editor.paint.cold</c> and <c>editor.paint.warm</c>).</summary>
+    public double LastFrameMilliseconds { get; private set; }
+
+    /// <summary>Whether the last frame laid text out or built runs (a cold frame, rule 76), else it only drew what was kept.</summary>
+    public bool LastFrameCold { get; private set; }
+
+    /// <summary>The canvas of the last frame (its kept layouts), or null before the first.</summary>
+    public MauiEditorCanvas? Canvas => _canvas;
+
+    /// <summary>Drops the kept lines and their layouts and the lone runs' layouts (memory pressure); the next frame lays out what it shows.</summary>
+    public void ReleaseLayouts()
+    {
+        _renderer.ReleaseLayouts();
+        _canvas?.ReleaseLayouts();
+    }
+
     /// <inheritdoc />
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -78,6 +105,9 @@ public sealed class EditorDrawable : IDrawable, IDisposable
 
         IsDrawing = true;
         using var label = Labels?.Enter("editor: paint");
+        long start = Stopwatch.GetTimestamp();
+        long runsBefore = _renderer.RunStringsBuilt;
+        string step = "pick and measure the code font";
         try
         {
             var options = model.Options;
@@ -104,13 +134,30 @@ public sealed class EditorDrawable : IDrawable, IDisposable
                 model.Remeasure();
             }
 
+            step = "bind the canvas";
             _canvas = _picker.Canvas!;
             _canvas.SetMetrics(model.Metrics);
             _canvas.Target = canvas;
             float width = ViewportWidth > 0 ? ViewportWidth : dirtyRect.Width;
             float height = ViewportHeight > 0 ? ViewportHeight : dirtyRect.Height;
-            _renderer.Draw(_canvas, model, ScrollX, ScrollY, width, height, CaretVisible);
+            bool carets = !CaretsOnOwnLayer || EditorRenderer.CaretsOnTextLayer(model);
+            LastFrameDrewCarets = carets;
+            step = "render";
+            _renderer.Draw(_canvas, model, ScrollX, ScrollY, width, height, carets && CaretVisible);
+            step = "end the frame";
+            _canvas.Target = null;                       // the frame ends here, so its kept layouts are counted in it
+            LastFrameCold = _canvas.Layouts.LastFrameBuilt > 0 || _renderer.RunStringsBuilt != runsBefore;
+            LastFrameMilliseconds = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             Drawn?.Invoke(this, EventArgs.Empty);
+        }
+#pragma warning disable CA1031 // B2: nothing may leave the platform's draw callback (a stowed exception ends the process); reported with its step and skipped.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            if (HandleFailure(step, error))
+            {
+                throw;                                   // a lost device: Win2D's control makes it again
+            }
         }
         finally
         {
@@ -125,4 +172,62 @@ public sealed class EditorDrawable : IDrawable, IDisposable
 
     /// <inheritdoc />
     public void Dispose() => _renderer.Dispose();
+
+    // True when the error is to be rethrown (a lost device: Win2D's control makes the device again), after dropping the layouts.
+    private bool HandleFailure(string step, Exception error)
+    {
+        string at = step == "render" ? "render: " + _renderer.Step : step;
+        bool rethrow = PaintGuard.Handle("editor: paint", at, error);
+        if (rethrow)
+        {
+            _canvas?.Target = null;
+            ReleaseLayouts();
+        }
+
+        return rethrow;
+    }
+}
+
+/// <summary>
+/// The <see cref="IDrawable"/> of the editor's caret layer (B1): a transparent GraphicsView over the text that draws only
+/// the carets (<see cref="EditorRenderer.DrawCarets"/>), so the blink repaints this layer and no text. While a popup or
+/// ghost text shows, the text frame draws the carets under them and this layer draws none.
+/// </summary>
+public sealed class CaretDrawable(EditorDrawable text) : IDrawable
+{
+    /// <summary>The frames that drew carets (the caret layer's telemetry).</summary>
+    public long Frames { get; private set; }
+
+    /// <inheritdoc />
+    public void Draw(ICanvas canvas, RectF dirtyRect)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        if (text.Model is not { } model || !text.CaretVisible || text.Canvas is not { } target || text.IsDrawing || EditorRenderer.CaretsOnTextLayer(model))
+        {
+            return;
+        }
+
+        using var label = text.Labels?.Enter("editor: caret");
+        try
+        {
+            target.Target = canvas;
+            float width = text.ViewportWidth > 0 ? text.ViewportWidth : dirtyRect.Width;
+            float height = text.ViewportHeight > 0 ? text.ViewportHeight : dirtyRect.Height;
+            text.Renderer.DrawCarets(target, model, text.ScrollX, text.ScrollY, width, height);
+            Frames++;
+        }
+#pragma warning disable CA1031 // B2: nothing may leave the platform's draw callback; reported and skipped.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            if (PaintGuard.Handle("editor: caret", "draw the carets", error))
+            {
+                throw;                                   // a lost device: Win2D's control makes it again
+            }
+        }
+        finally
+        {
+            target.Target = null;
+        }
+    }
 }

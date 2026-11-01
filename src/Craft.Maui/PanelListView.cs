@@ -3,6 +3,7 @@
 
 using Craft.Abstractions;
 using Craft.Core;
+using Craft.Core.Diagnostics;
 using Craft.Editor.Abstractions;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
@@ -226,31 +227,47 @@ public sealed class PanelListView : ContentView, IDisposable
         public void Draw(ICanvas canvas, RectF dirtyRect)
         {
             using var label = UiDispatch.Enter("panel list: paint");
-            var options = view._options;
-            if (_picker.Ensure(canvas, options.FontFamily, options.FontFallback, options.FontSize, _measurer))
-            {
-                var metrics = _measurer.Measure(new EditorFont(options.FontFamily, options.FontSize), options.LineSpacing);
-                if (metrics != Metrics)
-                {
-                    Metrics = metrics;
-                    view.Dispatcher.DispatchLabelled("panel list: measured", view.UpdateSize);
-                }
-            }
-
-            if (_picker.Canvas is not { } target)
-            {
-                return;
-            }
-
-            target.SetMetrics(Metrics);
-            target.Target = canvas;
+            string step = "pick and measure the code font";
+            MauiEditorCanvas? target = null;
             try
             {
+                var options = view._options;
+                if (_picker.Ensure(canvas, options.FontFamily, options.FontFallback, options.FontSize, _measurer))
+                {
+                    var metrics = _measurer.Measure(new EditorFont(options.FontFamily, options.FontSize), options.LineSpacing);
+                    if (metrics != Metrics)
+                    {
+                        Metrics = metrics;
+                        view.Dispatcher.DispatchLabelled("panel list: measured", view.UpdateSize);
+                    }
+                }
+
+                target = _picker.Canvas;
+                if (target is null)
+                {
+                    return;
+                }
+
+                step = "bind the canvas";
+                target.SetMetrics(Metrics);
+                target.Target = canvas;
+                step = "draw the rows";
                 view._list.Draw(target, Metrics, view._theme.Colors, (float)view._scroll.ScrollY, dirtyRect.Width, dirtyRect.Height);
+            }
+#pragma warning disable CA1031 // B2: nothing may leave the platform's draw callback (a stowed exception ends the process); reported with its step and skipped.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                if (PaintGuard.Handle("panel list: paint", step, error))
+                {
+                    target?.Target = null;
+                    target?.ReleaseLayouts();
+                    throw;                               // a lost device: Win2D's control makes it again
+                }
             }
             finally
             {
-                target.Target = null;
+                target?.Target = null;
             }
         }
     }

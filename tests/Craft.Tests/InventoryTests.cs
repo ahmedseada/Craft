@@ -102,6 +102,8 @@ public static class InventoryTests
             // Phase X: the editing surface.
             ["CRAFT_INDENT_GUIDES"] = "false", ["CRAFT_BRACKET_HIGHLIGHT"] = "false", ["CRAFT_WORD_HIGHLIGHT"] = "false", ["CRAFT_FOLDING"] = "false",
             ["CRAFT_FOLDING_DELAY_MS"] = "100", ["CRAFT_MAX_CARETS"] = "50",
+            // The owner's third Windows run (B1): the paint.
+            ["CRAFT_PAINT_LINE_LAYOUTS"] = "false", ["CRAFT_PAINT_CACHE_LINES"] = "8",
             // Phase X slice 3: inline, not modal; the welcome page.
             ["CRAFT_WELCOME_AT_START"] = "false", ["CRAFT_UNDO_BAR_MS"] = "3000", ["CRAFT_FIND_BACKGROUND_CHARS"] = "1000", ["CRAFT_FIND_REGEX_TIMEOUT_MS"] = "100",
             ["CRAFT_QUICK_OPEN_BACKGROUND_FILES"] = "50", ["CRAFT_QUICK_OPEN_RECENT"] = "5",
@@ -136,6 +138,7 @@ public static class InventoryTests
             CrashRecords = "none", TerminalCtrlCCopies = false,
             ReducedMotion = true, MotionMilliseconds = 120, ScrollMilliseconds = 0, ScrollWheelLines = 4, ReferencesLimit = 77,
             IndentGuides = false, BracketHighlight = false, WordHighlight = false, Folding = false, FoldingDelayMilliseconds = 100, MaxCarets = 50,
+            PaintLineLayouts = false, PaintCacheLines = 8,
             WelcomeAtStart = false, UndoBarMilliseconds = 3000, FindBackgroundCharacters = 1000, FindRegexTimeoutMilliseconds = 100,
             QuickOpenBackgroundFiles = 50, QuickOpenRecent = 5,
             TelemetrySamples = 30, TelemetrySlowMilliseconds = 250,

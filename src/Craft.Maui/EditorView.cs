@@ -24,8 +24,10 @@ public sealed class EditorView : ContentView, IDisposable
     private readonly ScrollView _scroll;
     private readonly Grid _content;
     private readonly GraphicsView _graphics;
+    private readonly GraphicsView _caretLayer;
     private readonly MauiTextMeasurer _measurer = new();
     private readonly EditorDrawable _drawable;
+    private readonly CaretDrawable _caretDrawable;
     private readonly MauiEditorClipboard _clipboard = MauiEditorClipboard.Shared;
     private readonly InputForwarder _input;
     private IDisposable? _inputConnection;
@@ -48,12 +50,22 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>An empty editor (set <see cref="Document"/> to show one).</summary>
     public EditorView()
     {
-        _drawable = new EditorDrawable(_measurer);
+        _drawable = new EditorDrawable(_measurer) { CaretsOnOwnLayer = true };
         _drawable.Drawn += OnDrawn;
+        _caretDrawable = new CaretDrawable(_drawable);
         _input = new InputForwarder(this);
         _graphics = new GraphicsView
         {
             Drawable = _drawable,
+            HorizontalOptions = LayoutOptions.Start,
+            VerticalOptions = LayoutOptions.Start,
+        };
+        // B1: the carets on a transparent layer of their own over the text (the pointer goes through it to the text's
+        // view), so the blink repaints the carets and no text.
+        _caretLayer = new GraphicsView
+        {
+            Drawable = _caretDrawable,
+            InputTransparent = true,
             HorizontalOptions = LayoutOptions.Start,
             VerticalOptions = LayoutOptions.Start,
         };
@@ -63,6 +75,7 @@ public sealed class EditorView : ContentView, IDisposable
             VerticalOptions = LayoutOptions.Start,
         };
         _content.Children.Add(_graphics);
+        _content.Children.Add(_caretLayer);
         _scroll = new ScrollView
         {
             Orientation = ScrollOrientation.Both,
@@ -93,6 +106,22 @@ public sealed class EditorView : ContentView, IDisposable
 
     /// <summary>The paint's counters (run strings built, lines drawn).</summary>
     public EditorRenderer Renderer => _drawable.Renderer;
+
+    /// <summary>The last text frame's time in milliseconds (B1's telemetry).</summary>
+    public double LastFrameMilliseconds => _drawable.LastFrameMilliseconds;
+
+    /// <summary>Whether the last text frame laid text out or built runs (cold) rather than drawing only what was kept (warm).</summary>
+    public bool LastFrameCold => _drawable.LastFrameCold;
+
+    /// <summary>
+    /// Drops the drawn lines and the layouts kept for them (B1: memory pressure); the next frame lays out the lines it
+    /// shows. On the UI thread.
+    /// </summary>
+    public void ReleaseDrawingMemory()
+    {
+        _drawable.ReleaseLayouts();
+        Invalidate();
+    }
 
     /// <summary>The document being edited (the caller keeps owning it).</summary>
     public ITextDocument? Document
@@ -237,8 +266,12 @@ public sealed class EditorView : ContentView, IDisposable
         Rebuild();
     }
 
-    /// <summary>Redraws.</summary>
-    public void Invalidate() => _graphics.Invalidate();
+    /// <summary>Redraws (the text and the caret layer).</summary>
+    public void Invalidate()
+    {
+        _graphics.Invalidate();
+        _caretLayer.Invalidate();
+    }
 
     /// <inheritdoc />
     public void Dispose()
@@ -327,6 +360,8 @@ public sealed class EditorView : ContentView, IDisposable
         _content.HeightRequest = height;
         _graphics.WidthRequest = viewportWidth;
         _graphics.HeightRequest = viewportHeight;
+        _caretLayer.WidthRequest = viewportWidth;
+        _caretLayer.HeightRequest = viewportHeight;
         _drawable.ViewportWidth = (float)viewportWidth;
         _drawable.ViewportHeight = (float)viewportHeight;
     }
@@ -443,6 +478,8 @@ public sealed class EditorView : ContentView, IDisposable
         _smooth.Jump(e.ScrollX, e.ScrollY);
         _graphics.TranslationX = e.ScrollX;
         _graphics.TranslationY = e.ScrollY;
+        _caretLayer.TranslationX = e.ScrollX;
+        _caretLayer.TranslationY = e.ScrollY;
         _drawable.ScrollX = (float)e.ScrollX;
         _drawable.ScrollY = (float)e.ScrollY;
         _model?.UpdateViewport((float)e.ScrollX, (float)e.ScrollY, (float)_scroll.Width, (float)_scroll.Height);
@@ -658,11 +695,18 @@ public sealed class EditorView : ContentView, IDisposable
         _blink.Start();
     }
 
+    // B1: a blink repaints the caret layer only; while a popup or ghost text shows, the text frame draws the carets (under
+    // them), so it is that frame that repaints.
     private void OnBlink(object? sender, EventArgs e)
     {
         _caretOn = !_caretOn;
         _drawable.CaretVisible = _caretOn;
-        Invalidate();
+        if (_model is { } model && EditorRenderer.CaretsOnTextLayer(model))
+        {
+            _graphics.Invalidate();
+        }
+
+        _caretLayer.Invalidate();
     }
 
     /// <summary>The keyboard's sink: the current model, whichever it is when the key arrives.</summary>

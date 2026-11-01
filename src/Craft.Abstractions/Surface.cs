@@ -38,6 +38,211 @@ public interface IEditorCanvas
     void DrawText(string text, float x, float top, in TextStyle style);
 }
 
+/// <summary>A run of a <see cref="StyledLine"/>: its characters (tabs already expanded) from <paramref name="Column"/> on, in one style.</summary>
+/// <param name="Text">The run's characters.</param>
+/// <param name="Column">The column its first character is drawn at.</param>
+/// <param name="Style">Its colour, weight and slant.</param>
+public readonly record struct StyledRun(string Text, int Column, TextStyle Style);
+
+/// <summary>
+/// One shown line as coloured runs, drawn as one piece (the owner's third Windows run, B1): a canvas that implements
+/// <see cref="IStyledLineCanvas"/> lays the whole line out once (each run's colour, weight and slant on its range) and keeps
+/// that layout here (<see cref="Layout"/>) while the line, its colours and the font stay the same, so a frame that draws
+/// the line again lays nothing out. The line's owner (the editor's renderer) keeps it while the line is on screen or near
+/// it, and releases its layout when it drops it (<see cref="ReleaseLayout"/>). The UI thread's; not thread-safe.
+/// </summary>
+public sealed class StyledLine
+{
+    private StyledRun[] _runs = [];
+    private int[] _starts = [];
+    private string? _text;
+    private int _textColumns;
+
+    /// <summary>The runs, in column order.</summary>
+    public ReadOnlySpan<StyledRun> Runs => _runs.AsSpan(0, Count);
+
+    /// <summary>How many runs it holds.</summary>
+    public int Count { get; private set; }
+
+    /// <summary>The line's width in columns (its last character's end, white space included).</summary>
+    public int Columns { get; set; }
+
+    /// <summary>
+    /// The runs' characters at their columns with spaces between them, made once when first asked (the text a canvas lays
+    /// out); run <c>i</c> starts at <see cref="TextIndexOf"/>(i).
+    /// </summary>
+    public string Text => _text ??= Join();
+
+    /// <summary>The columns <see cref="Text"/> spans (a surrogate pair is one column and two characters).</summary>
+    public int TextColumns
+    {
+        get
+        {
+            _ = Text;
+            return _textColumns;
+        }
+    }
+
+    /// <summary>The canvas's layout of this line, or null when none is kept.</summary>
+    public IDisposable? Layout { get; private set; }
+
+    /// <summary>The key of the canvas state (its font and measures) <see cref="Layout"/> was made for; 0 when none.</summary>
+    public int LayoutKey { get; private set; }
+
+    /// <summary>Adds a run after the others (the text and any kept layout are made again).</summary>
+    public void Add(StyledRun run)
+    {
+        ArgumentNullException.ThrowIfNull(run.Text);
+        if (Count == _runs.Length)
+        {
+            Array.Resize(ref _runs, Math.Max(4, _runs.Length * 2));
+        }
+
+        _runs[Count++] = run;
+        _text = null;
+        ReleaseLayout();
+    }
+
+    /// <summary>Where run <paramref name="index"/> starts in <see cref="Text"/>.</summary>
+    public int TextIndexOf(int index)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Count);
+        _ = Text;
+        return _starts[index];
+    }
+
+    /// <summary>Keeps <paramref name="layout"/> as this line's layout for canvas state <paramref name="key"/>; the one kept before is disposed.</summary>
+    public void KeepLayout(IDisposable? layout, int key)
+    {
+        if (!ReferenceEquals(layout, Layout))
+        {
+            Layout?.Dispose();
+        }
+
+        Layout = layout;
+        LayoutKey = layout is null ? 0 : key;
+    }
+
+    /// <summary>Disposes the kept layout, if any (the line is dropped, or its memory is wanted back).</summary>
+    public void ReleaseLayout()
+    {
+        var layout = Layout;
+        Layout = null;
+        LayoutKey = 0;
+        layout?.Dispose();
+    }
+
+    private string Join()
+    {
+        int length = 0;
+        int column = 0;
+        var runs = Runs;
+        foreach (ref readonly var run in runs)
+        {
+            length += Math.Max(0, run.Column - column) + run.Text.Length;
+            column = Math.Max(column, run.Column) + ColumnsOf(run.Text);
+        }
+
+        if (_starts.Length < Count)
+        {
+            _starts = new int[_runs.Length];
+        }
+
+        _textColumns = column;
+        return string.Create(length, this, static (span, line) =>
+        {
+            int at = 0;
+            int column = 0;
+            var runs = line.Runs;
+            for (int i = 0; i < runs.Length; i++)
+            {
+                ref readonly var run = ref runs[i];
+                int gap = Math.Max(0, run.Column - column);
+                span.Slice(at, gap).Fill(' ');
+                at += gap;
+                line._starts[i] = at;
+                run.Text.AsSpan().CopyTo(span[at..]);
+                at += run.Text.Length;
+                column = Math.Max(column, run.Column) + ColumnsOf(run.Text);
+            }
+        });
+    }
+
+    // A run's columns: its characters, a surrogate pair counting once (tabs are expanded before a run is made).
+    private static int ColumnsOf(string text)
+    {
+        int columns = text.Length;
+        foreach (char c in text)
+        {
+            if (char.IsLowSurrogate(c))
+            {
+                columns--;
+            }
+        }
+
+        return columns;
+    }
+}
+
+/// <summary>
+/// A canvas that draws a whole <see cref="StyledLine"/> at once (B1: one cached layout per shown line on Windows). The
+/// editor's renderer draws through <see cref="StyledLines.Draw"/>, which falls back to one <see cref="IEditorCanvas.DrawText"/>
+/// per run on a canvas without it.
+/// </summary>
+public interface IStyledLineCanvas
+{
+    /// <summary>
+    /// Draws <paramref name="line"/> with its column 0 at <paramref name="x"/> and its top at <paramref name="top"/>, one
+    /// column <paramref name="cell"/> wide; what lies outside <paramref name="clipLeft"/> to <paramref name="clipRight"/> need
+    /// not be drawn (a run wholly outside is skipped when drawn run by run).
+    /// </summary>
+    void DrawStyledLine(StyledLine line, float x, float top, float cell, float clipLeft, float clipRight);
+}
+
+/// <summary>Draws <see cref="StyledLine"/>s on any <see cref="IEditorCanvas"/>.</summary>
+public static class StyledLines
+{
+    /// <summary>
+    /// Draws <paramref name="line"/> on <paramref name="canvas"/>: as one piece when it is an <see cref="IStyledLineCanvas"/>,
+    /// else run by run (<see cref="DrawRuns"/>).
+    /// </summary>
+    public static void Draw(IEditorCanvas canvas, StyledLine line, float x, float top, float cell, float clipLeft, float clipRight)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(line);
+        if (canvas is IStyledLineCanvas lines)
+        {
+            lines.DrawStyledLine(line, x, top, cell, clipLeft, clipRight);
+        }
+        else
+        {
+            DrawRuns(canvas, line, x, top, cell, clipLeft, clipRight);
+        }
+    }
+
+    /// <summary>
+    /// Draws each run of <paramref name="line"/> with <see cref="IEditorCanvas.DrawText"/> at <paramref name="x"/> plus its
+    /// column times <paramref name="cell"/>, skipping a run that starts right of <paramref name="clipRight"/> or ends left of
+    /// <paramref name="clipLeft"/>.
+    /// </summary>
+    public static void DrawRuns(IEditorCanvas canvas, StyledLine line, float x, float top, float cell, float clipLeft, float clipRight)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(line);
+        foreach (ref readonly var run in line.Runs)
+        {
+            float at = x + (run.Column * cell);
+            if (at > clipRight || at + (run.Text.Length * cell) < clipLeft)
+            {
+                continue;
+            }
+
+            canvas.DrawText(run.Text, at, top, run.Style);
+        }
+    }
+}
+
 /// <summary>Modifier keys held during an input.</summary>
 [Flags]
 public enum KeyModifiers

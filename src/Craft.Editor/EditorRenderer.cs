@@ -16,6 +16,13 @@ namespace Craft.Editor;
 /// landed background parse (<see cref="EditorModel.Reclassified"/>) rebuilds only the lines whose spans it changed. Before
 /// classifying, a frame waits for the language's parse up to the options' budget, never longer. One renderer per drawn
 /// surface; dispose it to return its buffers.
+/// <para>
+/// B1 (the owner's third Windows run): each line's runs are a <see cref="StyledLine"/>, drawn as one piece on a canvas that
+/// implements <see cref="IStyledLineCanvas"/> (one layout per shown line, kept on the line while its text, its spans, the
+/// theme and the font stay; released when the line leaves the cache, which keeps the lines on screen and
+/// <see cref="Core.CraftOptions.PaintCacheLines"/> above and below them), else run by run as before. The carets can be
+/// drawn alone (<see cref="DrawCarets"/>), on a layer of their own, so the caret's blink repaints no text.
+/// </para>
 /// </summary>
 public sealed class EditorRenderer : IDisposable
 {
@@ -70,15 +77,15 @@ public sealed class EditorRenderer : IDisposable
         scrollY = model.ScrollY;
         var snapshot = model.Snapshot;
         var theme = model.Theme;
+        Step = StepStart;
         if (!ReferenceEquals(model, _model))
         {
             _numbers.Clear();
-            _lines.Clear();
         }
 
         if (!ReferenceEquals(model, _model) || !ReferenceEquals(theme, _theme))
         {
-            _lines.Clear();
+            ReleaseLayouts();
             _model = model;
             _theme = theme;
         }
@@ -98,7 +105,7 @@ public sealed class EditorRenderer : IDisposable
         var rows = model.VisibleRows(scrollY, viewportHeight);
         var visible = new LineRange(model.LineAtRow(rows.First), model.LineAtRow(rows.Last));
         LastVisible = visible;
-        TrimCaches(visible);
+        TrimCaches(visible, options.PaintCacheLines);
 
         var firstLine = snapshot.GetLine(visible.First);
         var lastLine = snapshot.GetLine(visible.Last);
@@ -118,6 +125,7 @@ public sealed class EditorRenderer : IDisposable
             previousCaretLine = line;
         }
 
+        Step = StepClassify;
         _spans.Clear();
         LastFrameClassified = model.WaitForClassification(snapshot);
         if (!LastFrameClassified)
@@ -145,6 +153,7 @@ public sealed class EditorRenderer : IDisposable
         int spanIndex = 0;
         int selectionIndex = firstSelection;
         int drawn = 0;
+        Step = StepLines;
         try
         {
             int row = rows.First;
@@ -218,18 +227,8 @@ public sealed class EditorRenderer : IDisposable
                     text = TextReading.ReadLine(snapshot, line, ref buffer);    // the guides may have read other lines into the buffer
                 }
 
-                var items = runs.Items;
-                for (int r = 0; r < runs.Count; r++)
-                {
-                    ref readonly var run = ref items[r];
-                    float x = left + (run.Column * cell);
-                    if (x > viewportWidth || x + (run.Text.Length * cell) < textLeft)
-                    {
-                        continue;
-                    }
-
-                    canvas.DrawText(run.Text, x, top, run.Style);
-                }
+                // B1: the line as one piece (one kept layout on a canvas that lays lines out), else run by run as before.
+                StyledLines.Draw(canvas, runs.Line, left, top, cell, textLeft, viewportWidth);
 
                 if (hidden && folding.Map.IsFolded(index))
                 {
@@ -256,6 +255,7 @@ public sealed class EditorRenderer : IDisposable
 
         LinesDrawn = drawn;
 
+        Step = StepGutter;
         canvas.FillRect(0, 0, gutterWidth, viewportHeight, model.ShowLineNumbers ? colors.Gutter : colors.Background);
         var plainNumber = new TextStyle(colors.GutterText);
         var currentNumber = new TextStyle(colors.GutterCurrentText);
@@ -287,31 +287,150 @@ public sealed class EditorRenderer : IDisposable
             }
         }
 
+        Step = StepCarets;
         if (caretVisible)
         {
             foreach (var (column, top, _) in _carets)
             {
-                float x = textLeft - scrollX + (column * cell);
-                if (x < textLeft - 1 || x > viewportWidth)
+                DrawCaret(canvas, model, column, top, scrollX, viewportWidth);
+            }
+        }
+
+        Step = StepGhost;
+        _ghost.Draw(canvas, model, scrollX, scrollY, viewportWidth, viewportHeight);
+        Step = StepPopups;
+        _popups.Draw(canvas, model);
+        model.NotePainted();
+        Step = StepDone;
+    }
+
+    /// <summary>
+    /// Whether the carets must be drawn with the text (<see cref="Draw"/> with the caret shown) rather than on a layer of
+    /// their own: while ghost text, the completion list or a tooltip shows, which the text frame draws over the carets.
+    /// </summary>
+    public static bool CaretsOnTextLayer(EditorModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return model.InlineCompletion.IsShown || model.Tooltip is not null || model.CompletionBox() is not null;
+    }
+
+    /// <summary>
+    /// Draws only the carets of <paramref name="model"/> on the lines shown at (<paramref name="scrollX"/>,
+    /// <paramref name="scrollY"/>): the caret layer's frame (B1), so a blink repaints no text. The same fills, at the same
+    /// places, as <see cref="Draw"/> with the caret shown; it reads the model, not the last text frame, so the layer is
+    /// right whichever of the two is drawn first. Allocates nothing once warm.
+    /// </summary>
+    public void DrawCarets(IEditorCanvas canvas, EditorModel model, float scrollX, float scrollY, float viewportWidth, float viewportHeight)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(model);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        model.UpdateViewport(scrollX, scrollY, viewportWidth, viewportHeight);
+        scrollX = model.ScrollX;
+        scrollY = model.ScrollY;
+        var snapshot = model.Snapshot;
+        float height = model.Metrics.LineHeight;
+        int tabSize = model.Options.TabSize;
+        var folding = model.Folding.Map;
+        bool hidden = folding.HasHidden;
+        var selections = model.Selections;
+        var rows = model.VisibleRows(scrollY, viewportHeight);
+        var visible = new LineRange(model.LineAtRow(rows.First), model.LineAtRow(rows.Last));
+        var firstLine = snapshot.GetLine(visible.First);
+        var lastLine = snapshot.GetLine(visible.Last);
+        CaretsDrawnAlone = 0;
+        char[]? buffer = null;
+        try
+        {
+            for (int i = FirstSelectionReaching(selections, firstLine.Start); i < selections.Length && selections[i].Start <= lastLine.EndIncludingBreak; i++)
+            {
+                int caret = selections[i].Caret;
+                int index = snapshot.GetLineIndex(caret);
+                if (index < visible.First || index > visible.Last || (hidden && folding.IsHidden(index)))
                 {
                     continue;
                 }
 
-                if (model.Overwrite)
-                {
-                    canvas.FillRect(x, top, cell, height, (colors.Caret & 0x00FFFFFFu) | 0x80000000u);
-                }
-                else
-                {
-                    canvas.FillRect(x, top, options.CaretWidth, height, colors.Caret);
-                }
+                var line = snapshot.GetLine(index);
+                int column = TextReading.ColumnOf(TextReading.ReadLine(snapshot, line, ref buffer), caret - line.Start, tabSize);
+                DrawCaret(canvas, model, column, (model.RowOfLine(index) * height) - scrollY, scrollX, viewportWidth);
+                CaretsDrawnAlone++;
             }
         }
-
-        _ghost.Draw(canvas, model, scrollX, scrollY, viewportWidth, viewportHeight);
-        _popups.Draw(canvas, model);
-        model.NotePainted();
+        finally
+        {
+            TextReading.Return(buffer);
+        }
     }
+
+    /// <summary>The carets the last <see cref="DrawCarets"/> drew (or would have, inside the viewport).</summary>
+    public int CaretsDrawnAlone { get; private set; }
+
+    /// <summary>The step of the frame being drawn, or of the last one when it ended ("done"): a frame that throws is reported with it (B2, rule 90).</summary>
+    public string Step { get; private set; } = StepDone;
+
+    /// <summary>The lines the run cache keeps now (on screen and in the margin).</summary>
+    public int LinesHeld => _lines.Count;
+
+    /// <summary>The kept lines that hold a canvas's layout now (a blank line has none); walks the cache: telemetry and tests, not the frame.</summary>
+    public int LayoutsHeld
+    {
+        get
+        {
+            int held = 0;
+            foreach (var runs in _lines.Values)
+            {
+                held += runs.Line.Layout is null ? 0 : 1;
+            }
+
+            return held;
+        }
+    }
+
+    /// <summary>
+    /// Drops every cached line and the layouts a canvas keeps on them (memory pressure, a lost device, another theme or
+    /// model): the next frame builds the lines on screen again.
+    /// </summary>
+    public void ReleaseLayouts()
+    {
+        foreach (var runs in _lines.Values)
+        {
+            runs.Line.ReleaseLayout();
+        }
+
+        _lines.Clear();
+    }
+
+    private static void DrawCaret(IEditorCanvas canvas, EditorModel model, int column, float top, float scrollX, float viewportWidth)
+    {
+        var colors = model.Theme.Colors;
+        float cell = model.Metrics.CellWidth;
+        float textLeft = model.TextLeft;
+        float x = textLeft - scrollX + (column * cell);
+        if (x < textLeft - 1 || x > viewportWidth)
+        {
+            return;
+        }
+
+        float height = model.Metrics.LineHeight;
+        if (model.Overwrite)
+        {
+            canvas.FillRect(x, top, cell, height, (colors.Caret & 0x00FFFFFFu) | 0x80000000u);
+        }
+        else
+        {
+            canvas.FillRect(x, top, model.Options.CaretWidth, height, colors.Caret);
+        }
+    }
+
+    private const string StepStart = "start";
+    private const string StepClassify = "classify the lines on screen";
+    private const string StepLines = "draw the lines";
+    private const string StepGutter = "draw the gutter";
+    private const string StepCarets = "draw the carets";
+    private const string StepGhost = "draw the ghost text";
+    private const string StepPopups = "draw the popups";
+    private const string StepDone = "done";
 
     /// <summary>The carets the last frame drew (or would have, with the caret shown).</summary>
     public int CaretsDrawn => _carets.Count;
@@ -565,7 +684,7 @@ public sealed class EditorRenderer : IDisposable
         _runSpans.Dispose();
         ArrayPool<TokenSpan>.Shared.Return(_clipped, clearArray: true);
         _clipped = [];
-        _lines.Clear();
+        ReleaseLayouts();
         _numbers.Clear();
     }
 
@@ -580,25 +699,31 @@ public sealed class EditorRenderer : IDisposable
         return text;
     }
 
-    private void TrimCaches(LineRange visible)
+    // The caches keep the lines on screen and `margin` lines above and below them (a scroll back lays nothing out), trimmed
+    // once they hold half as many again, so a scrolling frame does not walk them.
+    private void TrimCaches(LineRange visible, int margin)
     {
-        int keep = Math.Max(64, visible.Count * 4);
-        if (_lines.Count > keep)
+        margin = Math.Max(0, margin);
+        int keep = visible.Count + (2 * margin);
+        int first = visible.First - margin;
+        int last = visible.Last + margin;
+        if (_lines.Count > keep + (keep / 2) + 8)
         {
-            foreach (var key in _lines.Keys)
+            foreach (var (key, runs) in _lines)
             {
-                if (key < visible.First || key > visible.Last)
+                if (key < first || key > last)
                 {
+                    runs.Line.ReleaseLayout();
                     _lines.Remove(key);
                 }
             }
         }
 
-        if (_numbers.Count > keep)
+        if (_numbers.Count > keep + (keep / 2) + 8)
         {
             foreach (var key in _numbers.Keys)
             {
-                if (key < visible.First + 1 || key > visible.Last + 1)
+                if (key < first + 1 || key > last + 1)
                 {
                     _numbers.Remove(key);
                 }
@@ -639,6 +764,7 @@ public sealed class EditorRenderer : IDisposable
         var runs = Build(text, clipped, theme, tabSize, ref expanded);
         runs.Spans = clipped.ToArray();
         runs.Source = text.ToArray();
+        cached?.Line.ReleaseLayout();
         _lines[index] = runs;
         return runs;
     }
@@ -748,35 +874,23 @@ public sealed class EditorRenderer : IDisposable
             }
         }
 
-        runs.Add(new Run(new string(expanded, 0, written), start, style));
+        runs.Line.Add(new StyledRun(new string(expanded, 0, written), start, style));
         RunStringsBuilt++;
         return end;
     }
 
-    private readonly record struct Run(string Text, int Column, TextStyle Style);
-
     private sealed class LineRuns
     {
-        private Run[] _items = [];
+        public StyledLine Line { get; } = new();
 
         public TokenSpan[] Spans { get; set; } = [];
 
         public char[] Source { get; set; } = [];
 
-        public int Columns { get; set; }
-
-        public int Count { get; private set; }
-
-        public Run[] Items => _items;
-
-        public void Add(Run run)
+        public int Columns
         {
-            if (Count == _items.Length)
-            {
-                Array.Resize(ref _items, Math.Max(4, _items.Length * 2));
-            }
-
-            _items[Count++] = run;
+            get => Line.Columns;
+            set => Line.Columns = value;
         }
     }
 }

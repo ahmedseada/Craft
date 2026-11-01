@@ -348,11 +348,8 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         }
 
         var profile = terminal.Profile ?? DefaultProfile;
-        string folder;
-        lock (terminal.Screen.Sync)
-        {
-            folder = terminal.Screen.WorkingDirectory is { } current && Directory.Exists(current) ? current : terminal.WorkingDirectory;
-        }
+        // The shell's folder is published by the reader: read without the screen's lock.
+        string folder = terminal.Screen.WorkingDirectory is { } current && Directory.Exists(current) ? current : terminal.WorkingDirectory;
 
         try
         {
@@ -448,7 +445,7 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         var terminal = TerminalInstance.Start(_nextId, host, new TerminalStartInfo(shell, start.Folder, LastSize, environment), options.TerminalScrollback, _host.Dispatch, request?.Name);
         _nextId++;
         terminal.Profile = profile;
-        lock (terminal.Screen.Sync)
+        using (terminal.Screen.EnterForUi())
         {
             terminal.Screen.DefaultCursorStyle = TerminalLaunch.CursorStyle(options.TerminalCursor);
         }

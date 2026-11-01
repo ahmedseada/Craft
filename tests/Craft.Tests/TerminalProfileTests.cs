@@ -310,6 +310,86 @@ public static class TerminalProfileTests
         Check.True(running.IsBusy(time, time.GetTimestamp(), after, quiet), "a shell's OSC 133 mark says it exactly, quiet or not");
     }
 
+    [Test]
+    public static void TheBusyDotAndTheTitlesNeverWaitOnTheScreensLock()
+    {
+        var time = new ManualTime();
+        var shell = new ScriptedSession();
+        using var running = TerminalInstanceFactory(shell, time);
+        shell.Emit("\e]0;ping\a\e]7;file:///C:/work\a\e[?2004h\e]133;C\a");
+        Check.True(SpinUntil(() => running.Screen.CommandRunning == true && running.Screen.Title == "ping"), "the marks arrived");
+
+        // The output thread holds the screen's lock (a parse); the 500 ms busy tick and the tab's titles read on (the
+        // owner's 618 ms stall: IsBusy waited on that lock on the UI thread).
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = new Thread(() =>
+        {
+            lock (running.Screen.Sync)
+            {
+                held.Set();
+                release.Wait(TimeSpan.FromSeconds(10));
+            }
+        });
+        holder.Start();
+        held.Wait();
+        try
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            bool busy = running.IsBusy(time, time.GetTimestamp(), TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(400));
+            var title = running.Title;
+            var shortTitle = running.ShortTitle;
+            var folder = running.Screen.WorkingDirectory;
+            bool bracketed = running.Screen.BracketedPaste;
+            watch.Stop();
+            Check.True(watch.Elapsed < TimeSpan.FromMilliseconds(500), $"read while the lock is held, without waiting for it ({watch.Elapsed.TotalMilliseconds:F0} ms)");
+            Check.True(busy, "OSC 133;C read lock-free: a command runs");
+            Check.Equal("ping", title, "the shell's title read lock-free");
+            Check.Equal("ping", shortTitle, "the tab's short title read lock-free");
+            Check.Equal("C:/work", folder, "the shell's folder (OSC 7) read lock-free");
+            Check.True(bracketed, "bracketed paste (mode 2004) read lock-free");
+        }
+        finally
+        {
+            release.Set();
+            holder.Join();
+        }
+    }
+
+    [Test]
+    public static void TheUiThreadsWaitForTheScreenIsSeenByTheReader()
+    {
+        var screen = new TerminalScreen(20, 4, 10);
+        Check.True(!screen.UiWaiting, "nobody waits at first");
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = new Thread(() =>
+        {
+            lock (screen.Sync)
+            {
+                held.Set();
+                release.Wait(TimeSpan.FromSeconds(10));
+            }
+        });
+        holder.Start();
+        held.Wait();
+        bool entered = false;
+        var ui = new Thread(() =>
+        {
+            using (screen.EnterForUi())
+            {
+                entered = true;
+            }
+        });
+        ui.Start();
+        bool seen = SpinUntil(() => screen.UiWaiting);
+        release.Set();
+        holder.Join();
+        ui.Join();
+        Check.True(seen, "while the UI thread waits for the lock, the reader sees it (and lets it go first after its slice)");
+        Check.True(entered && !screen.UiWaiting, "the UI thread took the lock, and the wait is over once it has");
+    }
+
     private static TerminalInstance TerminalInstanceFactory(ScriptedSession session, ManualTime time)
     {
         var host = new ScriptedHost(session);

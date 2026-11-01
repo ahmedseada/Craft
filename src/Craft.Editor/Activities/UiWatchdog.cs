@@ -242,7 +242,7 @@ public sealed class UiWatchdog : IDisposable
                 if (label is null && Stopwatch.GetElapsedTime(posted) >= _stall)
                 {
                     // Blocked now: the work running is the one to name.
-                    label = _labels.Current ?? "unlabelled UI work (a window event's handler, or a dispatch without a label)";
+                    label = _labels.Current ?? UnlabelledText(_labels.Last.Label);
                     recent = _labels.Recent();
                 }
             }
@@ -278,6 +278,14 @@ public sealed class UiWatchdog : IDisposable
             }
         }
     }
+
+    /// <summary>
+    /// What a stall is named when no label runs while the window is blocked: the work after the last labelled one, which on
+    /// every start was the window's own layout and drawing of what that work changed (the trace showed no Craft code in it).
+    /// </summary>
+    private static string UnlabelledText(string? lastLabel) => lastLabel is null
+        ? "unlabelled UI work (a window event's handler, or a dispatch without a label)"
+        : $"unlabelled UI work after \"{lastLabel}\": the window's own layout and drawing of what it changed, or a handler without a label";
 
     private void Report(UiStall stall)
     {

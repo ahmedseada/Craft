@@ -3714,6 +3714,7 @@ sealed class Craft.Editor.Terminal.TerminalScreen
   System.Boolean BracketedPaste { get; }
   System.Boolean CursorVisible { get; }
   System.Boolean IsAlternate { get; }
+  System.Boolean UiWaiting { get; }
   System.Boolean? CommandRunning { get; }
   System.Int32 Bells { get; }
   System.Int32 Columns { get; }
@@ -3732,6 +3733,7 @@ sealed class Craft.Editor.Terminal.TerminalScreen
   System.String Title { get; }
   System.String WorkingDirectory { get; }
   System.Threading.Lock Sync { get; }
+  System.Threading.Lock.Scope EnterForUi()
   System.Void Clear()
   System.Void Feed(System.ReadOnlySpan<System.Byte> data)
   System.Void Reset()

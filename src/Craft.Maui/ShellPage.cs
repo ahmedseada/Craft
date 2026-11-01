@@ -689,7 +689,52 @@ public sealed class ShellPage : ContentPage, IDisposable
     {
         var line = $"A platform callback failed and was caught ({failure.Where}): {failure.Error.GetType().Name}: {failure.Error.Message}"
             + (failure.ReportPath is { } path ? " Report: " + path : "");
-        _host.Dispatch("shell: a caught callback failure", () => _host.Log(EditorLogLevel.Error, line, failure.Error));
+        _host.Dispatch("shell: a caught callback failure", () =>
+        {
+            _host.Log(EditorLogLevel.Error, line, failure.Error);
+            // The owner (2026-11-01): a failure never ends the app; it is shown in Craft's dialog with Copy report, once per
+            // place and exception type (the guard writes a report only for the first of each), and the app goes on.
+            if (failure.ReportPath is { } report)
+            {
+                _ = ShowFailureAsync(failure, report);
+            }
+        });
+    }
+
+    private async Task ShowFailureAsync(CallbackFailure failure, string report)
+    {
+        try
+        {
+            var question = new EditorQuestion(
+                "Something failed; Craft kept running",
+                $"{failure.Error.GetType().Name}: {failure.Error.Message}",
+                ["Copy report", "Continue"])
+            {
+                Details = [$"Where: {failure.Where}", $"Report: {report}"],
+                Dismissed = 1,
+            };
+            if (await _dialog.AskAsync(question) == 0)
+            {
+                string text;
+                try
+                {
+                    text = await File.ReadAllTextAsync(report);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    text = CrashReports.Format(failure.Error, failure.Where);
+                }
+
+                await MauiEditorClipboard.Shared.SetTextAsync(text);
+                _status.Notice.Text = "The report is on the clipboard.";
+            }
+        }
+#pragma warning disable CA1031 // Showing a failure never fails in its turn: it stays in Output.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(EditorLogLevel.Warning, "The failure's dialog could not show.", error);
+        }
     }
 
     /// <summary>Ctrl+C that reached the window with no control taking it (no editor): the bottom panel's chosen rows first.</summary>

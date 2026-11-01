@@ -8,9 +8,12 @@ using Craft.Core.Diagnostics;
 namespace Craft.App.WinUI;
 
 /// <summary>
-/// Windows' crash dialog: an exception nobody caught (on the UI thread, on any thread, or in a task nobody awaited) is
-/// written as a report (<see cref="CrashReports"/>) and shown in a message box, with the report's path, before the app
-/// closes. The message box is Win32's own, so it shows even when the window's XAML is what failed.
+/// Windows' exceptions nobody caught (the owner, 2026-11-01: "at any circumstances don't kill the app, keep the UI
+/// thread"). On the UI thread (WinUI's <c>UnhandledException</c>) and in a task nobody awaited, the exception is handled:
+/// written as a report, noted in the trail, and handed to <see cref="CallbackGuard"/>, whose page shows it in Craft's own
+/// dialog with Copy report, and in Output; the app goes on. Only an exception that leaves a raw thread of its own ends
+/// the process (.NET gives no way to go on): its report is written and shown in Win32's message box (Ctrl+C copies it),
+/// which shows even when the window's XAML is what failed.
 /// </summary>
 internal static partial class CrashDialog
 {
@@ -27,18 +30,22 @@ internal static partial class CrashDialog
         ArgumentNullException.ThrowIfNull(app);
         app.UnhandledException += (_, e) =>
         {
-            // WinUI's exception may be a bare COM error; its Message carries the original text and stack when it has one.
-            var extra = e.Message is { Length: > 0 } message && message != e.Exception?.Message ? "WinUI message: " + message : null;
-            Show(e.Exception ?? new InvalidOperationException(e.Message), "the window (WinUI, UI thread)", extra);
+            // Handled: the window and its UI thread go on. WinUI's exception may be a bare COM error; its Message carries the
+            // original text and stack when it has one.
+            e.Handled = true;
+            var error = e.Exception ?? new InvalidOperationException(e.Message);
+            var where = e.Message is { Length: > 0 } message && message != e.Exception?.Message
+                ? "the window (WinUI, UI thread; WinUI message: " + message + ")"
+                : "the window (WinUI, UI thread)";
+            CallbackGuard.Report(where, error);
         };
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             Show(e.ExceptionObject as Exception ?? new InvalidOperationException(Convert.ToString(e.ExceptionObject, System.Globalization.CultureInfo.InvariantCulture)), "the process (a thread)", null);
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
             // A task nobody awaited failed: reported, and the app goes on (it would not close for it).
-            var path = CrashReports.Write(Options, e.Exception, "a task nobody awaited (the app went on)");
-            CrashWatch.CurrentTrail?.Note($"A task nobody awaited failed: {e.Exception.GetBaseException().GetType().Name}: {e.Exception.GetBaseException().Message} (report {path})");
             e.SetObserved();
+            CallbackGuard.Report("a background task nobody awaited", e.Exception.GetBaseException());
         };
     }
 
@@ -64,7 +71,8 @@ internal static partial class CrashDialog
             text = string.Concat(text.AsSpan(0, MaxShown), "\n…");
         }
 
-        var head = path is not null ? $"Craft has to close. The full report is in:\n{path}\n\n" : "Craft has to close (the report could not be written).\n\n";
+        var head = (path is not null ? $"A thread of its own failed and .NET ends the process for it. The full report is in:\n{path}\n" : "A thread of its own failed and .NET ends the process for it (the report could not be written).\n")
+            + "Ctrl+C copies this message.\n\n";
         _ = MessageBoxW(IntPtr.Zero, head + text, "Craft crashed", MbOk | MbIconError | MbTopMost | MbSetForeground);
     }
 

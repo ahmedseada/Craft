@@ -486,6 +486,13 @@ public sealed class ModelsPage : ContentView, IDisposable
                 add.Children.Add(ProgressRow(progress));
             }
 
+            // The notice outlives each refresh: it leaves the box of the last one before it joins this one (WinUI refuses a
+            // second parent, "No installed components were detected", and that ended the app: the owner's run 2026-11-01).
+            if (_notice.Parent is Layout previous)
+            {
+                previous.Children.Remove(_notice);
+            }
+
             add.Children.Add(_notice);
             _main.Children.Add(Section("Add a model", add));
         }

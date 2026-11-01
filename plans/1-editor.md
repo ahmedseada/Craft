@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control) | Parts 6-8 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps) | Parts 6-9 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -2942,6 +2942,43 @@ in File Explorer: plain text rows.
   a real git repository made in a temp folder when git is on the machine, skipped with its reason when not: stage,
   unstage, commit, discard with Undo, branch switch; gutter marks from a fixture diff; the rail badge count).
 - Slot: slot 1 after 1b (before 1c).
+
+### X part 9: the modern-editor gaps (the owner, 2026-11-01: "any modern design gaps and missing helpful editor
+features would be a huge support")
+Each checked absent in the code and the plan (2026-11-01; "partly" where a piece exists). Present already, not added
+again: zoom, expand selection, the quick-fix command, find references, hover, signature help, format, multi-caret,
+folding, smooth scroll, the palette, the shortcuts page, the welcome page. Each is an option with its `CRAFT_*`
+variable, drawn through B1's cached layouts, and a contract where a plug-in may add to it.
+- **Editing helpers (first)**: 1 word wrap (Alt+Z, `CRAFT_WORD_WRAP`, wrapped rows laid out only on screen); 2
+  bracket pair colours (`CRAFT_BRACKET_COLORS`, by depth, theme tokens); 3 code snippets (a `SnippetProviders`
+  registry, tab stops and placeholders, C#'s `prop`, `ctor`, `for`, `foreach`, `if`, `try`, ... in completion, the
+  user's own in `.craft/snippets` and the user folder); 4 inlay hints (parameter names, inferred types, from Roslyn,
+  `ISemanticLanguageSession.InlayHintsAsync` for the visible lines only); 5 code lens (references count, Run and Debug
+  test from the Run view's providers, `ICodeLensProvider`); 6 diagnostics at the line end (`CRAFT_INLINE_DIAGNOSTICS`);
+  7 a lightbulb in the gutter where code actions exist (partly: the command exists); 8 render whitespace, vertical
+  rulers (`CRAFT_RULERS` "80,120"), trim trailing white space and insert a final newline on save; 9 `.editorconfig`
+  applied (indent style and size, line ending, charset, trim, final newline) per file (partly: coloured only); 10 linked
+  tag rename in HTML and XML.
+- **Navigation**: 11 an Outline view (X part 4's document symbols as a tree, following the caret); 12 call hierarchy
+  and type hierarchy (Roslyn); 13 bookmarks (toggle, next, list, kept per workspace); 14 preview tabs (a single click in
+  the tree previews in an italic tab the next preview replaces; an edit or a double click keeps it); 15 restore the last
+  session (folder, tabs, carets, folds, layout, split groups; `CRAFT_RESTORE_SESSION`); 16 local history (a snapshot per
+  save in the user's data folder, bounded, a timeline per file with compare and restore); 17 `file(line,col)` and
+  `file:line` links clickable in the terminal and Output.
+- **Tools**: 18 a Test explorer (tests found by Roslyn and by the Run view's providers, run one or all, results in the
+  tree and as gutter marks, failures to Problems); 19 Markdown preview (side by side, following the scroll); 20 an image
+  preview tab (png, jpg, gif, svg, ico; zoom); 21 a TODO/FIXME list from comments; 22 spell check in comments and strings
+  (a word list, no native library; user words kept); 23 inline AI chat (Ctrl+I at the caret or on a selection, the
+  answer as a diff, through the chat role's loaded model).
+- **Look**: 24 a theme picker with live preview, more built-in themes and a high-contrast pair; 25 Zen and full-screen
+  modes; 26 status bar items that change what they show (encoding, line ending, indentation, language) on click
+  (partly: to verify).
+- Decisions (recommended, noted): all 26, in the order above, after X part 8 and before W; debugging stays out (not
+  asked). Tests: a group per piece (`WordWrap`, `BracketColors`, `Snippets`, `InlayHints`, `CodeLens`, `InlineDiagnostics`,
+  `EditorConfigApplied`, `LinkedTags`, `Outline`, `Hierarchy`, `Bookmarks`, `PreviewTabs`, `SessionRestore`,
+  `LocalHistory`, `OutputLinks`, `TestExplorer`, `MarkdownPreview`, `ImagePreview`, `TodoList`, `SpellCheck`,
+  `InlineChat`, `ThemePicker`, `ZenMode`, `StatusPickers`). Slots: split by area over the three slots as each frees
+  (editing helpers, navigation, tools and look).
 
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 8 (Source

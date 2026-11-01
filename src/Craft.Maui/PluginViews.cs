@@ -109,16 +109,20 @@ public sealed class StatusItemsView : FlexLayout, IDisposable
 
 /// <summary>
 /// A plug-in panel (<see cref="IEditorPanel"/>, not a conversation) as a side view of the rail (phase U2: there is no fixed
-/// column of panels): its title, then its items in a scrolling column (a click on an item with a command runs it). It is
-/// drawn again when the panel raises <see cref="IEditorPanel.Changed"/>, through the dispatcher when that comes off the UI thread.
+/// column of panels): its title, then its items in a scrolling column (a click on an item with a command runs it), or,
+/// for a view panel (<see cref="IEditorViewPanel"/>, B11) once the palette is given (<see cref="SetPalette"/>), its blocks
+/// drawn with the shell's controls (<see cref="PanelBlocksView"/>). It is drawn again when the panel raises
+/// <see cref="IEditorPanel.Changed"/>, through the dispatcher when that comes off the UI thread.
 /// </summary>
 public sealed class PanelView : ContentView, IDisposable
 {
     private readonly EditorHost _host;
     private readonly VerticalStackLayout _stack = new() { Spacing = 4, Padding = new Thickness(12, 8) };
     private readonly Label _title = new() { FontAttributes = FontAttributes.Bold, Margin = new Thickness(12, 10, 12, 2) };
+    private readonly Grid _grid;
     private Color _textColor = Colors.Gray;
     private Color _secondary = Colors.Gray;
+    private PanelBlocksView? _blocks;
 
     /// <summary>The view of <paramref name="panel"/>; its commands run through <paramref name="host"/>.</summary>
     public PanelView(EditorHost host, IEditorPanel panel)
@@ -127,10 +131,10 @@ public sealed class PanelView : ContentView, IDisposable
         ArgumentNullException.ThrowIfNull(panel);
         _host = host;
         Panel = panel;
-        var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
-        grid.Add(_title, 0, 0);
-        grid.Add(new ScrollView { Content = _stack }, 0, 1);
-        Content = grid;
+        _grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
+        _grid.Add(_title, 0, 0);
+        _grid.Add(new ScrollView { Content = _stack }, 0, 1);
+        Content = _grid;
         panel.Changed += OnPanelChanged;
         Rebuild();
     }
@@ -146,6 +150,36 @@ public sealed class PanelView : ContentView, IDisposable
         _textColor = text;
         _secondary = secondary;
         Rebuild();
+    }
+
+    /// <summary>
+    /// Takes the shell's palette (its colours, fonts and controls' states): a view panel's blocks are drawn with it, and
+    /// drawn again in it after a theme change; a panel of lines takes its text colours.
+    /// </summary>
+    public void SetPalette(ShellPalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        _title.FontFamily = palette.Font(FontWeight.SemiBold);
+        if (Panel is IEditorViewPanel view)
+        {
+            _textColor = palette.Text;
+            _secondary = palette.Secondary;
+            _title.TextColor = palette.Text;
+            if (_blocks is null)
+            {
+                _blocks = new PanelBlocksView(view, palette, (action, error) => _host.Log(EditorLogLevel.Error, $"{Panel.Title}: '{action}' failed: {error.Message}", error));
+                _grid.Children.RemoveAt(1);
+                _grid.Add(_blocks, 0, 1);
+            }
+            else
+            {
+                _blocks.Apply(palette);
+            }
+
+            return;
+        }
+
+        SetColors(palette.Text, palette.Secondary);
     }
 
     /// <inheritdoc />
@@ -167,6 +201,12 @@ public sealed class PanelView : ContentView, IDisposable
     {
         _title.Text = Panel.Title;
         _title.TextColor = _textColor;
+        if (_blocks is not null)
+        {
+            _blocks.Update();
+            return;
+        }
+
         _stack.Children.Clear();
         foreach (var item in Panel.Items)
         {

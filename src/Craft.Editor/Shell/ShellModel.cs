@@ -275,6 +275,14 @@ public sealed partial class ShellModel : IDisposable
             : (Tabs.FindSuggested(path) ?? NewFile(path)).HostDocument;
         host.SetKeyBindings(Options.KeyBindings, Options.KeyMap);
         UndoBar = new UndoBar(Options.UndoBarMilliseconds, action => host.Dispatch("shell: the undo bar's time is up", action));
+        // B11: what a plug-in reaches through its host: the Undo bar, the folder dialog, its settings written as the page writes them.
+        host.UndoPresenter = (text, undo, kept) =>
+        {
+            UndoBar.Show(text, undo, kept);
+            return true;
+        };
+        host.FolderPicker = (start, token) => _dialogs.PickFolderAsync(start, token);
+        host.SettingWriter = StoreSettingAsync;
         RegisterCommands();
         WatchMemory();
     }
@@ -908,6 +916,34 @@ public sealed partial class ShellModel : IDisposable
         ReloadOptions();
         SettingApplied?.Invoke(this, variable);
         return null;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="value"/> for <paramref name="variable"/> as <see cref="ApplySetting"/> does, into the user's
+    /// settings (the workspace's when there is no user file), the file written on the thread pool (the value held at once):
+    /// a plug-in's <see cref="IPluginSettings.SetAsync"/>. Null when written, else why not.
+    /// </summary>
+    public async Task<string?> StoreSettingAsync(string variable, string? value)
+    {
+        ArgumentNullException.ThrowIfNull(variable);
+        if (Settings.SourceOf(variable) == SettingSource.Environment)
+        {
+            return $"The environment sets {variable}, which overrides the settings: change it there.";
+        }
+
+        var layer = Settings.User is not null ? SettingLayer.User : SettingLayer.Workspace;
+        try
+        {
+            var write = Settings.StoreAsync(layer, variable, value);
+            ReloadOptions();
+            SettingApplied?.Invoke(this, variable);
+            await write.ConfigureAwait(true);
+            return null;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return e.Message;
+        }
     }
 
     /// <summary>

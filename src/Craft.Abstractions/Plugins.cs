@@ -220,4 +220,13 @@ public interface IPluginSettings
 
     /// <summary>Every registered plug-in's declared settings with their values, in order (for the settings page).</summary>
     IReadOnlyList<PluginSettingValue> All { get; }
+
+    /// <summary>
+    /// Writes <paramref name="value"/> for <paramref name="key"/> of <paramref name="plugin"/> into the user's settings (the
+    /// workspace's when there is no user file), as the settings page does; null or empty takes it out (its default
+    /// applies). The value is held at once (<see cref="Get"/> reads it), the file written off the UI thread. Null when
+    /// written, else why not, in words (the environment sets it, the value does not parse, no settings file); a host that
+    /// cannot write settings says so (the default).
+    /// </summary>
+    Task<string?> SetAsync(string plugin, string key, string? value) => Task.FromResult<string?>("This host cannot change settings: set the variable instead.");
 }

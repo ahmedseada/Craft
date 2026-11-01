@@ -24,9 +24,9 @@ public sealed class LearningSession : IDisposable
     private const int MostPending = 64;
     private readonly IEditorHost _host;
     private readonly Lock _io = new();                     // the files (episodes, consents, adapters), touched off the UI thread
-    private readonly Task<ConsentStore> _consents;
     private readonly List<Pending> _pending = [];
-    private readonly ListPanel _panel = new(PanelId, "Learning");
+    private readonly ViewPanel _panel;
+    private Task<ConsentStore> _consents;
     private readonly StatusItem _recording = new("learning.recording", "● Learning", StatusAlignment.Right, 5, LearningPlugin.ShowCommand);
     private readonly StatusItem _sharing = new("learning.sharing", "↑ Sharing", StatusAlignment.Right, 5, LearningPlugin.ShowCommand);
     private readonly StatusItem _training = new("learning.training", "Learning: training", StatusAlignment.Right, 4, LearningPlugin.StopCommand);
@@ -43,6 +43,14 @@ public sealed class LearningSession : IDisposable
     private (int Count, long Bytes, string Verdicts, IReadOnlyList<EditorEpisode> Last) _stats = (0, 0, "", []);
     private IReadOnlyList<AdapterVersion> _versions = [];
     private (string Model, string Folder)? _current;
+    private bool _useBase;
+    private (int Tasks, int Held) _tasks;
+    private int _failing = -1;
+    private TrainingProgress? _progress;
+    private bool _askingDestination;
+    private string? _testAtCaret;
+    private (ITextBuffer? Buffer, int Version, int Line) _caretAt = (null, -1, -1);
+    private IModelProvider? _watched;
     private string _status = "";
     private bool _disposed;
 
@@ -52,9 +60,12 @@ public sealed class LearningSession : IDisposable
         _host = host ?? throw new ArgumentNullException(nameof(host));
         string root = Root(Settings());
         _consents = Task.Run(() => new ConsentStore(root));
+        _panel = new ViewPanel(PanelId, "Learning", ActAsync);
         _host.AddPanel(_panel);
         _host.DocumentChanged += OnDocumentChanged;
         _host.DocumentClosed += OnDocumentClosed;
+        _host.SelectionChanged += OnSelectionChanged;
+        _host.ActiveDocumentChanged += OnActiveDocumentChanged;
         _timer = new Timer(_ => Post(s => s.Tick(DateTimeOffset.UtcNow)), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         _consents.ContinueWith(_ => Post(s => s.Refresh()), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
@@ -91,6 +102,15 @@ public sealed class LearningSession : IDisposable
 
     /// <summary>The panel's line of what happened last.</summary>
     public string Status => _status;
+
+    /// <summary>The Learning view (B11): its blocks, drawn by the shell, and its actions.</summary>
+    public IEditorViewPanel Panel => _panel;
+
+    /// <summary>What the Learning view showed last (its phase, its figures).</summary>
+    public LearningViewState View { get; private set; } = new();
+
+    /// <summary>The test the caret is in, or null (the view's "Mark … as a task").</summary>
+    public string? TestAtCaret => _testAtCaret;
 
     /// <summary>The learning consent's words as they read now.</summary>
     public ConsentText LearnText => ConsentText.Learn(Settings(), Folder, ModelName(Settings()));
@@ -574,17 +594,20 @@ public sealed class LearningSession : IDisposable
     {
         var store = Store;
         var versions = Versions;
-        string? workspaceModel = ModelName(Settings());
         _ = Task.Run(() =>
         {
             List<EditorEpisode> all;
             IReadOnlyList<AdapterVersion> kept;
             long bytes;
+            bool useBase;
+            (int, int) tasks;
             lock (_io)
             {
                 all = store.All();
                 bytes = store.Bytes;
                 kept = versions.All;
+                useBase = versions.UseBase;
+                tasks = (CountTasks(Path.Combine(store.Folder, "tasks")), CountTasks(Path.Combine(store.Folder, "tasks-held")));
             }
 
             var current = versions.Current;
@@ -594,79 +617,339 @@ public sealed class LearningSession : IDisposable
             {
                 s._stats = (all.Count, bytes, verdicts, all.TakeLast(10).Reverse().ToList());
                 s._versions = kept;
+                s._useBase = useBase;
+                s._tasks = (tasks.Item1 + tasks.Item2, tasks.Item2);
                 s._current = current is null ? null : (current.BaseModel, current.Folder);
-                s.Draw(workspaceModel);
+                s.Draw();
             });
         });
-        Draw(workspaceModel);
+        Draw();
     }
 
-    private void Draw(string? model)
+    private static int CountTasks(string folder) => Directory.Exists(folder) ? Directory.GetDirectories(folder).Length : 0;
+
+    /// <summary>Builds the view's state from what the session holds (no file is read here) and draws the panel and the status marks.</summary>
+    private void Draw()
     {
-        var settings = Settings();
-        var items = new List<PanelItem>();
-        var learn = Consents?.Find(ConsentKinds.Learn, _host.WorkspaceFolder);
+        if (_disposed)
+        {
+            return;
+        }
+
+        LearningSettings settings;
+        try
+        {
+            settings = Settings();
+        }
+        catch (ArgumentException error)
+        {
+            _panel.SetBlocks([new PanelCard("A learning setting does not read", [new PanelText(error.Message, PanelTextStyle.Secondary),
+                new PanelButtons([new PanelButton("Learning settings", LearningActions.Settings)])]) { Tone = PanelTone.Error }]);
+            return;
+        }
+
         var state = LearnState();
-        items.Add(state switch
-        {
-            ConsentState.Granted => new PanelItem("Learn on this machine: on", $"{(learn!.Scope == ConsentStore.AllWorkspaces ? "all workspaces" : "this workspace")} · since {learn.Time.ToLocalTime():yyyy-MM-dd HH:mm} · text {learn.Version} · click to stop", LearningPlugin.WithdrawCommand),
-            ConsentState.Changed => new PanelItem("Learn on this machine: off until you answer again", "what is recorded or where changed since you said yes", LearningPlugin.ConsentCommand),
-            _ when settings.ConsentOff => new PanelItem("Learn on this machine: off", $"the setting {PluginSetting.VariableName(LearningSettings.PluginName, "consent")} is off"),
-            _ => new PanelItem("Learn on this machine: off", "nothing is recorded · click to choose", LearningPlugin.ConsentCommand),
-        });
-        var shareState = ShareState();
-        items.Add(shareState == ConsentState.Granted
-            ? new PanelItem($"Share: on, to {settings.ShareTo}", $"{string.Join(", ", settings.ShareWhat)} · every share previewed first · click to share now", LearningPlugin.ShareCommand)
-            : settings.ShareTo.Length == 0
-                ? new PanelItem("Share: off", $"nothing is shared until you name a destination ({PluginSetting.VariableName(LearningSettings.PluginName, "shareTo")})")
-                : new PanelItem("Share: off", $"to {settings.ShareTo} once you agree · click to choose", LearningPlugin.ShareCommand));
-        if (shareState == ConsentState.Granted)
-        {
-            items.Add(new PanelItem("Stop sharing", null, LearningPlugin.StopSharingCommand));
-        }
-
-        items.Add(new PanelItem("Folder", Folder, LearningPlugin.OpenFolderCommand));
-        items.Add(new PanelItem(string.Create(CultureInfo.InvariantCulture, $"Episodes: {_stats.Count} ({SharePlan.Bytes(_stats.Bytes)} of {settings.CapMegabytes} MiB)"),
-            _stats.Verdicts.Length == 0 ? "none yet" : _stats.Verdicts + $" · {_pending.Count} waiting", LearningPlugin.ExportCommand));
-        foreach (var episode in _stats.Last)
-        {
-            string answer = episode.Answer.ReplaceLineEndings(" ⏎ ");
-            items.Add(new PanelItem($"  {episode.Kind} · {episode.Verdict}{(episode.File is { } f ? " · " + f : "")}", answer.Length > 60 ? answer[..60] + "…" : answer));
-        }
-
-        items.Add(new PanelItem("Export the episodes", null, LearningPlugin.ExportCommand));
-        items.Add(new PanelItem("Delete the episodes", null, LearningPlugin.DeleteAllCommand));
-        items.Add(Training is null
-            ? new PanelItem("Train now", $"{settings.Trainer} · {model ?? "no model set"} · {(settings.Schedule == "idle" ? $"also when idle {settings.IdleMinutes} min" : "on demand only")}", LearningPlugin.TrainCommand)
-            : new PanelItem("Stop training", _training.Text, LearningPlugin.StopCommand));
-        items.Add(new PanelItem("Make tasks from the failing tests", $"through the sandbox {settings.Sandbox}", LearningPlugin.TasksCommand));
-        items.Add(new PanelItem("Mark the test at the caret", _marked.Count == 0 ? null : string.Join(", ", _marked), LearningPlugin.MarkTestCommand));
+        var provider = Provider();
+        Watch(provider);
+        var status = provider?.Status ?? ModelProviderStatus.None;
         var current = _versions.LastOrDefault(v => _current is { } c && v.Folder == c.Folder);
-        items.Add(new PanelItem(current is null ? "Adapter: none (the base model answers)" : $"Adapter: v{current.Number} (current)", current?.Note));
-        foreach (var version in _versions.Reverse())
+        View = new LearningViewState
         {
-            items.Add(new PanelItem(string.Create(CultureInfo.InvariantCulture, $"  v{version.Number} · {version.Time.ToLocalTime():yyyy-MM-dd HH:mm} · {(version.Promoted ? "promoted" : "kept")}"),
-                string.Create(CultureInfo.InvariantCulture, $"held-out {version.ScoreBefore:F3} → {version.ScoreAfter:F3} · {version.Pairs} pairs · loss {version.FirstLoss:F3} → {version.LastLoss:F3}")));
-        }
-
-        if (_current is not null)
-        {
-            items.Add(new PanelItem("Roll back the adapter", "one step back (to the previous promoted one, or the base model)", LearningPlugin.RollbackCommand));
-        }
-
-        if (_versions.Count > 0)
-        {
-            items.Add(new PanelItem("Delete an adapter version", null, LearningPlugin.DeleteVersionCommand));
-        }
-
-        if (_status.Length > 0)
-        {
-            items.Add(new PanelItem(_status));
-        }
-
-        _panel.SetItems(items);
+            Learn = state,
+            LearnRecord = Consents?.Find(ConsentKinds.Learn, _host.WorkspaceFolder),
+            Share = ShareState(),
+            Settings = settings,
+            AskingDestination = _askingDestination,
+            Folder = Folder,
+            Episodes = _stats.Count,
+            Bytes = _stats.Bytes,
+            Verdicts = _stats.Verdicts,
+            Recent = _stats.Last,
+            Pending = _pending.Count,
+            Model = ModelName(settings),
+            ChatModel = ChatModel(),
+            Models = status.Models,
+            Loaded = status.Loaded,
+            Device = status.Device,
+            HasProvider = provider is not null,
+            Progress = _progress,
+            Training = Training is not null,
+            Versions = _versions,
+            Current = current,
+            UseBase = _useBase,
+            FailureStage = LastFailureStage,
+            Status = _status,
+            FailingTests = _failing,
+            Tasks = _tasks.Tasks,
+            HeldTasks = _tasks.Held,
+            TestAtCaret = _testAtCaret,
+            Marked = [.. _marked],
+            HasWorkspace = _host.WorkspaceFolder is not null,
+            HasChat = _host.Panels.Any(p => p.Id == ChatPanelId),
+            Now = DateTimeOffset.UtcNow,
+        };
+        _panel.SetBlocks(LearningView.Build(View));
         Show(ref _recordingShown, _recording, state == ConsentState.Granted);
         _recording.Tooltip = state == ConsentState.Granted ? $"Learning: the AI's answers and what you do with them are recorded in {Folder}. Click for the Learning panel." : null;
+    }
+
+    // The AI plug-in's chat panel (the checklist's "Open the chat"); the id the AI plug-in gives it.
+    private const string ChatPanelId = "ai.chat";
+
+    // The provider's status changes (a model loaded, let go) redraw the training card's picker; its own threads post here.
+    private void Watch(IModelProvider? provider)
+    {
+        if (ReferenceEquals(provider, _watched))
+        {
+            return;
+        }
+
+        if (_watched is not null)
+        {
+            _watched.StatusChanged -= OnProviderStatusChanged;
+        }
+
+        _watched = provider;
+        if (provider is not null)
+        {
+            provider.StatusChanged += OnProviderStatusChanged;
+        }
+    }
+
+    private void OnProviderStatusChanged(object? sender, EventArgs e) => Post(s => s.Draw());
+
+    // ---- the view's actions ----
+
+    /// <summary>
+    /// What the Learning view's controls do (<see cref="LearningActions"/>), on the UI thread; every file, setting write and
+    /// training runs off it through the methods it calls.
+    /// </summary>
+    public async Task ActAsync(string action, string? value, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        bool on = string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+        switch (action)
+        {
+            case LearningActions.Record:
+                if (on)
+                {
+                    await AskLearnAsync(again: true).ConfigureAwait(true);
+                }
+                else if (Recording)
+                {
+                    await WithdrawAsync().ConfigureAwait(true);
+                }
+
+                Refresh();
+                break;
+            case LearningActions.Share:
+                if (!on)
+                {
+                    _askingDestination = false;
+                    if (ShareState() == ConsentState.Granted)
+                    {
+                        await StopSharingAsync().ConfigureAwait(true);
+                    }
+                }
+                else if (Settings().ShareTo.Length == 0)
+                {
+                    _askingDestination = true;                   // the destination is asked inline, under the switch
+                }
+                else
+                {
+                    await AskShareAsync().ConfigureAwait(true);
+                }
+
+                Draw();
+                break;
+            case LearningActions.ShareTo:
+                if (await SetAsync("shareTo", value).ConfigureAwait(true))
+                {
+                    _askingDestination = false;
+                    Draw();
+                    if (Settings().ShareTo.Length > 0)
+                    {
+                        await AskShareAsync().ConfigureAwait(true);
+                    }
+                }
+
+                Draw();
+                break;
+            case LearningActions.ShareCancel:
+                _askingDestination = false;
+                Draw();
+                break;
+            case LearningActions.ShareNow:
+                await ShareAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.OpenFolder:
+                await OpenFolderAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.ChangeFolder:
+                await ChangeFolderAsync(cancellationToken).ConfigureAwait(true);
+                break;
+            case LearningActions.Export:
+                await ExportAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.Delete:
+                await DeleteEpisodesAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.Model:
+                await SetAndReaskAsync("model", value).ConfigureAwait(true);
+                break;
+            case LearningActions.Trainer:
+                await SetAsync("trainer", value).ConfigureAwait(true);
+                Draw();
+                break;
+            case LearningActions.Train:
+                await TrainAsync(manual: true, say: false).ConfigureAwait(true);
+                break;
+            case LearningActions.Cancel:
+                StopTraining();
+                break;
+            case LearningActions.Idle:
+                await SetAndReaskAsync("schedule", on ? "idle" : "demand").ConfigureAwait(true);
+                break;
+            case LearningActions.IdleMinutes:
+                await SetAndReaskAsync("idleMinutes", value).ConfigureAwait(true);
+                break;
+            case LearningActions.Rollback:
+                await RollbackAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.Use:
+                await UseBaseAsync(string.Equals(value, "base", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(true);
+                break;
+            case LearningActions.DeleteVersion:
+                await DeleteVersionAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.Tasks:
+                await MakeTasksAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.Mark:
+                await MarkTestAsync().ConfigureAwait(true);
+                break;
+            case LearningActions.Settings:
+                await _host.ExecuteCommandAsync(SettingSections.CommandOf(SettingSections.Learning), cancellationToken).ConfigureAwait(true);
+                break;
+            case LearningActions.Chat:
+                _host.ShowPanel(ChatPanelId);
+                break;
+            case LearningActions.Dismiss:
+                _status = "";
+                LastFailureStage = null;
+                Draw();
+                break;
+            default:
+                throw new ArgumentException($"The Learning view has no action '{action}'.", nameof(action));
+        }
+    }
+
+    // Writes a learning setting through the host (held at once, the file written off the UI thread); a refusal is said in
+    // the panel. True when written.
+    private async Task<bool> SetAsync(string key, string? value)
+    {
+        string? problem = await _host.Settings.SetAsync(LearningSettings.PluginName, key, value).ConfigureAwait(true);
+        if (problem is null)
+        {
+            return true;
+        }
+
+        _status = $"{LearningView.Variable(key)} was not changed: {problem}";
+        return false;
+    }
+
+    // A setting the learning consent's words name (the model trained, when training runs): written, and when recording was on
+    // and the words changed, the consent is asked again at once with the new words (R's rule: a changed text asks again),
+    // so recording never stops unseen; dismissed, it stays off and the switch says why.
+    private async Task SetAndReaskAsync(string key, string? value)
+    {
+        bool recording = Recording;
+        if (await SetAsync(key, value).ConfigureAwait(true) && recording && LearnState() == ConsentState.Changed)
+        {
+            await AskLearnAsync(again: true).ConfigureAwait(true);
+        }
+
+        Draw();
+    }
+
+    /// <summary>
+    /// Picks another learning folder with the host's folder dialog: what is kept from now on goes there (the consents are
+    /// read from it, so you are asked again there); what the old folder holds stays where it is, said so.
+    /// </summary>
+    public async Task ChangeFolderAsync(CancellationToken cancellationToken = default)
+    {
+        string old = Folder;
+        bool recording = Recording;
+        if (await _host.PickFolderAsync(old, cancellationToken).ConfigureAwait(true) is not { } picked
+            || string.Equals(Path.GetFullPath(picked), old, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!await SetAsync("folder", picked).ConfigureAwait(true))
+        {
+            Draw();
+            return;
+        }
+
+        string root = Folder;
+        _consents = Task.Run(() => new ConsentStore(root));
+        await _consents.ConfigureAwait(true);
+        _pending.Clear();
+        _status = $"What is kept from now on goes to {root}; what {old} holds stays there.";
+        ModelAdapters.RaiseChanged();
+        Refresh();
+        if (recording && LearnState() != ConsentState.Granted)
+        {
+            await AskLearnAsync(again: true).ConfigureAwait(true);   // the words name the folder: asked again there, at once
+        }
+    }
+
+    /// <summary>Lets the base model answer (the promoted adapter kept), or the adapter again; the AI plug-ins load it on their next request.</summary>
+    public async Task UseBaseAsync(bool useBase)
+    {
+        var versions = Versions;
+        await Run(() => versions.SetUseBase(useBase)).ConfigureAwait(true);
+        _useBase = useBase;
+        _status = useBase ? "The base model answers; the adapter is kept." : "The adapter answers again.";
+        ModelAdapters.RaiseChanged();
+        Refresh();
+    }
+
+    // ---- the test at the caret ----
+
+    private void OnSelectionChanged(object? sender, EditorDocumentEventArgs e) => FindTestAtCaret();
+
+    private void OnActiveDocumentChanged(object? sender, EventArgs e) => FindTestAtCaret();
+
+    // Read only when the caret's line or the text changed (a bounded window before the caret, TestAtCaret.Window); the view
+    // is drawn again only when the test changed.
+    private void FindTestAtCaret()
+    {
+        string? test = null;
+        if (_host.ActiveDocument is { } document)
+        {
+            var snapshot = document.Document.Buffer.Current;
+            int caret = Math.Clamp(document.Selection.Caret, 0, snapshot.Length);
+            var at = (snapshot.Buffer, snapshot.Version, snapshot.GetLineIndex(caret));
+            if (ReferenceEquals(at.Buffer, _caretAt.Buffer) && at.Version == _caretAt.Version && at.Item3 == _caretAt.Line)
+            {
+                return;
+            }
+
+            _caretAt = at;
+            test = Learning.TestAtCaret.Find(snapshot, caret);
+        }
+        else
+        {
+            _caretAt = (null, -1, -1);
+        }
+
+        if (!string.Equals(test, _testAtCaret, StringComparison.Ordinal))
+        {
+            _testAtCaret = test;
+            Draw();
+        }
     }
 
     private void Show(ref IDisposable? shown, IStatusItem item, bool visible)
@@ -706,20 +989,51 @@ public sealed class LearningSession : IDisposable
         await _host.ShowMessageAsync("Learning: exported", _status).ConfigureAwait(true);
     }
 
-    /// <summary>Deletes the workspace's episodes (asked first); says how much was freed.</summary>
+    /// <summary>
+    /// Deletes the workspace's episodes with Undo (B11): they are moved aside at once (off the UI thread), the shell's bar
+    /// says how many and how much with Undo, and they are deleted for good when the bar goes; a host without the bar asks
+    /// first instead. Adapters stay.
+    /// </summary>
     public async Task DeleteEpisodesAsync()
     {
         var store = Store;
-        long bytes = await Task.Run(() => store.Bytes).ConfigureAwait(true);
-        int choice = await _host.AskAsync(new EditorQuestion("Delete the episodes?", $"Every recorded episode of this workspace ({SharePlan.Bytes(bytes)}) is deleted. Adapters stay.",
-            ["Delete them", "Keep them"]) { Dismissed = 1 }).ConfigureAwait(true);
-        if (choice != 0)
+        var (count, bytes) = await Run(store.Hold).ConfigureAwait(true);
+        if (count == 0 && bytes == 0)
         {
             return;
         }
 
-        long freed = await Run(store.DeleteAll).ConfigureAwait(true);
         _newEpisodes = 0;
+        string what = string.Create(CultureInfo.InvariantCulture, $"Deleted {count} episode{(count == 1 ? "" : "s")} ({SharePlan.Bytes(bytes)}).");
+        void Undo()
+        {
+            Background = Run(() => store.Restore());
+            Background.ContinueWith(_ => Post(s =>
+            {
+                s._status = "The episodes are back.";
+                s.Refresh();
+            }), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+
+        void Kept() => Background = Run(() => store.DropHeld());
+
+        if (_host.ShowUndo(what, Undo, Kept))
+        {
+            _status = what;
+            Refresh();
+            return;
+        }
+
+        int choice = await _host.AskAsync(new EditorQuestion("Delete the episodes?", $"Every recorded episode of this workspace ({SharePlan.Bytes(bytes)}) is deleted. Adapters stay.",
+            ["Delete them", "Keep them"]) { Dismissed = 1 }).ConfigureAwait(true);
+        if (choice != 0)
+        {
+            await Run(() => store.Restore()).ConfigureAwait(true);
+            Refresh();
+            return;
+        }
+
+        long freed = await Run(store.DropHeld).ConfigureAwait(true);
         _status = $"Deleted the episodes: {SharePlan.Bytes(freed)} freed.";
         Refresh();
     }
@@ -742,7 +1056,13 @@ public sealed class LearningSession : IDisposable
     /// off the UI thread, with its progress in the status bar and the panel; stoppable at every step. A promoted adapter
     /// is what the AI plug-ins load next (<see cref="ModelAdapters"/>).
     /// </summary>
-    public async Task TrainAsync(bool manual)
+    public Task TrainAsync(bool manual) => TrainAsync(manual, say: manual);
+
+    /// <summary>
+    /// As <see cref="TrainAsync(bool)"/>; <paramref name="say"/> shows the outcome as a message too (the command does; the
+    /// view's Train now does not: the view shows it in place).
+    /// </summary>
+    public async Task TrainAsync(bool manual, bool say)
     {
         if (Training is not null)
         {
@@ -752,7 +1072,7 @@ public sealed class LearningSession : IDisposable
         var settings = Settings();
         if (LearnState() != ConsentState.Granted)
         {
-            if (manual)
+            if (say)
             {
                 await _host.ShowMessageAsync("Learning", "Learning is off: nothing was recorded to train on. Say yes to learning first (Learning: ask me about learning again).").ConfigureAwait(true);
             }
@@ -762,7 +1082,7 @@ public sealed class LearningSession : IDisposable
 
         if (ModelName(settings) is not { } model)
         {
-            if (manual)
+            if (say)
             {
                 await _host.ShowMessageAsync("Learning", $"No model to train: set {PluginSetting.VariableName(LearningSettings.PluginName, "model")} or the AI plug-in's model.").ConfigureAwait(true);
             }
@@ -780,10 +1100,15 @@ public sealed class LearningSession : IDisposable
         progress.CancellationToken.Register(source.Cancel);
         Show(ref _trainingShown, _training, true);
         _training.Text = $"Learning: loading {model}";
+        _progress = null;
+        LastFailureStage = null;
+        _status = "";
         var reports = new Progress(p => Post(s =>
         {
             s._training.Text = p.Line;
+            s._progress = p;
             progress.Report(p.Steps > 0 ? (double)p.Step / p.Steps : null, p.Line);
+            s.Draw();
         }));
         _newEpisodes = 0;
         var families = Families(settings);
@@ -886,6 +1211,7 @@ public sealed class LearningSession : IDisposable
             progress.Dispose();
             Show(ref _trainingShown, _training, false);
             Training = null;
+            _progress = null;
             _train = null;
             source.Dispose();
         }
@@ -904,7 +1230,7 @@ public sealed class LearningSession : IDisposable
         }
 
         Refresh();
-        if (manual)
+        if (say)
         {
             await _host.ShowMessageAsync("Learning: training", message).ConfigureAwait(true);
         }
@@ -1026,7 +1352,7 @@ public sealed class LearningSession : IDisposable
     }
 
     /// <summary>The promoted adapter of the open workspace for <paramref name="model"/>, or null (any thread: it reads what the session last read).</summary>
-    public string? AdapterFor(string model) => _current is { } current && string.Equals(current.Model, model, StringComparison.Ordinal) ? current.Folder : null;
+    public string? AdapterFor(string model) => !_useBase && _current is { } current && string.Equals(current.Model, model, StringComparison.Ordinal) ? current.Folder : null;
 
     // ---- tasks ----
 
@@ -1059,6 +1385,7 @@ public sealed class LearningSession : IDisposable
             {
                 var (failing, run) = await WorkspaceTasks.FindFailingAsync(workspace, settings.Sandbox, Path.Combine(store.Folder, "test-results"), TimeSpan.FromMinutes(10),
                     CancellationToken.None).ConfigureAwait(false);
+                Post(s => s._failing = run.Refused ? s._failing : failing.Count);
                 var tests = failing.Concat(marked.Where(m => failing.All(f => f.Name != m.Name))).ToList();
                 if (tests.Count == 0)
                 {
@@ -1091,6 +1418,18 @@ public sealed class LearningSession : IDisposable
     /// <summary>Marks the test named at the caret (the word there, or the selection) as a task.</summary>
     public Task MarkTestAsync()
     {
+        if (_testAtCaret is { } test)
+        {
+            if (!_marked.Contains(test))
+            {
+                _marked.Add(test);
+                _status = $"Marked {test}: the next Make tasks includes it.";
+                Refresh();
+            }
+
+            return Task.CompletedTask;
+        }
+
         if (_host.ActiveDocument is not { } document)
         {
             return Task.CompletedTask;
@@ -1223,6 +1562,9 @@ public sealed class LearningSession : IDisposable
         StopTraining();
         _host.DocumentChanged -= OnDocumentChanged;
         _host.DocumentClosed -= OnDocumentClosed;
+        _host.SelectionChanged -= OnSelectionChanged;
+        _host.ActiveDocumentChanged -= OnActiveDocumentChanged;
+        Watch(null);
         _recordingShown?.Dispose();
         _sharingShown?.Dispose();
         _trainingShown?.Dispose();
@@ -1234,6 +1576,20 @@ public sealed class LearningSession : IDisposable
     private string Root(LearningSettings settings) =>
         Path.GetFullPath(settings.Folder.Length > 0 ? settings.Folder
             : Path.Combine(_host.DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Craft"), "learning"));
+
+    // The AI plug-in's (the chat's) model, or null.
+    private string? ChatModel()
+    {
+        try
+        {
+            string model = _host.Settings.Get("ai", "model").Trim();
+            return model.Length > 0 ? model : null;
+        }
+        catch (Exception error) when (error is NotRegisteredException or ArgumentException)
+        {
+            return null;
+        }
+    }
 
     // The model trained: the setting, else the AI plug-in's model; null for none.
     private string? ModelName(LearningSettings settings)

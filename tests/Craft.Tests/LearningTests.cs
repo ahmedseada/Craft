@@ -666,6 +666,301 @@ public static class LearningTests
         }
     }
 
+    // ---- B11: the Learning view ----
+
+    [Test]
+    public static async Task TheViewSaysWhereLearningStandsFromOffToReadyAndTheChecklistActs()
+    {
+        using var temp = new TempFolder();
+        var vars = new Dictionary<string, string>
+        {
+            ["CRAFT_PLUGIN_LEARNING_MINEPISODES"] = "3", ["CRAFT_PLUGIN_LEARNING_SCHEDULE"] = "demand", ["CRAFT_PLUGIN_LEARNING_MODEL"] = temp.File("no-such-model"),
+        };
+        using var world = new World(temp, vars);
+        var session = world.Session;
+        using var chat = world.Host.AddPanel(new ListPanel("ai.chat", "Chat"));
+        session.Refresh();
+        await Until(world, () => session.View.HasChat, "the chat panel is seen");
+
+        // Off: what learning does, where you are, a guided start; no training or tasks yet.
+        var off = session.View;
+        string text = Describe(session);
+        Check.Equal(LearningPhase.Off, off.Phase, "off before any answer");
+        Check.True(text.Contains(LearningView.Explanation, StringComparison.Ordinal), "the header says in two sentences what learning does");
+        Check.True(text.Contains("Record [Next] off → Train [Next] at 3 → Better suggestions [Next]", StringComparison.Ordinal), $"the three steps, none reached yet ({text})");
+        Check.True(text.Contains("1. [ ] Turn on recording", StringComparison.Ordinal) && text.Contains("[Open the chat]", StringComparison.Ordinal)
+                   && text.Contains("3. [ ] Train when there are 3 episodes (0 of 3 so far · CRAFT_PLUGIN_LEARNING_MINEPISODES) [Train now (disabled)]", StringComparison.Ordinal),
+            $"the checklist, each item with its button and the minimum's variable ({text})");
+        Check.True(text.Contains("[▸ What is recorded?", StringComparison.Ordinal) && text.Contains("\"verdict\": \"edited\"", StringComparison.Ordinal) && text.Contains("\"kept\": \"a + b;\"", StringComparison.Ordinal),
+            "What is recorded? holds a sample episode as the folder keeps it");
+        Check.True(text.Contains("Record on this machine: off", StringComparison.Ordinal) && text.Contains("Nothing leaves this machine", StringComparison.Ordinal) && text.Contains("{CRAFT_PLUGIN_LEARNING_CONSENT}", StringComparison.Ordinal),
+            "the recording switch, off, with its consent words and its variable");
+        Check.True(!text.Contains("[card Training", StringComparison.Ordinal) && !text.Contains("[card Practice tasks", StringComparison.Ordinal), "no training or tasks card while off");
+
+        // The checklist's actions: Open the chat shows the chat; Turn on asks the consent (yes) and records.
+        string? shown = null;
+        world.Host.PanelShowRequested += (_, id) => shown = id;
+        await session.Panel.ActAsync(LearningActions.Chat, null);
+        Check.Equal("ai.chat", shown, "Open the chat shows the chat panel");
+        world.Presenter.Answers.Enqueue(0);
+        await session.Panel.ActAsync(LearningActions.Record, "on");
+        await Until(world, () => session.View.Phase == LearningPhase.Recording, "recording after the yes");
+        Check.Equal("Learn on this machine?", world.Presenter.Questions[^1].Title, "the switch asks the consent with every detail, never says yes itself");
+        text = Describe(session);
+        Check.True(text.Contains("1. [x] Turn on recording", StringComparison.Ordinal) && text.Contains("Record [Current] 0 episodes", StringComparison.Ordinal), $"the first item done, the first step current ({text})");
+        Check.True(text.Contains("Waiting for episodes: 0% · 0 of 3", StringComparison.Ordinal) && text.Contains("[Train now * (disabled)]", StringComparison.Ordinal),
+            $"recording with too few episodes: waiting, with the count, Train now not yet ({text})");
+
+        // Enough episodes: ready.
+        await RecordRejections(world, 3);
+        await Until(world, () => session.View.Phase == LearningPhase.Ready, "ready with 3 episodes");
+        text = Describe(session);
+        Check.True(text.Contains("Train [Current] ready", StringComparison.Ordinal) && text.Contains("Ready: 3 episodes", StringComparison.Ordinal) && text.Contains("[Train now *]", StringComparison.Ordinal),
+            $"ready: the train step current, Train now enabled ({text})");
+        Check.True(text.Contains("3 episodes: ", StringComparison.Ordinal) && text.Contains("rejected 3", StringComparison.Ordinal) && text.Contains("{CRAFT_PLUGIN_LEARNING_CAPMB}", StringComparison.Ordinal),
+            "storage as a meter of the limit, the verdicts, the cap's variable");
+
+        // Train now on a model that does not load: an error card naming the stage in words, with the settings; no dialog.
+        int messages = world.Presenter.Messages.Count;
+        await session.Panel.ActAsync(LearningActions.Train, null);
+        await Until(world, () => session.View.FailureStage is not null && !session.View.Training, "the round failed");
+        text = Describe(session);
+        Check.True(text.Contains("[card Training failed at its load stage Error", StringComparison.Ordinal) && text.Contains("The load stage loads the model", StringComparison.Ordinal)
+                   && text.Contains("[Learning settings]", StringComparison.Ordinal), $"the failure in plain words with its stage and the way to the settings ({text})");
+        Check.Equal(messages, world.Presenter.Messages.Count, "the view's Train now shows the outcome in place, no message box");
+        await session.Panel.ActAsync(LearningActions.Dismiss, null);
+        Check.True(!Describe(session).Contains("Training failed", StringComparison.Ordinal), "Dismiss takes the error away");
+    }
+
+    [Test]
+    public static void TheTrainingCardShowsProgressAndEachRoundPromotedOrKeptBack()
+    {
+        var settings = new LearningSettings { MinEpisodes = 20 };
+        var now = DateTimeOffset.UtcNow;
+        var granted = new LearningViewState { Learn = ConsentState.Granted, Settings = settings, Episodes = 25, Model = "m", Folder = "/data/learning", HasWorkspace = true, Now = now };
+
+        // Training: progress, the time left, Cancel; the pickers held.
+        var training = granted with { Training = true, Progress = new TrainingProgress("training", 5, 20, 0.5f, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), "cpu", 0, 0) };
+        Check.Equal(LearningPhase.Training, training.Phase, "a round runs");
+        string text = Text(LearningView.Build(training));
+        Check.True(text.Contains("Training: 25% · step 5 of 20", StringComparison.Ordinal) && text.Contains("loss 0.500 · 0:30 left · on cpu", StringComparison.Ordinal) && text.Contains("[Cancel]", StringComparison.Ordinal),
+            $"progress, loss, time left, the device and Cancel ({text})");
+        Check.True(text.Contains("Method: Your verdicts (preference) of", StringComparison.Ordinal) && text.Contains("(disabled) {CRAFT_PLUGIN_LEARNING_TRAINER}", StringComparison.Ordinal)
+                   && !text.Contains("[card Getting started", StringComparison.Ordinal), "the method held while it runs; the guided start gone");
+
+        // A round promoted: its charts, better, the adapter answering, the third step reached.
+        var v1 = new AdapterVersion(1, "/a/v1", now.AddHours(-3).AddMinutes(-1), "m", 25, 20, 5, 40, 0.69f, 0.51f, -2, -1, true, "better");
+        var promoted = granted with { Versions = [v1], Current = v1 };
+        Check.Equal(LearningPhase.Trained, promoted.Phase, "trained");
+        text = Text(LearningView.Build(promoted));
+        Check.True(text.Contains("v1 was better (-2.00 → -1.00) and was promoted: it answers now. (Body Success)", StringComparison.Ordinal), $"promoted, said in words ({text})");
+        Check.True(text.Contains("Loss over rounds: 0.51 marks ● · 0.690 → 0.510", StringComparison.Ordinal) && text.Contains("Preference margin: -1 marks ●", StringComparison.Ordinal),
+            "the loss and the margin over the rounds, the promoted round marked");
+        Check.True(text.Contains("Answering adapter v1", StringComparison.Ordinal) && text.Contains("Trained 3 h ago", StringComparison.Ordinal) && text.Contains("Better by +1.00 margin on 5 held-out pairs", StringComparison.Ordinal)
+                   && text.Contains("[Use base model]", StringComparison.Ordinal) && text.Contains("[Roll back]", StringComparison.Ordinal),
+            $"the adapter card: which answers, its age, how much better, Use base model, Roll back ({text})");
+        Check.True(text.Contains("Better suggestions [Current] v1", StringComparison.Ordinal), "the third step is where you are");
+
+        // A second round kept back: said, marked hollow; the promoted one still answers.
+        var v2 = new AdapterVersion(2, "/a/v2", now, "m", 30, 24, 6, 40, 0.6f, 0.55f, -1, -1.4, false, "worse");
+        var kept = granted with { Versions = [v1, v2], Current = v1 };
+        text = Text(LearningView.Build(kept));
+        Check.True(text.Contains("v2 was kept back: it scored -1.40, not better than -1.00. The answers stay as they were. (Body Warning)", StringComparison.Ordinal), $"kept back, said in words ({text})");
+        Check.True(text.Contains("Preference margin: -1, -1.4 marks ●○", StringComparison.Ordinal) && text.Contains("Rounds (2)", StringComparison.Ordinal), "both rounds charted, the kept-back one hollow");
+
+        // The base model in use: Use adapter brings it back; the third step not reached.
+        text = Text(LearningView.Build(kept with { UseBase = true }));
+        Check.True(text.Contains("[Use adapter v1]", StringComparison.Ordinal) && text.Contains("Answering the base model (v1 kept aside)", StringComparison.Ordinal)
+                   && text.Contains("Better suggestions [Next] base model in use", StringComparison.Ordinal), $"the base model answers, the adapter kept ({text})");
+    }
+
+    [Test]
+    public static async Task DeleteTakesTheEpisodesAwayWithUndoAndTheBarsEndDeletesThem()
+    {
+        using var temp = new TempFolder();
+        using var world = new World(temp, new Dictionary<string, string> { ["CRAFT_PLUGIN_LEARNING_SCHEDULE"] = "demand" });
+        var session = world.Session;
+        world.Presenter.Answers.Enqueue(0);
+        Check.True(await session.AskLearnAsync(again: true), "yes");
+        await RecordRejections(world, 4);
+        using var bar = new Craft.Editor.Shell.UndoBar(60_000);
+        world.Host.UndoPresenter = (what, undo, kept) =>
+        {
+            bar.Show(what, undo, kept);
+            return true;
+        };
+        var store = session.Store;
+        int asked = world.Presenter.Questions.Count;
+
+        await session.Panel.ActAsync(LearningActions.Delete, null);
+        Check.True(!File.Exists(store.FilePath) && File.Exists(store.HeldPath), "deleted at once (held aside for Undo)");
+        Check.True(bar.Current?.Text == "Deleted 4 episodes (" + SharePlan.Bytes(new FileInfo(store.HeldPath).Length) + ").", $"the bar says how many and how much ({bar.Current?.Text})");
+        Check.Equal(asked, world.Presenter.Questions.Count, "no question: Undo instead of a confirmation");
+
+        Check.True(bar.Undo(), "Undo");
+        await world.Idle();
+        Check.True(store.All().Count == 4 && !File.Exists(store.HeldPath), "Undo brings the four back");
+
+        await session.Panel.ActAsync(LearningActions.Delete, null);
+        bar.Dismiss();
+        await world.Idle();
+        Check.True(store.All().Count == 0 && !File.Exists(store.HeldPath) && !File.Exists(store.FilePath), "the bar gone without Undo: deleted for good");
+
+        // A host without the bar asks first; Keep them puts them back.
+        await RecordRejections(world, 2);
+        world.Host.UndoPresenter = null;
+        world.Presenter.Answers.Enqueue(1);
+        await session.Panel.ActAsync(LearningActions.Delete, null);
+        Check.True(world.Presenter.Questions[^1].Title == "Delete the episodes?" && store.All().Count == 2 && !File.Exists(store.HeldPath), "without the bar it asks; kept, they stay");
+    }
+
+    [Test]
+    public static async Task ThePickerListsTheLoadedModelsAndAPickWritesTheSetting()
+    {
+        using var temp = new TempFolder();
+        var vars = new Dictionary<string, string>();
+        Check.True(ModelProviders.Find(ModelProviders.Local) is null, "no other test left a provider named local registered");
+        var provider = new FakeProvider
+        {
+            Status = new ModelProviderStatus { Where = "local", Models = ["m-a", "m-b"], Loaded = ["m-a · in use"], Device = "cpu" },
+        };
+        ModelProviders.Register(provider);
+        try
+        {
+            using var world = new World(temp, vars);
+            var session = world.Session;
+            world.Host.SettingWriter = (variable, value) =>
+            {
+                if (value is null)
+                {
+                    vars.Remove(variable);
+                }
+                else
+                {
+                    vars[variable] = value;
+                }
+
+                return Task.FromResult<string?>(null);
+            };
+            world.Presenter.Answers.Enqueue(0);
+            Check.True(await session.AskLearnAsync(again: true), "yes");
+            await Until(world, () => session.View.Recording, "recording");
+
+            var picker = PanelBlocks.All(session.Panel.Blocks).OfType<PanelPicker>().Single(p => p.ActionId == LearningActions.Model);
+            Check.SequenceEqual(["The chat's model (none set)", "m-a · loaded", "m-b"], [.. picker.Options.Select(o => o.Title)], "the chat's model first, then the models the provider holds, the loaded one said");
+            Check.True(picker.Options[0].Detail!.Contains("one copy", StringComparison.Ordinal) && picker.Options[2].Detail!.StartsWith("Not loaded", StringComparison.Ordinal),
+                "each with what training it means (B7: the chat's copy, or a load)");
+            Check.True(picker.Variable == "CRAFT_PLUGIN_LEARNING_MODEL" && Describe(session).Contains("Device the chat's copy, on cpu", StringComparison.Ordinal), "its variable, and the settings it trains with");
+
+            provider.Status = provider.Status with { Models = ["m-a", "m-b", "m-c"] };
+            provider.Raise();
+            await Until(world, () => PanelBlocks.All(session.Panel.Blocks).OfType<PanelPicker>().Single(p => p.ActionId == LearningActions.Model).Options.Count == 4, "a model the provider loads joins the picker");
+
+            // The model is named in the consent's words: a pick asks the consent again at once, so recording never stops unseen.
+            int asked = world.Presenter.Questions.Count;
+            world.Presenter.Answers.Enqueue(0);
+            await session.Panel.ActAsync(LearningActions.Model, "m-b");
+            Check.True(vars.TryGetValue("CRAFT_PLUGIN_LEARNING_MODEL", out var set) && set == "m-b" && session.View.Model == "m-b" && session.View.Settings.Model == "m-b",
+                "the pick writes the model's setting, and the view reads it");
+            Check.True(world.Presenter.Questions.Count == asked + 1 && world.Presenter.Questions[^1].Details.Any(d => d.Contains("an adapter for m-b", StringComparison.Ordinal)) && session.View.Recording,
+                "the consent's words changed (the model): asked again with the new words; yes, recording goes on");
+            Check.True(Describe(session).Contains("Also train when idle 10 min: on", StringComparison.Ordinal) && Describe(session).Contains("Idle minutes: 10 min [Set]", StringComparison.Ordinal),
+                "idle training on, with its minutes");
+            world.Presenter.Answers.Enqueue(0);
+            await session.Panel.ActAsync(LearningActions.Idle, "off");
+            await session.Panel.ActAsync(LearningActions.IdleMinutes, "15");
+            Check.True(world.Presenter.Questions.Count == asked + 2 && session.View.Recording, "when training runs is in the words too: asked once more; the minutes alone, with idle off, change none");
+            Check.True(vars["CRAFT_PLUGIN_LEARNING_SCHEDULE"] == "demand" && vars["CRAFT_PLUGIN_LEARNING_IDLEMINUTES"] == "15" && !Describe(session).Contains("Idle minutes", StringComparison.Ordinal),
+                "the switch and the minutes write their settings; off, the minutes go");
+
+            world.Host.SettingWriter = null;
+            await session.Panel.ActAsync(LearningActions.Trainer, "tasks");
+            Check.True(session.Status.StartsWith("CRAFT_PLUGIN_LEARNING_TRAINER was not changed: This window cannot change settings", StringComparison.Ordinal), $"a write refused is said ({session.Status})");
+        }
+        finally
+        {
+            ModelProviders.Unregister(ModelProviders.Local);
+        }
+    }
+
+    [Test]
+    public static async Task MarkTheTestAtTheCaretShowsOnlyWhileTheCaretIsInATest()
+    {
+        const string Source = "namespace T;\n\npublic class CalcTests\n{\n    [Fact]\n    public void Adds()\n    {\n        Assert.Equal(2, 1 + 1);\n    }\n\n    public void Helper() { }\n\n"
+            + "    [Theory]\n    [InlineData(1)]\n    public void Twice(int a) => Assert.True(a > 0);\n\n    [Tests]\n    public void NotATest() { }\n}\n";
+        int inAdds = Source.IndexOf("Assert.Equal", StringComparison.Ordinal);
+        int inHelper = Source.IndexOf("{ }", StringComparison.Ordinal) + 1;
+        int inTwice = Source.IndexOf("a > 0", StringComparison.Ordinal);
+        int afterTwice = Source.IndexOf("[Tests]", StringComparison.Ordinal);
+        int onAttribute = Source.IndexOf("[Fact", StringComparison.Ordinal) + 3;
+        int inNotATest = Source.LastIndexOf("{ }", StringComparison.Ordinal) + 1;
+        Check.Equal("CalcTests.Adds", TestAtCaret.Find(Source.AsSpan(0, inAdds)), "inside a [Fact]'s body");
+        Check.Equal("CalcTests.Twice", TestAtCaret.Find(Source.AsSpan(0, inTwice)), "inside a [Theory]'s expression body, past another attribute");
+        Check.True(TestAtCaret.Find(Source.AsSpan(0, inHelper)) is null && TestAtCaret.Find(Source.AsSpan(0, afterTwice)) is null
+                   && TestAtCaret.Find(Source.AsSpan(0, onAttribute)) is null && TestAtCaret.Find(Source.AsSpan(0, inNotATest)) is null,
+            "not in a method that is no test, after a test's end, on the attribute, or under [Tests]");
+
+        using var temp = new TempFolder();
+        using var world = new World(temp, new Dictionary<string, string> { ["CRAFT_PLUGIN_LEARNING_SCHEDULE"] = "demand" });
+        var session = world.Session;
+        world.Presenter.Answers.Enqueue(0);
+        Check.True(await session.AskLearnAsync(again: true), "yes");
+        world.Insert(0, Source, EditKind.Command);
+        world.Host.Select(world.Open, new SelectionState(inAdds, inAdds));
+        world.Pump();
+        Check.Equal("CalcTests.Adds", session.TestAtCaret, "the caret in a test is seen");
+        await Until(world, () => Describe(session).Contains("[Mark CalcTests.Adds as a task]", StringComparison.Ordinal), "Mark shows while the caret is in the test");
+        Check.True(Describe(session).Contains("Turn failing tests into practice tasks the model is rewarded for solving.", StringComparison.Ordinal)
+                   && Describe(session).Contains("Failing tests not run yet", StringComparison.Ordinal) && Describe(session).Contains("Through the sandbox approve-each: each command asks you first.", StringComparison.Ordinal),
+            "tasks from tests explained in a line, the count of failing tests, the sandbox said");
+        await session.Panel.ActAsync(LearningActions.Mark, null);
+        Check.True(session.View.Marked.SequenceEqual(["CalcTests.Adds"]), "marked by its class and name");
+
+        world.Host.Select(world.Open, new SelectionState(inHelper, inHelper));
+        world.Pump();
+        Check.True(session.TestAtCaret is null && !Describe(session).Contains("[Mark ", StringComparison.Ordinal), "outside a test the Mark button goes");
+    }
+
+    // The panel's blocks as text.
+    private static string Describe(LearningSession session) => Text(session.Panel.Blocks);
+
+    private static string Text(IReadOnlyList<PanelBlock> blocks) => string.Join("\n", blocks.Select(PanelBlocks.Describe));
+
+    // Pumps the test's UI thread until `done` holds (the session reads its figures off it), at most ten seconds.
+    private static async Task Until(World world, Func<bool> done, string what)
+    {
+        for (var watch = Stopwatch.StartNew(); watch.Elapsed < TimeSpan.FromSeconds(10);)
+        {
+            world.Pump();
+            if (done())
+            {
+                return;
+            }
+
+            await Task.Delay(5);
+        }
+
+        world.Pump();
+        Check.True(done(), $"{what} (within ten seconds; the view: {Describe(world.Session)})");
+    }
+
+    /// <summary>A model provider that lends no copy and reports a status the test sets.</summary>
+    private sealed class FakeProvider : IModelProvider
+    {
+        public string Name => ModelProviders.Local;
+
+        public string Summary => "the Learning view's test provider";
+
+        public ModelProviderStatus Status { get; set; } = ModelProviderStatus.None;
+
+        public event EventHandler? StatusChanged;
+
+        public void Raise() => StatusChanged?.Invoke(this, EventArgs.Empty);
+
+        public Task<ModelLease> AcquireAsync(ModelRequest request, IProgress<ModelLoadStatus>? progress = null, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The view's test loads no model.");
+    }
+
     // `count` completions answered "no", each typed over with "yes": rejected, the typed text kept.
     private static async Task RecordRejections(World world, int count)
     {

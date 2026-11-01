@@ -128,6 +128,21 @@ public interface IEditorHost
     /// </summary>
     Task<bool> OpenExternalAsync(string path) => Task.FromResult(false);
 
+    /// <summary>
+    /// Asks the user for a folder with the system's folder dialog, starting in <paramref name="startFolder"/>; the folder
+    /// picked (its full path), or null when the user cancelled or the host has no dialog (the default).
+    /// </summary>
+    Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+
+    /// <summary>
+    /// Shows the shell's inline bar with Undo after a change the plug-in has already made and can take back (B11: delete
+    /// with Undo instead of a confirmation): <paramref name="text"/> says what happened, <paramref name="undo"/> takes it
+    /// back when the user presses Undo, <paramref name="kept"/> runs when the bar goes without an Undo (its time is up,
+    /// another bar takes its place, the window closes), so a change held for Undo is made for good then. Both run on the UI
+    /// thread. False when the host has no such bar (the default): the plug-in asks before the change instead.
+    /// </summary>
+    bool ShowUndo(string text, Action undo, Action? kept = null) => false;
+
     /// <summary>A document opened.</summary>
     event EventHandler<EditorDocumentEventArgs>? DocumentOpened;
 

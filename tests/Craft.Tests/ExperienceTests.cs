@@ -22,6 +22,57 @@ namespace Craft.Tests;
 [TestGroup("Experience")]
 public static class ExperienceTests
 {
+    [Test]
+    public static async Task AViewPanelsBlocksRedrawOnlyWhatChangedAndThePluginReachesTheShell()
+    {
+        // B11: a view panel's blocks as lines for a host that draws lines, and the signatures that redraw only a changed card.
+        string? acted = null;
+        var panel = new ViewPanel("test.view", "View", (action, value, _) =>
+        {
+            acted = action + "=" + value;
+            return Task.CompletedTask;
+        });
+        int changes = 0;
+        panel.Changed += (_, _) => changes++;
+        PanelBlock[] first =
+        [
+            new PanelCard("One", [new PanelText("hello"), new PanelSwitch("s", "Switch", false) { Variable = "CRAFT_X" }]),
+            new PanelCard("Two", [new PanelMeter("Used", 0.25) { Detail = "1 of 4" }]),
+        ];
+        panel.SetBlocks(first);
+        Check.True(changes == 1 && panel.Items.Select(i => i.Text).SequenceEqual(["One", "hello", "Switch: off", "Two", "Used: 25% · 1 of 4"]) && panel.Items[2].Detail == "CRAFT_X",
+            $"the blocks as the panel's lines, a control's variable as its detail ({string.Join(" | ", panel.Items.Select(i => i.Text))})");
+        await panel.ActAsync("s", "on");
+        Check.Equal("s=on", acted, "an action reaches the panel with its value");
+
+        var before = first.Select(PanelBlockLayout.Signature).ToList();
+        PanelBlock[] next = [first[0], new PanelCard("Two", [new PanelMeter("Used", 0.5) { Detail = "2 of 4" }]), new PanelText("three")];
+        var after = next.Select(PanelBlockLayout.Signature).ToList();
+        Check.SequenceEqual([1, 2], PanelBlockLayout.Changed(before, after), "only the changed card and the new block are drawn again");
+        PanelBlock tipped = new PanelCard("One", [new PanelText("hello") { Tooltip = "a new tip" }, new PanelSwitch("s", "Switch", false) { Variable = "CRAFT_X" }]);
+        Check.True(PanelBlockLayout.Signature(tipped) != before[0], "a changed tooltip inside a card redraws it");
+
+        // A chart's points: evenly across, the lowest at the bottom; one value or equal values at mid-height; NaN left out.
+        var points = PanelBlockLayout.ChartPoints([1, 3, 2], 104, 44, 2);
+        Check.True(points[0] == (2f, 42f) && points[1] == (52f, 2f) && points[2] == (102f, 22f), $"three points ({string.Join(" ", points)})");
+        Check.True(PanelBlockLayout.ChartPoints([5], 100, 40, 0)[0] == (50f, 20f) && PanelBlockLayout.ChartPoints([2, 2], 100, 40, 0)[1].Y == 20f, "one value, equal values: mid-height");
+        Check.True(float.IsNaN(PanelBlockLayout.ChartPoints([1, double.NaN, 2], 100, 40, 0)[1].Y), "a value that is not finite is left out");
+        Check.True(PanelBlockLayout.MeterWidth(0.5, 200) == 100 && PanelBlockLayout.MeterWidth(3, 200) == 200 && PanelBlockLayout.MeterWidth(-1, 300) == 100, "a meter's fill held to its bar; unknown work a third");
+
+        // The plug-in reaches the shell through its host: the Undo bar, the folder dialog and its settings, or a plain no.
+        using var host = new EditorHost();
+        Check.True(!((IEditorHost)host).ShowUndo("x", () => { }) && await ((IEditorHost)host).PickFolderAsync() is null, "no shell: no bar, no dialog");
+        using var bar = new UndoBar(60_000);
+        host.UndoPresenter = (text, undo, kept) =>
+        {
+            bar.Show(text, undo, kept);
+            return true;
+        };
+        host.FolderPicker = (start, _) => Task.FromResult<string?>(start + "/picked");
+        Check.True(((IEditorHost)host).ShowUndo("Deleted 2.", () => { }) && bar.Current?.Text == "Deleted 2.", "the shell's bar shows the plug-in's change");
+        Check.Equal("/a/picked", await ((IEditorHost)host).PickFolderAsync("/a"), "the shell's folder dialog");
+    }
+
     private static readonly InteractionKind[] Kinds = Enum.GetValues<InteractionKind>();
     private static readonly string[] TabFiles = ["one.txt", "two.txt", "three.txt"];
     private static readonly string[] Labels = ["Console", "Convert", "ConsoleKey"];

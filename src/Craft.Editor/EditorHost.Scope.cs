@@ -34,6 +34,11 @@ public sealed partial class EditorHost
 
         public Task<bool> OpenExternalAsync(string path) => _closed ? Task.FromResult(false) : host.OpenExternalAsync(path);
 
+        public Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult<string?>(null) : host.PickFolderAsync(startFolder, cancellationToken);
+
+        public bool ShowUndo(string text, Action undo, Action? kept = null) => !_closed && host.ShowUndo(text, undo, kept);
+
         public IReadOnlyList<IEditorCommand> Commands => host.Commands;
 
         public IPluginSettings Settings => host.Settings;

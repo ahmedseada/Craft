@@ -318,6 +318,21 @@ public static class InlineTests
         bar.Show("Removed three.", () => undone++);
         bar.Dismiss();
         Check.True(bar.Current is null && undone == 1, "× keeps the change");
+
+        // B11: a change held for Undo is made for good when the bar goes without one (its time, ×, a newer bar, the end).
+        var kept = new List<string>();
+        bar.Show("Held one.", () => undone++, () => kept.Add("one"));
+        bar.Show("Held two.", () => undone++, () => kept.Add("two"));
+        Check.SequenceEqual(["one"], kept, "a newer bar keeps the older change");
+        time.AdvanceMilliseconds(5000);
+        Check.True(bar.ExpireIfDue() && kept.SequenceEqual(["one", "two"]), "its time up: kept");
+        bar.Show("Held three.", () => undone++, () => kept.Add("three"));
+        Check.True(bar.Undo() && kept.Count == 2 && undone == 2, "Undo: never kept");
+        bar.Show("Held four.", () => undone++, () => kept.Add("four"));
+        bar.Dismiss();
+        bar.Show("Held five.", () => undone++, () => kept.Add("five"));
+        bar.Dispose();
+        Check.SequenceEqual(["one", "two", "four", "five"], kept, "× and the bar's end keep it");
     }
 
     private static string Rel(params string[] parts) => Path.Combine(parts);

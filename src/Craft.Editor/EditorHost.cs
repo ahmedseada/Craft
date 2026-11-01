@@ -61,7 +61,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         ActivityCenter = new ActivityCenter(action => Dispatch("activities: show", action), Options);
         Notifications = new NotificationCenter(ActivityCenter, action => Dispatch("notifications: show", action), Options);
         Presenter = presenter;
-        Settings = new PluginSettingsReader(readVariable ?? Environment.GetEnvironmentVariable);
+        Settings = new PluginSettingsReader(readVariable ?? Environment.GetEnvironmentVariable, this);
         SetKeyBindings(Options.KeyBindings, Options.KeyMap);
     }
 
@@ -252,6 +252,30 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <inheritdoc />
     /// <remarks>The settings' data folder (<see cref="CraftOptions.ResolveDataFolder"/>: <c>CRAFT_DATA_FOLDER</c>, else the local application data's "Craft").</remarks>
     public string? DataFolder => Options.ResolveDataFolder();
+
+    /// <summary>The shell's folder dialog for <see cref="PickFolderAsync"/> (the shell sets it); null: the call gives null.</summary>
+    public Func<string?, CancellationToken, Task<string?>>? FolderPicker { get; set; }
+
+    /// <inheritdoc />
+    public Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default) =>
+        FolderPicker is { } pick ? pick(startFolder, cancellationToken) : Task.FromResult<string?>(null);
+
+    /// <summary>The shell's inline Undo bar for <see cref="ShowUndo"/> (text, undo, kept; the shell sets it); null: the call gives false.</summary>
+    public Func<string, Action, Action?, bool>? UndoPresenter { get; set; }
+
+    /// <inheritdoc />
+    public bool ShowUndo(string text, Action undo, Action? kept = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        ArgumentNullException.ThrowIfNull(undo);
+        return UndoPresenter is { } show && show(text, undo, kept);
+    }
+
+    /// <summary>
+    /// How <see cref="IPluginSettings.SetAsync"/> writes a plug-in setting's variable (its name, its value; null when
+    /// written, else why not): the shell sets it to its settings files; null: a write is refused in words.
+    /// </summary>
+    public Func<string, string?, Task<string?>>? SettingWriter { get; set; }
 
     /// <summary>How <see cref="OpenExternalAsync"/> opens a folder or a file outside the editor (the page sets it); null: it cannot, and the call gives false.</summary>
     public Func<string, Task<bool>>? OpenExternal { get; set; }
@@ -1227,8 +1251,20 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     }
 
     /// <summary>The plug-ins' settings: each declared key's variable, else its default.</summary>
-    private sealed class PluginSettingsReader(Func<string, string?> read) : IPluginSettings
+    private sealed class PluginSettingsReader(Func<string, string?> read, EditorHost host) : IPluginSettings
     {
+        public Task<string?> SetAsync(string plugin, string key, string? value)
+        {
+            ArgumentNullException.ThrowIfNull(plugin);
+            ArgumentNullException.ThrowIfNull(key);
+            var owner = EditorPlugins.Get(plugin);
+            var setting = owner.Settings.FirstOrDefault(s => s.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
+                ?? throw new ArgumentException($"Plug-in '{owner.Name}' declares no setting '{key}'.", nameof(key));
+            string variable = PluginSetting.VariableName(owner.Name, setting.Key);
+            return host.SettingWriter is { } write ? write(variable, string.IsNullOrWhiteSpace(value) ? null : value.Trim())
+                : Task.FromResult<string?>($"This window cannot change settings: set {variable} instead.");
+        }
+
         public IReadOnlyList<PluginSettingValue> All =>
         [
             .. EditorPlugins.All.SelectMany(plugin => plugin.Settings.Select(setting => Value(plugin.Name, setting))),

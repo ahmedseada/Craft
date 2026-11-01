@@ -10,6 +10,8 @@ public sealed record UndoBarEntry(long Id, string Text)
 {
     internal Action Undo { get; init; } = static () => { };
 
+    internal Action? Kept { get; init; }
+
     internal long Deadline { get; init; }
 }
 
@@ -44,18 +46,25 @@ public sealed class UndoBar : IDisposable
     /// <summary>Raised when a bar shows, is undone or goes.</summary>
     public event EventHandler? Changed;
 
-    /// <summary>Shows <paramref name="text"/> with Undo running <paramref name="undo"/> (the change is already made).</summary>
-    public UndoBarEntry Show(string text, Action undo)
+    /// <summary>
+    /// Shows <paramref name="text"/> with Undo running <paramref name="undo"/> (the change is already made);
+    /// <paramref name="kept"/> runs when the bar goes without an Undo (its time is up, it is dismissed, a newer bar takes its
+    /// place, the bar is disposed), so a change held for Undo is made for good then.
+    /// </summary>
+    public UndoBarEntry Show(string text, Action undo, Action? kept = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
         ArgumentNullException.ThrowIfNull(undo);
         ObjectDisposedException.ThrowIf(_disposed, this);
+        var before = Current;
         var entry = new UndoBarEntry(++_next, text)
         {
             Undo = undo,
+            Kept = kept,
             Deadline = _time.GetTimestamp() + (long)(Milliseconds * (double)_time.TimestampFrequency / 1000),
         };
         Current = entry;
+        before?.Kept?.Invoke();
         _timer?.Dispose();
         _timer = _time.CreateTimer(_ => _dispatch(() => ExpireIfDue()), null, TimeSpan.FromMilliseconds(Milliseconds), Timeout.InfiniteTimeSpan);
         Changed?.Invoke(this, EventArgs.Empty);
@@ -78,9 +87,10 @@ public sealed class UndoBar : IDisposable
     /// <summary>Hides the bar and keeps the change.</summary>
     public void Dismiss()
     {
-        if (Current is not null)
+        if (Current is { } entry)
         {
             Hide();
+            entry.Kept?.Invoke();
         }
     }
 
@@ -93,6 +103,7 @@ public sealed class UndoBar : IDisposable
         }
 
         Hide();
+        entry.Kept?.Invoke();
         return true;
     }
 
@@ -102,7 +113,9 @@ public sealed class UndoBar : IDisposable
         _disposed = true;
         _timer?.Dispose();
         _timer = null;
+        var entry = Current;
         Current = null;
+        entry?.Kept?.Invoke();
     }
 
     private void Hide()

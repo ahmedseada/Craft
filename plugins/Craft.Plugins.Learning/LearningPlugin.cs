@@ -42,6 +42,9 @@ public sealed class LearningRegistration() : IdrakPlugin(LearningSettings.Plugin
         Part(() => AiEvents.Register(LearningSink.Instance), () => AiEvents.Unregister(LearningSink.SinkName));
         Part(() => ModelAdapters.Register(LearningAdapters.Instance), () => ModelAdapters.Unregister(LearningAdapters.SourceName));
         Part(() => EditorPlugins.Register(LearningPlugin.Instance), () => EditorPlugins.Unregister(LearningSettings.PluginName));
+        // B11: the Learning view's own rail icon (a cap) in place of the shell's list icon; the shell's side-view command shows it.
+        Part(() => EditorRailItems.Register(new RailItem(LearningSession.PanelId, "Learning", LearningPlugin.SideViewCommand, LearningView.LearningIcon, 20)),
+            () => EditorRailItems.Unregister(LearningSession.PanelId));
         foreach (var command in LearningPlugin.Commands)
         {
             Part(() => EditorCommands.Register(command), () => EditorCommands.Unregister(command.Name));
@@ -131,6 +134,9 @@ public sealed class LearningPlugin : IEditorPlugin
 
     /// <summary>Shares (after the preview).</summary>
     public const string ShareCommand = "learning.share";
+
+    /// <summary>The shell's command that shows the Learning view as the side view (the rail item runs it: "craft.sideView." and the panel's id).</summary>
+    public const string SideViewCommand = "craft.sideView." + LearningSession.PanelId;
 
     private LearningPlugin()
     {

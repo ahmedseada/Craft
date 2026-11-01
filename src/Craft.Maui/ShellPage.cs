@@ -915,7 +915,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         view = new PanelView(_host, panel) { BackgroundColor = _palette.Surface };
-        view.SetColors(_palette.Text, _palette.Secondary);
+        view.SetPalette(_palette);
         _sideViews[id] = view;
         return view;
     }
@@ -1755,7 +1755,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         foreach (var view in _sideViews.Values)
         {
             view.BackgroundColor = p.Surface;
-            view.SetColors(p.Text, p.Secondary);
+            view.SetPalette(p);
         }
 
         _pluginStatus.TextColor = p.Secondary;

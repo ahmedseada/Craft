@@ -103,6 +103,27 @@ public sealed class AdapterVersions
         }
     }
 
+    /// <summary>
+    /// Whether the base model answers though an adapter is promoted (B11: Use base model): the promoted adapter is kept and
+    /// comes back with <see cref="SetUseBase"/>(false).
+    /// </summary>
+    public bool UseBase => File.Exists(Path.Combine(_folder, "use-base.txt"));
+
+    /// <summary>Sets <see cref="UseBase"/>.</summary>
+    public void SetUseBase(bool useBase)
+    {
+        string path = Path.Combine(_folder, "use-base.txt");
+        if (useBase)
+        {
+            Directory.CreateDirectory(_folder);
+            File.WriteAllText(path, "The base model answers; delete this file (or Use adapter) to let the promoted adapter answer again.\n");
+        }
+        else if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+
     /// <summary>The folder of the next version (not made yet).</summary>
     public (int Number, string Folder) Next()
     {
@@ -146,6 +167,7 @@ public sealed class AdapterVersions
     public void Promote(int number)
     {
         Directory.CreateDirectory(_folder);
+        SetUseBase(false);                                         // a new promotion answers: Use base model was for the one before
         File.AppendAllText(Path.Combine(_folder, "promotions.txt"), number.ToString(CultureInfo.InvariantCulture) + "\n");
     }
 

@@ -282,6 +282,63 @@ public sealed class EpisodeStore
         return before;
     }
 
+    /// <summary>Where <see cref="Hold"/> keeps the episodes while their delete can still be undone.</summary>
+    public string HeldPath => FilePath + ".held";
+
+    /// <summary>
+    /// Deletes every episode so that it can be undone (B11: Delete with Undo): the file moves aside to <see cref="HeldPath"/>
+    /// (one held at a time: an older held file goes for good first); the episodes and bytes taken.
+    /// </summary>
+    public (int Episodes, long Bytes) Hold()
+    {
+        DropHeld();
+        if (!System.IO.File.Exists(FilePath))
+        {
+            return (0, 0);
+        }
+
+        int count = All().Count;
+        long bytes = Bytes;
+        System.IO.File.Move(FilePath, HeldPath);
+        return (count, bytes);
+    }
+
+    /// <summary>Takes a <see cref="Hold"/> back: the held episodes return, before any recorded since; true when there were some.</summary>
+    public bool Restore()
+    {
+        if (!System.IO.File.Exists(HeldPath))
+        {
+            return false;
+        }
+
+        if (System.IO.File.Exists(FilePath))
+        {
+            byte[] since = System.IO.File.ReadAllBytes(FilePath);
+            using (var stream = new FileStream(HeldPath, FileMode.Append, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(since);
+            }
+
+            System.IO.File.Delete(FilePath);
+        }
+
+        System.IO.File.Move(HeldPath, FilePath);
+        return true;
+    }
+
+    /// <summary>Makes a <see cref="Hold"/> final: the held episodes are deleted; the bytes freed.</summary>
+    public long DropHeld()
+    {
+        if (!System.IO.File.Exists(HeldPath))
+        {
+            return 0;
+        }
+
+        long bytes = new FileInfo(HeldPath).Length;
+        System.IO.File.Delete(HeldPath);
+        return bytes;
+    }
+
     /// <summary>Copies the episodes to <paramref name="path"/> (JSON lines); the path.</summary>
     public string Export(string path)
     {

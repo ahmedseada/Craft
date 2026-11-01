@@ -180,6 +180,13 @@ public interface IRunProvider : IKind
     /// folder (a relative file is taken from it). By default MSBuild's and the compilers' form (<see cref="RunProblems.TryParse"/>).
     /// </summary>
     bool TryParseProblem(ReadOnlySpan<char> line, string folder, [NotNullWhen(true)] out RunProblem? problem) => RunProblems.TryParse(line, folder, out problem);
+
+    /// <summary>
+    /// The command that runs only the test <paramref name="testName"/> (fully qualified) of <paramref name="target"/> (one
+    /// of this provider's targets that tests) in the workspace <paramref name="root"/>, or null when this provider cannot
+    /// pick one test (the default). X part 9: a code lens's Run test (contract 1.1).
+    /// </summary>
+    RunCommand? TestCommand(RunTarget target, string testName, string root) => null;
 }
 
 /// <summary>

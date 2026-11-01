@@ -53,6 +53,15 @@ public static class ShellCommandIds
     /// <summary>The places that refer to the symbol at the caret (Shift+F12).</summary>
     public const string FindReferences = "craft.findReferences";
 
+    /// <summary>View: the Outline side view (X part 9).</summary>
+    public const string ShowOutline = "craft.outline.show";
+
+    /// <summary>The callers of the member at the caret, and what it calls (Shift+Alt+H; X part 9).</summary>
+    public const string CallHierarchy = "craft.callHierarchy";
+
+    /// <summary>The base types and the derived types of the type at the caret (X part 9).</summary>
+    public const string TypeHierarchy = "craft.typeHierarchy";
+
     /// <summary>Opens a file (Ctrl+O).</summary>
     public const string OpenFile = "craft.openFile";
 
@@ -293,6 +302,9 @@ public static class ShellViewNames
 
     /// <summary>The bottom panel's Idrak telemetry tab.</summary>
     public const string Telemetry = "panel.telemetry";
+
+    /// <summary>The bottom panel's Hierarchy tab (X part 9: the call and type hierarchies).</summary>
+    public const string Hierarchy = "panel.hierarchy";
 }
 
 /// <summary>

@@ -70,6 +70,9 @@ internal sealed class MarkupTokenizer(MarkupDialect dialect) : LineTokenizer
 
     private bool IsRazor => dialect == MarkupDialect.Razor;
 
+    /// <summary>Which markup it reads.</summary>
+    public MarkupDialect Dialect => dialect;
+
     /// <inheritdoc />
     public override ulong Tokenize(ReadOnlySpan<char> line, int lineStart, ulong state, TokenSpanBuffer? into)
     {

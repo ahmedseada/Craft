@@ -864,6 +864,9 @@ public enum BottomTab
 
     /// <summary>The measures recorded through the host.</summary>
     Telemetry,
+
+    /// <summary>The call and type hierarchies (X part 9).</summary>
+    Hierarchy,
 }
 
 /// <summary>
@@ -900,6 +903,8 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly Label _noMeasures;
     private readonly Action<ProblemItem> _problemChosen;
     private View? _terminalView;
+    private IEditorViewPanel? _hierarchy;
+    private PanelBlocksView? _hierarchyView;
     private ShellPalette _palette;
     private string _outputFilter = "";
     private string _metricsFilter = "";
@@ -1066,6 +1071,30 @@ public sealed class BottomPanelView : ContentView, IDisposable
         }
     }
 
+    /// <summary>
+    /// The Hierarchy tab's panel (X part 9: the shell's call and type hierarchies), drawn from its blocks; the tab shows once
+    /// it is set.
+    /// </summary>
+    public void SetHierarchy(IEditorViewPanel panel)
+    {
+        ArgumentNullException.ThrowIfNull(panel);
+        if (_hierarchy is not null)
+        {
+            _hierarchy.Changed -= OnHierarchyChanged;
+        }
+
+        _hierarchy = panel;
+        _hierarchyView = new PanelBlocksView(panel, _palette, (action, error) => _host.Log(EditorLogLevel.Error, $"{panel.Title}: '{action}' failed: {error.Message}", error));
+        panel.Changed += OnHierarchyChanged;
+        RebuildTabs();
+    }
+
+    private void OnHierarchyChanged(object? sender, EventArgs e) => Dispatcher.DispatchLabelled("hierarchy: redraw", () =>
+    {
+        _hierarchyView?.Update();
+        RebuildTabs();
+    });
+
     /// <summary>Shows <paramref name="tab"/>.</summary>
     public void Select(BottomTab tab)
     {
@@ -1080,6 +1109,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
             BottomTab.Problems => _problemsBody,
             BottomTab.Terminal => _terminalView ?? _terminal,
             BottomTab.Output => _output,
+            BottomTab.Hierarchy => (View?)_hierarchyView ?? _noMeasures,
             _ => _metrics.AllRows.Count == 0 ? _noMeasures : _metricsView,
         };
         UpdateTools();
@@ -1153,6 +1183,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
 
         _metricsView.Apply(palette.Options, palette.Theme);
         _problemsView.Apply(palette.Options, palette.Theme);
+        _hierarchyView?.Apply(palette);
         UpdateTools();
         RebuildTabs();
     }
@@ -1162,6 +1193,11 @@ public sealed class BottomPanelView : ContentView, IDisposable
     {
         _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.Logged -= OnLogged;
+        if (_hierarchy is not null)
+        {
+            _hierarchy.Changed -= OnHierarchyChanged;
+        }
+
         _metrics.Recorded -= OnMeasured;
         _metrics.Dispose();
         _metricsView.Dispose();
@@ -1256,10 +1292,16 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private void RebuildTabs()
     {
         _tabs.Children.Clear();
-        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Telemetry])
+        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Telemetry, BottomTab.Hierarchy])
         {
+            if (tab == BottomTab.Hierarchy && _hierarchy is null)
+            {
+                continue;
+            }
+
             string title = tab switch
             {
+                BottomTab.Hierarchy => _hierarchy!.Title,
                 BottomTab.Problems => _problems.Count > 0 ? string.Create(CultureInfo.InvariantCulture, $"Problems {_problems.Count}") : "Problems",
                 BottomTab.Terminal => "Terminal",
                 BottomTab.Output => "Output",

@@ -33,7 +33,10 @@ public sealed partial class CSharpLanguageSession
     private bool _diagnosticsArmed;
     private bool _diagnosticsRunning;
     private bool _diagnosticsAgain;
-    private TaskCompletionSource _diagnosticsIdle = Completed();
+    // Made only when someone waits (WhenDiagnosticsIdle) while a pass is due, never on the keystroke's path (X part 9: the
+    // same fix as the colours' in X part 6b; before, each keystroke after an idle pass made a new source and its task).
+    private TaskCompletionSource? _diagnosticsIdle;
+    private bool _diagnosticsDue;
     private bool _semanticsEnabled;
     private long _lastDiagnosticsTicks;
     private int _diagnosticsPasses;
@@ -73,6 +76,17 @@ public sealed partial class CSharpLanguageSession
     {
         lock (_gate)
         {
+            if (!_diagnosticsDue)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (_diagnosticsIdle is null)
+            {
+                _diagnosticsIdle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Interlocked.Increment(ref _idleSourcesMade);
+            }
+
             return _diagnosticsIdle.Task;
         }
     }
@@ -219,6 +233,8 @@ public sealed partial class CSharpLanguageSession
             _workspaceGeneration = -1;
             _workspaceVersion = -1;
             _workspacePending = null;
+            _colorsNoDocument = false;                         // a rebuilt workspace may hold the document
+            _colorsFailedVersion = -1;
         }
 
         Volatile.Read(ref _workspace)?.RequestRelease();
@@ -227,13 +243,6 @@ public sealed partial class CSharpLanguageSession
     /// <summary>The workspace's solution with this document at its current text (the bench builds it with this).</summary>
     internal async Task<Document?> CurrentDocumentAsync(CancellationToken cancellationToken) =>
         await Task.Run(() => DocumentForAsync(Volatile.Read(ref _latest), cancellationToken), cancellationToken).ConfigureAwait(false);
-
-    private static TaskCompletionSource Completed()
-    {
-        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        done.SetResult();
-        return done;
-    }
 
     private void Validate(ITextSnapshot snapshot, int position)
     {
@@ -297,10 +306,7 @@ public sealed partial class CSharpLanguageSession
 
         _diagnosticsRun?.Cancel();
         _diagnosticsArmed = true;
-        if (_diagnosticsIdle.Task.IsCompleted)
-        {
-            _diagnosticsIdle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        }
+        _diagnosticsDue = true;
 
         _diagnosticsTimer ??= TimeProvider.System.CreateTimer(static state => ((CSharpLanguageSession)state!).OnDiagnosticsDue(), this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         int delay = immediately ? 0 : Math.Max(0, _context.Settings.DiagnosticsDelayMilliseconds);
@@ -393,7 +399,7 @@ public sealed partial class CSharpLanguageSession
             _diagnosticsAgain = false;
             if (!again && (!_diagnosticsArmed || _disposed))
             {
-                _diagnosticsIdle.TrySetResult();
+                DiagnosticsIdle();
             }
         }
 
@@ -511,6 +517,15 @@ public sealed partial class CSharpLanguageSession
         }
     }
 
+    /// <summary>Called holding the gate: no diagnostics pass is due or running; whoever waits for it is let go.</summary>
+    private void DiagnosticsIdle()
+    {
+        _diagnosticsDue = false;
+        var waiting = _diagnosticsIdle;
+        _diagnosticsIdle = null;
+        waiting?.TrySetResult();
+    }
+
     /// <summary>Called holding the gate from Dispose: no pass runs again, and the workspace is left off the calling thread.</summary>
     private void StopSemantics()
     {
@@ -521,7 +536,7 @@ public sealed partial class CSharpLanguageSession
         StopColors();
         if (!_diagnosticsRunning)
         {
-            _diagnosticsIdle.TrySetResult();
+            DiagnosticsIdle();
         }
 
         if (Interlocked.Exchange(ref _workspace, null) is { } workspace)

@@ -26,6 +26,7 @@ public sealed class CompletionController : IDisposable
     private CompletionList? _list;
     private int _selected;
     private int _firstVisible;
+    private bool _choices;
 
     internal CompletionController(EditorModel model) => _model = model;
 
@@ -66,9 +67,35 @@ public sealed class CompletionController : IDisposable
         Request(CompletionTrigger.Invoke);
     }
 
+    /// <summary>
+    /// Shows <paramref name="choices"/> (a snippet stop's) as the list, unfiltered, the first selected: a commit replaces
+    /// the stop's text (<paramref name="start"/> to <paramref name="end"/>) at every caret.
+    /// </summary>
+    public void ShowChoices(IReadOnlyList<string> choices, int start, int end)
+    {
+        ArgumentNullException.ThrowIfNull(choices);
+        Close();
+        var snapshot = _model.Snapshot;
+        var items = new List<CompletionItem>(choices.Count);
+        foreach (var choice in choices)
+        {
+            items.Add(new CompletionItem(choice, CompletionItemKind.EnumMember, null, new TextEdit(start, end - start, choice), choice, choice));
+        }
+
+        _list = new CompletionList(snapshot, end, start, items);
+        _choices = true;
+        _filtered.AddRange(items);
+        Filter = "";
+        _selected = 0;
+        _firstVisible = 0;
+        _model.Invalidate();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Closes the list (and forgets any request in flight).</summary>
     public void Close()
     {
+        _choices = false;
         _timer?.Cancel();
         _request?.Cancel();
         _request = null;
@@ -121,7 +148,25 @@ public sealed class CompletionController : IDisposable
             return false;
         }
 
+        bool choices = _choices;
         Close();
+        if (item.Data is Snippet snippet)
+        {
+            // X part 9: a snippet expands in place of the typed word, its stops kept for Tab.
+            var snapshot = _model.Snapshot;
+            int delta = snapshot.Length - list.Snapshot.Length;
+            int end = Math.Clamp(item.Edit.End >= list.Position ? item.Edit.End + delta : item.Edit.End, item.Edit.Start, snapshot.Length);
+            _model.InsertSnippet(snippet, item.Edit.Start, end);
+            return true;
+        }
+
+        if (choices)
+        {
+            // A snippet stop's choice: it replaces the stop's text (its mirrors follow through the carets).
+            _model.ReplaceSelections(item.Edit.Text);
+            return true;
+        }
+
         if (item.NeedsResolve && _model.SemanticSession is { } session)
         {
             int version = _model.Snapshot.Version;
@@ -207,9 +252,14 @@ public sealed class CompletionController : IDisposable
     /// <summary>After typed text: an identifier character filters an open list or (after the delay) asks for one; '.' asks for one; anything else closes it.</summary>
     internal void OnTyped(string text)
     {
-        if (_model.SemanticSession is null)
+        if (_model.SemanticSession is null && (!_model.OffersSnippets || SnippetProviders.For(_model.Language?.Name).Count == 0))
         {
-            return;
+            return;                                          // no semantic layer and no snippet of this language: nothing to complete
+        }
+
+        if (_choices)
+        {
+            Close();
         }
 
         char last = text[^1];
@@ -243,6 +293,12 @@ public sealed class CompletionController : IDisposable
     /// <summary>After Backspace or Delete: an open list filters again (closing when the caret left its word).</summary>
     internal void OnDeleted()
     {
+        if (_choices)
+        {
+            Close();
+            return;
+        }
+
         if (_list is not null && !Refilter())
         {
             Close();
@@ -253,6 +309,11 @@ public sealed class CompletionController : IDisposable
     internal void OnCaretMoved()
     {
         _timer?.Cancel();
+        if (_choices)
+        {
+            return;                                          // a snippet's choices stay while its stop is selected
+        }
+
         if (_list is not null && !Refilter())
         {
             Close();
@@ -277,19 +338,117 @@ public sealed class CompletionController : IDisposable
 
     private void Request(CompletionTrigger trigger)
     {
-        if (_model.SemanticSession is not { } session || !_model.CompletesHere)
+        if (!_model.CompletesHere)
+        {
+            return;
+        }
+
+        var session = _model.SemanticSession;
+        if (session is null && !_model.OffersSnippets)
         {
             return;
         }
 
         _request?.Cancel();
-        var cancel = new CancellationTokenSource();
-        _request = cancel;
         int id = ++_requestId;
         var snapshot = _model.Snapshot;
         int caret = _model.Selection.Caret;
         Requests++;
-        _model.Track(session.GetCompletionsAsync(snapshot, caret, trigger, cancel.Token), list => Apply(id, list));
+        if (session is null)
+        {
+            // X part 9: a language without a semantic layer still completes snippets (made here, on the UI thread: a list of names).
+            _request = null;
+            Apply(id, WithSnippets(null, snapshot, caret, trigger));
+            return;
+        }
+
+        var cancel = new CancellationTokenSource();
+        _request = cancel;
+        _model.Track(session.GetCompletionsAsync(snapshot, caret, trigger, cancel.Token), list => Apply(id, WithSnippets(list, snapshot, caret, trigger)));
+    }
+
+    /// <summary>
+    /// The language's list with the snippets for the word at the caret merged in by their sort text (X part 9), or the
+    /// snippets alone; none after a '.' or for an empty word typed (only Ctrl+Space lists every snippet).
+    /// </summary>
+    internal CompletionList? WithSnippets(CompletionList? list, ITextSnapshot snapshot, int caret, CompletionTrigger trigger)
+    {
+        if (!_model.OffersSnippets)
+        {
+            return list;
+        }
+
+        int start = list?.SpanStart ?? WordStart(snapshot, caret);
+        var at = list?.Snapshot ?? snapshot;
+        int position = list?.Position ?? caret;
+        if (start > at.Length || position > at.Length || (start > 0 && at[start - 1] == '.') || (position == start && trigger.Kind != CompletionTriggerKind.Invoke))
+        {
+            return list;
+        }
+
+        var snippets = SnippetProviders.For(_model.Language?.Name);
+        if (snippets.Count == 0)
+        {
+            return list;
+        }
+
+        var items = new List<CompletionItem>(snippets.Count + (list?.Items.Count ?? 0));
+        foreach (var snippet in snippets)
+        {
+            foreach (var prefix in snippet.Prefixes)
+            {
+                if (prefix.Length == 0)
+                {
+                    continue;
+                }
+
+                items.Add(new CompletionItem(prefix, CompletionItemKind.Snippet, snippet.Description ?? snippet.Name,
+                    new TextEdit(start, position - start, prefix), prefix, prefix, Data: snippet));
+            }
+        }
+
+        if (items.Count == 0)
+        {
+            return list;
+        }
+
+        if (list is null)
+        {
+            items.Sort(static (a, b) => string.Compare(a.SortText, b.SortText, StringComparison.OrdinalIgnoreCase));
+            return new CompletionList(at, position, start, items);
+        }
+
+        // Merged: each snippet goes before the first language item that sorts after it (the language's own order kept).
+        items.Sort(static (a, b) => string.Compare(a.SortText, b.SortText, StringComparison.OrdinalIgnoreCase));
+        var merged = new List<CompletionItem>(list.Items.Count + items.Count);
+        int s = 0;
+        foreach (var item in list.Items)
+        {
+            while (s < items.Count && string.Compare(items[s].SortText, item.SortText, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                merged.Add(items[s++]);
+            }
+
+            merged.Add(item);
+        }
+
+        while (s < items.Count)
+        {
+            merged.Add(items[s++]);
+        }
+
+        return list with { Items = merged };
+    }
+
+    private static int WordStart(ITextSnapshot snapshot, int caret)
+    {
+        int start = Math.Min(caret, snapshot.Length);
+        while (start > 0 && caret - start < 256 && IsIdentifierPart(snapshot[start - 1]))
+        {
+            start--;
+        }
+
+        return start;
     }
 
     /// <summary>On the UI thread: takes the answer of request <paramref name="id"/> if it is the newest and the caret is still in its word.</summary>

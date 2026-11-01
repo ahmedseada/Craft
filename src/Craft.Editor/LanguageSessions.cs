@@ -210,5 +210,8 @@ public sealed class SyntacticLanguageSession : ILanguageSession
         _inner.GetDocumentSymbolsAsync(snapshot, cancellationToken);
 
     /// <inheritdoc />
+    public LinkedEditingRanges? GetLinkedEditingRanges(ITextSnapshot snapshot, int position, int maxLines) => _inner.GetLinkedEditingRanges(snapshot, position, maxLines);
+
+    /// <inheritdoc />
     public void Dispose() => _inner.Dispose();
 }

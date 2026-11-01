@@ -172,6 +172,202 @@ internal sealed class LineStateSession : IFormattingLanguageSession
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// X part 9, for markup (XML, XAML, MSBuild, Razor): the tag whose name holds <paramref name="position"/> is found in
+    /// its line's tokens (a '&lt;' or '&lt;/' of markup and the name after it; C#'s '&lt;' is an operator, a comment's or a
+    /// value's text is not a tag), then its partner by walking the lines' tokens from the states the session keeps,
+    /// forward from a start tag or backward from an end tag, counting the elements between (an empty element, and HTML's
+    /// void elements in Razor, open none). Null when the name has no partner within <paramref name="maxLines"/> lines.
+    /// </remarks>
+    public LinkedEditingRanges? GetLinkedEditingRanges(ITextSnapshot snapshot, int position, int maxLines)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (_tokenizer is not MarkupTokenizer markup || snapshot.Length == 0 || position < 0 || position > snapshot.Length)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            if (_disposed || !ReferenceEquals(snapshot, _snapshot))
+            {
+                return null;
+            }
+
+            using var spans = new TokenSpanBuffer(64);
+            var tags = new List<MarkupTags.Tag>();
+            int line = snapshot.GetLineIndex(position);
+            LineTags(snapshot, line, spans, tags);
+            int at = -1;
+            for (int i = 0; i < tags.Count; i++)
+            {
+                if (tags[i].Kind != MarkupTags.Kind.SelfClose && tags[i].NameStart <= position && position <= tags[i].NameEnd)
+                {
+                    at = i;
+                    break;
+                }
+            }
+
+            if (at < 0)
+            {
+                return null;
+            }
+
+            var tag = tags[at];
+            bool razor = markup.Dialect == MarkupDialect.Razor;
+            var own = new TextRange(tag.NameStart, tag.NameEnd - tag.NameStart);
+            if (tag.Kind == MarkupTags.Kind.Open)
+            {
+                if (razor && MarkupTags.IsVoid(snapshot, tag))
+                {
+                    return null;
+                }
+
+                var partner = Forward(snapshot, line, at, tags, maxLines, razor, spans);
+                return partner is { } found ? new LinkedEditingRanges([own, found]) : null;
+            }
+
+            var opener = Backward(snapshot, line, at, tags, maxLines, razor, spans);
+            return opener is { } open ? new LinkedEditingRanges([own, open]) : null;
+        }
+    }
+
+    // From the start tag tags[at] of `line`: the name of the end tag that closes it.
+    private TextRange? Forward(ITextSnapshot snapshot, int line, int at, List<MarkupTags.Tag> tags, int maxLines, bool razor, TokenSpanBuffer spans)
+    {
+        int depth = 0;
+        int last = Math.Min(snapshot.LineCount - 1, line + Math.Max(0, maxLines));
+        int i = at + 1;
+        bool lastOpenVoid = false;
+        for (int index = line; index <= last; index++)
+        {
+            if (index > line)
+            {
+                LineTags(snapshot, index, spans, tags);
+                i = 0;
+            }
+
+            for (; i < tags.Count; i++)
+            {
+                var tag = tags[i];
+                switch (tag.Kind)
+                {
+                    case MarkupTags.Kind.SelfClose:
+                        if (lastOpenVoid)
+                        {
+                            lastOpenVoid = false;             // <br />: a void element opened none
+                            break;
+                        }
+
+                        if (depth == 0)
+                        {
+                            return null;                      // the start tag asked about is an empty element
+                        }
+
+                        depth--;                              // an empty element opened none
+                        break;
+                    case MarkupTags.Kind.Open:
+                        lastOpenVoid = razor && MarkupTags.IsVoid(snapshot, tag);
+                        if (!lastOpenVoid)
+                        {
+                            depth++;
+                        }
+
+                        break;
+                    case MarkupTags.Kind.Close:
+                        if (depth == 0)
+                        {
+                            return new TextRange(tag.NameStart, tag.NameEnd - tag.NameStart);
+                        }
+
+                        depth--;
+                        break;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // From the end tag tags[at] of `line`: the name of the start tag it closes.
+    private TextRange? Backward(ITextSnapshot snapshot, int line, int at, List<MarkupTags.Tag> tags, int maxLines, bool razor, TokenSpanBuffer spans)
+    {
+        int depth = 0;
+        int first = Math.Max(0, line - Math.Max(0, maxLines));
+        int i = at - 1;
+        // Walking back: an empty element's "/>" comes before its start tag, so it marks that start tag as opening nothing.
+        bool skipNextOpen = false;
+        for (int index = line; index >= first; index--)
+        {
+            if (index < line)
+            {
+                LineTags(snapshot, index, spans, tags);
+                i = tags.Count - 1;
+            }
+
+            for (; i >= 0; i--)
+            {
+                var tag = tags[i];
+                switch (tag.Kind)
+                {
+                    case MarkupTags.Kind.SelfClose:
+                        skipNextOpen = true;
+                        break;
+                    case MarkupTags.Kind.Close:
+                        depth++;
+                        break;
+                    case MarkupTags.Kind.Open:
+                        if (skipNextOpen)
+                        {
+                            skipNextOpen = false;
+                            break;
+                        }
+
+                        if (razor && MarkupTags.IsVoid(snapshot, tag))
+                        {
+                            break;
+                        }
+
+                        if (depth == 0)
+                        {
+                            return new TextRange(tag.NameStart, tag.NameEnd - tag.NameStart);
+                        }
+
+                        depth--;
+                        break;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // The tag events of a line (its start and end tags' names, and the "/>" of empty elements), from its tokens.
+    private void LineTags(ITextSnapshot snapshot, int index, TokenSpanBuffer spans, List<MarkupTags.Tag> tags)
+    {
+        Known(index);
+        spans.Clear();
+        tags.Clear();
+        ulong state = index == 0 ? _tokenizer.Initial : _ends[index - 1];
+        var line = snapshot.GetLine(index);
+        var text = Read(snapshot, line, out var rented);
+        try
+        {
+            state = _tokenizer.Tokenize(text, line.Start, state, spans);
+            MarkupTags.Collect(text, line.Start, spans.Spans, tags);
+        }
+        finally
+        {
+            Return(rented);
+        }
+
+        if (index == _valid)
+        {
+            Learn(index, state);
+        }
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<TextEdit>> FormatAsync(ITextSnapshot snapshot, int start, int length, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -383,4 +579,93 @@ internal sealed class ProjectLanguage(string name, string summary, string[] exte
         ArgumentNullException.ThrowIfNull(context);
         return new LineStateSession(buffer, tokenizer, formatter, context.Settings);
     }
+}
+
+/// <summary>The tags of a markup line, read from its tokens (X part 9's linked tag rename).</summary>
+internal static class MarkupTags
+{
+    private static readonly string[] VoidElements = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"];
+
+    /// <summary>What a tag event is.</summary>
+    internal enum Kind
+    {
+        /// <summary>A start tag's name.</summary>
+        Open,
+
+        /// <summary>An end tag's name.</summary>
+        Close,
+
+        /// <summary>The "/>" that ends an empty element.</summary>
+        SelfClose,
+    }
+
+    /// <summary>A tag event: its kind and its name's place (the "/>"'s for a self-close).</summary>
+    internal readonly record struct Tag(Kind Kind, int NameStart, int NameEnd);
+
+    /// <summary>Adds the line's tag events in order: a markup '&lt;' or '&lt;/' (punctuation, not C#'s operator) with a name after it, and "/>".</summary>
+    public static void Collect(ReadOnlySpan<char> text, int lineStart, ReadOnlySpan<TokenSpan> spans, List<Tag> into)
+    {
+        foreach (var span in spans)
+        {
+            if (span.Class != TokenClasses.Punctuation)
+            {
+                continue;
+            }
+
+            int at = span.Start - lineStart;
+            if (at < 0 || at + span.Length > text.Length)
+            {
+                continue;
+            }
+
+            var mark = text.Slice(at, span.Length);
+            if (mark is "/>")
+            {
+                into.Add(new Tag(Kind.SelfClose, span.Start, span.End));
+                continue;
+            }
+
+            bool open = mark is "<";
+            if (!open && mark is not "</")
+            {
+                continue;
+            }
+
+            int name = at + span.Length;
+            int end = name;
+            while (end < text.Length && IsNameChar(text[end]))
+            {
+                end++;
+            }
+
+            if (end > name)
+            {
+                into.Add(new Tag(open ? Kind.Open : Kind.Close, lineStart + name, lineStart + end));
+            }
+        }
+    }
+
+    /// <summary>Whether the start tag names one of HTML's void elements (br, img, input, …), which have no end tag.</summary>
+    public static bool IsVoid(ITextSnapshot snapshot, Tag tag)
+    {
+        int length = tag.NameEnd - tag.NameStart;
+        if (length > 6)
+        {
+            return false;
+        }
+
+        Span<char> name = stackalloc char[length];
+        snapshot.CopyTo(tag.NameStart, name);
+        foreach (var known in VoidElements)
+        {
+            if (name.Equals(known, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '-' or '.' or ':';
 }

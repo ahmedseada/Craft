@@ -317,6 +317,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bottom.FindRequested += (_, e) => ShowFind(false, e.InitialQuery, e.Model);
         _bottom.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.ReadOnlyText, new ContextMenuTarget(EditorContextMenus.ReadOnlyText, null, false, e.Model), e.Where);
         _bottom.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
+        _bottom.SetHierarchy(_shell.Hierarchy);              // X part 9: the call and type hierarchies' tab
         _bottomSplit.Panel = _bottom;
 
         // Each panel's splitter: a drag kept within what the panel and the editor share, written to the workspace's
@@ -1424,6 +1425,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             case ShellViewNames.Telemetry:
                 ShowBottom(BottomTab.Telemetry);
                 break;
+            case ShellViewNames.Hierarchy:
+                ShowBottom(BottomTab.Hierarchy);
+                break;
         }
     }
 
@@ -1694,6 +1698,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             KeyHandler = _keys,
             Labels = _host.Labels,
             Activities = _host.Activities,
+            Host = _host,
             WorkspaceRoot = _shell.Workspace?.Root,
             ShowsMinimap = true,                            // the X restart, piece 2b: one minimap per document view
         };

@@ -25,6 +25,12 @@ public sealed partial class EditorModel
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
         bool control = (modifiers & KeyModifiers.Control) != 0;
         bool alt = (modifiers & KeyModifiers.Alt) != 0;
+        if (!Completion.IsOpen && SnippetKey(key, modifiers))
+        {
+            NoteInput();
+            return true;                                     // X part 9: Tab, Shift+Tab and Escape in a snippet
+        }
+
         if (!Completion.IsOpen && CompletesHere && InlineCompletion.HandleKey(key, modifiers))
         {
             NoteInput();
@@ -47,8 +53,8 @@ public sealed partial class EditorModel
         {
             EditorKey.Left or EditorKey.Right or EditorKey.Up or EditorKey.Down or EditorKey.Home or EditorKey.End
                 or EditorKey.PageUp or EditorKey.PageDown => Move(key, shift, control),
-            EditorKey.Backspace => Backspace(control),
-            EditorKey.Delete => DeleteForward(control),
+            EditorKey.Backspace => BackspaceLinked(control),
+            EditorKey.Delete => DeleteForwardLinked(control),
             EditorKey.Enter when !control => Enter(),
             EditorKey.Tab when !control => shift ? OutdentLines() : Indent(),
             EditorKey.Escape => Escape(),
@@ -105,7 +111,13 @@ public sealed partial class EditorModel
             InlineCompletion.TypeThrough(text);
         }
 
+        bool linked = BeginLinked(LinkedEdit.Type, text);
         EditCarets(EditKind.Typing, keepAutoClosed: true, text, static (model, selection, snapshot, typed) => model.TypedPart(selection, snapshot, typed));
+        if (linked)
+        {
+            EndLinked();
+        }
+
         EnsureCaretVisible();
         if (completes)
         {
@@ -164,6 +176,11 @@ public sealed partial class EditorModel
         if (PressOnLayers(viewX, viewY, modifiers))
         {
             return;
+        }
+
+        if (PressOnLens(viewX, viewY))
+        {
+            return;                                           // X part 9: a code lens's title runs it
         }
 
         CloseTooltips();
@@ -513,7 +530,7 @@ public sealed partial class EditorModel
         }
     }
 
-    // A vertical move by rows: folded lines are stepped over, never entered.
+    // A vertical move by rows: folded lines are stepped over, never entered; a code lens row is not a line (X part 9).
     private int LineMove(int position, int lines, ref int desired)
     {
         var snapshot = Snapshot;
@@ -523,18 +540,18 @@ public sealed partial class EditorModel
             desired = ColumnOf(position);
         }
 
-        int target = RowOfLine(index) + lines;
+        int target = TextRowOf(index) + lines;
         if (target < 0)
         {
             return 0;
         }
 
-        if (target >= RowCount)
+        if (target >= TextRowCount)
         {
             return snapshot.Length;
         }
 
-        return PositionAtColumn(snapshot.GetLine(LineAtRow(target)), desired, nearest: false);
+        return PositionAtColumn(snapshot.GetLine(TextLineAt(target)), desired, nearest: false);
     }
 
     private bool SelectAll()

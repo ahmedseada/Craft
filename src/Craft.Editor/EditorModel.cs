@@ -180,14 +180,26 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>The cells of the gutter's fold column (its chevrons), when the document folds.</summary>
     public const int FoldGutterCells = 2;
 
-    /// <summary>The rows drawn: the lines minus those the folds hide.</summary>
-    public int RowCount => Folding.Map.HasHidden ? Folding.Map.RowCount : Snapshot.LineCount;
+    /// <summary>The rows drawn: the lines minus those the folds hide, plus a code lens row above each member that has lenses (X part 9).</summary>
+    public int RowCount
+    {
+        get
+        {
+            EnsureLensRows();
+            return TextRowCount + _lensLines.Length;
+        }
+    }
 
-    /// <summary>The row <paramref name="line"/> is drawn on (its fold's header row when hidden).</summary>
-    public int RowOfLine(int line) => Folding.Map.HasHidden ? Folding.Map.RowOf(line) : line;
+    /// <summary>The row <paramref name="line"/> is drawn on (its fold's header row when hidden; below its lens row when it has one).</summary>
+    public int RowOfLine(int line)
+    {
+        EnsureLensRows();
+        int row = TextRowOf(line);
+        return _lensBaseRows.Length == 0 ? row : row + LensRowsThrough(row);
+    }
 
-    /// <summary>The line drawn on <paramref name="row"/>.</summary>
-    public int LineAtRow(int row) => Folding.Map.HasHidden ? Folding.Map.LineAt(row) : Math.Clamp(row, 0, Snapshot.LineCount - 1);
+    /// <summary>The line drawn on <paramref name="row"/> (a lens row gives the line below it).</summary>
+    public int LineAtRow(int row) => LineAtViewRow(row);
 
     /// <summary>The next line drawn after <paramref name="line"/> (the line count when it is the last).</summary>
     public int NextShownLine(int line) => Folding.Map.HasHidden ? Folding.Map.NextShown(line) : line + 1;
@@ -431,7 +443,29 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         }
 
         float column = Math.Max(0, (x - TextLeft) / Metrics.CellWidth);
-        return PositionAtColumn(snapshot.GetLine(index), column, nearest: true);
+        var line = snapshot.GetLine(index);
+        if (_hints.Length > 0 && InlayHintsShown && !InlayHintsBetween(line.Start, line.End).IsEmpty)
+        {
+            column = HintedColumn(line, column);              // X part 9: a click past an inlay hint is a click on the text it shifted
+        }
+
+        return PositionAtColumn(line, column, nearest: true);
+    }
+
+    // The text column drawn at the point's column of a line with inlay hints.
+    private float HintedColumn(in TextLine line, float drawn)
+    {
+        char[]? buffer = null;
+        try
+        {
+            var text = TextReading.ReadLine(Snapshot, line, ref buffer);
+            var columns = new HintColumns(InlayHintsBetween(line.Start, line.End), text, line.Start, Options.TabSize);
+            return columns.FromDrawn((int)MathF.Round(drawn));
+        }
+        finally
+        {
+            TextReading.Return(buffer);
+        }
     }
 
     /// <summary>Measures the options' font again (after the platform measured it for real) and redraws.</summary>
@@ -595,6 +629,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         DetachLineMarks();
         Folding.Dispose();
         InlineCompletion.Dispose();
+        DisposeHints();
+        DisposeLenses();
         DisposeSemantic();
         if (_session is not null)
         {
@@ -751,6 +787,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private void OnBufferChanged(object? sender, TextChangedEventArgs e)
     {
         NoteLineChange(e);                                   // the minimap moves its kept lines through it (piece 2b)
+        MapSnippet(e);                                       // X part 9: a snippet's stops, the inlay hints and the lenses follow the change
+        MapHints(e);
+        MapLenses(e);
         // The folds first: the selections mapped below may land on lines they hide.
         Folding.OnBufferChanged(e);
         if (!_applying)

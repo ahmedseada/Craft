@@ -382,6 +382,18 @@ public sealed record PanelResultRow(string Id, string Text)
 
     /// <summary>A short badge at its right that always shows ("running", "default"), or null.</summary>
     public string? Badge { get; init; }
+
+    /// <summary>Its level in a tree (X part 9: the Outline's and the hierarchies' rows): each level is indented one step; 0 by default.</summary>
+    public int Depth { get; init; }
+
+    /// <summary>Whether it is a tree node that opens (false: closed, true: open), or null for a leaf: a chevron before it.</summary>
+    public bool? Expanded { get; init; }
+
+    /// <summary>The action a click on its chevron runs (with <see cref="Id"/>), or null.</summary>
+    public string? ToggleActionId { get; init; }
+
+    /// <summary>Whether it is the row that stands for where the user is (the symbol at the caret): highlighted and scrolled into view.</summary>
+    public bool Selected { get; init; }
 }
 
 /// <summary>A group of a <see cref="PanelResults"/> block: its header (a file with its icon and count) and its rows, folded or not.</summary>

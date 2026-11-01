@@ -69,6 +69,8 @@ public sealed class CSharpLanguage : ILanguage
         EditorLanguages.Register(new CSharpLanguage());
         EditorLanguages.Register(Script);
         FoldingRangeProviders.Register(new CSharpFolding());
+        SnippetProviders.Register(new CSharpSnippets());
+        CodeLensProviders.Register(new CSharpCodeLens());
         WorkspaceReaders.Register(new Workspaces.CsprojWorkspaceReader());
         WorkspaceReaders.Register(new Workspaces.LooseWorkspaceReader());
     }
@@ -79,6 +81,8 @@ public sealed class CSharpLanguage : ILanguage
         EditorLanguages.Unregister(RegularName);
         EditorLanguages.Unregister(ScriptName);
         FoldingRangeProviders.Unregister(CSharpFolding.ProviderName);
+        SnippetProviders.Unregister(CSharpSnippets.ProviderName);
+        CodeLensProviders.Unregister(CSharpCodeLens.ProviderName);
         WorkspaceReaders.Unregister(Workspaces.CsprojWorkspaceReader.ReaderName);
         WorkspaceReaders.Unregister(Workspaces.LooseWorkspaceReader.ReaderName);
     }
@@ -177,7 +181,9 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
     private bool _working;
     private bool _disposed;
     private bool _released;
-    private TaskCompletionSource _idle = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    // Made only when someone waits (WhenIdle) while the worker parses, never on the keystroke's path (X part 9's speed fix:
+    // before, each keystroke that started the worker made a new source and its task).
+    private TaskCompletionSource? _idle;
     private Exception? _error;
     private TokenSpanBuffer? _scratch;
 
@@ -233,11 +239,30 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
         }
     }
 
+    /// <summary>
+    /// How many idle sources (the parse worker's, the diagnostics' and the colours') were made since the session opened: each
+    /// is made only when someone waits on one (the tests' check that a keystroke makes none).
+    /// </summary>
+    internal int IdleSourcesMade => Volatile.Read(ref _idleSourcesMade);
+
+    private int _idleSourcesMade;
+
     /// <summary>Completes when the worker has nothing left to parse (or the session is disposed and the worker stopped).</summary>
     public Task WhenIdle()
     {
         lock (_gate)
         {
+            if (!_working)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (_idle is null)
+            {
+                _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Interlocked.Increment(ref _idleSourcesMade);
+            }
+
             return _idle.Task;
         }
     }
@@ -446,10 +471,6 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
         }
 
         _working = true;
-        if (_idle.Task.IsCompleted)
-        {
-            _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        }
 
         _ = Task.Run(Work);
     }
@@ -560,7 +581,8 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
     private void Stop()
     {
         _working = false;
-        _idle.TrySetResult();
+        _idle?.TrySetResult();
+        _idle = null;
         Monitor.PulseAll(_gate);
         if (_disposed)
         {
@@ -580,7 +602,8 @@ public sealed partial class CSharpLanguageSession : ISemanticLanguageSession
         _resume.Dispose();
         Interlocked.Exchange(ref _scratch, null)?.Dispose();
         Interlocked.Exchange(ref _colorScratch, null)?.Dispose();
-        _idle.TrySetResult();
+        _idle?.TrySetResult();
+        _idle = null;
     }
 
     /// <summary>

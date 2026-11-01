@@ -344,6 +344,81 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         }
     }
 
+    /// <summary>
+    /// X part 9 (a code lens's Run test): runs only the test <paramref name="testName"/> of the test project that holds
+    /// <paramref name="filePath"/> (the deepest one), with its provider's <see cref="IRunProvider.TestCommand"/>, asked and
+    /// run as any run (its own tab "Test: Name"). NotStarted, said, when no provider can run that one test.
+    /// </summary>
+    public async Task<RunOutcome> RunTestAsync(string filePath, string testName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(testName);
+        if (_found.Task is { IsCompleted: false } finding)
+        {
+            await finding.WaitAsync(cancellationToken).ConfigureAwait(true);
+        }
+
+        if (_root() is not { } root)
+        {
+            return NotStarted("Open a folder to run its tests.");
+        }
+
+        string relative = Path.GetRelativePath(root, Path.GetFullPath(filePath)).Replace('\\', '/');
+        RunTarget? chosen = null;
+        RunCommand? command = null;
+        IRunProvider? provider = null;
+        int depth = -1;
+        foreach (var target in _targets)
+        {
+            if ((target.Actions & RunActions.Test) == 0 || RunProviders.Find(target.Provider) is not { } candidate)
+            {
+                continue;
+            }
+
+            string folder = Path.GetDirectoryName(target.File)?.Replace('\\', '/') ?? "";
+            bool holds = folder.Length == 0 || relative.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase);
+            if (!holds || folder.Length <= depth || candidate.TestCommand(target, testName, root) is not { } found)
+            {
+                continue;
+            }
+
+            chosen = target;
+            command = found;
+            provider = candidate;
+            depth = folder.Length;
+        }
+
+        string shortName = testName[(testName.LastIndexOf('.') + 1)..];
+        if (chosen is null || command is null || provider is null)
+        {
+            string why = $"No test project here runs '{shortName}': the Run view found none that holds {Path.GetFileName(filePath)}.";
+            Say(why, NotificationSeverity.Warning);
+            return NotStarted(why);
+        }
+
+        var configuration = AdHoc(chosen, RunActions.Test) with { Name = "Test: " + shortName };
+        if (_running.ContainsKey(configuration.Name))
+        {
+            string why = $"'{configuration.Name}' runs already: stop it first (Shift+F5).";
+            Say(why, NotificationSeverity.Information);
+            return NotStarted(why);
+        }
+
+        var item = new RunningItem(configuration.Name);
+        _running[configuration.Name] = item;
+        Changed2();
+        try
+        {
+            return await StepAsync(item, provider, chosen, RunActions.Test, configuration, root, cancellationToken, command).ConfigureAwait(true);
+        }
+        finally
+        {
+            _running.Remove(configuration.Name);
+            item.Dispose();
+            Changed2();
+        }
+    }
+
     /// <summary>Stops the run named <paramref name="name"/> (every run when null), with its process tree; false when none ran.</summary>
     public bool Stop(string? name = null)
     {
@@ -527,10 +602,11 @@ public sealed class RunView : IEditorViewPanel, IDisposable
 
     // ---- one step of a run: approve, sandbox, terminal, activity, problems ----
 
-    private async Task<RunOutcome> StepAsync(RunningItem item, IRunProvider provider, RunTarget target, RunActions action, RunConfiguration configuration, string root, CancellationToken cancellationToken)
+    private async Task<RunOutcome> StepAsync(RunningItem item, IRunProvider provider, RunTarget target, RunActions action, RunConfiguration configuration, string root, CancellationToken cancellationToken,
+        RunCommand? given = null)
     {
         var options = _options();
-        var command = provider.Command(target, action, configuration, root);
+        var command = given ?? provider.Command(target, action, configuration, root);
         if (command.Problem is { } cannot || command.Command.Count == 0)
         {
             string why = command.Problem ?? "The provider gave no command.";

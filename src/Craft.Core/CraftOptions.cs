@@ -362,6 +362,47 @@ public sealed record CraftOptions
     /// </summary>
     public bool CompletionAllCarets { get; init; } = true;
 
+    // X part 9: snippets, inlay hints, code lens, linked tag rename, the outline and the hierarchies.
+
+    /// <summary>Whether completion offers the snippets of the registered providers (<c>CRAFT_SNIPPETS</c>).</summary>
+    public bool Snippets { get; init; } = true;
+
+    /// <summary>
+    /// The folder of the user's own snippets files (<c>*.json</c> in VS Code's form; <c>CRAFT_SNIPPETS_FOLDER</c>); null for
+    /// the data folder's "snippets". A workspace's <c>.craft/snippets</c> is read too.
+    /// </summary>
+    public string? SnippetsFolder { get; init; }
+
+    /// <summary>When inlay hints show (<c>CRAFT_INLAY_HINTS</c>): "on", "off", or "ctrl-held" (only while Ctrl is held).</summary>
+    public string InlayHints { get; init; } = "on";
+
+    /// <summary>Whether inlay hints show parameter names (<c>CRAFT_INLAY_HINTS_PARAMETERS</c>).</summary>
+    public bool InlayHintsParameters { get; init; } = true;
+
+    /// <summary>Whether inlay hints show inferred types (<c>CRAFT_INLAY_HINTS_TYPES</c>).</summary>
+    public bool InlayHintsTypes { get; init; } = true;
+
+    /// <summary>Milliseconds without a change or a scroll before the lines on screen are asked for inlay hints (<c>CRAFT_INLAY_HINTS_DELAY_MS</c>).</summary>
+    public int InlayHintsDelayMilliseconds { get; init; } = 250;
+
+    /// <summary>Whether members show code lenses on a row above them (<c>CRAFT_CODE_LENS</c>).</summary>
+    public bool CodeLens { get; init; } = true;
+
+    /// <summary>Milliseconds without a change or a scroll before the members on screen are asked for code lenses (<c>CRAFT_CODE_LENS_DELAY_MS</c>).</summary>
+    public int CodeLensDelayMilliseconds { get; init; } = 500;
+
+    /// <summary>Whether editing a markup start tag's name edits its end tag's too, in the same undo step (<c>CRAFT_LINKED_EDITING</c>).</summary>
+    public bool LinkedEditing { get; init; } = true;
+
+    /// <summary>How the Outline view orders symbols (<c>CRAFT_OUTLINE_SORT</c>): "position", "name" or "kind".</summary>
+    public string OutlineSort { get; init; } = "position";
+
+    /// <summary>Whether the Outline view highlights and reveals the symbol at the caret (<c>CRAFT_OUTLINE_FOLLOW_CARET</c>).</summary>
+    public bool OutlineFollowCaret { get; init; } = true;
+
+    /// <summary>The most items one level of a call or type hierarchy lists (<c>CRAFT_HIERARCHY_LIMIT</c>).</summary>
+    public int HierarchyLimit { get; init; } = 500;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -716,6 +757,9 @@ public sealed record CraftOptions
     /// </summary>
     public string RunInteractive { get; init; } = "auto";
 
+    /// <summary>The user's snippets folder as a full path: <see cref="SnippetsFolder"/>, else the data folder's "snippets".</summary>
+    public string ResolveSnippetsFolder() => Path.GetFullPath(SnippetsFolder ?? Path.Combine(ResolveDataFolder(), "snippets"));
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -872,6 +916,19 @@ public sealed record CraftOptions
         new("CRAFT_MINIMAP_LINES_PER_FRAME", "64", "After an edit, a landed parse or a theme, the most of the minimap's kept lines a frame colours again (the lines an edit touched are built at once); the rest follow in the next frames.") { Shape = SettingShape.Whole(SettingSections.Editor, "Minimap recolours a frame at most", 1, 100_000, "lines", "Advanced", step: 16) },
         new("CRAFT_MINIMAP_DIAGNOSTICS", "true", "Whether the minimap marks the lines with errors and warnings.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Minimap marks problems", "Display") },
         new("CRAFT_MINIMAP_FIND", "true", "Whether the minimap marks the find box's hits.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Minimap marks search hits", "Display") },
+        // X part 9: snippets, inlay hints, code lens, linked tag rename, the outline and the hierarchies.
+        new("CRAFT_SNIPPETS", "true", "Whether completion offers snippets (C#'s prop, ctor, for, … and your own): Tab moves to the next place to fill, Escape leaves.") { Shape = SettingShape.Toggle(SettingSections.Completion, "Snippets in completion", "Snippets") },
+        new("CRAFT_SNIPPETS_FOLDER", "", "The folder of your own snippets files (*.json, VS Code's form), read again when they change; empty: the data folder's 'snippets'. A workspace's .craft/snippets is read too.") { Shape = SettingShape.PathTo(SettingSections.Completion, "Your snippets folder", "Snippets") },
+        new("CRAFT_INLAY_HINTS", "on", "When inlay hints (parameter names, inferred types) show inside the code: on, off, or ctrl-held (while Ctrl is held).") { Shape = SettingShape.Choice(SettingSections.Editor, "Inlay hints", ["on", "off", "ctrl-held"], "Inlay hints") },
+        new("CRAFT_INLAY_HINTS_PARAMETERS", "true", "Whether inlay hints name the parameters before arguments.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Parameter names", "Inlay hints") },
+        new("CRAFT_INLAY_HINTS_TYPES", "true", "Whether inlay hints show inferred types (after var, before implicit lambda parameters).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Inferred types", "Inlay hints") },
+        new("CRAFT_INLAY_HINTS_DELAY_MS", "250", "Milliseconds without a change or a scroll before the lines on screen are asked for inlay hints (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.Editor, "Inlay hints follow after", 0, 60_000, "ms", "Inlay hints", step: 50) },
+        new("CRAFT_CODE_LENS", "true", "Whether members show code lenses on a row above them (references, Run test); a click runs one.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Code lens", "Code lens") },
+        new("CRAFT_CODE_LENS_DELAY_MS", "500", "Milliseconds without a change or a scroll before the members on screen are asked for code lenses (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.Editor, "Code lenses follow after", 0, 60_000, "ms", "Code lens", step: 50) },
+        new("CRAFT_LINKED_EDITING", "true", "Whether editing a markup start tag's name (XML, XAML, MSBuild, Razor) edits its end tag's too, in the same undo step.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Rename the matching tag", "Editing") },
+        new("CRAFT_OUTLINE_SORT", "position", "How the Outline view orders symbols: position, name or kind.") { Shape = SettingShape.Choice(SettingSections.Editor, "Outline order", ["position", "name", "kind"], "Navigation") },
+        new("CRAFT_OUTLINE_FOLLOW_CARET", "true", "Whether the Outline view highlights and reveals the symbol at the caret.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Outline follows the caret", "Navigation") },
+        new("CRAFT_HIERARCHY_LIMIT", "500", "The most items one level of a call or type hierarchy lists.") { Shape = SettingShape.Whole(SettingSections.Editor, "Hierarchy lists at most a level", 1, 1_000_000, "items", "Navigation") },
         new("CRAFT_COMPLETION_ALL_CARETS", "true", "Whether the completion list and ghost text work at several carets: asked at the primary caret, applied at every caret whose text before it matches (the rest left and said); off closes them while there are several carets.") { Shape = SettingShape.Toggle(SettingSections.Completion, "Complete at every matching caret", "Completion list") },
         // Phase X slice 3: inline, not modal; the welcome page.
         new("CRAFT_WELCOME_AT_START", "true", "Whether the welcome page (open a folder, a new file, the recent folders, the main shortcuts) opens at start when no folder is open; Help › Welcome opens it any time.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Show the welcome page at start", "Welcome") },
@@ -1232,6 +1289,67 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_COMPLETION_ALL_CARETS") is { } allCarets)
         {
             options = options with { CompletionAllCarets = Flag(allCarets, "CRAFT_COMPLETION_ALL_CARETS") };
+        }
+
+        // X part 9.
+        if (Text(read, "CRAFT_SNIPPETS") is { } snippets)
+        {
+            options = options with { Snippets = Flag(snippets, "CRAFT_SNIPPETS") };
+        }
+
+        if (Text(read, "CRAFT_SNIPPETS_FOLDER") is { } snippetsFolder)
+        {
+            options = options with { SnippetsFolder = snippetsFolder };
+        }
+
+        if (Text(read, "CRAFT_INLAY_HINTS") is { } inlay)
+        {
+            options = options with { InlayHints = OneOf(inlay, "CRAFT_INLAY_HINTS", "on", "off", "ctrl-held") };
+        }
+
+        if (Text(read, "CRAFT_INLAY_HINTS_PARAMETERS") is { } inlayParameters)
+        {
+            options = options with { InlayHintsParameters = Flag(inlayParameters, "CRAFT_INLAY_HINTS_PARAMETERS") };
+        }
+
+        if (Text(read, "CRAFT_INLAY_HINTS_TYPES") is { } inlayTypes)
+        {
+            options = options with { InlayHintsTypes = Flag(inlayTypes, "CRAFT_INLAY_HINTS_TYPES") };
+        }
+
+        if (Text(read, "CRAFT_INLAY_HINTS_DELAY_MS") is { } inlayDelay)
+        {
+            options = options with { InlayHintsDelayMilliseconds = Whole(inlayDelay, "CRAFT_INLAY_HINTS_DELAY_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_CODE_LENS") is { } lens)
+        {
+            options = options with { CodeLens = Flag(lens, "CRAFT_CODE_LENS") };
+        }
+
+        if (Text(read, "CRAFT_CODE_LENS_DELAY_MS") is { } lensDelay)
+        {
+            options = options with { CodeLensDelayMilliseconds = Whole(lensDelay, "CRAFT_CODE_LENS_DELAY_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_LINKED_EDITING") is { } linked)
+        {
+            options = options with { LinkedEditing = Flag(linked, "CRAFT_LINKED_EDITING") };
+        }
+
+        if (Text(read, "CRAFT_OUTLINE_SORT") is { } outlineSort)
+        {
+            options = options with { OutlineSort = OneOf(outlineSort, "CRAFT_OUTLINE_SORT", "position", "name", "kind") };
+        }
+
+        if (Text(read, "CRAFT_OUTLINE_FOLLOW_CARET") is { } outlineFollow)
+        {
+            options = options with { OutlineFollowCaret = Flag(outlineFollow, "CRAFT_OUTLINE_FOLLOW_CARET") };
+        }
+
+        if (Text(read, "CRAFT_HIERARCHY_LIMIT") is { } hierarchyLimit)
+        {
+            options = options with { HierarchyLimit = Whole(hierarchyLimit, "CRAFT_HIERARCHY_LIMIT", 1, 1_000_000) };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)

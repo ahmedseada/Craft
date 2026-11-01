@@ -449,6 +449,117 @@ public interface ISemanticLanguageSession : IFormattingLanguageSession
     /// </summary>
     Task<WorkspaceEdit> RenameAsync(ITextSnapshot snapshot, int position, string newName, CancellationToken cancellationToken) =>
         Task.FromResult(WorkspaceEdit.Refused("This language cannot rename symbols."));
+
+    /// <summary>
+    /// The inlay hints of the range <paramref name="start"/> to <paramref name="start"/> + <paramref name="length"/> of
+    /// <paramref name="snapshot"/> (the editor asks for the lines on screen only): parameter names before arguments,
+    /// inferred types after <c>var</c> and implicit lambda parameters, in order of position. Off the calling thread; none
+    /// by default (X part 9, contract 1.1).
+    /// </summary>
+    Task<IReadOnlyList<InlayHint>> InlayHintsAsync(ITextSnapshot snapshot, int start, int length, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<InlayHint>>([]);
+
+    /// <summary>
+    /// The symbol at <paramref name="position"/> of <paramref name="snapshot"/> as the root of a call hierarchy (a method,
+    /// constructor, property or event) or a type hierarchy (a type), or null when there is none there or the language
+    /// cannot tell (the default). Off the calling thread (X part 9, contract 1.1).
+    /// </summary>
+    Task<HierarchyItem?> PrepareHierarchyAsync(ITextSnapshot snapshot, int position, HierarchyKind kind, CancellationToken cancellationToken) =>
+        Task.FromResult<HierarchyItem?>(null);
+
+    /// <summary>
+    /// The items one step from <paramref name="item"/> in <paramref name="direction"/>: its callers (each with the places
+    /// it calls from), the members it calls, its base types and interfaces, or the types derived from it, across the
+    /// session's workspace. Asked lazily, one level a time, as the user expands. Off the calling thread; none by default.
+    /// </summary>
+    Task<IReadOnlyList<HierarchyItem>> HierarchyAsync(HierarchyItem item, HierarchyDirection direction, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<HierarchyItem>>([]);
+}
+
+/// <summary>What an inlay hint shows.</summary>
+public enum InlayHintKind
+{
+    /// <summary>A parameter's name before its argument ("count:").</summary>
+    Parameter,
+
+    /// <summary>An inferred type (after <c>var x</c>, before an implicit lambda parameter).</summary>
+    Type,
+
+    /// <summary>Anything else a language shows.</summary>
+    Other,
+}
+
+/// <summary>
+/// A hint drawn inside the text (X part 9), faded, that is not part of it: the caret, the selection and the columns do not
+/// count it; the text after it is only drawn further right.
+/// </summary>
+/// <param name="Position">Where it is drawn (before the character at this position).</param>
+/// <param name="Label">What it shows ("count:", ": int").</param>
+/// <param name="Kind">What it is (the settings turn kinds on and off).</param>
+public sealed record InlayHint(int Position, string Label, InlayHintKind Kind)
+{
+    /// <summary>A space before the label.</summary>
+    public bool PaddingLeft { get; init; }
+
+    /// <summary>A space after the label.</summary>
+    public bool PaddingRight { get; init; }
+
+    /// <summary>What hovering shows, or null.</summary>
+    public string? Tooltip { get; init; }
+
+    /// <summary>The cells it takes on screen (its label and paddings).</summary>
+    public int Cells => Label.Length + (PaddingLeft ? 1 : 0) + (PaddingRight ? 1 : 0);
+}
+
+/// <summary>Which hierarchy is asked for.</summary>
+public enum HierarchyKind
+{
+    /// <summary>Calls: who calls a member, and what it calls.</summary>
+    Call,
+
+    /// <summary>Types: a type's bases and the types derived from it.</summary>
+    Type,
+}
+
+/// <summary>Which way a hierarchy is walked from an item.</summary>
+public enum HierarchyDirection
+{
+    /// <summary>The members that call it.</summary>
+    Incoming,
+
+    /// <summary>The members it calls.</summary>
+    Outgoing,
+
+    /// <summary>Its base type and interfaces.</summary>
+    Supertypes,
+
+    /// <summary>The types derived from it (and implementing it).</summary>
+    Subtypes,
+}
+
+/// <summary>
+/// One symbol of a call or type hierarchy (X part 9): its name, what it is, where it is declared and, for a call, the
+/// places of the calls that link it to its parent. Immutable; any thread.
+/// </summary>
+/// <param name="Name">Its name as shown ("Parse(string)").</param>
+/// <param name="Kind">What it is (an outline kind: a method, a type).</param>
+/// <param name="Detail">Its container ("App.Program"), quieter, or null.</param>
+/// <param name="FilePath">Its file, or null for a symbol only in metadata (it cannot be opened, nor expanded below).</param>
+/// <param name="Line">The line of its name, from 1 (0 for metadata).</param>
+/// <param name="Column">The column of its name, from 1.</param>
+public sealed record HierarchyItem(string Name, ScopeKind Kind, string? Detail, string? FilePath, int Line, int Column)
+{
+    /// <summary>The language's own handle on the symbol (what it walks on from); the editor never reads it.</summary>
+    public string? Data { get; init; }
+
+    /// <summary>For a call: the places of the calls (in the caller for incoming, in this member for outgoing), each a line and column from 1.</summary>
+    public IReadOnlyList<(int Line, int Column)> Calls { get; init; } = [];
+
+    /// <summary>For a call: the file the <see cref="Calls"/> are in (the caller's for incoming, the root's for outgoing), or null.</summary>
+    public string? CallsFile { get; init; }
+
+    /// <summary>Whether it is only in metadata (a referenced assembly's).</summary>
+    public bool IsMetadata => FilePath is null;
 }
 
 /// <summary>What a rename would rename (<see cref="ISemanticLanguageSession.PrepareRenameAsync"/>): the name's place and text, or why not.</summary>

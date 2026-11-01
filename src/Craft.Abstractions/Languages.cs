@@ -127,7 +127,34 @@ public interface ILanguageSession : IDisposable
     /// </summary>
     Task<IReadOnlyList<DocumentSymbol>> GetDocumentSymbolsAsync(ITextSnapshot snapshot, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<DocumentSymbol>>([]);
+
+    /// <summary>
+    /// The ranges that are edited together with the one at <paramref name="position"/> of <paramref name="snapshot"/> (X
+    /// part 9: a markup start tag's name and its end tag's), the one holding the position first, or null when there are none
+    /// there (the default). Asked on the UI thread before a keystroke in such a range, so it answers from what the session
+    /// holds (its tokenizer's line states), looking at most <paramref name="maxLines"/> lines away (contract 1.1).
+    /// </summary>
+    LinkedEditingRanges? GetLinkedEditingRanges(ITextSnapshot snapshot, int position, int maxLines) => null;
 }
+
+/// <summary>A range of a document's text: where it starts and its characters.</summary>
+/// <param name="Start">Its first character.</param>
+/// <param name="Length">Its characters.</param>
+public readonly record struct TextRange(int Start, int Length)
+{
+    /// <summary>The position after it.</summary>
+    public int End => Start + Length;
+
+    /// <summary>Whether <paramref name="position"/> is in it, its ends included (a caret just after a name).</summary>
+    public bool Touches(int position) => position >= Start && position <= End;
+}
+
+/// <summary>
+/// Ranges edited together (<see cref="ILanguageSession.GetLinkedEditingRanges"/>): typing in one types the same in each,
+/// in one undo step, while what is typed is a name's characters.
+/// </summary>
+/// <param name="Ranges">The ranges, the one asked about first; each holds the same text.</param>
+public sealed record LinkedEditingRanges(IReadOnlyList<TextRange> Ranges);
 
 /// <summary>
 /// A language session that formats its document (Format document, Shift+Alt+F, and format on save), with or without a

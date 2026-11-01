@@ -148,6 +148,27 @@ public sealed class DotnetRunProvider : IRunProvider
         return new RunCommand(command, folder) { Environment = environment };
     }
 
+    /// <inheritdoc />
+    /// <remarks>X part 9 (a code lens's Run test): <c>dotnet test PROJECT -nologo --filter FullyQualifiedName=NAME</c> for a test project's target.</remarks>
+    public RunCommand? TestCommand(RunTarget target, string testName, string root)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentException.ThrowIfNullOrWhiteSpace(testName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        if ((target.Actions & RunActions.Test) == 0 || !target.File.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var command = Command(target, RunActions.Test, null, root);
+        if (command.Problem is not null || command.Command.Count == 0)
+        {
+            return command;
+        }
+
+        return command with { Command = [.. command.Command, "--filter", "FullyQualifiedName=" + testName] };
+    }
+
     /// <summary>The framework a multi-targeted project runs here: one for this system (net10.0-windows… on Windows), else one for none, else the first.</summary>
     public static string FrameworkFor(IReadOnlyList<string> frameworks)
     {

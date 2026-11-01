@@ -47,6 +47,7 @@ public sealed partial class ShellModel
         Run = new RunView(Host, () => Workspace?.Root, () => Options);
         _searchPanel = Host.AddPanel(Search);
         _runPanel = Host.AddPanel(Run);
+        CreateOutline();
         WorkspaceChanged += OnViewsWorkspaceChanged;
         if (Workspace is not null)
         {
@@ -58,6 +59,7 @@ public sealed partial class ShellModel
     {
         Search.WorkspaceChanged();
         Run.WorkspaceChanged();
+        OutlineWorkspaceChanged();
     }
 
     // The views' commands, keys (the same as Visual Studio's and VS Code's, so both keymaps have them) and rail items.
@@ -82,6 +84,7 @@ public sealed partial class ShellModel
         Menu(EditorMenus.Edit, SearchCommands.Show, 5, 0);
         Menu(EditorMenus.Edit, SearchCommands.Replace, 5, 1);
         Rail(new RailItem(RunView.PanelId, "Run", SideViewCommand(RunView.PanelId), RailIcons.Run, 15));
+        RegisterOutlineCommands();
     }
 
     private void DisposeViews()
@@ -91,5 +94,6 @@ public sealed partial class ShellModel
         _runPanel?.Dispose();
         Search?.Dispose();
         Run?.Dispose();
+        DisposeOutline();
     }
 }

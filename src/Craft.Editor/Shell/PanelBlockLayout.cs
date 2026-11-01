@@ -144,7 +144,8 @@ public static class PanelBlockLayout
             foreach (var row in group.Rows)
             {
                 var text = new StringBuilder("R").Append(row.Text).Append('\u0001').Append(row.Prefix).Append('\u0001').Append(row.Detail).Append('\u0001')
-                    .Append(row.Badge).Append('\u0001').Append(row.Tone).Append(row.Value).Append(row.Icon is null ? "" : "i");
+                    .Append(row.Badge).Append('\u0001').Append(row.Tone).Append(row.Value).Append(row.Icon is null ? "" : "i")
+                    .Append('\u0001').Append(row.Depth).Append(row.Expanded switch { true => "+", false => "-", _ => "" }).Append(row.Selected ? "*" : "");
                 foreach (var span in row.Highlights)
                 {
                     text.Append('\u0002').Append(span.Start).Append(',').Append(span.Length).Append(span.Replacement is null ? "" : "=" + span.Replacement);

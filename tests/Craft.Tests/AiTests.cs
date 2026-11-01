@@ -359,6 +359,9 @@ public static class AiTests
             ["agentNudges"] = "5", ["agentCallsInText"] = "false", ["chatImageMaxMb"] = "7",
             // X part 11 item 1: speculative decoding's draft per role.
             ["draftModel"] = "store:small", ["draftTokens"] = "6", ["agentDraftModel"] = "off", ["agentDraftTokens"] = "2",
+            // X part 9 item 23 and X part 11 items 4 and 5: the inline chat, Review changes, Fix with AI.
+            ["inlineChat"] = "false", ["inlineChatContextLines"] = "12", ["inlineChatMaxTokens"] = "256", ["reviewModel"] = "loaded", ["reviewPrompt"] = "Be strict.",
+            ["reviewMaxTokens"] = "700", ["buildFix"] = "false", ["buildFixContextLines"] = "3",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -380,6 +383,11 @@ public static class AiTests
             AgentEnabled: false, AgentModel: "store:agent", AgentDevice: "vulkan:0", AgentWeights: "bfloat16", AgentContext: 8192, AgentKeepAliveMinutes: 3,
         } && Math.Abs(settings.ChatTemperature - 0.3f) < 1e-6 && settings.AgentTemperature is { } agentTemperature && Math.Abs(agentTemperature - 0.1f) < 1e-6,
             "each role's own set is read (note 25)");
+        Check.True(settings is
+        {
+            InlineChat: false, InlineChatContextLines: 12, InlineChatMaxTokens: 256, ReviewModel: "loaded", ReviewPrompt: "Be strict.", ReviewMaxTokens: 700,
+            BuildFix: false, BuildFixContextLines: 3,
+        }, "the inline chat's, the review's and the build fix's settings are read (CRAFT_PLUGIN_AI_INLINECHAT, _REVIEWMODEL, _BUILDFIX)");
         var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "threads" ? "many" : null), "a bad value");
         Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_THREADS", StringComparison.Ordinal), "the error names the variable");
     }

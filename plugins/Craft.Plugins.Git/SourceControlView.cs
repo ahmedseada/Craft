@@ -62,6 +62,30 @@ public sealed record SourceControlViewState
 
     /// <summary>What the last action that failed said, or null.</summary>
     public string? Error { get; init; }
+
+    /// <summary>The last review's findings (X part 11 item 4), in the order they came.</summary>
+    public IReadOnlyList<ReviewItem> Findings { get; init; } = [];
+
+    /// <summary>Whether a review runs now.</summary>
+    public bool Reviewing { get; init; }
+
+    /// <summary>Whether a review ran (its findings, or "no findings", are shown until cleared).</summary>
+    public bool Reviewed { get; init; }
+
+    /// <summary>The line under the findings (the model, how the changes were chosen, why none could review), or null.</summary>
+    public string? ReviewStatus { get; init; }
+
+    /// <summary>The review line's colour role.</summary>
+    public PanelTone ReviewTone { get; init; }
+
+    /// <summary>The command that loads the review's model, when the user is offered to load it, or null.</summary>
+    public string? ReviewLoadCommand { get; init; }
+
+    /// <summary>What the Review button's tooltip says (the model it will use, or why none).</summary>
+    public string ReviewTooltip { get; init; } = "Review changes";
+
+    /// <summary>Whether a code review provider is registered (the AI plug-in).</summary>
+    public bool CanReview { get; init; } = true;
 }
 
 /// <summary>
@@ -78,6 +102,9 @@ public static class SourceControlView
 
     /// <summary>A sparkle (the design's Agent icon): Generate commit message.</summary>
     public const string SparkleIcon = RailIcons.Agent;
+
+    /// <summary>A checked box: review the changes (X part 11).</summary>
+    public const string ReviewIcon = "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11";
 
     /// <summary>A plus: stage.</summary>
     public const string StageIcon = "M12 5v14M5 12h14";
@@ -140,6 +167,14 @@ public static class SourceControlView
     public const string Init = "init";
     public const string OpenFolder = "openFolder";
     public const string Dismiss = "dismiss";
+    public const string Review = "review";
+    public const string StopReview = "stopReview";
+    public const string LoadReviewModel = "loadReviewModel";
+    public const string OpenFinding = "openFinding";
+    public const string ApplyFix = "applyFix";
+    public const string DismissFinding = "dismissFinding";
+    public const string CopyFindings = "copyFindings";
+    public const string ClearFindings = "clearFindings";
 #pragma warning restore CS1591
 
     /// <summary>The blocks of <paramref name="state"/>.</summary>
@@ -210,6 +245,7 @@ public static class SourceControlView
             },
         ]));
         blocks.Add(new PanelSwitch(Amend, "Amend the last commit", state.Amend) { Detail = state.Amend ? "The next commit replaces the last one, with this message." : null });
+        AddReview(blocks, state);
         blocks.Add(SyncButtons(state));
         if (state.Working is { } working)
         {
@@ -258,18 +294,96 @@ public static class SourceControlView
                 Menu = [.. state.Models.Where(m => m.Loaded).Select(m => new PanelOption(m.Value, m.Title))],
                 MenuActionId = PickModel,
             };
+        PanelIconButton review = state.Reviewing
+            ? new PanelIconButton(StopIcon, StopReview, "Stop the review (its findings so far stay)") { Tone = PanelTone.Error }
+            : new PanelIconButton(ReviewIcon, Review, state.ReviewTooltip)
+            {
+                Enabled = state.CanReview && state.Working is null && state.Status.Count > 0,
+                Tone = PanelTone.Accent,
+            };
         return new PanelMessageBox(Message, state.Message)
         {
             Placeholder = $"Message (Ctrl+Enter to commit{branch})",
             Version = state.MessageVersion,
             SubmitActionId = Commit,
-            Actions = [action],
+            Actions = [action, review],
             Busy = state.Generating,
             Status = state.MessageStatus,
             StatusTone = state.MessageTone,
             Variable = state.MessageStatus is null ? null : "CRAFT_PLUGIN_GIT_COMMITMODEL",
         };
     }
+
+    // X part 11 item 4: the review's state, its findings by file (each with Apply fix and Dismiss), Copy all and Clear.
+    private static void AddReview(List<PanelBlock> blocks, SourceControlViewState state)
+    {
+        if (state.Reviewing)
+        {
+            blocks.Add(new PanelMeter(state.ReviewStatus ?? "Reviewing the changes…", -1) { Detail = state.Findings.Count > 0 ? Findings(state.Findings.Count) + " so far" : null });
+        }
+        else if (state.ReviewStatus is { } status)
+        {
+            blocks.Add(new PanelText(status, PanelTextStyle.Caption) { Tone = state.ReviewTone, Variable = "CRAFT_PLUGIN_AI_REVIEWMODEL" });
+        }
+
+        if (state.ReviewLoadCommand is not null)
+        {
+            blocks.Add(new PanelButtons([new PanelButton("Load the model", LoadReviewModel) { Tooltip = "Loads the review's model (its progress and Cancel in the status bar); review once it is loaded" }]));
+        }
+
+        if (state.Findings.Count == 0)
+        {
+            return;
+        }
+
+        var groups = new List<PanelResultGroup>();
+        foreach (var file in state.Findings.GroupBy(f => f.Finding.Path, StringComparer.Ordinal))
+        {
+            var rows = new List<PanelResultRow>();
+            foreach (var item in file.OrderBy(i => i.Finding.Line))
+            {
+                var finding = item.Finding;
+                rows.Add(new PanelResultRow("finding:" + item.Id, finding.Message)
+                {
+                    Prefix = finding.Line > 0 ? "L" + finding.Line.ToString(CultureInfo.InvariantCulture) : null,
+                    Detail = finding.Reason.Length > 0 ? finding.Reason : null,
+                    Badge = ReviewFinding.SeverityWord(finding.Severity),
+                    Tone = finding.Severity switch
+                    {
+                        DiagnosticSeverity.Error => PanelTone.Error,
+                        DiagnosticSeverity.Warning => PanelTone.Warning,
+                        _ => PanelTone.Accent,
+                    },
+                    ActionId = OpenFinding,
+                    Value = item.Id,
+                    Buttons =
+                    [
+                        new PanelButton("Apply fix", ApplyFix, PanelButtonKind.Flat) { Value = item.Id, Tooltip = "The model's fix of this finding, as a diff you accept" },
+                        new PanelButton("Dismiss", DismissFinding, PanelButtonKind.Flat) { Value = item.Id, Tooltip = "Drop this finding" },
+                    ],
+                });
+            }
+
+            var icon = FileIcons.For(file.Key);
+            groups.Add(new PanelResultGroup("review:" + file.Key, Path.GetFileName(file.Key), rows)
+            {
+                Detail = Path.GetDirectoryName(file.Key)?.Replace('\\', '/') is { Length: > 0 } folder ? folder : null,
+                Badge = rows.Count.ToString(CultureInfo.InvariantCulture),
+                Glyph = icon.Badge,
+                GlyphArgb = icon.Argb,
+                Tooltip = file.Key,
+            });
+        }
+
+        blocks.Add(new PanelText($"Review · {Findings(state.Findings.Count)}", PanelTextStyle.Heading));
+        blocks.Add(new PanelResults("review", groups) { Version = state.Findings.Count });
+        blocks.Add(new PanelButtons([
+            new PanelButton("Copy all", CopyFindings, PanelButtonKind.Flat) { Tooltip = "Copies every finding, one a line (path:line: severity: message — reason)" },
+            new PanelButton("Clear", ClearFindings, PanelButtonKind.Flat) { Enabled = !state.Reviewing, Tooltip = "Drops the findings and their notes in the editor" },
+        ]));
+    }
+
+    private static string Findings(int count) => count == 1 ? "1 finding" : string.Create(CultureInfo.InvariantCulture, $"{count} findings");
 
     private static PanelButtons SyncButtons(SourceControlViewState state)
     {

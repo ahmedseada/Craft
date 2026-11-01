@@ -51,6 +51,14 @@ sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstracti
   const System.String PanelId = ai.agent
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
   static System.Threading.Tasks.Task DiscardsDone()
+sealed class Craft.Ai.AiBuildFix : Craft.Abstractions.IBuildFixProvider, Idrak.Abstraction.IKind
+  System.Boolean Offers(Craft.Abstractions.BuildFixRequest request)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.BuildFixResult> FixAsync(Craft.Abstractions.BuildFixRequest request, System.Threading.CancellationToken cancellationToken)
+  const System.String ProviderName = ai
+  ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiCodeActions actions, Craft.Ai.AiAgentPanel agent)
+  static System.String Task(Craft.Abstractions.BuildFixRequest request, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunProblem> errors, System.Func<System.String, System.String> textOf, System.Int32 contextLines)
 sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationHistory, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, System.IDisposable
   Craft.Abstractions.ConversationCapabilities Capabilities { get; }
   Craft.Abstractions.ConversationEntry CodeEntry(System.String code, System.String language)
@@ -90,11 +98,22 @@ sealed class Craft.Ai.AiCodeActions : Craft.Abstractions.ICodeActionProvider, Id
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeAction> ActionsFor(Craft.Abstractions.CodeActionContext context)
   System.String Name { get; }
   System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Boolean> FixProblemAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.EditorDiagnostic diagnostic, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<System.Boolean> RunAsync(System.String kind, System.Threading.CancellationToken cancellationToken)
   const System.String ProviderName = ai
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models, Craft.Ai.AiChatPanel chat)
   static Craft.Abstractions.CodeActionContext AtSelection(Craft.Abstractions.IEditorHost host)
   static System.String FirstBlock(System.String reply)
+sealed class Craft.Ai.AiCodeReview : Craft.Abstractions.ICodeReviewProvider, Idrak.Abstraction.IKind
+  Craft.Abstractions.CodeReviewPlan Plan()
+  System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.ReviewFinding> ReviewAsync(Craft.Abstractions.CodeReviewRequest request, System.Threading.CancellationToken cancellationToken)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String DefaultPrompt = You review code changes before they are committed. Look for bugs, crashes, security problems, leaks, wrong edge cases and code that does not do what it seems to; mention style only when it hides a problem. For each finding write one line, exactly: PATH:LINE: SEVERITY: MESSAGE — REASON, where PATH is the file as the diff names it, LINE the number shown before the changed line, SEVERITY one of error (a bug), warning (a risk) or info (a suggestion), MESSAGE what is wrong in a few words and REASON why it matters. Write nothing else. When there is nothing to report, write: No findings.
+  const System.String ProviderName = ai
+  ctor(System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
+  static Craft.Abstractions.ReviewFinding Parse(System.ReadOnlySpan<System.Char> line)
+  static System.String Prompt(Craft.Abstractions.CodeReviewRequest request)
 sealed class Craft.Ai.AiCommitMessages : Craft.Abstractions.ICommitMessageProvider, Idrak.Abstraction.IKind
   Craft.Abstractions.CommitModelPlan Plan(System.String choice)
   System.Collections.Generic.IAsyncEnumerable<System.String> WriteAsync(Craft.Abstractions.CommitMessageRequest request, System.Threading.CancellationToken cancellationToken)
@@ -107,6 +126,15 @@ sealed class Craft.Ai.AiCommitMessages : Craft.Abstractions.ICommitMessageProvid
 static class Craft.Ai.AiErrors
   static System.Boolean IsOutOfMemory(System.Exception error)
   static System.String Describe(System.Exception error, Craft.Ai.AiSettings settings, System.Boolean forCompletion = false)
+sealed class Craft.Ai.AiInlineChat : Craft.Abstractions.IInlineChatProvider, Idrak.Abstraction.IKind
+  Craft.Abstractions.InlineChatPlan Plan()
+  System.Collections.Generic.IAsyncEnumerable<System.String> EditAsync(Craft.Abstractions.InlineChatRequest request, System.Threading.CancellationToken cancellationToken)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String ProviderName = ai
+  const System.String SystemPrompt = You edit code inside a code editor. You are given some lines of a file and what the user wants done with them. Reply with the complete replacement of those lines only, in one fenced code block, keeping their indentation and the file's style; write new code there when asked. No explanation before or after the block.
+  ctor(System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> load)
+  static System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ChatMessage> Messages(Craft.Abstractions.InlineChatRequest request, System.Int32 contextLines)
 sealed class Craft.Ai.AiInlineCompletion : Craft.Abstractions.IInlineCompletionProvider, Idrak.Abstraction.IKind
   Craft.Abstractions.IEditorActivities Activities { get; set; }
   Craft.Ai.CompletionMode Mode { get; }
@@ -216,9 +244,12 @@ sealed class Craft.Ai.AiRoleSettings : System.IEquatable<Craft.Ai.AiRoleSettings
   ctor(System.String Key, System.Boolean Enabled, System.String Model, System.String Device, System.Int32 Context, System.String Weights, System.Int32 KeepAliveMinutes, System.Single Temperature, System.Int32 MaxTokens)
 sealed class Craft.Ai.AiSession : System.IDisposable
   Craft.Ai.AiAgentPanel Agent { get; }
+  Craft.Ai.AiBuildFix BuildFix { get; }
   Craft.Ai.AiChatPanel Chat { get; }
   Craft.Ai.AiCodeActions Actions { get; }
+  Craft.Ai.AiCodeReview Review { get; }
   Craft.Ai.AiCommitMessages CommitMessages { get; }
+  Craft.Ai.AiInlineChat InlineChat { get; }
   Craft.Ai.AiInlineCompletion Completion { get; }
   Craft.Ai.AiModels Models { get; }
   Craft.Ai.AiSettings Settings { get; }
@@ -246,12 +277,14 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Boolean AgentCallsInText { get; init; }
   System.Boolean AgentEnabled { get; init; }
   System.Boolean AgentSaveOnAccept { get; init; }
+  System.Boolean BuildFix { get; init; }
   System.Boolean ChatEnabled { get; init; }
   System.Boolean ChatKeep { get; init; }
   System.Boolean Completion { get; init; }
   System.Boolean CompletionLoad { get; init; }
   System.Boolean Equals(Craft.Ai.AiSettings other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean InlineChat { get; init; }
   System.Boolean LoadOnStart { get; init; }
   System.Boolean McpOnStart { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentChangesIgnore { get; init; }
@@ -264,6 +297,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Int32 AgentMaxTurns { get; init; }
   System.Int32 AgentMinutes { get; init; }
   System.Int32 AgentNudges { get; init; }
+  System.Int32 BuildFixContextLines { get; init; }
   System.Int32 ChatFileLines { get; init; }
   System.Int32 ChatHistory { get; init; }
   System.Int32 ChatImageMaxMegabytes { get; init; }
@@ -278,7 +312,10 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Int32 Context { get; init; }
   System.Int32 DraftTokens { get; init; }
   System.Int32 GetHashCode()
+  System.Int32 InlineChatContextLines { get; init; }
+  System.Int32 InlineChatMaxTokens { get; init; }
   System.Int32 KeepAliveMinutes { get; init; }
+  System.Int32 ReviewMaxTokens { get; init; }
   System.Int32 Threads { get; init; }
   System.Int32? AgentContext { get; init; }
   System.Int32? AgentDraftTokens { get; init; }
@@ -307,6 +344,8 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.String Model { get; init; }
   System.String ModelProvider { get; init; }
   System.String Placement { get; init; }
+  System.String ReviewModel { get; init; }
+  System.String ReviewPrompt { get; init; }
   System.String ToString()
   System.String Weights { get; init; }
   const System.String DefaultCompletionModel = Qwen/Qwen2.5-Coder-1.5B

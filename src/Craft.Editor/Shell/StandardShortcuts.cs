@@ -107,6 +107,8 @@ public static class StandardShortcuts
     /// <summary>Edit: Trim the trailing white space (one undo step).</summary>
     public const string TrimTrailingWhitespace = "craft.editor.trimTrailingWhitespace";
 
+    /// <summary>Edit: Inline chat (Ctrl+I, X part 9 item 23): a box at the caret or over the selection, the answer a ghost diff to accept.</summary>
+    public const string InlineChat = "craft.editor.inlineChat";
     /// <summary>Edit: Format the selection's lines (Ctrl+K Ctrl+F, in VS Code and Visual Studio alike).</summary>
     public const string FormatSelection = "craft.editor.formatSelection";
 
@@ -146,6 +148,7 @@ public static class StandardShortcuts
         (UnfoldAll, "Fold: Unfold all", static m => m.Folding.UnfoldAll() || true, true),
         (ToggleWordWrap, "View: Toggle word wrap", static m => m.ToggleWordWrap(), false),
         (TrimTrailingWhitespace, "Edit: Trim trailing white space", static m => m.TrimTrailingWhitespace() || true, false),
+        (InlineChat, "Edit: Inline chat (ask the model to edit here)", static m => m.OpenInlineChat(), true),
         (FormatSelection, "Edit: Format selection", static m => m.FormatSelection(), true),
     ];
 
@@ -183,6 +186,7 @@ public static class StandardShortcuts
         Editor("Ctrl+K Ctrl+0", FoldAll),
         Editor("Ctrl+K Ctrl+J", UnfoldAll),
         Editor("Alt+Z", ToggleWordWrap),
+        Editor("Ctrl+I", InlineChat),
         Anywhere("Ctrl+.", QuickFix),
         Anywhere("F1", ShellCommandIds.CommandPalette),
         Anywhere("Ctrl+F4", ShellCommandIds.CloseTab),

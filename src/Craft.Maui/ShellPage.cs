@@ -1141,6 +1141,21 @@ public sealed class ShellPage : ContentPage, IDisposable
     // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
     private void OnCodeActionRequested(ProblemItem item, string kind)
     {
+        // X part 11 item 5: a build's or test's row: Fix with AI fixes its one error (a diff to accept; Run again in the
+        // Run view); Explain opens its file first, then explains it there.
+        if (item.Group.Owner is Craft.Editor.Run.RunProblemFile built)
+        {
+            if (kind == CodeActionKinds.Fix)
+            {
+                _ = FixBuildProblemAsync(built, item.Diagnostic);
+            }
+            else
+            {
+                _ = OpenRunProblemAsync(built.Path, item.Line, item.Column);
+            }
+            return;
+        }
+
         if (item.Group.Owner is ClosedProblemFile closed)
         {
             // W: a closed file's row has no text to act on: the file opens at its place, its problems then on its text.
@@ -1180,6 +1195,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         _ = RunCodeActionAsync(action);
+    }
+
+    private async Task FixBuildProblemAsync(Craft.Editor.Run.RunProblemFile file, EditorDiagnostic diagnostic)
+    {
+        if (await _shell.Run.FixProblemAsync(file, diagnostic) is null && !_shell.Run.IsFixing)
+        {
+            _status.Notice.Text = "No plug-in offers to fix this build problem (the AI plug-in's Fix with AI).";
+        }
     }
 
     private async Task RunCodeActionAsync(CodeAction action)

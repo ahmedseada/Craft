@@ -25,6 +25,12 @@ public sealed partial class EditorModel
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
         bool control = (modifiers & KeyModifiers.Control) != 0;
         bool alt = (modifiers & KeyModifiers.Alt) != 0;
+        if (InlineChatKey(key, modifiers))
+        {
+            NoteInput();
+            return true;
+        }
+
         if (!Completion.IsOpen && CompletesHere && InlineCompletion.HandleKey(key, modifiers))
         {
             NoteInput();
@@ -84,6 +90,12 @@ public sealed partial class EditorModel
         if (string.IsNullOrEmpty(text))
         {
             return;
+        }
+
+        if (InlineChatText(text))
+        {
+            NoteInput();
+            return;                                          // the inline chat's box has the keyboard
         }
 
         if (_readOnly)
@@ -154,6 +166,11 @@ public sealed partial class EditorModel
         NotePress(viewX, viewY, modifiers);
         NoteLinkPress(viewX, viewY, modifiers);
         InlineCompletion.Dismiss();
+        if (InlineChatPress(viewX, viewY))
+        {
+            _pointerDown = false;
+            return;
+        }
 
         if (PopupRowAt(viewX, viewY) is { } row)
         {

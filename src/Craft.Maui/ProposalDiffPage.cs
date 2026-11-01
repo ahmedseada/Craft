@@ -474,7 +474,17 @@ public sealed class ChangesDiffPage : ContentPage
 
     /// <summary>The view of <paramref name="diff"/> of <paramref name="path"/> under <paramref name="title"/>, in <paramref name="theme"/>'s colours.</summary>
     public ChangesDiffPage(string title, string path, TextDiff diff, ITheme theme)
+        : this(title, path, diff, theme, [])
     {
+    }
+
+    /// <summary>
+    /// The view of <paramref name="diff"/> with <paramref name="notes"/> (X part 11: a review's findings) as rows under
+    /// their new lines; a note on a line no hunk shows heads the list.
+    /// </summary>
+    public ChangesDiffPage(string title, string path, TextDiff diff, ITheme theme, IReadOnlyList<DiffNote> notes)
+    {
+        ArgumentNullException.ThrowIfNull(notes);
         ArgumentNullException.ThrowIfNull(diff);
         ArgumentNullException.ThrowIfNull(theme);
         var colors = theme.Colors;
@@ -514,7 +524,7 @@ public sealed class ChangesDiffPage : ContentPage
         var list = new CollectionView
         {
             IsGrouped = true,
-            ItemsSource = ProposalDiffPage.Groups(diff, null, colors),
+            ItemsSource = WithNotes(ProposalDiffPage.Groups(diff, null, colors), notes, colors),
             GroupHeaderTemplate = new DataTemplate(() =>
             {
                 var lines = new Label { FontSize = 12, TextColor = ThemeColors.Of(colors.SecondaryText), Padding = new Thickness(12, 6), BackgroundColor = ThemeColors.Of(colors.Surface) };
@@ -534,6 +544,72 @@ public sealed class ChangesDiffPage : ContentPage
 
     /// <summary>Completes when the user closed it.</summary>
     public Task Closed => _closed.Task;
+
+    /// <summary>
+    /// <paramref name="groups"/> with each note as a row under the row of its new line ("● warning · message — reason" on the
+    /// severity's tint); the notes no row shows go first, in a group of their own.
+    /// </summary>
+    public static List<DiffHunkGroup> WithNotes(List<DiffHunkGroup> groups, IReadOnlyList<DiffNote> notes, EditorColors colors)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(notes);
+        ArgumentNullException.ThrowIfNull(colors);
+        if (notes.Count == 0)
+        {
+            return groups;
+        }
+
+        var placed = new bool[notes.Count];
+        foreach (var group in groups)
+        {
+            for (int r = group.Count - 1; r >= 0; r--)
+            {
+                if (!int.TryParse(group[r].NewNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int line))
+                {
+                    continue;
+                }
+
+                for (int n = notes.Count - 1; n >= 0; n--)
+                {
+                    if (!placed[n] && notes[n].Line == line)
+                    {
+                        group.Insert(r + 1, NoteRow(notes[n], colors));
+                        placed[n] = true;
+                    }
+                }
+            }
+        }
+
+        var rest = new List<DiffRow>();
+        for (int n = 0; n < notes.Count; n++)
+        {
+            if (!placed[n])
+            {
+                rest.Add(NoteRow(notes[n], colors));
+            }
+        }
+
+        if (rest.Count > 0)
+        {
+            groups.Insert(0, new DiffHunkGroup(0, new DiffHunk(1, 0, 1, 0, []), null, rest, "Review notes", 0));
+        }
+
+        return groups;
+    }
+
+    private static DiffRow NoteRow(DiffNote note, EditorColors colors)
+    {
+        uint tone = note.Severity switch
+        {
+            DiagnosticSeverity.Error => colors.Error,
+            DiagnosticSeverity.Warning => colors.Warning,
+            _ => colors.Info,
+        };
+        string word = ReviewFinding.SeverityWord(note.Severity);
+        string text = note.Reason.Length > 0 ? $"{word} · {note.Text} — {note.Reason}" : $"{word} · {note.Text}";
+        string line = note.Line > 0 ? note.Line.ToString(CultureInfo.InvariantCulture) : "";
+        return new DiffRow("", line, "●", text, ThemeColors.Of(colors.PopupBackground), ThemeColors.Of(tone), ThemeColors.Of(tone));
+    }
 
     /// <summary>Closes it (a cancelled request).</summary>
     public void Close() => _closed.TrySetResult();

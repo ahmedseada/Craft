@@ -386,6 +386,19 @@ public interface IEditorHost
     Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) => Task.FromResult(false);
 
     /// <summary>
+    /// <see cref="ShowDiffAsync(string, string, string, string, CancellationToken)"/> with <paramref name="notes"/> under
+    /// their lines (X part 11 item 4: a review's findings on the changes). By default the diff alone.
+    /// </summary>
+    Task<bool> ShowDiffAsync(string title, string path, string before, string after, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken = default) =>
+        ShowDiffAsync(title, path, before, after, cancellationToken);
+
+    /// <summary>
+    /// Puts <paramref name="text"/> on the system's clipboard (a plug-in's Copy all: a review's findings); false when the
+    /// host reaches no clipboard (the default).
+    /// </summary>
+    bool CopyText(string text) => false;
+
+    /// <summary>
     /// Publishes <paramref name="items"/> as <paramref name="source"/>'s diagnostics of the file <paramref name="path"/> (W,
     /// contract 6: a linter's findings), in place of what that source published for it before; none takes them away. The
     /// items are in the lines and columns of <paramref name="snapshot"/> (the open document's text they were found in; the

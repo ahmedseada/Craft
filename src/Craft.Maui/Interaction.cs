@@ -1,9 +1,11 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using Craft.Abstractions;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Dispatching;
 using Microsoft.Maui.Graphics;
 
 namespace Craft.Maui;
@@ -352,15 +354,23 @@ public sealed class EmptyStateView : ContentView
 }
 
 /// <summary>
-/// The open menu (<see cref="MenuModel"/>: a title-bar menu or a context menu) drawn in the design's style: the raised
-/// card with the strong border and a shadow, each row its title and keys, a line between groups, the rows that cannot run
-/// faded, the pointer's or the keyboard's row on the selection's fill. A click runs the row; the keys are the model's.
+/// The open menu (<see cref="MenuModel"/>: a title-bar menu or a context menu) drawn in the design's style (X part 7): the
+/// raised card with the strong border and a soft shadow, rows on its surface with no box of their own (the pointer's or
+/// the keyboard's row on the selection's fill), each row its icon (a command's stroke icon, a file type's badge or the
+/// folder's), its title and its keys in effect or a chevron when it opens a submenu, a line between groups; a row that
+/// cannot run is faded and says why in its tooltip. The pointer resting on a row with a submenu opens it beside the card
+/// (<see cref="SubmenuShown"/>: the page places it) after <see cref="SubmenuDelayMilliseconds"/>; a click runs a row or
+/// opens its submenu. The keys are the model's (Right and Left open and close a submenu, typing jumps).
 /// </summary>
 public sealed class MenuView : ContentView
 {
+    private const double IconSize = 16;
     private readonly MenuModel _model;
-    private readonly List<(Grid Cell, InteractiveStates States)> _rows = [];
+    private readonly List<(Grid Cell, InteractiveStates? States)> _rows = [];
     private ShellPalette _palette;
+    private MenuView? _child;
+    private IDispatcherTimer? _hover;
+    private int _hoverRow = -1;
 
     /// <summary>The view of <paramref name="model"/>'s open menu.</summary>
     public MenuView(MenuModel model, ShellPalette palette)
@@ -368,7 +378,17 @@ public sealed class MenuView : ContentView
         _model = model ?? throw new ArgumentNullException(nameof(model));
         _palette = palette ?? throw new ArgumentNullException(nameof(palette));
         model.FocusMoved += (_, _) => MarkFocused();
+        model.SubmenuChanged += (_, _) => OnSubmenuChanged();
     }
+
+    /// <summary>How long the pointer rests on a row before its submenu opens or another closes (<c>CRAFT_MENU_SUBMENU_DELAY_MS</c>).</summary>
+    public int SubmenuDelayMilliseconds { get; set; } = 200;
+
+    /// <summary>Raised when the model's submenu opened: its card (drawn) and how far below this card's top its row is.</summary>
+    public event EventHandler<(MenuView Card, double OffsetY)>? SubmenuShown;
+
+    /// <summary>Raised when the submenu closed.</summary>
+    public event EventHandler? SubmenuHidden;
 
     /// <summary>Draws the menu open now (call after <see cref="MenuModel.Open"/>).</summary>
     public void Build(ShellPalette palette)
@@ -376,6 +396,7 @@ public sealed class MenuView : ContentView
         _palette = palette ?? throw new ArgumentNullException(nameof(palette));
         var p = palette;
         _rows.Clear();
+        StopHover();
         var stack = new VerticalStackLayout { Spacing = 0, Padding = new Thickness(4) };
         var rows = _model.Rows;
         if (rows.Count == 0)
@@ -386,37 +407,82 @@ public sealed class MenuView : ContentView
             stack.Children.Add(none);
         }
 
+        bool icons = rows.Any(r => r.Icon is not null);
         for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
             if (row.StartsGroup)
             {
                 var line = p.Line();
-                line.Margin = new Thickness(-4, 4);
+                line.Margin = new Thickness(6, 4);
                 stack.Children.Add(line);
             }
 
-            var cell = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 24, Padding = new Thickness(10, 0), MinimumHeightRequest = 28 };
-            var title = p.Label(row.Title);
-            cell.Add(title, 0, 0);
-            if (row.Chord is { } chord)
+            var cell = new Grid
             {
-                cell.Add(p.Label(chord, p.Secondary, p.SmallSize), 1, 0);
+                ColumnDefinitions = [new ColumnDefinition(icons ? new GridLength(IconSize + 10) : new GridLength(0)), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)],
+                ColumnSpacing = 0,
+                Padding = new Thickness(8, 0, 10, 0),
+                MinimumHeightRequest = 28,
+            };
+            var title = p.Label(row.Title, row.Enabled ? p.Text : p.Secondary);
+            title.VerticalOptions = LayoutOptions.Center;
+            title.LineBreakMode = LineBreakMode.TailTruncation;
+            if (IconOf(row.Icon, row.Enabled ? p.Secondary : p.Secondary.WithAlpha(0.5f)) is { } icon)
+            {
+                cell.Add(icon, 0, 0);
             }
 
-            cell.IsEnabled = row.Enabled;
-            var states = InteractiveStates.Attach(cell, p, InteractionKind.MenuItem);
-            states.Label = title;
-            SemanticProperties.SetDescription(cell, row.Chord is null ? row.Title : $"{row.Title}, {row.Chord}");
+            cell.Add(title, 1, 0);
+            if (row.Submenu is not null)
+            {
+                var chevron = new StrokeIcon("M9 6l6 6l-6 6", 12, 1.6) { Color = p.Secondary, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(16, 0, 0, 0) };
+                cell.Add(chevron, 2, 0);
+            }
+            else if (row.Chord is { } chord)
+            {
+                var keys = p.Label(chord, p.Secondary, p.SmallSize);
+                keys.VerticalOptions = LayoutOptions.Center;
+                keys.Margin = new Thickness(24, 0, 0, 0);
+                cell.Add(keys, 2, 0);
+            }
+
+            InteractiveStates? states = null;
             if (row.Enabled)
             {
+                states = InteractiveStates.Attach(cell, p, InteractionKind.MenuItem);
+                states.Label = title;
                 int index = i;
                 var tap = new TapGestureRecognizer();
-                tap.Tapped += (_, _) => _ = _model.RunAsync(index);
+                tap.Tapped += (_, _) =>
+                {
+                    if (_model.Rows.Count > index && _model.Rows[index].Submenu is not null)
+                    {
+                        StopHover();
+                        _model.OpenSubmenu(index);
+                    }
+                    else
+                    {
+                        _ = _model.RunAsync(index);
+                    }
+                };
                 cell.GestureRecognizers.Add(tap);
-                var pointer = new PointerGestureRecognizer();
-                pointer.PointerEntered += (_, _) => _model.SetFocus(index);
-                cell.GestureRecognizers.Add(pointer);
+            }
+            else
+            {
+                // A row that cannot run stays hoverable so its tooltip says why (a disabled control shows none).
+                title.Opacity = 0.6;
+                ToolTipProperties.SetText(cell, row.Reason ?? "Not available here.");
+            }
+
+            int at = i;
+            var pointer = new PointerGestureRecognizer();
+            pointer.PointerEntered += (_, _) => OnPointerEntered(at);
+            cell.GestureRecognizers.Add(pointer);
+            SemanticProperties.SetDescription(cell, row.Chord is null ? row.Title : $"{row.Title}, {row.Chord}");
+            if (!row.Enabled && row.Reason is { } reason)
+            {
+                SemanticProperties.SetHint(cell, reason);
             }
 
             _rows.Add((cell, states));
@@ -431,16 +497,126 @@ public sealed class MenuView : ContentView
             StrokeThickness = 1,
             BackgroundColor = p.Raised,
             StrokeShape = new RoundRectangle { CornerRadius = 8 },
-            Shadow = new Shadow { Brush = new SolidColorBrush(Colors.Black), Opacity = 0.35f, Radius = 14, Offset = new Point(0, 4) },
+            Shadow = new Shadow { Brush = new SolidColorBrush(Colors.Black), Opacity = 0.3f, Radius = 18, Offset = new Point(0, 6) },
         };
         MarkFocused();
+    }
+
+    /// <summary>The icon of a row (a file type's badge, the folder's or a command's stroke), or null for none.</summary>
+    public static View? IconOf(string? icon, Color color)
+    {
+        if (icon is null)
+        {
+            return null;
+        }
+
+        if (MenuIcons.FileOf(icon) is { } file)
+        {
+            var type = FileIcons.For(file);
+            return new Label
+            {
+                Text = type.Badge,
+                TextColor = ThemeColors.Of(type.Argb),
+                FontSize = 10,
+                FontAttributes = FontAttributes.Bold,
+                WidthRequest = IconSize + 4,
+                HorizontalTextAlignment = TextAlignment.Center,
+                VerticalOptions = LayoutOptions.Center,
+                HorizontalOptions = LayoutOptions.Start,
+                InputTransparent = true,
+            };
+        }
+
+        return new StrokeIcon(icon, IconSize, 1.5) { Color = color, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Start };
+    }
+
+    // The pointer on a row: the keyboard's row follows it; resting on a row with a submenu opens it, on another closes
+    // an open one (after the delay, so a pointer passing over rows on its way to the submenu does not close it).
+    private void OnPointerEntered(int index)
+    {
+        _model.SetFocus(index);
+        bool hasSubmenu = index < _model.Rows.Count && _model.Rows[index] is { Submenu: not null, Enabled: true };
+        if (!hasSubmenu && _model.Submenu is null)
+        {
+            StopHover();
+            return;
+        }
+
+        if (hasSubmenu && _model.SubmenuRow == index)
+        {
+            StopHover();
+            return;
+        }
+
+        _hoverRow = index;
+        if (SubmenuDelayMilliseconds <= 0 || Dispatcher is null)
+        {
+            OnHoverElapsed();
+            return;
+        }
+
+        _hover ??= MakeTimer();
+        _hover.Stop();
+        _hover.Interval = TimeSpan.FromMilliseconds(SubmenuDelayMilliseconds);
+        _hover.Start();
+    }
+
+    private IDispatcherTimer MakeTimer()
+    {
+        var timer = Dispatcher.CreateTimer();
+        timer.IsRepeating = false;
+        timer.Tick += (_, _) => OnHoverElapsed();
+        return timer;
+    }
+
+    private void OnHoverElapsed()
+    {
+        int index = _hoverRow;
+        _hoverRow = -1;
+        if (!_model.IsOpen || index < 0 || index >= _model.Rows.Count || _model.Focused != index)
+        {
+            return;
+        }
+
+        if (_model.Rows[index].Submenu is not null)
+        {
+            _model.OpenSubmenu(index);
+        }
+        else
+        {
+            _model.CloseSubmenu();
+        }
+    }
+
+    private void StopHover()
+    {
+        _hover?.Stop();
+        _hoverRow = -1;
+    }
+
+    private void OnSubmenuChanged()
+    {
+        if (_model.Submenu is { } submenu && _model.SubmenuRow is >= 0 and var row && row < _rows.Count)
+        {
+            _child = new MenuView(submenu, _palette) { SubmenuDelayMilliseconds = SubmenuDelayMilliseconds };
+            _child.Build(_palette);
+            var cell = _rows[row].Cell;
+            SubmenuShown?.Invoke(this, (_child, cell.Y - 4));
+            return;
+        }
+
+        _child = null;
+        SubmenuHidden?.Invoke(this, EventArgs.Empty);
     }
 
     private void MarkFocused()
     {
         for (int i = 0; i < _rows.Count; i++)
         {
-            _rows[i].States.Selected = i == _model.Focused;
+            if (_rows[i].States is { } states)
+            {
+                states.Selected = i == _model.Focused;
+            }
         }
     }
 }

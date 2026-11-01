@@ -182,6 +182,77 @@ public static class ShellCommandIds
 
     /// <summary>Go: Peek definition (Alt+F12): the definition in an overlay under the caret's line.</summary>
     public const string PeekDefinition = "craft.peekDefinition";
+
+    // X part 7: rich context menus in the explorer and on the tabs.
+
+    /// <summary>Opens the explorer's file (the menu's row) in the focused group.</summary>
+    public const string Open = "craft.explorer.open";
+
+    /// <summary>Opens the file in the group to the side (the next group, else a new one to the right).</summary>
+    public const string OpenToSide = "craft.explorer.openToSide";
+
+    /// <summary>The submenu "Open with": the file opened in a language picked (its rows run <see cref="OpenWithLanguage"/>).</summary>
+    public const string OpenWith = "craft.menu.openWith";
+
+    /// <summary>Opens the file in the language of the row's argument (a language's name; empty: plain text).</summary>
+    public const string OpenWithLanguage = "craft.openWithLanguage";
+
+    /// <summary>The Search view scoped to the row's folder (a file's: its folder).</summary>
+    public const string FindInFolder = "craft.explorer.findInFolder";
+
+    /// <summary>The submenu "Run": the run targets of the file or folder (its rows run <see cref="RunTarget"/>).</summary>
+    public const string RunMenu = "craft.menu.run";
+
+    /// <summary>Runs, builds or tests the run target of the row's argument ("run.target|provider:id").</summary>
+    public const string RunTarget = "craft.run.menuTarget";
+
+    /// <summary>Formats the file (opened first when it is not), as one undo step.</summary>
+    public const string FormatFile = "craft.formatFile";
+
+    /// <summary>Cuts the explorer's file or folder (pasted, it moves).</summary>
+    public const string Cut = "craft.explorer.cut";
+
+    /// <summary>Copies the explorer's file or folder (pasted, it is copied).</summary>
+    public const string Copy = "craft.explorer.copy";
+
+    /// <summary>Pastes what was cut or copied into the row's folder, off the UI thread, with Undo.</summary>
+    public const string Paste = "craft.explorer.paste";
+
+    /// <summary>Copies the file or folder beside itself ("Name copy.cs"), with Undo.</summary>
+    public const string Duplicate = "craft.explorer.duplicate";
+
+    /// <summary>Takes the file as the first of a comparison.</summary>
+    public const string SelectForCompare = "craft.explorer.selectForCompare";
+
+    /// <summary>Compares the file with the one selected for compare, in the diff view.</summary>
+    public const string CompareWithSelected = "craft.explorer.compareWithSelected";
+
+    /// <summary>Copies the file's or folder's name.</summary>
+    public const string CopyName = "craft.copyName";
+
+    /// <summary>Closes the folder and every open folder inside it, in the explorer.</summary>
+    public const string CollapseFolder = "craft.explorer.collapseFolder";
+
+    /// <summary>Closes every open folder of the explorer.</summary>
+    public const string CollapseAll = "craft.explorer.collapseAll";
+
+    /// <summary>Closes the group's tabs without unsaved changes (the pinned ones stay).</summary>
+    public const string CloseSavedTabs = "craft.closeSavedTabs";
+
+    /// <summary>Closes every tab of the group, asking about unsaved changes.</summary>
+    public const string CloseAllTabs = "craft.closeAllTabs";
+
+    /// <summary>Pins the tab (kept at the left, spared by Close others).</summary>
+    public const string PinTab = "craft.pinTab";
+
+    /// <summary>Unpins the tab.</summary>
+    public const string UnpinTab = "craft.unpinTab";
+
+    /// <summary>Compares the tab's unsaved text with its file, in the diff view (a hunk accepted goes back to the file's text).</summary>
+    public const string CompareWithSaved = "craft.compareWithSaved";
+
+    /// <summary>Takes the tab's text back to its file's, as one undo step, with Undo.</summary>
+    public const string RevertFile = "craft.revertFile";
 }
 
 /// <summary>What a drop of paths onto the window or the editor opened (<see cref="ShellModel.OpenDroppedAsync"/>).</summary>
@@ -241,7 +312,7 @@ public sealed partial class ShellModel : IDisposable
     private readonly List<(string Menu, string Command)> _menuItems = [];
     private readonly List<string> _railItems = [];
     private readonly Dictionary<string, (string Command, bool Rail)> _sideViews = new(StringComparer.Ordinal);
-    private readonly List<string> _closedFiles = [];
+    private readonly List<ClosedTab> _closed = [];
     private FolderTreeWatch? _treeWatch;
     private string _optionsSignature;
     private bool _disposed;
@@ -438,8 +509,8 @@ public sealed partial class ShellModel : IDisposable
     /// <summary>Raised when <see cref="ShowSettings"/> asks the open settings page for another section.</summary>
     public event EventHandler? SettingsSectionChanged;
 
-    /// <summary>The files of the tabs closed, latest last (<see cref="ReopenClosedTabAsync"/> takes them back; at most <c>CRAFT_RECENT_LIMIT</c>).</summary>
-    public IReadOnlyList<string> ClosedFiles => _closedFiles;
+    /// <summary>The files of the tabs closed, latest last (<see cref="ReopenClosedTabAsync"/> takes them back; at most <c>CRAFT_TABS_REOPEN_LIMIT</c>).</summary>
+    public IReadOnlyList<string> ClosedFiles => [.. _closed.Select(c => c.Path)];
 
     /// <summary>Opens the settings page's tab at <paramref name="section"/> (the one shown last when null).</summary>
     public void ShowSettings(string? section = null)
@@ -468,21 +539,44 @@ public sealed partial class ShellModel : IDisposable
         return all;
     }
 
-    /// <summary>Opens the file of the tab closed last again (one still on disk); false when there is none.</summary>
+    /// <summary>
+    /// Opens the tab closed last again (X part 7: its file still on disk), in its group when that is still open (else the
+    /// focused one), at its place, pinned again when it was, its caret and selection where they were; false when there is
+    /// none. The disk is asked off the UI thread.
+    /// </summary>
     public async Task<bool> ReopenClosedTabAsync(CancellationToken cancellationToken = default)
     {
-        while (_closedFiles.Count > 0)
+        while (_closed.Count > 0)
         {
-            var path = _closedFiles[^1];
-            _closedFiles.RemoveAt(_closedFiles.Count - 1);
-            if (File.Exists(path) && Tabs.Find(path) is null)
+            var closed = _closed[^1];
+            _closed.RemoveAt(_closed.Count - 1);
+            var group = Groups.Groups.FirstOrDefault(g => g.Id == closed.GroupId) ?? Groups.Focused;
+            if (group.Tabs.Find(closed.Path) is not null || !await Task.Run(() => File.Exists(closed.Path), cancellationToken))
             {
-                return await OpenFileAsync(path, cancellationToken: cancellationToken) is not null;
+                continue;
             }
+
+            if (await OpenInGroupAsync(group, closed.Path, activate: true, cancellationToken) is not { } tab)
+            {
+                return false;
+            }
+
+            if (closed.Pinned)
+            {
+                group.Tabs.SetPinned(tab, true);
+            }
+
+            group.Tabs.Move(tab, closed.Index);
+            int length = tab.Document.Buffer.Current.Length;
+            Host.Select(tab.HostDocument, new SelectionState(Math.Clamp(closed.Selection.Anchor, 0, length), Math.Clamp(closed.Selection.Caret, 0, length)));
+            return true;
         }
 
         return false;
     }
+
+    // A closed tab Reopen closed can bring back: its file, group, place, selection and pin.
+    private sealed record ClosedTab(string Path, int GroupId, int Index, SelectionState Selection, bool Pinned);
 
     /// <summary>
     /// Zooms the code font: <paramref name="steps"/> times <see cref="CraftOptions.ZoomStep"/> larger (smaller when
@@ -887,13 +981,16 @@ public sealed partial class ShellModel : IDisposable
             return false;
         }
 
-        if (tab.FilePath is { } closed && !Groups.IsShared(tab))
+        if (tab.FilePath is { } closed && !Groups.IsShared(tab) && Groups.GroupOf(tab) is { } closedIn)
         {
-            _closedFiles.Remove(closed);
-            _closedFiles.Add(closed);
-            if (_closedFiles.Count > Math.Max(1, Options.RecentLimit))
+            _closed.RemoveAll(c => PathKeys.Comparer.Equals(c.Path, closed));
+            if (Options.TabsReopenLimit > 0)
             {
-                _closedFiles.RemoveAt(0);
+                _closed.Add(new ClosedTab(closed, closedIn.Id, closedIn.Tabs.IndexOf(tab), tab.HostDocument.Selection, tab.IsPinned));
+                if (_closed.Count > Options.TabsReopenLimit)
+                {
+                    _closed.RemoveRange(0, _closed.Count - Options.TabsReopenLimit);
+                }
             }
         }
 
@@ -1102,6 +1199,7 @@ public sealed partial class ShellModel : IDisposable
         Host.PanelsChanged -= OnPanelsChanged;
         Host.PanelShowRequested -= OnPanelShowRequested;
         DisposeViews();
+        DisposeContext();
         StopWatching();
         _memoryWatch?.Dispose();
         Pages.CloseAll();
@@ -1313,13 +1411,14 @@ public sealed partial class ShellModel : IDisposable
         }
 
         Command(ShellCommandIds.SaveAll, "File: Save all", (_, token) => SaveAllAsync(token), _ => Tabs.HasUnsaved, "Ctrl+K S");
-        Command(ShellCommandIds.ReopenClosedTab, "Tab: Reopen the closed tab", (_, token) => ReopenClosedTabAsync(token), _ => _closedFiles.Count > 0, "Ctrl+Shift+T");
+        Command(ShellCommandIds.ReopenClosedTab, "Tab: Reopen the closed tab", (_, token) => ReopenClosedTabAsync(token), _ => _closed.Count > 0, "Ctrl+Shift+T",
+            _ => Options.TabsReopenLimit == 0 ? "CRAFT_TABS_REOPEN_LIMIT is 0: closed tabs are not kept." : "No tab was closed yet.");
         Command(ShellCommandIds.ZoomIn, "View: Zoom in", (_, _) => ZoomCommandAsync(1), null, "Ctrl+=");
         Command(ShellCommandIds.ZoomOut, "View: Zoom out", (_, _) => ZoomCommandAsync(-1), null, "Ctrl+-");
         Command(ShellCommandIds.ZoomReset, "View: Reset the zoom", (_, _) => ZoomCommandAsync(0), null, "Ctrl+0");
         Command(ShellCommandIds.GoToLine, "Go: Go to line", (_, _) => View(ShellViewNames.GoToLine), _ => Tabs.Active is not null, "Ctrl+G");
         Command(ShellCommandIds.ToggleTree, "View: Show or hide the folder tree", (_, _) => ToggleTree(), _ => Workspace is not null || !Layout.IsNarrow, "Ctrl+B");
-        Command(ShellCommandIds.RefreshTree, "View: Refresh the folder tree", (_, _) => { Tree?.Refresh(); return Task.CompletedTask; }, _ => Tree is not null, null);
+        Command(ShellCommandIds.RefreshTree, "View: Refresh the folder tree", (_, token) => RefreshTreeAsync(token), _ => Tree is not null, null, NoFolder);
         Command(ShellCommandIds.ToggleTheme, "View: Switch light and dark", (_, _) => { ToggleTheme(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.QuickOpen, "Go: Open a file by name ('>' for a command)", (_, _) => View(ShellViewNames.QuickOpen), null, "Ctrl+P");
         Command(ShellCommandIds.TogglePanel, "View: Show or hide the bottom panel", (_, _) => { _ = Panels.ToggleAsync(ShellPanel.Bottom); return View(ShellViewNames.TogglePanel); }, null, "Ctrl+J");
@@ -1420,15 +1519,23 @@ public sealed partial class ShellModel : IDisposable
         _menuItems.Add((menu, command));
     }
 
+    // A rich menu item (X part 7): its icon, its submenu, when it shows.
+    private void Menu(MenuItem item)
+    {
+        EditorMenus.Register(item);
+        _menuItems.Add((item.Menu, item.CommandId));
+    }
+
     private void Rail(RailItem item)
     {
         EditorRailItems.Register(item);
         _railItems.Add(item.Id);
     }
 
-    private void Command(string id, string title, Func<IEditorHost, CancellationToken, Task> execute, Func<IEditorHost, bool>? canExecute, string? chord)
+    private void Command(string id, string title, Func<IEditorHost, CancellationToken, Task> execute, Func<IEditorHost, bool>? canExecute, string? chord,
+        Func<IEditorHost, string?>? reason = null)
     {
-        EditorCommands.Register(new EditorCommand(id, title, execute, canExecute));
+        EditorCommands.Register(new EditorCommand(id, title, execute, canExecute) { Reason = reason });
         _commandIds.Add(id);
         if (chord is not null)
         {

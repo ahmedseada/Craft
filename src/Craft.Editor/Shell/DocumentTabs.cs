@@ -54,6 +54,12 @@ public sealed class DocumentTab
     /// <summary>The UI's own object for the tab (its editor view); the tabs never read it.</summary>
     public object? View { get; set; }
 
+    /// <summary>
+    /// Whether it is pinned (X part 7): it stays at the left with the other pinned tabs, and Close others, Close to the
+    /// right and Close saved leave it open (<see cref="DocumentTabs.SetPinned"/>).
+    /// </summary>
+    public bool IsPinned { get; internal set; }
+
     internal bool WasDirty { get; set; }
 
     internal string? LastPath { get; set; }
@@ -228,7 +234,7 @@ public sealed class DocumentTabs : IDisposable
         source.Document.StateChanged += tab.StateHandler;
         if (index >= 0 && index < _tabs.Count)
         {
-            _tabs.Insert(index, tab);
+            _tabs.Insert(Math.Max(index, PinnedCount), tab);    // a tab coming in lands after the pinned ones
         }
         else
         {
@@ -263,9 +269,50 @@ public sealed class DocumentTabs : IDisposable
 
     private int TakeUntitled() => NextUntitled?.Invoke() ?? _nextUntitled++;
 
+    /// <summary>How many tabs are pinned (they are the first ones).</summary>
+    public int PinnedCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (var tab in _tabs)
+            {
+                if (tab.IsPinned)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
     /// <summary>
-    /// Moves <paramref name="tab"/> to <paramref name="index"/> (a tab dragged along the strip; clamped to the tabs), the
-    /// others keeping their order; false when it is not open or already there. The active tab stays active.
+    /// Pins <paramref name="tab"/> (after the pinned tabs) or unpins it (first after them) (X part 7); false when it is not
+    /// open or is so already.
+    /// </summary>
+    public bool SetPinned(DocumentTab tab, bool pinned)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        int from = _tabs.IndexOf(tab);
+        if (from < 0 || tab.IsPinned == pinned)
+        {
+            return false;
+        }
+
+        _tabs.RemoveAt(from);
+        int place = PinnedCount;
+        tab.IsPinned = pinned;
+        _tabs.Insert(place, tab);
+        TabsChanged?.Invoke(this, EventArgs.Empty);
+        TabChanged?.Invoke(this, tab);
+        return true;
+    }
+
+    /// <summary>
+    /// Moves <paramref name="tab"/> to <paramref name="index"/> (a tab dragged along the strip; clamped to the tabs, a
+    /// pinned tab among the pinned ones and another after them), the others keeping their order; false when it is not open
+    /// or already there. The active tab stays active.
     /// </summary>
     public bool Move(DocumentTab tab, int index)
     {
@@ -276,7 +323,8 @@ public sealed class DocumentTabs : IDisposable
             return false;
         }
 
-        int to = Math.Clamp(index, 0, _tabs.Count - 1);
+        int pinned = PinnedCount;
+        int to = tab.IsPinned ? Math.Clamp(index, 0, Math.Max(0, pinned - 1)) : Math.Clamp(index, pinned, _tabs.Count - 1);
         if (to == from)
         {
             return false;

@@ -165,9 +165,11 @@ sealed class Craft.Ai.AiPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstrac
   System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
   System.String Name { get; }
   System.String Summary { get; }
+  const System.String AddToChatCommand = ai.addFileToChat
   const System.String AgentDiscardCommand = ai.agentDiscard
   const System.String AgentReviewCommand = ai.agentReview
   const System.String AgentStopCommand = ai.agentStop
+  const System.String AskAgentCommand = ai.askAgentAboutFile
   const System.String DocumentCommand = ai.documentSelection
   const System.String ExplainCommand = ai.explainSelection
   const System.String ExplainProblemCommand = ai.explainProblem
@@ -223,6 +225,7 @@ sealed class Craft.Ai.AiSession : System.IDisposable
   Craft.Ai.EditorMcpServer Mcp { get; }
   System.Boolean HasProblemAtCaret { get; }
   System.Boolean HasSelection { get; }
+  System.Threading.Tasks.Task AddFileAsync(System.String path, System.Boolean agent, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task LoadModelAsync(System.String role, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task LoadModelAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task ShowMcpAsync()

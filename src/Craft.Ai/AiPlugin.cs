@@ -44,6 +44,18 @@ public sealed class AiRegistration() : IdrakPlugin(AiSettings.PluginName)
             var item = new MenuItem(EditorContextMenus.Editor, id, Order: order++, Group: 50);
             Part(() => EditorMenus.Register(item), () => EditorMenus.Unregister(EditorContextMenus.Editor, item.CommandId));
         }
+
+        // X part 7: the explorer's and the tabs' menus, on a file only (a "when" over the target), with the design's icons.
+        foreach (var item in (ReadOnlySpan<MenuItem>)
+        [
+            new(EditorContextMenus.Tree, AiPlugin.AddToChatCommand, "Add to chat context", 10, 3) { Icon = MenuIcons.Chat, When = MenuWhen.Files },
+            new(EditorContextMenus.Tree, AiPlugin.AskAgentCommand, "Ask the agent about it", 11, 3) { Icon = RailIcons.Agent, When = MenuWhen.Files },
+            new(EditorContextMenus.Tab, AiPlugin.AddToChatCommand, "Add to chat context", 0, 7) { Icon = MenuIcons.Chat, When = MenuWhen.Files },
+        ])
+        {
+            var added = item;
+            Part(() => EditorMenus.Register(added), () => EditorMenus.Unregister(added.Menu, added.CommandId));
+        }
     }
 }
 
@@ -103,6 +115,12 @@ public sealed class AiPlugin : IEditorPlugin
     /// <summary>Shows the chat panel.</summary>
     public const string ShowChatCommand = "ai.showChat";
 
+    /// <summary>Adds the menu's file (the explorer's row, the tab's) to the chat's context (X part 7).</summary>
+    public const string AddToChatCommand = "ai.addFileToChat";
+
+    /// <summary>Puts the menu's file in the agent's input, to ask about it (X part 7).</summary>
+    public const string AskAgentCommand = "ai.askAgentAboutFile";
+
     /// <summary>Shows the agent's panel: the id the shell's rail item runs (Craft.Editor's ShellCommandIds.Agent), so the item shows while this plug-in is active.</summary>
     public const string ShowAgentCommand = "craft.agent";
 
@@ -152,11 +170,25 @@ public sealed class AiPlugin : IEditorPlugin
             _ => Current?.Agent.Changes.Count > 0, "Drops the agent's working copy; your files were never changed"),
         new EditorCommand(AgentStopCommand, "AI: Stop the agent", (_, _) => { Current!.Agent.Stop(); return Task.CompletedTask; },
             _ => Current?.Agent.IsBusy == true, "Stops the agent's run; its changes so far stay to review"),
+        new EditorCommand(AddToChatCommand, "AI: Add the file to the chat's context", (host, token) => Current!.AddFileAsync(FileOf(host), agent: false, token),
+            host => Current is not null && FileOf(host) is not null, "Adds the file as a chip of the chat's context")
+        {
+            Reason = _ => Current is null ? "The AI plug-in is not active." : "A new file is not on the disk yet.",
+        },
+        new EditorCommand(AskAgentCommand, "AI: Ask the agent about the file", (host, token) => Current!.AddFileAsync(FileOf(host), agent: true, token),
+            host => Current is not null && FileOf(host) is not null, "Puts the file in the agent's input")
+        {
+            Reason = _ => Current is null ? "The AI plug-in is not active." : "A new file is not on the disk yet.",
+        },
         new EditorCommand(ShowChatCommand, "AI: Show the chat", (_, _) => { Current!.ShowPanel(AiChatPanel.PanelId); return Task.CompletedTask; },
             _ => Current is not null, "Shows the chat column (a sheet in the narrow layout)"),
         new EditorCommand(ShowAgentCommand, "AI: Show the agent", (_, _) => { Current!.ShowPanel(AiAgentPanel.PanelId); return Task.CompletedTask; },
             _ => Current is not null, "Shows the agent run: a task on a copy of the folder, every change a diff, every command approved"),
     ];
+
+    // The file a context menu was opened on (a file's row, a tab), else the active document's; read before any await.
+    private static string? FileOf(IEditorHost host) =>
+        EditorContextMenus.Target is { Path: { } path, IsFolder: false } ? path : EditorContextMenus.Target is null ? host.ActiveDocument?.FilePath : null;
 
     /// <inheritdoc />
     public string Name => AiSettings.PluginName;
@@ -269,6 +301,25 @@ public sealed class AiSession : IDisposable
 
     /// <summary>Brings the panel <paramref name="id"/> into view.</summary>
     public void ShowPanel(string id) => _host.ShowPanel(id);
+
+    /// <summary>
+    /// Shows the chat (or the agent, <paramref name="agent"/>) and gives it <paramref name="path"/> as a dropped file: a
+    /// chip of the chat's context, or "@path" in the agent's input (X part 7); what it could not take is said.
+    /// </summary>
+    public async Task AddFileAsync(string? path, bool agent, CancellationToken cancellationToken)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        IConversationPanel panel = agent ? Agent : Chat;
+        _host.ShowPanel(panel.Id);
+        if (await panel.AcceptDropAsync([path], cancellationToken).ConfigureAwait(true) == 0)
+        {
+            _host.ShowStatus(agent ? "Ask the agent" : "Add to chat", $"{Path.GetFileName(path)} could not be added (a folder, or a file it does not read).", NotificationSeverity.Warning);
+        }
+    }
 
     /// <summary>Whether the active document has a selection.</summary>
     public bool HasSelection => _host.ActiveDocument is { Selection.IsEmpty: false };

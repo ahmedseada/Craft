@@ -30,7 +30,9 @@ public sealed partial class ShellModel
     /// </summary>
     public EditorGroup? Split(SplitDirection direction)
     {
-        var group = Groups.Split(Groups.Focused, direction, Tabs.Active);
+        // X part 7: a tab's menu splits from that tab and its group; the keys and the palette, the focused group's active tab.
+        var tab = TargetTab();
+        var group = Groups.Split(tab is not null && Groups.GroupOf(tab) is { } own ? own : Groups.Focused, direction, tab);
         if (group is null)
         {
             Host.ShowStatus("Split", string.Create(CultureInfo.InvariantCulture,
@@ -187,7 +189,7 @@ public sealed partial class ShellModel
         Command(ShellCommandIds.SplitDown, "View: Split the editor down", (_, _) => { Split(SplitDirection.Down); return Task.CompletedTask; }, null, "Ctrl+K Ctrl+\\");
         Command(ShellCommandIds.MoveToNextGroup, "View: Move the editor to the next group", (_, _) =>
         {
-            if (Tabs.Active is { } tab && Groups.MoveToNext(tab) is null)
+            if (TargetTab() is { } tab && Groups.MoveToNext(tab) is null)
             {
                 Host.ShowStatus("Move the editor", Groups.Groups.Count >= Groups.Max
                     ? "The last group is focused and no more groups can open (CRAFT_EDITOR_GROUPS_MAX)."

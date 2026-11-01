@@ -30,7 +30,8 @@ public sealed partial class ShellModel
         string from = Path.TrimEndingDirectorySeparator(Path.GetFullPath(source));
         string into = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetFolder));
         string name = Path.GetFileName(from);
-        if (Workspace is not { } workspace || !CanChange(from) || !workspace.Contains(into))
+        // The workspace's own folder is a target too (Workspace.Contains says no for the root itself).
+        if (Workspace is not { } workspace || !CanChange(from) || !(workspace.Contains(into) || PathKeys.Comparer.Equals(into, Path.TrimEndingDirectorySeparator(workspace.Root))))
         {
             return Refuse(copy, $"{name} and {Path.GetFileName(into)} must both be in the open folder (and the folder itself does not move).");
         }
@@ -223,11 +224,13 @@ public sealed partial class ShellModel
         string.Equals(Path.GetPathRoot(Path.GetFullPath(first)), Path.GetPathRoot(Path.GetFullPath(second)), StringComparison.OrdinalIgnoreCase);
 
     // "Name copy.cs", "Name copy 2.cs", ... beside the original (a copy dropped on its own folder).
-    private static string FreeCopyName(string path, bool isFolder)
+    private static string FreeCopyName(string path, bool isFolder) => FreeCopyName(Path.GetDirectoryName(path)!, Path.GetFileName(path), isFolder);
+
+    // "Name copy.cs", "Name copy 2.cs", ... in `folder` for an entry named `name` (a paste onto a name the folder has).
+    private static string FreeCopyName(string folder, string name, bool isFolder)
     {
-        string folder = Path.GetDirectoryName(path)!;
-        string stem = isFolder ? Path.GetFileName(path) : Path.GetFileNameWithoutExtension(path);
-        string extension = isFolder ? "" : Path.GetExtension(path);
+        string stem = isFolder ? name : Path.GetFileNameWithoutExtension(name);
+        string extension = isFolder ? "" : Path.GetExtension(name);
         for (int n = 1; ; n++)
         {
             string candidate = Path.Combine(folder, n == 1 ? $"{stem} copy{extension}" : string.Create(CultureInfo.InvariantCulture, $"{stem} copy {n}{extension}"));

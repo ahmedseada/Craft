@@ -159,6 +159,12 @@ public sealed class WorkspaceSearchView : IEditorViewPanel, IDisposable
         Schedule(immediately: false);
     }
 
+    /// <summary>The files to include (globs, <see cref="WorkspaceGlob"/>), or "".</summary>
+    public string Include => _include;
+
+    /// <summary>The files to exclude (globs), or "".</summary>
+    public string Exclude => _exclude;
+
     /// <summary>Sets the include and exclude globs and searches again.</summary>
     public void SetFilters(string include, string exclude, bool? useIgnoreFiles = null)
     {

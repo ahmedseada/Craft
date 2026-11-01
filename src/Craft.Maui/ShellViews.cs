@@ -29,8 +29,10 @@ public static class ThemeColors
 /// <param name="BadgeColor">The icon's colour.</param>
 /// <param name="StateLetter">The file's source control state's letter (X part 8: "M", "U"), or "".</param>
 /// <param name="StateColor">The name's and the letter's colour for that state, or null for the row's own.</param>
+/// <param name="Editing">Whether its name is being typed in place (X part 7: rename, or a new entry's row).</param>
+/// <param name="EditText">The name the field starts with.</param>
 public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, bool Active, string? FontFamily, bool IsFolder = false, string Badge = "", Color? BadgeColor = null,
-    string StateLetter = "", Color? StateColor = null);
+    string StateLetter = "", Color? StateColor = null, bool Editing = false, string EditText = "");
 
 /// <summary>
 /// The folder tree (<see cref="FolderTree"/>) as a virtualized list (only the rows on screen are made): a folder's row
@@ -49,17 +51,72 @@ public sealed class FolderTreeView : ContentView
     private Color _selected = Colors.Transparent;
     private string? _fontFamily;
     private string? _activePath;
+    private TreeEdit? _edit;
+    private RoutedEntry? _editor;
+    private bool _committing;
 
     /// <summary>An empty tree (set <see cref="Tree"/>).</summary>
     public FolderTreeView()
     {
+        // X part 7: the space under the rows takes a right-click too: the workspace's menu (New file, Paste, Collapse all…).
+        var footer = new BoxView { Color = Colors.Transparent, HeightRequest = 160 };
+        var footerMenu = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
+        footerMenu.Tapped += (_, e) => ContextRequested?.Invoke(this, (null, e));
+        footer.GestureRecognizers.Add(footerMenu);
         _list = new CollectionView
         {
             SelectionMode = SelectionMode.None,                     // a row's own tap opens it (below), not the list's selection
             ItemTemplate = new DataTemplate(MakeRow),
             ItemsSource = _items,
+            Footer = footer,
         };
         Content = _list;
+    }
+
+    /// <summary>The name being typed in place (X part 7: <see cref="ShellModel.TreeEdit"/>), or null; its row shows a field.</summary>
+    public TreeEdit? Edit
+    {
+        get => _edit;
+        set
+        {
+            if (value != _edit)
+            {
+                _edit = value;
+                if (value is null)
+                {
+                    _editor = null;
+                }
+
+                Refresh();
+            }
+        }
+    }
+
+    /// <summary>Raised as the name in place is typed (the page says what is wrong with it: <see cref="EditProblem"/>).</summary>
+    public event EventHandler<string>? EditTextChanged;
+
+    /// <summary>Raised with the name typed in place when Enter is pressed or the field loses the keyboard.</summary>
+    public event EventHandler<string>? EditCommitted;
+
+    /// <summary>Raised when Escape ends the name in place without a change.</summary>
+    public event EventHandler? EditCancelled;
+
+    /// <summary>Raises the workspace's menu (the explorer's header was right-clicked).</summary>
+    public void RequestRootMenu(TappedEventArgs where) => ContextRequested?.Invoke(this, (null, where));
+
+    /// <summary>Why the name typed in place cannot be (its field shows the error's colour and says it in its tooltip), or null.</summary>
+    public string? EditProblem
+    {
+        set
+        {
+            if (_editor is not { } editor)
+            {
+                return;
+            }
+
+            editor.TextColor = value is null ? _textColor : (Palette?.Error ?? Colors.IndianRed);
+            ToolTipProperties.SetText(editor, value ?? "");
+        }
     }
 
     /// <summary>The tree shown, or null for none.</summary>
@@ -218,6 +275,41 @@ public sealed class FolderTreeView : ContentView
         line.Add(badge, 0, 0);
         line.Add(label, 1, 0);
         line.Add(state, 2, 0);
+        // X part 7: the name typed in place (rename, new file, new folder) over the label, on the row's own line.
+        var field = new RoutedEntry { FontSize = 13, HeightRequest = 26, IsVisible = false, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(-4, 0, 0, 0) };
+        field.RouteKey = (key, modifiers) =>
+        {
+            if (key == EditorKey.Enter && modifiers == KeyModifiers.None)
+            {
+                CommitEdit(field);
+                return true;
+            }
+
+            if (key == EditorKey.Escape)
+            {
+                _committing = true;
+                EditCancelled?.Invoke(this, EventArgs.Empty);
+                _committing = false;
+                return true;
+            }
+
+            return false;
+        };
+        field.TextChanged += (_, e) =>
+        {
+            if (field.IsVisible && ReferenceEquals(_editor, field))
+            {
+                EditTextChanged?.Invoke(this, e.NewTextValue ?? "");
+            }
+        };
+        field.Unfocused += (_, _) =>
+        {
+            if (field.IsVisible && ReferenceEquals(_editor, field))
+            {
+                CommitEdit(field);
+            }
+        };
+        line.Add(field, 1, 0);
         var row = new ContentView { Content = line };
         // Phase X: the row's hover, pressed and active looks from the theme (one mechanism); its text follows them.
         InteractiveStates? states = null;
@@ -233,6 +325,23 @@ public sealed class FolderTreeView : ContentView
             states.Apply(palette);
             states.SetText(item.StateColor);                 // a changed file's name in its state's colour
             states.Selected = item.Active;
+            label.IsVisible = !item.Editing;
+            field.IsVisible = item.Editing;
+            if (item.Editing && !ReferenceEquals(_editor, field))
+            {
+                // The field takes the keyboard with the name selected (a file's without its extension).
+                _editor = field;
+                field.FontFamily = item.FontFamily;
+                field.TextColor = _textColor;
+                field.Text = item.EditText;
+                int stem = item.IsFolder ? item.EditText.Length : System.IO.Path.GetFileNameWithoutExtension(item.EditText).Length;
+                Dispatcher.DispatchLabelled("explorer: the name in place takes the keyboard", () =>
+                {
+                    field.Focus();
+                    field.CursorPosition = 0;
+                    field.SelectionLength = stem > 0 ? stem : item.EditText.Length;
+                });
+            }
         };
         // A click opens the file or toggles the folder through the row's own tap: on Windows the drag recognizer below
         // takes the press from the list, so the list's selection never changed and a click opened nothing (the owner's
@@ -347,8 +456,9 @@ public sealed class FolderTreeView : ContentView
                 badgeColor = ThemeColors.Of(icon.Argb);
             }
 
+            bool editing = _edit is { } edit && string.Equals(edit.RowPath, row.Entry.FullPath, StringComparison.OrdinalIgnoreCase);
             items[i] = new FolderTreeItem(row.Entry.Name, new Thickness(8 + (row.Depth * _indent), 0, 14, 0), _textColor, row.Entry.FullPath,
-                active, _fontFamily, row.Entry.IsFolder, badge, badgeColor, state?.Letter ?? "", state?.Color);
+                active, _fontFamily, row.Entry.IsFolder, badge, badgeColor, state?.Letter ?? "", state?.Color, editing, editing ? _edit!.Name : "");
         }
 
         // Only the run that differs is replaced; the rows before and after it stay the same items on screen.
@@ -375,6 +485,25 @@ public sealed class FolderTreeView : ContentView
         for (int i = common; i < change.Inserted; i++)
         {
             _items.Insert(change.Start + i, items[change.Start + i]);
+        }
+    }
+
+    // The name in place is taken (Enter, or the field lost the keyboard); once per edit.
+    private void CommitEdit(RoutedEntry field)
+    {
+        if (_committing || !ReferenceEquals(_editor, field))
+        {
+            return;
+        }
+
+        _committing = true;
+        try
+        {
+            EditCommitted?.Invoke(this, field.Text ?? "");
+        }
+        finally
+        {
+            _committing = false;
         }
     }
 
@@ -535,6 +664,9 @@ public sealed class TabStripView : ContentView, IDisposable
     /// <summary>Raised when a tab's close button is clicked.</summary>
     public event EventHandler<DocumentTab>? CloseRequested;
 
+    /// <summary>Raised when a pinned tab's pin is clicked (X part 7: the page unpins it).</summary>
+    public event EventHandler<DocumentTab>? UnpinRequested;
+
     /// <summary>Raised when the compact switcher's title is clicked (the page lists the tabs).</summary>
     public event EventHandler? ListRequested;
 
@@ -660,11 +792,28 @@ public sealed class TabStripView : ContentView, IDisposable
             bool isActive = page is null && ReferenceEquals(tab, _tabs.Active);
             var title = palette.Label(tab.Title, isActive ? palette.Text : palette.Secondary);
             var dot = new Ellipse { WidthRequest = 8, HeightRequest = 8, Fill = new SolidColorBrush(palette.Text), IsVisible = tab.IsDirty, VerticalOptions = LayoutOptions.Center };
-            var close = palette.Flat("×", palette.Secondary, 24, palette.SmallSize);
-            close.WidthRequest = 24;
-            close.Padding = new Thickness(0);
-            ToolTipProperties.SetText(close, CloseTip());
-            close.Clicked += (_, _) => CloseRequested?.Invoke(this, tab);
+            View close;
+            if (tab.IsPinned)
+            {
+                // X part 7: a pinned tab shows its pin where the close button is; a click on it unpins.
+                var pin = new ContentView { WidthRequest = 24, HeightRequest = 24, Content = new StrokeIcon(MenuIcons.Pin, 14, 1.5) { Color = palette.Secondary, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center } };
+                var unpin = new TapGestureRecognizer();
+                unpin.Tapped += (_, _) => UnpinRequested?.Invoke(this, tab);
+                pin.GestureRecognizers.Add(unpin);
+                palette.States(pin, InteractionKind.Flat);
+                ToolTipProperties.SetText(pin, "Pinned: click to unpin");
+                close = pin;
+            }
+            else
+            {
+                var button = palette.Flat("×", palette.Secondary, 24, palette.SmallSize);
+                button.WidthRequest = 24;
+                button.Padding = new Thickness(0);
+                ToolTipProperties.SetText(button, CloseTip());
+                button.Clicked += (_, _) => CloseRequested?.Invoke(this, tab);
+                close = button;
+            }
+
             var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, dot, close } };
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) =>

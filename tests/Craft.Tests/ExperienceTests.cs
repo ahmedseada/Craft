@@ -238,8 +238,9 @@ public static class ExperienceTests
         var src = folder.File("src");
 
         menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, src, IsFolder: true));
-        var titles = menu.Rows.Select(r => r.Title).ToList();
-        Check.SequenceEqual(["New file…", "New folder…", "Reveal in Test Files", "Open in terminal", "Copy path", "Copy relative path", "Rename…", "Delete…"], titles, "the tree's menu");
+        var titles = menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal)).Select(r => r.Title).ToList();
+        Check.SequenceEqual(["New file…", "New folder…", "Reveal in Test Files", "Open in terminal", "Find in folder…", "Collapse all inside", "Cut", "Copy", "Paste", "Duplicate",
+            "Copy name", "Copy path", "Copy relative path", "Rename…", "Delete"], titles, "the tree's menu on a folder (X part 7: a folder's rows only)");
         Check.True(!menu.Rows[Index(menu, ShellCommandIds.OpenInTerminal)].Enabled, "Open in terminal waits for a terminal host");
 
         ui.Prompts.Enqueue("A.cs");
@@ -247,10 +248,10 @@ public static class ExperienceTests
         var a = Path.Combine(src, "A.cs");
         Check.True(File.Exists(a) && shell.Tabs.Find(a) is not null, "the file is made in the row's folder and opened");
 
-        menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, a));
+        menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, src, IsFolder: true));
         ui.Prompts.Enqueue("lib");
         await menu.RunAsync(Index(menu, ShellCommandIds.NewFolder));
-        Check.True(Directory.Exists(Path.Combine(src, "lib")), "New folder on a file's row makes it in the file's folder");
+        Check.True(Directory.Exists(Path.Combine(src, "lib")), "New folder on a folder's row makes it there");
 
         menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, src, IsFolder: true));
         ui.Prompts.Enqueue("bad/name");
@@ -275,16 +276,14 @@ public static class ExperienceTests
         Check.True(shell.Tabs.Find(b) is not null && shell.Tabs.Find(a) is null, "and its clean tab follows it");
 
         menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, b));
-        ui.Confirm = false;
         await menu.RunAsync(Index(menu, ShellCommandIds.Delete));
-        Check.True(File.Exists(b) && ui.Confirms.Count == 1, "Delete asks first, and a No deletes nothing");
-        Check.True(ui.Confirms[0].Contains("for good", StringComparison.Ordinal), "the question says it is for good when there is no trash: " + ui.Confirms[0]);
-        menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, b));
-        ui.Confirm = true;
-        await menu.RunAsync(Index(menu, ShellCommandIds.Delete));
-        Check.True(!File.Exists(b) && fixture.Files.Trashed == b && shell.Tabs.Find(b) is null, "a Yes asks the trash, then deletes, and closes the clean tab");
+        Check.True(!File.Exists(b) && ui.Confirms.Count == 0 && fixture.Files.Trashed == b && shell.Tabs.Find(b) is null,
+            "X part 7: Delete asks nothing (Undo instead), asks the trash, then deletes, and closes the clean tab");
+        Check.Equal("Deleted B.cs", shell.UndoBar.Current?.Text, "the Undo bar says it");
+        shell.UndoBar.Dismiss();
         menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, folder.Path, IsFolder: true));
         Check.True(!menu.Rows[Index(menu, ShellCommandIds.Delete)].Enabled && !menu.Rows[Index(menu, ShellCommandIds.Rename)].Enabled, "the workspace's own folder cannot be renamed or deleted");
+        Check.Equal("The open folder itself cannot be.", menu.Rows[Index(menu, ShellCommandIds.Delete)].Reason, "and the row says why");
 
         // The tabs' menu.
         foreach (var name in TabFiles)
@@ -295,8 +294,9 @@ public static class ExperienceTests
 
         var one = shell.Tabs.Find(folder.File("one.txt"))!;
         menu.Open(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, one.FilePath, false, one));
-        Check.SequenceEqual(["Close", "Close others", "Close to the right", "Copy path", "Copy relative path", "Reveal in the explorer", "Reveal in Test Files"],
-            menu.Rows.Select(r => r.Title).ToList(), "the tab's menu");
+        Check.SequenceEqual(["Close", "Close others", "Close to the right", "Close saved", "Close all", "Reopen closed tab", "Pin", "Split right", "Split down", "Move to the other group",
+            "Copy name", "Copy path", "Copy relative path", "Reveal in the explorer", "Reveal in Test Files", "Open in terminal", "Format file", "Compare with saved", "Revert file"],
+            menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal)).Select(r => r.Title).ToList(), "the tab's menu (X part 7)");
         string? revealed = null;
         shell.RevealRequested += (_, path) => revealed = path;
         await menu.RunAsync(Index(menu, ShellCommandIds.RevealInTree));

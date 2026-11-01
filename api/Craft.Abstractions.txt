@@ -293,11 +293,16 @@ sealed class Craft.Abstractions.ContextChip : System.IEquatable<Craft.Abstractio
   ctor(System.String Id, System.String Text)
 sealed class Craft.Abstractions.ContextMenuTarget : System.IEquatable<Craft.Abstractions.ContextMenuTarget>
   Craft.Abstractions.ContextMenuTarget <Clone>$()
+  Craft.Abstractions.MenuTargetKinds Kind { get; }
   System.Boolean Equals(Craft.Abstractions.ContextMenuTarget other)
   System.Boolean Equals(System.Object obj)
   System.Boolean IsFolder { get; init; }
+  System.Boolean IsRoot { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> ProjectKinds { get; init; }
   System.Int32 GetHashCode()
   System.Object Item { get; init; }
+  System.String Argument { get; init; }
+  System.String Language { get; init; }
   System.String Menu { get; init; }
   System.String Path { get; init; }
   System.String ToString()
@@ -488,6 +493,8 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   ctor(System.UInt32 Background, System.UInt32 Foreground, System.UInt32 Selection, System.UInt32 CurrentLine, System.UInt32 Caret, System.UInt32 Gutter, System.UInt32 GutterText, System.UInt32 GutterCurrentText, System.UInt32 BracketMatch, System.UInt32 FindMatch)
 sealed class Craft.Abstractions.EditorCommand : Craft.Abstractions.IEditorCommand, Idrak.Abstraction.IKind
   System.Boolean CanExecute(Craft.Abstractions.IEditorHost host)
+  System.Func<Craft.Abstractions.IEditorHost, System.String> Reason { get; init; }
+  System.String DisabledReason(Craft.Abstractions.IEditorHost host)
   System.String Name { get; }
   System.String Summary { get; }
   System.String Title { get; }
@@ -504,8 +511,10 @@ static class Craft.Abstractions.EditorContextMenus
   const System.String Conversation = context:conversation
   const System.String ConversationPanel = context:conversation-panel
   const System.String Editor = context:editor
+  const System.String OpenWith = context:open-with
   const System.String Prefix = context:
   const System.String ReadOnlyText = context:readonly-text
+  const System.String RunTargets = context:run
   const System.String Tab = context:tab
   const System.String Terminal = context:terminal
   const System.String TerminalProfiles = context:terminal-profiles
@@ -648,6 +657,14 @@ enum Craft.Abstractions.EditorLogLevel : System.IComparable, System.IConvertible
   Error = 3
   Information = 1
   Warning = 2
+static class Craft.Abstractions.EditorMenuSources
+  static Craft.Abstractions.MenuItemSource Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.MenuItemSource Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.MenuItem> ItemsFor(System.String menu, Craft.Abstractions.ContextMenuTarget target)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.MenuItemSource> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.MenuItemSource source)
 static class Craft.Abstractions.EditorMenus
   const System.String Edit = Edit
   const System.String File = File
@@ -898,6 +915,7 @@ interface Craft.Abstractions.IEditorCanvas
   System.Void FillRect(System.Single x, System.Single y, System.Single width, System.Single height, System.UInt32 argb)
 interface Craft.Abstractions.IEditorCommand : Idrak.Abstraction.IKind
   System.Boolean CanExecute(Craft.Abstractions.IEditorHost host)
+  System.String DisabledReason(Craft.Abstractions.IEditorHost host)
   System.String Title { get; }
   System.Threading.Tasks.Task ExecuteAsync(Craft.Abstractions.IEditorHost host, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.IEditorDocument
@@ -1338,22 +1356,97 @@ static class Craft.Abstractions.MemoryPressureMonitors
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.IMemoryPressureMonitor monitor)
   static System.Void ReleaseLanguages()
+static class Craft.Abstractions.MenuIcons
+  const System.String Chat = M4 5h16v11H9l-5 4z
+  const System.String Close = M6 6l12 12M18 6L6 18
+  const System.String CloseMany = M8 8h12v12H8zM16 8V4H4v12h4M11 11l6 6M17 11l-6 6
+  const System.String CloseSaved = M6 3h8l4 4v14H6zM14 3v4h4M9 14l2 2l4-4
+  const System.String Compare = M4 4h7v16H4zM13 4h7v16h-7zM6 9h3M15 14h3
+  const System.String Copy = M8 8h12v12H8zM16 8V4H4v12h4
+  const System.String Cut = M8.5 6a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0M8.5 18a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0M8 7.5L20 18M8 16.5L20 6
+  const System.String Delete = M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6
+  const System.String Duplicate = M8 8h12v12H8zM16 8V4H4v12h4M14 11v6M11 14h6
+  const System.String FilePrefix = file:
+  const System.String Find = M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5
+  const System.String Folder = M4 4h6l2 2h8v13H4z
+  const System.String Format = M4 6h16M8 10h12M8 14h12M4 18h16
+  const System.String MoveToGroup = M4 5h16v14H4zM12 5v14M6 12h8M11 9l3 3l-3 3
+  const System.String Name = M5 7V5h14v2M12 5v14M9 19h6
+  const System.String NewFile = M6 3h8l4 4v14H6zM14 3v4h4M12 11v6M9 14h6
+  const System.String NewFolder = M3 6h6l2 2h10v11H3zM12 11v6M9 14h6
+  const System.String Open = M6 3h8l4 4v14H6zM14 3v4h4
+  const System.String OpenWith = M6 3h8l4 4v14H6zM14 3v4h4M9 14h6M12 11l3 3l-3 3
+  const System.String Paste = M9 3h6v3H9zM7 5H5v16h14V5h-2
+  const System.String Path = M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1
+  const System.String Pin = M9 4h6l-1 6l4 4H6l4-4zM12 14v7
+  const System.String Rename = M4 20h4L19 9l-4-4L4 16zM14 6l4 4
+  const System.String Reopen = M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5
+  const System.String Reveal = M3 6h6l2 2h10v11H3zM13 14h6M16 11l3 3l-3 3
+  const System.String RevealInTree = M4 6h7M4 12h5M4 18h7M17 12a3 3 0 1 0 0.01 0M17 7v2M17 15v2M12 12h2M20 12h2
+  const System.String Revert = M4 8h10a6 6 0 0 1 0 12H8M4 8l4-4M4 8l4 4
+  const System.String SelectForCompare = M4 4h7v16H4zM13 4h7v16h-7zM6 12l1.5 1.5L10 11
+  const System.String SplitDown = M4 5h16v14H4zM4 12h16
+  const System.String SplitRight = M4 5h16v14H4zM12 5v14
+  const System.String Terminal = M4 5h16v14H4zM7 10l3 2l-3 2M12 15h5
+  const System.String Unpin = M9 4h6l-1 6l4 4H6l4-4zM12 14v7M4 4l16 16
+  static System.String File(System.String name)
+  static System.String FileOf(System.String icon)
 sealed class Craft.Abstractions.MenuItem : Idrak.Abstraction.IKind, System.IEquatable<Craft.Abstractions.MenuItem>
   Craft.Abstractions.MenuItem <Clone>$()
+  Craft.Abstractions.MenuWhen When { get; init; }
   System.Boolean Equals(Craft.Abstractions.MenuItem other)
   System.Boolean Equals(System.Object obj)
   System.Int32 GetHashCode()
   System.Int32 Group { get; init; }
   System.Int32 Order { get; init; }
+  System.String Argument { get; init; }
   System.String CommandId { get; init; }
+  System.String Icon { get; init; }
   System.String Menu { get; init; }
   System.String Name { get; }
   System.String Shortcut { get; init; }
+  System.String Submenu { get; init; }
   System.String Summary { get; }
   System.String Title { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String Menu, out System.String CommandId, out System.String Title, out System.Int32 Order, out System.Int32 Group, out System.String Shortcut)
   ctor(System.String Menu, System.String CommandId, System.String Title = null, System.Int32 Order = 0, System.Int32 Group = 0, System.String Shortcut = null)
+sealed class Craft.Abstractions.MenuItemSource : Idrak.Abstraction.IKind, System.IEquatable<Craft.Abstractions.MenuItemSource>
+  Craft.Abstractions.MenuItemSource <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.MenuItemSource other)
+  System.Boolean Equals(System.Object obj)
+  System.Func<Craft.Abstractions.ContextMenuTarget, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.MenuItem>> Items { get; init; }
+  System.Int32 GetHashCode()
+  System.String Menu { get; init; }
+  System.String Name { get; init; }
+  System.String Summary { get; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Menu, out System.Func<Craft.Abstractions.ContextMenuTarget, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.MenuItem>> Items)
+  ctor(System.String Name, System.String Menu, System.Func<Craft.Abstractions.ContextMenuTarget, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.MenuItem>> Items)
+enum Craft.Abstractions.MenuTargetKinds : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Any = 7
+  File = 1
+  Folder = 2
+  None = 0
+  Root = 4
+sealed class Craft.Abstractions.MenuWhen : System.IEquatable<Craft.Abstractions.MenuWhen>
+  Craft.Abstractions.MenuTargetKinds Targets { get; init; }
+  Craft.Abstractions.MenuWhen <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.MenuWhen other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Matches(Craft.Abstractions.ContextMenuTarget target)
+  System.Collections.Generic.IReadOnlyList<System.String> Endings { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> ProjectKinds { get; init; }
+  System.Func<Craft.Abstractions.ContextMenuTarget, System.Boolean> Test { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  ctor()
+  static Craft.Abstractions.MenuWhen AnyFolder { get; }
+  static Craft.Abstractions.MenuWhen Entries { get; }
+  static Craft.Abstractions.MenuWhen Files { get; }
+  static Craft.Abstractions.MenuWhen Folders { get; }
+  static Craft.Abstractions.MenuWhen Root { get; }
 static class Craft.Abstractions.ModelAdapters
   event System.EventHandler Changed
   static Craft.Abstractions.IModelAdapterSource Find(System.ReadOnlySpan<System.Char> name)

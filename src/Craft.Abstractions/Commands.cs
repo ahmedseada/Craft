@@ -16,6 +16,12 @@ public interface IEditorCommand : IKind
     /// <summary>Whether it can run now in <paramref name="host"/> (true by default).</summary>
     bool CanExecute(IEditorHost host) => true;
 
+    /// <summary>
+    /// Why it cannot run now in <paramref name="host"/> (X part 7: a menu's disabled row shows it as its tooltip), or null
+    /// when it can or there is nothing to say. Asked only when <see cref="CanExecute"/> said no; null by default.
+    /// </summary>
+    string? DisabledReason(IEditorHost host) => null;
+
     /// <summary>Runs it in <paramref name="host"/>, on the UI thread.</summary>
     Task ExecuteAsync(IEditorHost host, CancellationToken cancellationToken);
 }
@@ -50,6 +56,12 @@ public sealed class EditorCommand : IEditorCommand
 
     /// <inheritdoc />
     public bool CanExecute(IEditorHost host) => _canExecute?.Invoke(host) ?? true;
+
+    /// <summary>Why it cannot run (<see cref="IEditorCommand.DisabledReason"/>), or null for nothing to say.</summary>
+    public Func<IEditorHost, string?>? Reason { get; init; }
+
+    /// <inheritdoc />
+    public string? DisabledReason(IEditorHost host) => Reason?.Invoke(host);
 
     /// <inheritdoc />
     public Task ExecuteAsync(IEditorHost host, CancellationToken cancellationToken) => _execute(host, cancellationToken);

@@ -22,6 +22,7 @@ public sealed class PopupLayer : AbsoluteLayout
 {
     private readonly BoxView _cover = new() { Color = Colors.Transparent };
     private View? _shown;
+    private View? _beside;
 
     /// <summary>An empty, hidden layer.</summary>
     public PopupLayer()
@@ -50,6 +51,7 @@ public sealed class PopupLayer : AbsoluteLayout
     public void Show(View popup, Point at, double width)
     {
         ArgumentNullException.ThrowIfNull(popup);
+        HideBeside();
         if (_shown is not null)
         {
             _shown.SizeChanged -= OnShownSizeChanged;
@@ -69,7 +71,7 @@ public sealed class PopupLayer : AbsoluteLayout
 
     private void OnShownSizeChanged(object? sender, EventArgs e)
     {
-        if (_shown is { } popup && Height > 0 && popup.Height > 0)
+        if (sender is View popup && Height > 0 && popup.Height > 0)
         {
             KeepInside(popup);
         }
@@ -89,6 +91,46 @@ public sealed class PopupLayer : AbsoluteLayout
         }
     }
 
+    /// <summary>The popup shown beside the main one (a submenu), or null.</summary>
+    public View? Beside => _beside;
+
+    /// <summary>
+    /// Shows <paramref name="popup"/> beside the shown popup (X part 7: a submenu next to its row): its top
+    /// <paramref name="offsetY"/> below the shown popup's top, to its right, else to its left when the window has no room;
+    /// it goes with the shown popup.
+    /// </summary>
+    public void ShowBeside(View popup, double offsetY, double width)
+    {
+        ArgumentNullException.ThrowIfNull(popup);
+        HideBeside();
+        if (_shown is not { } shown)
+        {
+            return;
+        }
+
+        var bounds = GetLayoutBounds((BindableObject)shown);
+        double right = bounds.X + shown.Width - 4;
+        double x = Width > 0 && right + width > Width ? Math.Max(0, bounds.X - width + 4) : right;
+        _beside = popup;
+        SetLayoutBounds((BindableObject)popup, new Rect(x, Math.Max(0, bounds.Y + offsetY), width, AbsoluteLayout.AutoSize));
+        SetLayoutFlags((BindableObject)popup, AbsoluteLayoutFlags.None);
+        popup.SizeChanged += OnShownSizeChanged;
+        Children.Add(popup);
+    }
+
+    /// <summary>Takes the popup beside the main one away.</summary>
+    public void HideBeside()
+    {
+        if (_beside is not { } beside)
+        {
+            return;
+        }
+
+        beside.SizeChanged -= OnShownSizeChanged;
+        Children.Remove(beside);
+        _beside = null;
+    }
+
     /// <summary>Closes the popup.</summary>
     public void Hide()
     {
@@ -97,6 +139,7 @@ public sealed class PopupLayer : AbsoluteLayout
             return;
         }
 
+        HideBeside();
         _shown.SizeChanged -= OnShownSizeChanged;
         Children.Remove(_shown);
         _shown = null;
@@ -562,6 +605,10 @@ public sealed class ExplorerView : ContentView
         _header = palette.Label("", palette.Secondary, palette.CaptionSize, FontWeight.SemiBold);
         _header.CharacterSpacing = 0.6;
         _header.Margin = new Thickness(14, 10, 14, 8);
+        // X part 7: the folder's name takes a right-click: the workspace's menu (New file, Paste, Collapse all, Refresh…).
+        var rootMenu = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
+        rootMenu.Tapped += (_, e) => tree.RequestRootMenu(e);
+        _header.GestureRecognizers.Add(rootMenu);
         Empty = new EmptyStateView(palette) { IsVisible = false };
         var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
         grid.Add(_header, 0, 0);

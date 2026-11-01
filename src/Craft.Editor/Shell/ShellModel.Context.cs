@@ -27,44 +27,106 @@ public sealed partial class ShellModel
 
     private void RegisterContextCommands()
     {
-        Command(ShellCommandIds.NewFileInFolder, "Explorer: New file…", (_, token) => CreateAsync(TargetFolder(), false, token), _ => TargetFolder() is not null, null);
-        Command(ShellCommandIds.NewFolder, "Explorer: New folder…", (_, token) => CreateAsync(TargetFolder(), true, token), _ => TargetFolder() is not null, null);
-        Command(ShellCommandIds.Rename, "Explorer: Rename…", (_, token) => RenameAsync(TargetEntry(), token), _ => CanChange(TargetEntry().Path), null);
-        Command(ShellCommandIds.Delete, "Explorer: Delete…", (_, token) => DeleteAsync(TargetEntry(), token), _ => CanChange(TargetEntry().Path), null);
+        Command(ShellCommandIds.NewFileInFolder, "Explorer: New file…", (_, token) => NewEntryAsync(TargetFolder(), false, token), _ => TargetFolder() is not null, null, NoFolder);
+        Command(ShellCommandIds.NewFolder, "Explorer: New folder…", (_, token) => NewEntryAsync(TargetFolder(), true, token), _ => TargetFolder() is not null, null, NoFolder);
+        Command(ShellCommandIds.Rename, "Explorer: Rename…", (_, token) => RenameAsync(TargetEntry(), token), _ => CanChange(TargetEntry().Path), null, _ => WhyNotChange(TargetEntry().Path));
+        Command(ShellCommandIds.Delete, "Explorer: Delete", (_, token) => DeleteAsync(TargetEntry(), token), _ => CanChange(TargetEntry().Path), null, _ => WhyNotChange(TargetEntry().Path));
         Command(ShellCommandIds.RevealInFileManager, "File: " + (_files?.RevealTitle ?? "Reveal in the file manager"), (_, token) => RevealInFileManagerAsync(TargetEntry().Path, token),
-            _ => _files is not null && TargetEntry().Path is not null, "Shift+Alt+R");
-        Command(ShellCommandIds.OpenInTerminal, "Terminal: Open in this folder", (_, _) => OpenInTerminal(TargetFolder()), _ => Host.Terminals is not null && TargetFolder() is not null, null);
-        Command(ShellCommandIds.CopyPath, "File: Copy path", (_, _) => CopyAsync(TargetEntry().Path), _ => _clipboard is not null && TargetEntry().Path is not null, "Shift+Alt+C");
-        Command(ShellCommandIds.CopyRelativePath, "File: Copy relative path", (_, _) => CopyAsync(RelativeOf(TargetEntry().Path)), _ => _clipboard is not null && RelativeOf(TargetEntry().Path) is not null, null);
+            _ => _files is not null && TargetEntry().Path is not null, "Shift+Alt+R", _ => _files is null ? "This system has no file manager Craft can show it in." : "A new file is not on the disk yet.");
+        Command(ShellCommandIds.OpenInTerminal, "Terminal: Open in this folder", (_, _) => OpenInTerminal(TargetFolder()), _ => Host.Terminals is not null && TargetFolder() is not null, null,
+            _ => Host.Terminals is null ? "No terminal host is running." : "Open a folder first.");
+        Command(ShellCommandIds.CopyPath, "File: Copy path", (_, _) => CopyAsync(TargetEntry().Path), _ => _clipboard is not null && TargetEntry().Path is not null, "Shift+Alt+C", NotOnDisk);
+        Command(ShellCommandIds.CopyRelativePath, "File: Copy relative path", (_, _) => CopyAsync(RelativeOf(TargetEntry().Path)), _ => _clipboard is not null && RelativeOf(TargetEntry().Path) is not null, null,
+            _ => "It is not in the open folder.");
         Command(ShellCommandIds.CloseOtherTabs, "Tab: Close others", (_, token) => CloseOthersAsync(TargetTab(), false, token),
-            _ => TargetTab() is { } tab && Groups.GroupOf(tab)?.Tabs.Tabs.Count > 1, null);
+            _ => TargetTab() is { } tab && Groups.GroupOf(tab)?.Tabs.Tabs.Any(t => !ReferenceEquals(t, tab) && !t.IsPinned) == true, null, _ => "No other tab to close (pinned tabs stay).");
         Command(ShellCommandIds.CloseTabsToTheRight, "Tab: Close to the right", (_, token) => CloseOthersAsync(TargetTab(), true, token),
-            _ => TargetTab() is { } tab && Groups.GroupOf(tab) is { } group && group.Tabs.IndexOf(tab) is var at && at >= 0 && at < group.Tabs.Tabs.Count - 1, null);
-        Command(ShellCommandIds.RevealInTree, "File: Reveal in the explorer", (_, _) => RevealInTree(TargetEntry().Path), _ => Tree is not null && TargetEntry().Path is { } path && Tree.Workspace.Contains(Path.GetFullPath(path)), null);
+            _ => TargetTab() is { } tab && Groups.GroupOf(tab) is { } group && group.Tabs.IndexOf(tab) is var at && at >= 0 && group.Tabs.Tabs.Skip(at + 1).Any(t => !t.IsPinned), null,
+            _ => "No tab to its right (pinned tabs stay).");
+        Command(ShellCommandIds.RevealInTree, "File: Reveal in the explorer", (_, _) => RevealInTree(TargetEntry().Path), _ => Tree is not null && TargetEntry().Path is { } path && Tree.Workspace.Contains(Path.GetFullPath(path)), null,
+            _ => Tree is null ? "Open a folder first." : "It is not in the open folder.");
         Command(ShellCommandIds.FindReferences, "Go: Find references", (_, token) => FindReferencesAsync(token), _ => Tabs.Active is { } tab && EditorOf?.Invoke(tab)?.SemanticSession is not null, "Shift+F12");
+        RegisterFileCommands();
 
-        // The tree's menu: a row's (or the empty space's: the workspace's folder).
-        Menu(EditorContextMenus.Tree, ShellCommandIds.NewFileInFolder, 0, 0, "New file…");
-        Menu(EditorContextMenus.Tree, ShellCommandIds.NewFolder, 0, 1, "New folder…");
-        Menu(EditorContextMenus.Tree, ShellCommandIds.RevealInFileManager, 1, 0, _files?.RevealTitle);
-        Menu(EditorContextMenus.Tree, ShellCommandIds.OpenInTerminal, 1, 1, "Open in terminal");
-        Menu(EditorContextMenus.Tree, ShellCommandIds.CopyPath, 2, 0);
-        Menu(EditorContextMenus.Tree, ShellCommandIds.CopyRelativePath, 2, 1);
-        Menu(EditorContextMenus.Tree, ShellCommandIds.Rename, 3, 0);
-        Menu(EditorContextMenus.Tree, ShellCommandIds.Delete, 3, 1);
+        // The tree's menu (X part 7): a file's, a folder's and the workspace's (its own row, or the empty space) rows, each
+        // with its icon, shown where its When says.
+        string tree = EditorContextMenus.Tree;
+        Menu(new MenuItem(tree, ShellCommandIds.Open, "Open", 0, 0) { Icon = MenuIcons.Open, When = MenuWhen.Files });
+        Menu(new MenuItem(tree, ShellCommandIds.OpenToSide, "Open to the side", 1, 0) { Icon = MenuIcons.SplitRight, When = MenuWhen.Files });
+        Menu(new MenuItem(tree, ShellCommandIds.OpenWith, "Open with", 2, 0) { Icon = MenuIcons.OpenWith, When = MenuWhen.Files, Submenu = EditorContextMenus.OpenWith });
+        Menu(new MenuItem(tree, ShellCommandIds.NewFileInFolder, "New file…", 3, 0) { Icon = MenuIcons.NewFile, When = MenuWhen.AnyFolder });
+        Menu(new MenuItem(tree, ShellCommandIds.NewFolder, "New folder…", 4, 0) { Icon = MenuIcons.NewFolder, When = MenuWhen.AnyFolder });
+        Menu(new MenuItem(tree, ShellCommandIds.RevealInFileManager, _files?.RevealTitle, 0, 1) { Icon = MenuIcons.Reveal });
+        Menu(new MenuItem(tree, ShellCommandIds.OpenInTerminal, "Open in terminal", 1, 1) { Icon = MenuIcons.Terminal });
+        Menu(new MenuItem(tree, ShellCommandIds.FindInFolder, "Find in folder…", 2, 1) { Icon = MenuIcons.Find });
+        Menu(new MenuItem(tree, ShellCommandIds.RunMenu, "Run", 0, 2) { Icon = RailIcons.Run, Submenu = EditorContextMenus.RunTargets, When = HasRunners(MenuTargetKinds.File | MenuTargetKinds.Folder) });
+        Menu(new MenuItem(tree, ShellCommandIds.FormatFile, "Format file", 0, 3) { Icon = MenuIcons.Format, When = MenuWhen.Files });
+        Menu(new MenuItem(tree, ShellCommandIds.CollapseFolder, "Collapse all inside", 1, 3) { Icon = RailIcons.Collapse, When = MenuWhen.Folders });
+        Menu(new MenuItem(tree, ShellCommandIds.CollapseAll, "Collapse all", 2, 3) { Icon = RailIcons.Collapse, When = MenuWhen.Root });
+        Menu(new MenuItem(tree, ShellCommandIds.RefreshTree, "Refresh", 3, 3) { Icon = RailIcons.Refresh, When = MenuWhen.Root });
+        Menu(new MenuItem(tree, ShellCommandIds.Cut, "Cut", 0, 4) { Icon = MenuIcons.Cut, When = MenuWhen.Entries });
+        Menu(new MenuItem(tree, ShellCommandIds.Copy, "Copy", 1, 4) { Icon = MenuIcons.Copy, When = MenuWhen.Entries });
+        Menu(new MenuItem(tree, ShellCommandIds.Paste, "Paste", 2, 4) { Icon = MenuIcons.Paste });
+        Menu(new MenuItem(tree, ShellCommandIds.Duplicate, "Duplicate", 3, 4) { Icon = MenuIcons.Duplicate, When = MenuWhen.Entries });
+        Menu(new MenuItem(tree, ShellCommandIds.SelectForCompare, "Select for compare", 0, 5) { Icon = MenuIcons.SelectForCompare, When = MenuWhen.Files });
+        Menu(new MenuItem(tree, ShellCommandIds.CompareWithSelected, "Compare with selected", 1, 5) { Icon = MenuIcons.Compare, When = MenuWhen.Files });
+        Menu(new MenuItem(tree, ShellCommandIds.CopyName, "Copy name", 0, 6) { Icon = MenuIcons.Name, When = MenuWhen.Entries });
+        Menu(new MenuItem(tree, ShellCommandIds.CopyPath, "Copy path", 1, 6) { Icon = MenuIcons.Path });
+        Menu(new MenuItem(tree, ShellCommandIds.CopyRelativePath, "Copy relative path", 2, 6) { Icon = MenuIcons.Path, When = MenuWhen.Entries });
+        Menu(new MenuItem(tree, ShellCommandIds.Rename, "Rename…", 0, 7) { Icon = MenuIcons.Rename, When = MenuWhen.Entries });
+        Menu(new MenuItem(tree, ShellCommandIds.Delete, "Delete", 1, 7) { Icon = MenuIcons.Delete, When = MenuWhen.Entries });
+        Menu(new MenuItem(tree, ShellCommandIds.OpenFolder, "Open folder…", 0, 8) { Icon = MenuIcons.Folder, When = MenuWhen.Root });
 
         // A tab's menu.
-        Menu(EditorContextMenus.Tab, ShellCommandIds.CloseTab, 0, 0);
-        Menu(EditorContextMenus.Tab, ShellCommandIds.CloseOtherTabs, 0, 1);
-        Menu(EditorContextMenus.Tab, ShellCommandIds.CloseTabsToTheRight, 0, 2);
-        Menu(EditorContextMenus.Tab, ShellCommandIds.CopyPath, 1, 0);
-        Menu(EditorContextMenus.Tab, ShellCommandIds.CopyRelativePath, 1, 1);
-        Menu(EditorContextMenus.Tab, ShellCommandIds.RevealInTree, 2, 0);
-        Menu(EditorContextMenus.Tab, ShellCommandIds.RevealInFileManager, 2, 1, _files?.RevealTitle);
+        string tab = EditorContextMenus.Tab;
+        Menu(new MenuItem(tab, ShellCommandIds.CloseTab, "Close", 0, 0) { Icon = MenuIcons.Close });
+        Menu(new MenuItem(tab, ShellCommandIds.CloseOtherTabs, "Close others", 1, 0) { Icon = MenuIcons.CloseMany });
+        Menu(new MenuItem(tab, ShellCommandIds.CloseTabsToTheRight, "Close to the right", 2, 0) { Icon = MenuIcons.CloseMany });
+        Menu(new MenuItem(tab, ShellCommandIds.CloseSavedTabs, "Close saved", 3, 0) { Icon = MenuIcons.CloseSaved });
+        Menu(new MenuItem(tab, ShellCommandIds.CloseAllTabs, "Close all", 4, 0) { Icon = MenuIcons.CloseMany });
+        Menu(new MenuItem(tab, ShellCommandIds.ReopenClosedTab, "Reopen closed tab", 0, 1) { Icon = MenuIcons.Reopen });
+        Menu(new MenuItem(tab, ShellCommandIds.PinTab, "Pin", 1, 1) { Icon = MenuIcons.Pin, When = new MenuWhen { Test = static t => t.Item is DocumentTab { IsPinned: false } } });
+        Menu(new MenuItem(tab, ShellCommandIds.UnpinTab, "Unpin", 2, 1) { Icon = MenuIcons.Unpin, When = new MenuWhen { Test = static t => t.Item is DocumentTab { IsPinned: true } } });
+        Menu(new MenuItem(tab, ShellCommandIds.SplitRight, "Split right", 0, 2) { Icon = MenuIcons.SplitRight });
+        Menu(new MenuItem(tab, ShellCommandIds.SplitDown, "Split down", 1, 2) { Icon = MenuIcons.SplitDown });
+        Menu(new MenuItem(tab, ShellCommandIds.MoveToNextGroup, "Move to the other group", 2, 2) { Icon = MenuIcons.MoveToGroup });
+        Menu(new MenuItem(tab, ShellCommandIds.CopyName, "Copy name", 0, 3) { Icon = MenuIcons.Name });
+        Menu(new MenuItem(tab, ShellCommandIds.CopyPath, "Copy path", 1, 3) { Icon = MenuIcons.Path });
+        Menu(new MenuItem(tab, ShellCommandIds.CopyRelativePath, "Copy relative path", 2, 3) { Icon = MenuIcons.Path });
+        Menu(new MenuItem(tab, ShellCommandIds.RevealInTree, "Reveal in the explorer", 0, 4) { Icon = MenuIcons.RevealInTree });
+        Menu(new MenuItem(tab, ShellCommandIds.RevealInFileManager, _files?.RevealTitle, 1, 4) { Icon = MenuIcons.Reveal });
+        Menu(new MenuItem(tab, ShellCommandIds.OpenInTerminal, "Open in terminal", 2, 4) { Icon = MenuIcons.Terminal });
+        Menu(new MenuItem(tab, ShellCommandIds.FormatFile, "Format file", 0, 5) { Icon = MenuIcons.Format });
+        Menu(new MenuItem(tab, ShellCommandIds.CompareWithSaved, "Compare with saved", 1, 5) { Icon = MenuIcons.Compare });
+        Menu(new MenuItem(tab, ShellCommandIds.RevertFile, "Revert file", 2, 5) { Icon = MenuIcons.Revert });
+        Menu(new MenuItem(tab, ShellCommandIds.RunMenu, "Run", 0, 6) { Icon = RailIcons.Run, Submenu = EditorContextMenus.RunTargets, When = HasRunners(MenuTargetKinds.File) });
 
         // The editor's menu: the shell's part (Go to definition and the edits come from ShellEditCommands; the AI actions from its plug-in).
         Menu(EditorContextMenus.Editor, ShellCommandIds.FindReferences, 1, 1);
+
+        // The submenus' rows, made as the menu opens.
+        Source(new MenuItemSource("craft.openWith", EditorContextMenus.OpenWith, _ => OpenWithRows()));
+        Source(new MenuItemSource("craft.run", EditorContextMenus.RunTargets, RunRows));
     }
+
+    private static string? NoFolder(IEditorHost host) => "Open a folder first.";
+
+    private string? NotOnDisk(IEditorHost host) => _clipboard is null ? "This system has no clipboard Craft can reach." : "A new file is not on the disk yet.";
+
+    // Why a file or folder cannot be renamed, deleted, cut or duplicated.
+    private string? WhyNotChange(string? path) =>
+        path is null ? "A new file is not on the disk yet."
+        : Workspace is not { } workspace ? "Open its folder first: Craft changes files of the open folder."
+        : PathKeys.Comparer.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)), Path.TrimEndingDirectorySeparator(workspace.Root)) ? "The open folder itself cannot be."
+        : !workspace.Contains(Path.GetFullPath(path)) ? "It is not in the open folder."
+        : null;
+
+    // A row shown on the kinds given when the target has run targets of its own (the Run view's providers).
+    private MenuWhen HasRunners(MenuTargetKinds kinds) => new()
+    {
+        Targets = kinds,
+        Test = target => target.Path is { } path && RunTargetsOf(path, target.Kind != MenuTargetKinds.File).Count > 0,
+    };
 
     // The file or folder the menu was opened on (a row's, a tab's), else the active document's file.
     private (string? Path, bool IsFolder) TargetEntry() => EditorContextMenus.Target is { Path: { } path } target
@@ -74,7 +136,7 @@ public sealed partial class ShellModel
     // The folder a new file goes in: the row's folder (a file's: its folder), else the workspace's; null with no workspace.
     private string? TargetFolder()
     {
-        if (EditorContextMenus.Target is { Menu: EditorContextMenus.Tree, Path: { } path } target)
+        if (EditorContextMenus.Target is { Menu: EditorContextMenus.Tree or EditorContextMenus.Tab, Path: { } path } target)
         {
             return target.IsFolder ? path : Path.GetDirectoryName(path);
         }
@@ -116,27 +178,45 @@ public sealed partial class ShellModel
         return name.EndsWith(' ') || name.EndsWith('.') ? $"'{name}' ends with a space or a dot, which Windows drops." : null;
     }
 
-    private async Task CreateAsync(string? folder, bool isFolder, CancellationToken cancellationToken)
+    // New file, New folder: named in place in the tree when it shows (X part 7), else asked in Craft's dialog.
+    private async Task NewEntryAsync(string? folder, bool isFolder, CancellationToken cancellationToken)
     {
         if (folder is null)
         {
             return;
         }
 
-        string where = RelativeOf(folder) is { Length: > 0 } relative && relative != "." ? relative : Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
+        if (BeginTreeEdit(isFolder ? TreeEditKind.NewFolder : TreeEditKind.NewFile, folder, null))
+        {
+            return;
+        }
+
+        string where = WhereOf(folder);
         string? typed = await _ui.PromptAsync(isFolder ? "New folder" : "New file", $"In {where}", isFolder ? "The folder's name" : "The file's name (Program.cs)", "", "Create", cancellationToken);
         if (typed is null)
         {
             return;
         }
 
-        string name = typed.Trim();
-        if (NameProblem(name) is { } problem)
+        if (await CreateEntryAsync(folder, typed.Trim(), isFolder, cancellationToken) is { } problem)
         {
             await _ui.ShowMessageAsync(isFolder ? "Craft: the folder was not made" : "Craft: the file was not made", problem);
-            return;
+        }
+    }
+
+    // The folder as the user reads it: its path from the workspace's folder, else its name.
+    private string WhereOf(string folder) =>
+        RelativeOf(folder) is { Length: > 0 } relative && relative != "." ? relative.Replace('\\', '/') : Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
+
+    // Makes the file or folder `name` in `folder` off the UI thread (a file opens): null when made, else why not.
+    private async Task<string?> CreateEntryAsync(string folder, string name, bool isFolder, CancellationToken cancellationToken)
+    {
+        if (NameProblem(name) is { } problem)
+        {
+            return problem;
         }
 
+        string where = WhereOf(folder);
         string path = Path.Combine(folder, name);
         string? error = await Task.Run(() =>
         {
@@ -166,8 +246,7 @@ public sealed partial class ShellModel
         }, cancellationToken);
         if (error is not null)
         {
-            await _ui.ShowMessageAsync(isFolder ? "Craft: the folder was not made" : "Craft: the file was not made", error);
-            return;
+            return error;
         }
 
         _treeWatch?.Touch(path);
@@ -176,6 +255,8 @@ public sealed partial class ShellModel
         {
             await OpenFileAsync(path, fromTree: true, cancellationToken);
         }
+
+        return null;
     }
 
     // The tabs of `path` (a folder's: every tab under it).
@@ -196,6 +277,7 @@ public sealed partial class ShellModel
         return tabs;
     }
 
+    // Rename: in place in the tree when it shows (X part 7), else asked in Craft's dialog; then RenameEntryAsync.
     private async Task RenameAsync((string? Path, bool IsFolder) entry, CancellationToken cancellationToken)
     {
         if (entry.Path is not { } path || !CanChange(path))
@@ -204,11 +286,14 @@ public sealed partial class ShellModel
         }
 
         path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-        bool isFolder = entry.IsFolder;
-        var open = TabsOf(path, isFolder);
-        if (open.Find(t => t.IsDirty) is { } dirty)
+        if (TabsOf(path, entry.IsFolder).Find(t => t.IsDirty) is { } dirty)
         {
             await _ui.ShowMessageAsync("Craft: not renamed", $"{dirty.Title} has unsaved changes: save it or close it, then rename.");
+            return;
+        }
+
+        if (BeginTreeEdit(TreeEditKind.Rename, Path.GetDirectoryName(path)!, path, entry.IsFolder))
+        {
             return;
         }
 
@@ -219,16 +304,35 @@ public sealed partial class ShellModel
             return;
         }
 
-        string name = typed.Trim();
+        if (await RenameEntryAsync(path, entry.IsFolder, typed.Trim(), offerUndo: true, cancellationToken) is { } problem)
+        {
+            await _ui.ShowMessageAsync("Craft: not renamed", problem);
+        }
+    }
+
+    /// <summary>
+    /// Renames the file or folder <paramref name="path"/> to <paramref name="name"/> in its folder, off the UI thread: its
+    /// clean tabs follow it, and with <paramref name="offerUndo"/> the inline bar says so with Undo (the name back). Null
+    /// when renamed (or the name is the same), else why not.
+    /// </summary>
+    private async Task<string?> RenameEntryAsync(string path, bool isFolder, string name, bool offerUndo, CancellationToken cancellationToken)
+    {
+        path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        string oldName = Path.GetFileName(path);
         if (name == oldName)
         {
-            return;
+            return null;
         }
 
         if (NameProblem(name) is { } problem)
         {
-            await _ui.ShowMessageAsync("Craft: not renamed", problem);
-            return;
+            return problem;
+        }
+
+        var open = TabsOf(path, isFolder);
+        if (open.Find(t => t.IsDirty) is { } dirty)
+        {
+            return $"{dirty.Title} has unsaved changes: save it or close it, then rename.";
         }
 
         string target = Path.Combine(Path.GetDirectoryName(path)!, name);
@@ -260,8 +364,7 @@ public sealed partial class ShellModel
         }, cancellationToken);
         if (error is not null)
         {
-            await _ui.ShowMessageAsync("Craft: not renamed", error);
-            return;
+            return error;
         }
 
         // The renamed file's (or folder's) clean tabs open again under the new name, in their groups and places, the
@@ -270,8 +373,31 @@ public sealed partial class ShellModel
         _treeWatch?.Touch(path);
         _treeWatch?.Touch(target);
         Tree?.Reveal(target);
+        if (_compareFirst is { } first && PathKeys.Comparer.Equals(first, path))
+        {
+            _compareFirst = target;
+        }
+
+        if (offerUndo)
+        {
+            UndoBar.Show($"Renamed {oldName} to {name}", () => _ = RenameBackAsync(target, isFolder, oldName));
+        }
+
+        return null;
     }
 
+    // Undo of a rename: the old name back (not itself offered for undo), a refusal said.
+    private async Task RenameBackAsync(string renamed, bool isFolder, string oldName)
+    {
+        if (await RenameEntryAsync(renamed, isFolder, oldName, offerUndo: false, CancellationToken.None) is { } problem)
+        {
+            Host.ShowStatus("Undo rename", problem, NotificationSeverity.Warning);
+        }
+    }
+
+    // Delete (X part 7): the entry is kept aside first (up to CRAFT_DELETE_UNDO_MAX_MB), then goes to the trash (or for
+    // good where there is none), its clean tabs close, and the inline bar's Undo brings it back; an entry too large to keep
+    // is asked about first. The disk's work runs off the UI thread as an activity.
     private async Task DeleteAsync((string? Path, bool IsFolder) entry, CancellationToken cancellationToken)
     {
         if (entry.Path is not { } path || !CanChange(path))
@@ -284,17 +410,31 @@ public sealed partial class ShellModel
         var open = TabsOf(path, isFolder);
         int dirty = open.Count(t => t.IsDirty);
         string name = Path.GetFileName(path);
-        string where = _files?.TrashName is { } trash ? $"It goes to {trash}." : "It is deleted for good: Craft has no trash to move it to here.";
-        string kept = dirty switch
+        string? trashName = _files?.TrashName;
+        long limit = Options.DeleteUndoMaxMegabytes * 1024L * 1024L;
+        string? held = null;
+        if (limit > 0)
         {
-            0 => "",
-            1 => " Its tab with unsaved changes stays open.",
-            _ => string.Create(CultureInfo.InvariantCulture, $" {dirty} tabs with unsaved changes stay open."),
-        };
-        string what = isFolder ? $"The folder {RelativeOf(path)} and everything in it." : $"{RelativeOf(path)}.";
-        if (!await _ui.ConfirmAsync($"Delete {name}?", $"{what} {where}{kept}", "Delete", danger: true, cancellationToken))
+            using var keeping = Host.Activities.Start($"Keeping {name} for Undo");
+            held = await Task.Run(() => HoldForUndo(path, isFolder, limit), cancellationToken);
+            keeping.Complete(held is null ? "too large to keep: asking first" : "kept");
+        }
+
+        if (held is null)
         {
-            return;
+            string where = trashName is { } trash ? $"It goes to {trash}." : "It is deleted for good: Craft has no trash to move it to here.";
+            string kept = dirty switch
+            {
+                0 => "",
+                1 => " Its tab with unsaved changes stays open.",
+                _ => string.Create(CultureInfo.InvariantCulture, $" {dirty} tabs with unsaved changes stay open."),
+            };
+            string what = isFolder ? $"The folder {RelativeOf(path)} and everything in it." : $"{RelativeOf(path)}.";
+            string why = limit > 0 ? string.Create(CultureInfo.InvariantCulture, $" It is larger than {Options.DeleteUndoMaxMegabytes} MB, so it is not kept for Undo (CRAFT_DELETE_UNDO_MAX_MB).") : "";
+            if (!await _ui.ConfirmAsync($"Delete {name}?", $"{what} {where}{kept}{why}", "Delete", danger: true, cancellationToken))
+            {
+                return;
+            }
         }
 
         using var activity = Host.Activities.Start($"Deleting {name}");
@@ -327,20 +467,140 @@ public sealed partial class ShellModel
         if (error is not null)
         {
             activity.Fail(error);
+            DropHeld(held);
             await _ui.ShowMessageAsync("Craft: not deleted", $"{name}: {error}");
             return;
         }
 
-        activity.Complete(_files?.TrashName is { } bin ? "moved to " + bin : "deleted");
+        activity.Complete(trashName is { } bin ? "moved to " + bin : "deleted");
+        var reopen = new List<string>();
         foreach (var tab in open)
         {
-            if (!tab.IsDirty)
+            if (!tab.IsDirty && tab.FilePath is { } file && await CloseTabAsync(tab, cancellationToken))
             {
-                await CloseTabAsync(tab, cancellationToken);
+                reopen.Add(file);
             }
         }
 
         _treeWatch?.Touch(path);
+        if (held is not null)
+        {
+            string said = trashName is { } trashed ? $"Deleted {name} (to {trashed})" : $"Deleted {name}";
+            UndoBar.Show(said, () => _ = RestoreHeldAsync(held, path, isFolder, reopen), () => DropHeld(held));
+        }
+    }
+
+    // The entry copied aside for Undo (a folder of Craft's own under the system's temporary folder): its copy's path, or
+    // null when it is larger than `limit` bytes or could not be copied. Off the UI thread.
+    private static string? HoldForUndo(string path, bool isFolder, long limit)
+    {
+        try
+        {
+            long size = 0;
+            if (isFolder)
+            {
+                foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    size += file.Length;
+                    if (size > limit)
+                    {
+                        return null;
+                    }
+                }
+            }
+            else if (new FileInfo(path).Length > limit)
+            {
+                return null;
+            }
+
+            string holder = Path.Combine(Path.GetTempPath(), "craft-undo", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(holder);
+            string copy = Path.Combine(holder, Path.GetFileName(path));
+            if (isFolder)
+            {
+                CopyFolder(path, copy);
+            }
+            else
+            {
+                File.Copy(path, copy);
+            }
+
+            return copy;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // What was held for Undo goes (the bar's time is up, or it was not needed), off the UI thread.
+    private static void DropHeld(string? held)
+    {
+        if (held is null || Path.GetDirectoryName(held) is not { } holder)
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                Directory.Delete(holder, recursive: true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Left in the temporary folder, which the system empties.
+            }
+        });
+    }
+
+    // Undo of a delete: the held copy back at its place (unless something took the name meanwhile, said), the tabs that
+    // closed opened again.
+    private async Task RestoreHeldAsync(string held, string path, bool isFolder, List<string> reopen)
+    {
+        string name = Path.GetFileName(path);
+        using var activity = Host.Activities.Start($"Restoring {name}");
+        string? error = await Task.Run(() =>
+        {
+            try
+            {
+                if (File.Exists(path) || Directory.Exists(path))
+                {
+                    return $"{name} is there again: the deleted one was not put back.";
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                if (isFolder)
+                {
+                    CopyFolder(held, path);
+                }
+                else
+                {
+                    File.Copy(held, path);
+                }
+
+                return null;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return e.Message;
+            }
+        });
+        DropHeld(held);
+        if (error is not null)
+        {
+            activity.Fail(error);
+            Host.ShowStatus("Undo delete", error, NotificationSeverity.Warning);
+            return;
+        }
+
+        activity.Complete("restored");
+        _treeWatch?.Touch(path);
+        Tree?.Reveal(path);
+        foreach (var file in reopen)
+        {
+            await OpenFileAsync(file);
+        }
     }
 
     private async Task RevealInFileManagerAsync(string? path, CancellationToken cancellationToken)
@@ -401,7 +661,7 @@ public sealed partial class ShellModel
         }
 
         int at = group.Tabs.IndexOf(keep);
-        var closing = group.Tabs.Tabs.Where((tab, index) => !ReferenceEquals(tab, keep) && (!toTheRight || index > at)).ToArray();
+        var closing = group.Tabs.Tabs.Where((tab, index) => !ReferenceEquals(tab, keep) && !tab.IsPinned && (!toTheRight || index > at)).ToArray();
         foreach (var tab in closing)
         {
             if (!await CloseTabAsync(tab, cancellationToken))

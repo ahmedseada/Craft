@@ -15,7 +15,14 @@ public sealed record FolderListing(string Folder, bool Exists, IReadOnlyList<Wor
 /// <param name="Entry">The file or folder.</param>
 /// <param name="Depth">Its depth below the root (0 for the root's own entries).</param>
 /// <param name="IsExpanded">Whether it is a folder shown open.</param>
-public sealed record FolderTreeRow(WorkspaceEntry Entry, int Depth, bool IsExpanded);
+public sealed record FolderTreeRow(WorkspaceEntry Entry, int Depth, bool IsExpanded)
+{
+    /// <summary>
+    /// Whether it is the row of a file or folder being named in place (X part 7: New file, New folder): not on the disk
+    /// yet, its name empty, its path its folder's with a separator at the end.
+    /// </summary>
+    public bool IsNew { get; init; }
+}
 
 /// <summary>
 /// The folder tree of a <see cref="Workspace"/> as the rows the view shows: the root's entries, and below each expanded
@@ -29,6 +36,7 @@ public sealed class FolderTree
     private readonly HashSet<string> _expanded;
     private IReadOnlyList<WorkspaceEntry> _root;
     private List<FolderTreeRow> _rows = [];
+    private (string Folder, bool IsFolder)? _pendingNew;
 
     /// <summary>The tree of <paramref name="workspace"/>, its root listed.</summary>
     public FolderTree(Workspace workspace)
@@ -112,6 +120,99 @@ public sealed class FolderTree
 
         return true;
     }
+
+    /// <summary>
+    /// Closes every open folder below <paramref name="folder"/> and the folder itself (X part 7: Collapse all inside), or
+    /// every open folder when null (Collapse all); false when none was open.
+    /// </summary>
+    public bool Collapse(string? folder = null)
+    {
+        int before = _expanded.Count;
+        if (folder is null)
+        {
+            _expanded.Clear();
+        }
+        else
+        {
+            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+            var below = full + Path.DirectorySeparatorChar;
+            var comparison = ReferenceEquals(PathKeys.Comparer, StringComparer.OrdinalIgnoreCase) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            _expanded.RemoveWhere(k => PathKeys.Comparer.Equals(k, full) || k.StartsWith(below, comparison));
+        }
+
+        if (_expanded.Count == before)
+        {
+            return false;
+        }
+
+        Rebuild();
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>Whether the folder <paramref name="folder"/> is shown open.</summary>
+    public bool IsExpanded(string folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        return _expanded.Contains(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)));
+    }
+
+    /// <summary>The entries the tree holds for <paramref name="folder"/> (the root's or a listed folder's), or null when it holds none (nothing read from the disk).</summary>
+    public IReadOnlyList<WorkspaceEntry>? EntriesOf(string folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        if (PathKeys.Comparer.Equals(full, Workspace.Root))
+        {
+            return _root;
+        }
+
+        return _listed.TryGetValue(full, out var entries) ? entries : null;
+    }
+
+    /// <summary>
+    /// Shows a row to name a new file or folder in place (X part 7) at the top of <paramref name="folder"/>'s entries, the
+    /// folder (and those above it) opened; false when the folder is not in the workspace.
+    /// </summary>
+    public bool BeginNew(string folder, bool isFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        bool isRoot = PathKeys.Comparer.Equals(full, Workspace.Root);
+        if (!isRoot && !Workspace.Contains(full))
+        {
+            return false;
+        }
+
+        if (!isRoot)
+        {
+            for (var at = full; at is not null && !PathKeys.Comparer.Equals(at, Workspace.Root); at = Path.GetDirectoryName(at))
+            {
+                _expanded.Add(at);
+            }
+        }
+
+        _pendingNew = (full, isFolder);
+        Rebuild();
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>Takes the row of <see cref="BeginNew"/> away (named or cancelled).</summary>
+    public void EndNew()
+    {
+        if (_pendingNew is null)
+        {
+            return;
+        }
+
+        _pendingNew = null;
+        Rebuild();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The path of the row <see cref="BeginNew"/> shows (its folder's, with a separator at the end), or null.</summary>
+    public string? NewRowPath => _pendingNew is { } pending ? pending.Folder + Path.DirectorySeparatorChar : null;
 
     /// <summary>Reads the root and every open folder again (files added or removed outside the editor).</summary>
     public void Refresh()
@@ -241,12 +342,17 @@ public sealed class FolderTree
     private void Rebuild()
     {
         var rows = new List<FolderTreeRow>(_rows.Count + 16);
-        Add(rows, _root, 0);
+        Add(rows, _root, 0, Workspace.Root);
         _rows = rows;
     }
 
-    private void Add(List<FolderTreeRow> rows, IReadOnlyList<WorkspaceEntry> entries, int depth)
+    private void Add(List<FolderTreeRow> rows, IReadOnlyList<WorkspaceEntry> entries, int depth, string folder)
     {
+        if (_pendingNew is { } pending && PathKeys.Comparer.Equals(pending.Folder, folder))
+        {
+            rows.Add(new FolderTreeRow(new WorkspaceEntry("", folder + Path.DirectorySeparatorChar, pending.IsFolder), depth, false) { IsNew = true });
+        }
+
         foreach (var entry in entries)
         {
             bool expanded = entry.IsFolder && _expanded.Contains(entry.FullPath);
@@ -259,7 +365,7 @@ public sealed class FolderTree
                     _listed[entry.FullPath] = children;
                 }
 
-                Add(rows, children, depth + 1);
+                Add(rows, children, depth + 1, entry.FullPath);
             }
         }
     }

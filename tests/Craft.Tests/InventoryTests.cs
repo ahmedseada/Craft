@@ -126,6 +126,8 @@ public static class InventoryTests
             // X part 10: the chat and the agent redesigned.
             ["CRAFT_CHAT_EXPANDED"] = "true", ["CRAFT_COMPOSER_MAX_LINES"] = "6", ["CRAFT_CHAT_COPY_FORMAT"] = "plain", ["CRAFT_CHAT_FOLD_CODE_LINES"] = "10",
             ["CRAFT_CHAT_SHOW_METRICS"] = "false",
+            // X part 7: rich context menus.
+            ["CRAFT_TABS_REOPEN_LIMIT"] = "7", ["CRAFT_DELETE_UNDO_MAX_MB"] = "2", ["CRAFT_MENU_TYPE_AHEAD_MS"] = "400", ["CRAFT_MENU_SUBMENU_DELAY_MS"] = "0",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -169,6 +171,7 @@ public static class InventoryTests
             SearchMaxResults = 500, SearchMaxFileMegabytes = 3, SearchThreads = 2, SearchIgnoreFiles = false, SearchProvider = "code",
             RunSandbox = "approve-each", RunTimeLimitMinutes = 30, RunApproval = "each",
             ChatExpanded = true, ComposerMaxLines = 6, ChatCopyFormat = "plain", ChatFoldCodeLines = 10, ChatShowMetrics = false,
+            TabsReopenLimit = 7, DeleteUndoMaxMegabytes = 2, MenuTypeAheadMilliseconds = 400, MenuSubmenuDelayMilliseconds = 0,
         }, options, "options read from every variable");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");
         Check.True(Equals(new CraftOptions(), new CraftOptions()), "two default options compare equal (no list made per instance)");

@@ -136,6 +136,28 @@ public sealed class TextDocument : IMultiSelectionDocument
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Takes the text as it is now for the file's own (X part 7: Revert file just made it the file's text again): the
+    /// document is no longer dirty, and an undo or redo away from this point makes it dirty again. A document without a
+    /// file is left as it is.
+    /// </summary>
+    public void MarkUnchanged()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (FilePath is null || _savedState == _state)
+        {
+            return;
+        }
+
+        if (_undo.Count > 0)
+        {
+            _undo[^1].Open = false;                          // the next typing starts a step of its own, as after a save
+        }
+
+        _savedState = _state;
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <inheritdoc />
     public ITextSnapshot Edit(ReadOnlySpan<TextEdit> edits, EditKind kind, SelectionState before, SelectionState after)
     {

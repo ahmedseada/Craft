@@ -164,7 +164,16 @@ public sealed class ShellPage : ContentPage, IDisposable
         _shell.EditorOf = tab => (tab.View as EditorView)?.Model;     // format on save goes through the tab's editor
         _palette = new ShellPalette(_shell.Theme, _shell.Options);
         ShellMotion.Milliseconds = Motion.Duration(_shell.Options);
-        _menuView = new MenuView(_menu, _palette);
+        _menuView = new MenuView(_menu, _palette) { SubmenuDelayMilliseconds = _shell.Options.MenuSubmenuDelayMilliseconds };
+        // X part 7: the menus' targets described for their rows' "when"; a submenu's card beside its row; typing jumps.
+        _menu.Describe = _shell.DescribeMenuTarget;
+        _menu.TypeAheadMilliseconds = _shell.Options.MenuTypeAheadMilliseconds;
+        _menuView.SubmenuShown += (_, e) =>
+        {
+            _popup.ShowBeside(e.Card, e.OffsetY, MenuWidth);
+            _ = ShellMotion.ShowAsync(e.Card, -4);
+        };
+        _menuView.SubmenuHidden += (_, _) => _popup.HideBeside();
         _menu.Changed += (_, _) =>
         {
             if (!_menu.IsOpen && ReferenceEquals(_popup.Shown, _menuView))
@@ -456,6 +465,15 @@ public sealed class ShellPage : ContentPage, IDisposable
         _shell.ThemeChanged += (_, _) => ApplyTheme();
         _shell.ViewRequested += (_, view) => OnViewRequested(view);
         _shell.RevealRequested += (_, path) => _tree.ScrollTo(path);
+        // X part 7: names typed in place in the tree (new file, new folder, rename), checked as they are typed.
+        _shell.TreeEditChanged += (_, _) => _tree.Edit = _shell.TreeEdit;
+        _tree.EditTextChanged += (_, text) => _tree.EditProblem = _shell.TreeEditProblem(text);
+        _tree.EditCommitted += (_, text) => _ = _shell.CommitTreeEditAsync(text);
+        _tree.EditCancelled += (_, _) =>
+        {
+            _shell.CancelTreeEdit();
+            _shown?.Focus();
+        };
         _shell.Recent.Changed += OnRecentChanged;
         _host.KeyBindingsChanged += OnKeyBindingsChanged;
         _shell.Layout.Changed += (_, _) => ApplyLayout();
@@ -1538,6 +1556,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         strip.CloseRequested += (_, tab) => _ = _shell.CloseTabAsync(tab);
         strip.ListRequested += (_, _) => _ = PickTabAsync(group);
         strip.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, e.Tab.FilePath, false, e.Tab), e.Where);
+        strip.UnpinRequested += (_, tab) => _shell.Groups.GroupOf(tab)?.Tabs.SetPinned(tab, false);
         strip.NewFileRequested += (_, _) =>
         {
             _shell.Groups.Focus(group);
@@ -2067,6 +2086,8 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         _groupsView.MinimumSize = options.PanelMinimumSize;
         _tree.MovesEntries = options.TreeDragMove;
+        _menu.TypeAheadMilliseconds = options.MenuTypeAheadMilliseconds;
+        _menuView.SubmenuDelayMilliseconds = options.MenuSubmenuDelayMilliseconds;
         foreach (var tab in _shell.Groups.AllTabs)
         {
             if (tab.View is EditorView view && !ReferenceEquals(view.Options, options) && !Equals(view.Options, options))
@@ -2106,6 +2127,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         var layout = _shell.Layout;
         var panels = _shell.Panels;
         bool narrow = layout.IsNarrow;
+        _shell.InlineTreeEdits = !narrow;                    // X part 7: names in place where the explorer shows beside the editor
         bool windowBar = _windowTitleBar is not null && !narrow;
         if (_window is not null)
         {

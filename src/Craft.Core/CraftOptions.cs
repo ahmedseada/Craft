@@ -657,6 +657,23 @@ public sealed record CraftOptions
     /// </summary>
     public string RunApproval { get; init; } = "once";
 
+    // X part 7: rich context menus in the explorer and on the tabs.
+
+    /// <summary>The closed tabs Reopen closed (Ctrl+Shift+T) keeps, with their carets (<c>CRAFT_TABS_REOPEN_LIMIT</c>); 0 keeps none.</summary>
+    public int TabsReopenLimit { get; init; } = 20;
+
+    /// <summary>
+    /// A file or folder up to this many megabytes is kept aside when deleted, so the inline bar's Undo brings it back
+    /// (<c>CRAFT_DELETE_UNDO_MAX_MB</c>); a larger one asks first instead; 0 always asks.
+    /// </summary>
+    public int DeleteUndoMaxMegabytes { get; init; } = 64;
+
+    /// <summary>Milliseconds within which letters typed in an open menu add up to jump to a row (<c>CRAFT_MENU_TYPE_AHEAD_MS</c>).</summary>
+    public int MenuTypeAheadMilliseconds { get; init; } = 700;
+
+    /// <summary>Milliseconds the pointer rests on a menu's row before its submenu opens (or another closes) (<c>CRAFT_MENU_SUBMENU_DELAY_MS</c>).</summary>
+    public int MenuSubmenuDelayMilliseconds { get; init; } = 200;
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -827,6 +844,11 @@ public sealed record CraftOptions
         new("CRAFT_RUN_SANDBOX", "process", "The command sandbox the Run view's runs and builds go through (a name in Idrak's CommandSandboxes); a workspace cannot set it.") { Shape = SettingShape.Text(SettingSections.Terminal, "Runs go through the sandbox", "Run") },
         new("CRAFT_RUN_TIME_LIMIT_MINUTES", "0", "Minutes a run or build may take before it is stopped with its process tree; 0: no limit.") { Shape = SettingShape.Whole(SettingSections.Terminal, "Stop a run after", 0, 10_080, "min", "Run") },
         new("CRAFT_RUN_APPROVAL", "once", "When the Run view asks before a command runs: once (each command line the first time in a session) or each (every run); a workspace cannot set it.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Ask before a run", ["once", "each"], "Run") },
+        // X part 7: rich context menus in the explorer and on the tabs.
+        new("CRAFT_TABS_REOPEN_LIMIT", "20", "The closed tabs Reopen closed (Ctrl+Shift+T) keeps, each with its caret, group and place; 0 keeps none.") { Shape = SettingShape.Whole(SettingSections.Files, "Closed tabs kept to reopen", 0, 1000, "tabs", "Tabs") },
+        new("CRAFT_DELETE_UNDO_MAX_MB", "64", "A file or folder up to this size is kept aside when deleted from the explorer, so Undo brings it back; a larger one is asked about first; 0 always asks.") { Shape = SettingShape.Whole(SettingSections.Files, "Keep deleted files for Undo up to", 0, 4096, "MB", "Tree") },
+        new("CRAFT_MENU_TYPE_AHEAD_MS", "700", "Milliseconds within which letters typed in an open menu add up to jump to the row they start.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Menu typing joins letters within", 100, 5000, "ms", "Menus", step: 50) },
+        new("CRAFT_MENU_SUBMENU_DELAY_MS", "200", "Milliseconds the pointer rests on a menu's row before its submenu opens (or an open one closes).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Submenus open after", 0, 2000, "ms", "Menus", step: 50) },
     ];
 
     /// <summary>
@@ -1639,6 +1661,26 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_RUN_APPROVAL") is { } runApproval)
         {
             options = options with { RunApproval = OneOf(runApproval, "CRAFT_RUN_APPROVAL", "once", "each") };
+        }
+
+        if (Text(read, "CRAFT_TABS_REOPEN_LIMIT") is { } reopenLimit)
+        {
+            options = options with { TabsReopenLimit = Whole(reopenLimit, "CRAFT_TABS_REOPEN_LIMIT", 0, 1000) };
+        }
+
+        if (Text(read, "CRAFT_DELETE_UNDO_MAX_MB") is { } deleteUndo)
+        {
+            options = options with { DeleteUndoMaxMegabytes = Whole(deleteUndo, "CRAFT_DELETE_UNDO_MAX_MB", 0, 4096) };
+        }
+
+        if (Text(read, "CRAFT_MENU_TYPE_AHEAD_MS") is { } typeAhead)
+        {
+            options = options with { MenuTypeAheadMilliseconds = Whole(typeAhead, "CRAFT_MENU_TYPE_AHEAD_MS", 100, 5000) };
+        }
+
+        if (Text(read, "CRAFT_MENU_SUBMENU_DELAY_MS") is { } submenuDelay)
+        {
+            options = options with { MenuSubmenuDelayMilliseconds = Whole(submenuDelay, "CRAFT_MENU_SUBMENU_DELAY_MS", 0, 2000) };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

@@ -14,7 +14,20 @@ namespace Craft.Editor.Shell;
 /// <param name="CommandId">The command.</param>
 /// <param name="StartsGroup">Whether a line separates it from the row before (a new group).</param>
 /// <param name="Enabled">Whether the command can run now.</param>
-public sealed record MenuRow(string Title, string? Chord, string CommandId, bool StartsGroup, bool Enabled);
+public sealed record MenuRow(string Title, string? Chord, string CommandId, bool StartsGroup, bool Enabled)
+{
+    /// <summary>Its icon (<see cref="MenuItem.Icon"/>: stroke path data, a file type's "file:Name", or the folder's), or null.</summary>
+    public string? Icon { get; init; }
+
+    /// <summary>The menu that opens beside it (X part 7), or null for a row that runs its command.</summary>
+    public string? Submenu { get; init; }
+
+    /// <summary>Why it cannot run (its command's <see cref="IEditorCommand.DisabledReason"/>, or its submenu's), shown as its tooltip; null when it can.</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>Its item's <see cref="MenuItem.Argument"/> (the target's while its command starts), or null.</summary>
+    public string? Argument { get; init; }
+}
 
 /// <summary>The title bar's menus as rows (<see cref="EditorMenus"/> over <see cref="EditorCommands"/>).</summary>
 public static class ShellMenus
@@ -44,26 +57,78 @@ public static class ShellMenus
     }
 
     /// <summary>
-    /// The rows of <paramref name="menu"/>: its items whose command is registered, by group and order, each with its
-    /// chord (the keys in effect, <see cref="EditorHost.KeysOf"/>, so a remap shows; else the item's <see cref="MenuItem.Shortcut"/>)
-    /// and whether it can run in <paramref name="host"/>.
+    /// The rows of <paramref name="menu"/> on <see cref="EditorContextMenus.Target"/> (<see cref="Rows(string, IEditorHost, ContextMenuTarget?)"/>).
     /// </summary>
-    public static IReadOnlyList<MenuRow> Rows(string menu, IEditorHost host)
+    public static IReadOnlyList<MenuRow> Rows(string menu, IEditorHost host) => Rows(menu, host, EditorContextMenus.Target);
+
+    /// <summary>
+    /// The rows of <paramref name="menu"/> on <paramref name="target"/>: its items (and its sources' rows,
+    /// <see cref="EditorMenuSources"/>) that show there (<see cref="MenuItem.When"/>) and whose command is registered, by
+    /// group and order, each with its icon, its chord (the keys in effect, <see cref="EditorHost.KeysOf"/>, so a remap
+    /// shows; else the item's <see cref="MenuItem.Shortcut"/>), whether it can run in <paramref name="host"/> and why not.
+    /// A submenu's row can run when one of its own rows can. A command's check reads <see cref="EditorContextMenus.Target"/>:
+    /// the caller sets it to <paramref name="target"/> while it asks (<see cref="MenuModel.Open"/> does).
+    /// </summary>
+    public static IReadOnlyList<MenuRow> Rows(string menu, IEditorHost host, ContextMenuTarget? target)
     {
         ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(menu);
+        return RowsCore(menu, host, target, 0);
+    }
+
+    private static List<MenuRow> RowsCore(string menu, IEditorHost host, ContextMenuTarget? target, int depth)
+    {
         var rows = new List<MenuRow>();
-        int? group = null;
-        foreach (var item in EditorMenus.ItemsOf(menu))
+        var items = EditorMenus.ItemsOf(menu);
+        var made = EditorMenuSources.ItemsFor(menu, target);
+        if (made.Count > 0)
         {
+            var all = new List<MenuItem>(items.Count + made.Count);
+            all.AddRange(items);
+            all.AddRange(made);
+            all.Sort(ByPlace);
+            items = all;
+        }
+
+        int? group = null;
+        foreach (var item in items)
+        {
+            if (item.When is { } when && !SafeMatches(when, target))
+            {
+                continue;
+            }
+
+            if (item.Submenu is { } submenu)
+            {
+                // A submenu's rows are asked as the menu opens (one level deep is drawn; a deeper one still counts its rows).
+                var inner = depth < 4 ? RowsCore(submenu, host, target, depth + 1) : [];
+                bool any = inner.Exists(r => r.Enabled);
+                string title = item.Title ?? (EditorCommands.Find(item.CommandId) is { } titled ? MenuTitle(titled) : item.CommandId);
+                rows.Add(new MenuRow(title, null, item.CommandId, group is not null && group != item.Group, any)
+                {
+                    Icon = item.Icon,
+                    Submenu = submenu,
+                    Argument = item.Argument,
+                    Reason = any ? null : inner.Find(r => r.Reason is not null)?.Reason ?? "Nothing to choose here.",
+                });
+                group = item.Group;
+                continue;
+            }
+
             if (EditorCommands.Find(item.CommandId) is not { } command)
             {
                 continue;
             }
 
             bool enabled;
+            string? reason = null;
             try
             {
                 enabled = command.CanExecute(host);
+                if (!enabled)
+                {
+                    reason = command.DisabledReason(host);
+                }
             }
 #pragma warning disable CA1031 // A command whose check throws shows disabled, never a crash.
             catch (Exception)
@@ -73,12 +138,36 @@ public static class ShellMenus
             }
 
             string? chord = host is EditorHost editorHost ? editorHost.KeysOf(command.Name) : ChordOf(command.Name);
-            rows.Add(new MenuRow(item.Title ?? MenuTitle(command), chord ?? item.Shortcut, command.Name, group is not null && group != item.Group, enabled));
+            rows.Add(new MenuRow(item.Title ?? MenuTitle(command), chord ?? item.Shortcut, command.Name, group is not null && group != item.Group, enabled)
+            {
+                Icon = item.Icon,
+                Argument = item.Argument,
+                Reason = reason,
+            });
             group = item.Group;
         }
 
         return rows;
     }
+
+    private static bool SafeMatches(MenuWhen when, ContextMenuTarget? target)
+    {
+        try
+        {
+            return when.Matches(target);
+        }
+#pragma warning disable CA1031 // A plug-in's test that throws hides its row, never a crash.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            return false;
+        }
+    }
+
+    // By group, then order, then title (as EditorMenus.ItemsOf orders a menu's items).
+    private static int ByPlace(MenuItem a, MenuItem b) => a.Group != b.Group ? a.Group.CompareTo(b.Group)
+        : a.Order != b.Order ? a.Order.CompareTo(b.Order)
+        : string.Compare(a.Title ?? a.CommandId, b.Title ?? b.CommandId, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>The state of a language's semantic layer as the shell shows it (the status bar while it loads or failed, the language item's tooltip, B10's notification).</summary>

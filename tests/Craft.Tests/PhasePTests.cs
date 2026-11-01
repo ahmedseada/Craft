@@ -475,7 +475,8 @@ public static class PhasePTests
             Check.True(File.Exists(Path.Combine(output, "plugin.json")), $"{name}'s build output carries its plugin.json");
             Check.True(!File.Exists(Path.Combine(output, "Idrak.Abstraction.dll")), $"{name} carries no copy of Idrak.Abstraction (the host's)");
             var manifest = PluginManifest.Read(File.ReadAllBytes(Path.Combine(output, "plugin.json")), name, out var problems);
-            Check.True(manifest is { ContractVersion: "1.0" }, $"{name}'s plugin.json reads ({string.Join("; ", problems)})");
+            var stated = StatedContractVersion(name);
+            Check.True(manifest is not null && manifest.ContractVersion == stated, $"{name}'s plugin.json reads, at the contract its source states ({stated}; {string.Join("; ", problems)})");
         }
     }
 
@@ -492,6 +493,18 @@ public static class PhasePTests
         return output;
     }
 
+    /// <summary>The contract version plugins/NAME/plugin.json states, checked to be one this Craft loads (its major, not newer):
+    /// a plug-in steps it when it uses a newer minor's members, so the tests follow the plug-in rather than a fixed "1.0".</summary>
+    internal static string StatedContractVersion(string name)
+    {
+        var manifest = PluginManifest.Read(File.ReadAllBytes(TestRunner.RepositoryPath("plugins", name, PluginManifest.FileName)), name, out var problems);
+        Check.True(manifest is not null, $"plugins/{name}/plugin.json reads ({string.Join("; ", problems)})");
+        var version = CraftContracts.Parse(manifest!.ContractVersion);
+        Check.True(version is not null && version.Major == CraftContracts.Version.Major && version <= CraftContracts.Version,
+            $"plugins/{name}/plugin.json states contract {manifest.ContractVersion}, one this Craft ({CraftContracts.Version.ToString(2)}) loads");
+        return manifest.ContractVersion;
+    }
+
     /// <summary>Copies the plug-in's build output to TEMP/plugins/NAME/ and loads it from there, as the app does; its assembly.</summary>
     internal static System.Reflection.Assembly LoadFromFolder(TempFolder temp, string name)
     {
@@ -506,7 +519,8 @@ public static class PhasePTests
 
         File.Delete(Path.Combine(folder, "Craft.Abstractions.dll"));         // the host's, as the app's copy leaves it out
         var result = CraftPlugins.LoadFolder(folder);
-        Check.True(result is { Loaded: true, Manifest.ContractVersion: "1.0" }, $"{name} loads from its folder ({result.Error})");
+        var stated = StatedContractVersion(name);
+        Check.True(result.Loaded && result.Manifest?.ContractVersion == stated, $"{name} loads from its folder at the contract it states, {stated} ({result.Error})");
         var assembly = AssemblyLoadContext.All.Where(c => c != AssemblyLoadContext.Default).SelectMany(c => c.Assemblies)
             .Last(a => a.GetName().Name == name && a.Location.StartsWith(folder, StringComparison.Ordinal));
         return assembly;

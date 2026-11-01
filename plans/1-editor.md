@@ -25,6 +25,13 @@ Windows run (2026-11-01)" at the end.
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
 
+**The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
+before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a
+leftover or a new enhancement while a W piece is ready. What a W slot leaves undone goes into one "Left, for later"
+line in its "as built" section and into row 10 above, never into a follow-up slot of its own; a failing test on
+`main` is the only thing that may interrupt W. New asks from the owner are written into the plan and queued after W
+unless the owner says otherwise.
+
 ## The original status (2026-10-31)
 
 Planned 2026-10-31 against Idrak `main` d01a3b1 and Craft `main` 39f26ab; reviewed and verified against

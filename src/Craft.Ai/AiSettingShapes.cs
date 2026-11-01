@@ -15,6 +15,7 @@ namespace Craft.Ai;
 public static class AiSettingShapes
 {
     private const string ModelGroup = "Model";
+    private const string DraftGroup = "Speculative decoding";
     private static readonly string[] Devices = ["auto", "cpu", "cuda:0", "vulkan:0"];
     private static readonly string[] Weights = ["", "int8", "int4", "bfloat16"];
 
@@ -30,7 +31,8 @@ public static class AiSettingShapes
         ArgumentNullException.ThrowIfNull(setting);
         return setting.Key.StartsWith("completion", StringComparison.Ordinal) ? SettingSections.Completion
             : setting.Key.StartsWith("agent", StringComparison.Ordinal) ? SettingSections.Agent
-            : setting.Key.StartsWith("chat", StringComparison.Ordinal) || setting.Key is "model" or "device" or "weights" or "context" or "keepAliveMinutes" ? SettingSections.Chat
+            : setting.Key.StartsWith("chat", StringComparison.Ordinal) || setting.Key.StartsWith("draft", StringComparison.Ordinal)
+              || setting.Key is "model" or "device" or "weights" or "context" or "keepAliveMinutes" ? SettingSections.Chat
             : SettingSections.Models;
     }
 
@@ -45,6 +47,8 @@ public static class AiSettingShapes
         "keepAliveMinutes" => KeepAlive(SettingSections.Chat),
         "chatTemperature" => Temperature(SettingSections.Chat),
         "chatMaxTokens" => MaxTokens(SettingSections.Chat, "Most reply tokens"),
+        "draftModel" => SettingShape.Text(SettingSections.Chat, "Draft model (empty: the completion model when it matches; off: none)", DraftGroup),
+        "draftTokens" => DraftTokens(SettingSections.Chat, "Draft tokens a round (0: adapted)"),
 
         // Inline completion.
         "completion" => SettingShape.Toggle(SettingSections.Completion, "Inline completion (AI)", ModelGroup),
@@ -66,6 +70,8 @@ public static class AiSettingShapes
         "agentKeepAliveMinutes" => KeepAlive(SettingSections.Agent),
         "agentTemperature" => Temperature(SettingSections.Agent),
         "agentMaxTokens" => MaxTokens(SettingSections.Agent, "Most tokens per turn"),
+        "agentDraftModel" => SettingShape.Text(SettingSections.Agent, "Draft model (empty: the chat's; off: none)", DraftGroup),
+        "agentDraftTokens" => DraftTokens(SettingSections.Agent, "Draft tokens a round (0: adapted; empty: the chat's)"),
         "agentNudges" => SettingShape.Whole(SettingSections.Agent, "Corrections for unreadable tool calls", 0, 20, null, "Tool calls"),
         "agentCallsInText" => SettingShape.Toggle(SettingSections.Agent, "Read tool calls written as text", "Tool calls"),
 
@@ -88,6 +94,9 @@ public static class AiSettingShapes
 
     private static SettingShape Temperature(string section) =>
         SettingShape.Number(section, "Temperature", 0, 2, 0.05, null, ModelGroup);
+
+    private static SettingShape DraftTokens(string section, string title) =>
+        SettingShape.Whole(section, title, 0, 1024, "tokens", DraftGroup);
 
     private static SettingShape MaxTokens(string section, string title) =>
         SettingShape.Whole(section, title, 1, 1_000_000, "tokens", ModelGroup, step: 64);

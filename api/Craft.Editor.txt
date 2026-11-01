@@ -2181,6 +2181,7 @@ static class Craft.Editor.Shell.ShellText
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> Breadcrumb(System.String filePath, System.String workspaceRoot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> scopes)
   static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ModelPick> ModelPicks(Craft.Abstractions.ModelProviderStatus status, System.String role = null)
   static System.String Bytes(System.Int64 bytes)
+  static System.String DraftText(Craft.Abstractions.ModelRole role)
   static System.String EncodingName(System.Text.Encoding encoding, System.Boolean hasBom)
   static System.String Indentation(Craft.Core.CraftOptions options)
   static System.String LineEnding(System.String lineEnding)
@@ -2191,6 +2192,7 @@ static class Craft.Editor.Shell.ShellText
   static System.String Position(System.Int32 line, System.Int32 column)
   static System.String Problems(System.Int32 errors, System.Int32 warnings)
   static System.String Seconds(System.TimeSpan time)
+  static System.String ShortModelName(System.String name)
   static System.ValueTuple<Craft.Abstractions.IModelProvider, Craft.Abstractions.ModelProviderStatus>? ModelStatus()
 static class Craft.Editor.Shell.ShellTooltips
   static System.String For(Craft.Editor.EditorHost host, System.String title, System.String commandId)

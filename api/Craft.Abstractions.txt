@@ -1368,6 +1368,7 @@ static class Craft.Abstractions.ModelErrors
 sealed class Craft.Abstractions.ModelLease : System.IDisposable
   Idrak.Abstraction.Generation.IChatModel Chat { get; }
   Idrak.Abstraction.Generation.IChatTemplate ChatTemplate { get; init; }
+  Idrak.Abstraction.Generation.IDraftModel Draft { get; init; }
   Idrak.Abstraction.Generation.IPretrainedTokenizer Tokenizer { get; init; }
   Idrak.Abstraction.Generation.ITextModel Text { get; }
   System.Boolean Loaded { get; }
@@ -1449,9 +1450,12 @@ sealed class Craft.Abstractions.ModelRole : System.IEquatable<Craft.Abstractions
   System.Boolean InheritsModel { get; init; }
   System.Boolean IsLoading { get; init; }
   System.Boolean IsProblem { get; init; }
+  System.Double? DraftAcceptance { get; init; }
   System.Int32 GetHashCode()
   System.String Device { get; init; }
   System.String DeviceChoice { get; init; }
+  System.String Draft { get; init; }
+  System.String DraftState { get; init; }
   System.String Inherits { get; init; }
   System.String Key { get; init; }
   System.String LoadCommand { get; init; }

@@ -31,6 +31,26 @@ internal sealed class CopyGate
         return new Release(this, exclusive: false);
     }
 
+    /// <summary>
+    /// Passes a generation only when nothing holds the copy alone or waits to: null otherwise, at once (never waits). For a
+    /// draft (speculative decoding), which a reply does without rather than wait for.
+    /// </summary>
+    public IDisposable? TryEnter()
+    {
+        if (!_door.Wait(0))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            _running++;
+        }
+
+        _door.Release();
+        return new Release(this, exclusive: false);
+    }
+
     /// <summary>Takes the copy alone: once the running generations have ended; the next ones wait until it is disposed.</summary>
     public async Task<IDisposable> ExclusiveAsync(CancellationToken cancellationToken)
     {
@@ -117,6 +137,73 @@ internal sealed class GatedTextModel(ITextModel inner, CopyGate gate) : ITextMod
         await foreach (var chunk in inner.StreamAsync(prompt, options, cancellationToken).ConfigureAwait(false))
         {
             yield return chunk;
+        }
+    }
+}
+
+/// <summary>
+/// A copy as a draft for another model (speculative decoding, <see cref="Craft.Abstractions.ModelLease.Draft"/>): each
+/// drafting session passes the copy's gate while it lasts, as a generation does; while the copy is held alone (a training
+/// round), a session proposes nothing and the reply goes on without drafting, never waiting.
+/// </summary>
+internal sealed class GatedDraftModel(IDraftModel inner, CopyGate gate) : IDraftModel
+{
+    /// <inheritdoc />
+    public ITokenizer Tokenizer => inner.Tokenizer;
+
+    /// <inheritdoc />
+    public int Vocabulary => inner.Vocabulary;
+
+    /// <inheritdoc />
+    public IDraftSession StartDraft(IReadOnlyList<int> prompt, GenerationOptions options)
+    {
+        if (gate.TryEnter() is not { } pass)
+        {
+            return new Idle();
+        }
+
+        try
+        {
+            return new Session(inner.StartDraft(prompt, options), pass);
+        }
+        catch
+        {
+            pass.Dispose();
+            throw;
+        }
+    }
+
+    private sealed class Session(IDraftSession inner, IDisposable pass) : IDraftSession
+    {
+        public int Propose(Span<int> ids, Span<float> probabilities, int width, CancellationToken cancellationToken) =>
+            inner.Propose(ids, probabilities, width, cancellationToken);
+
+        public void Accept(int accepted, int next) => inner.Accept(accepted, next);
+
+        public void Dispose()
+        {
+            try
+            {
+                inner.Dispose();
+            }
+            finally
+            {
+                pass.Dispose();
+            }
+        }
+    }
+
+    // A session that proposes nothing: the target generates alone.
+    private sealed class Idle : IDraftSession
+    {
+        public int Propose(Span<int> ids, Span<float> probabilities, int width, CancellationToken cancellationToken) => 0;
+
+        public void Accept(int accepted, int next)
+        {
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

@@ -60,6 +60,23 @@ public sealed record AiSettings
     /// <summary>The library's default sampling temperature (Idrak's <see cref="GenerationOptions.Temperature"/>), the chat's default.</summary>
     public static float DefaultTemperature { get; } = new GenerationOptions().Temperature;
 
+    /// <summary>
+    /// The chat's draft model (<c>draftModel</c>, speculative decoding: a small model of the chat model's vocabulary
+    /// proposes tokens the chat model checks in one pass, the same replies in fewer passes): empty, the completion model
+    /// (its copy, never a second) when inline completion is on and its vocabulary is the chat model's; "off", none; else
+    /// a model's name.
+    /// </summary>
+    public string DraftModel { get; init; } = "";
+
+    /// <summary>The tokens the chat's draft proposes a round (<c>draftTokens</c>); 0: adapted to how many the chat model keeps.</summary>
+    public int DraftTokens { get; init; }
+
+    /// <summary>The agent's draft model (<c>agentDraftModel</c>); empty: the chat's (<c>draftModel</c>).</summary>
+    public string AgentDraftModel { get; init; } = "";
+
+    /// <summary>The tokens the agent's draft proposes a round (<c>agentDraftTokens</c>); empty: the chat's (<c>draftTokens</c>).</summary>
+    public int? AgentDraftTokens { get; init; }
+
     /// <summary>Whether the agent runs (<c>agentEnabled</c>); off: it loads no model and its panel says so.</summary>
     public bool AgentEnabled { get; init; } = true;
 
@@ -249,7 +266,11 @@ public sealed record AiSettings
     public int ChatImageMaxMegabytes { get; init; } = 20;
 
     /// <summary>The chat's model settings, resolved (note 25).</summary>
-    public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens);
+    public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens)
+    {
+        DraftModel = DraftModel.Trim(),
+        DraftTokens = DraftTokens,
+    };
 
     /// <summary>The agent's model settings, resolved: an empty model, device, weights, context, keep-alive or temperature is the chat's.</summary>
     public AiRoleSettings AgentRole => new(ModelRoleKeys.Agent, AgentEnabled,
@@ -263,6 +284,8 @@ public sealed record AiSettings
     {
         InheritsModel = AgentModel.Trim().Length == 0,
         InheritsDevice = AgentDevice.Trim().Length == 0,
+        DraftModel = AgentDraftModel.Trim() is { Length: > 0 } draft ? draft : DraftModel.Trim(),
+        DraftTokens = AgentDraftTokens ?? DraftTokens,
     };
 
     /// <summary>
@@ -273,7 +296,10 @@ public sealed record AiSettings
         CompletionContext ?? Context,
         CompletionWeights.Trim() is { Length: > 0 } weights ? WeightsOf(weights) : WeightsOf(Weights),
         CompletionKeepAliveMinutes ?? KeepAliveMinutes,
-        CompletionTemperature, CompletionMaxTokens);
+        CompletionTemperature, CompletionMaxTokens)
+    {
+        DraftModel = AiRoleSettings.NoDraft,                   // completion is the small model: it drafts for none of its own
+    };
 
     /// <summary>The role of key <paramref name="key"/> (<see cref="ModelRoleKeys"/>).</summary>
     /// <exception cref="ArgumentException">No role has that key.</exception>
@@ -337,6 +363,8 @@ public sealed record AiSettings
         new("chatImageMaxMb", "20", "The largest image a chat may carry, MB; a larger one dropped on the chat is not added."),
         new("placement", "semi-global", "The Idrak text matcher that places a model's snippet in a document."),
         new("placementMaxError", "0.35", "The largest share of a snippet's characters its placed span may differ in; more: it goes at the selection or caret."),
+        new("draftModel", "", "Speculative decoding for the chat: a small model of the chat model's vocabulary proposes tokens the chat model checks in one pass (the same replies, fewer passes of the large model); empty: the completion model (its copy) when inline completion is on and its vocabulary matches, else none; 'off': none; else a model's name."),
+        new("draftTokens", "0", "Tokens the chat's draft proposes a round; 0: adapted to how many the chat model keeps."),
         new("agentEnabled", "true", "Whether the agent runs; off: it loads no model."),
         new("agentModel", "", "The agent's model; empty: the chat's (model), so one copy is shared on the device."),
         new("agentDevice", "", "The device the agent's model loads on: auto, cpu, cuda:0, vulkan:0; empty: the chat's (device)."),
@@ -344,6 +372,8 @@ public sealed record AiSettings
         new("agentContext", "", "The agent's model's context window in tokens (0: the model's own); empty: the chat's (context)."),
         new("agentKeepAliveMinutes", "", "Minutes the agent's model stays loaded once unused; empty: the chat's (keepAliveMinutes)."),
         new("agentTemperature", "", "The agent's sampling temperature (0 takes the likeliest token); empty: the chat's (chatTemperature)."),
+        new("agentDraftModel", "", "The agent's draft model (speculative decoding); empty: the chat's (draftModel); 'off': none."),
+        new("agentDraftTokens", "", "Tokens the agent's draft proposes a round (0: adapted); empty: the chat's (draftTokens)."),
         new("agentSandbox", "approve-each", "The command sandbox the agent's commands run in; none registered under it: the agent runs no command."),
         new("agentMaxTurns", "20", "The agent's most turns."),
         new("agentMinutes", "20", "The agent's time limit in minutes."),
@@ -436,6 +466,10 @@ public sealed record AiSettings
             AgentContext = Inherited("agentContext", 0, 16_777_216),
             AgentKeepAliveMinutes = Inherited("agentKeepAliveMinutes", 0, 1_000_000),
             AgentTemperature = Text("agentTemperature") is null ? null : (float)Real("agentTemperature", 0, 0, 10),
+            DraftModel = Text("draftModel") ?? "",
+            DraftTokens = Whole("draftTokens", 0, 0, 1024),
+            AgentDraftModel = Text("agentDraftModel") ?? "",
+            AgentDraftTokens = Inherited("agentDraftTokens", 0, 1024),
             CompletionDevice = Text("completionDevice") ?? "",
             CompletionWeights = Text("completionWeights") ?? "",
             CompletionContext = Inherited("completionContext", 0, 16_777_216),
@@ -502,4 +536,19 @@ public sealed record AiRoleSettings(string Key, bool Enabled, string Model, stri
 
     /// <summary>Whether the device is the chat's (the agent's own setting is empty).</summary>
     public bool InheritsDevice { get; init; }
+
+    /// <summary>What <see cref="DraftModel"/> holds for a role that drafts with none: "off".</summary>
+    public const string NoDraft = "off";
+
+    /// <summary>
+    /// The model drafting for this role's (speculative decoding): empty for the completion model when its vocabulary
+    /// matches, <see cref="NoDraft"/> for none, else a model's name.
+    /// </summary>
+    public string DraftModel { get; init; } = "";
+
+    /// <summary>The tokens its draft proposes a round; 0: adapted to the acceptance.</summary>
+    public int DraftTokens { get; init; }
+
+    /// <summary>Whether <see cref="DraftModel"/> turns drafting off ("off" or "none").</summary>
+    public bool DraftOff => DraftModel.Equals(NoDraft, StringComparison.OrdinalIgnoreCase) || DraftModel.Equals("none", StringComparison.OrdinalIgnoreCase);
 }

@@ -105,6 +105,13 @@ public sealed class ModelLease : IDisposable
     /// </summary>
     public Func<CancellationToken, Task<IDisposable>>? Exclusive { get; init; }
 
+    /// <summary>
+    /// The model as a draft for another of its vocabulary (Idrak's <see cref="IDraftModel"/>, speculative decoding: it
+    /// proposes tokens the larger model checks in one pass, <see cref="GenerationOptions.Draft"/>), drafting on this copy
+    /// and passing its gate; null when the provider lends none.
+    /// </summary>
+    public IDraftModel? Draft { get; init; }
+
     /// <summary>The time this lease spent loading it: zero when it was loaded already.</summary>
     public TimeSpan LoadDuration { get; }
 
@@ -192,6 +199,18 @@ public sealed record ModelRole(string Role, string? Model, string State, bool Is
 
     /// <summary>Whether the role's model is loading now.</summary>
     public bool IsLoading { get; init; }
+
+    /// <summary>
+    /// The model drafting for the role's (speculative decoding: <c>draftModel</c>), or null when none drafts (turned off,
+    /// none to draft with, another vocabulary: <see cref="DraftState"/> says why).
+    /// </summary>
+    public string? Draft { get; init; }
+
+    /// <summary>The share of the draft's tokens the role's model kept (0 to 1) over its replies so far, or null before one was measured.</summary>
+    public double? DraftAcceptance { get; init; }
+
+    /// <summary>Why no draft drafts, or that it is loading, as the user reads it; null when it drafts or the provider has none to say.</summary>
+    public string? DraftState { get; init; }
 }
 
 /// <summary>The keys of the model roles (<see cref="ModelRole.Key"/>, <see cref="IConversationPanel.ModelRoleKey"/>).</summary>

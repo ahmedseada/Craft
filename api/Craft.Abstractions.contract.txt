@@ -1541,6 +1541,7 @@ Craft.Abstractions.ModelErrors  static System.Boolean IsOutOfMemory(System.Excep
 Craft.Abstractions.ModelLease
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IChatModel Chat { get; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IChatTemplate ChatTemplate { get; init; }
+Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IDraftModel Draft { get; init; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IPretrainedTokenizer Tokenizer { get; init; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.ITextModel Text { get; }
 Craft.Abstractions.ModelLease  System.Boolean Loaded { get; }
@@ -1626,9 +1627,12 @@ Craft.Abstractions.ModelRole  System.Boolean InheritsDevice { get; init; }
 Craft.Abstractions.ModelRole  System.Boolean InheritsModel { get; init; }
 Craft.Abstractions.ModelRole  System.Boolean IsLoading { get; init; }
 Craft.Abstractions.ModelRole  System.Boolean IsProblem { get; init; }
+Craft.Abstractions.ModelRole  System.Double? DraftAcceptance { get; init; }
 Craft.Abstractions.ModelRole  System.Int32 GetHashCode()
 Craft.Abstractions.ModelRole  System.String Device { get; init; }
 Craft.Abstractions.ModelRole  System.String DeviceChoice { get; init; }
+Craft.Abstractions.ModelRole  System.String Draft { get; init; }
+Craft.Abstractions.ModelRole  System.String DraftState { get; init; }
 Craft.Abstractions.ModelRole  System.String Inherits { get; init; }
 Craft.Abstractions.ModelRole  System.String Key { get; init; }
 Craft.Abstractions.ModelRole  System.String LoadCommand { get; init; }

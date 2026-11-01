@@ -287,12 +287,65 @@ public static class ShellText
         }
 
         string text = PlannedDevice(status, role) is { } device ? $"{model} · {device}" : model;
+        string draft = found is not null && DraftText(found) is { } drafting ? " · " + drafting : "";
         if (found is { Inherits: { } other, InheritsModel: true })
         {
-            return found.InheritsDevice ? $"same as {other.ToLowerInvariant()}: {text}" : $"{model} (same as {other.ToLowerInvariant()}) · {PlannedDevice(status, role)}".TrimEnd(' ', '·');
+            return (found.InheritsDevice ? $"same as {other.ToLowerInvariant()}: {text}" : $"{model} (same as {other.ToLowerInvariant()}) · {PlannedDevice(status, role)}".TrimEnd(' ', '·')) + draft;
         }
 
-        return found is { Enabled: false } ? text + " · off" : text;
+        return found is { Enabled: false } ? text + " · off" : text + draft;
+    }
+
+    /// <summary>
+    /// A role's draft as the chip and the status bar show it (speculative decoding): "draft: 1.5B, 72% accepted" once a
+    /// reply measured it, "draft: 1.5B" before; null when no draft drafts for the role.
+    /// </summary>
+    public static string? DraftText(ModelRole role)
+    {
+        ArgumentNullException.ThrowIfNull(role);
+        if (role.Draft is not { } draft || !role.Enabled)
+        {
+            return null;
+        }
+
+        string name = ShortModelName(draft);
+        return role.DraftAcceptance is { } kept
+            ? string.Create(CultureInfo.InvariantCulture, $"draft: {name}, {Math.Round(100 * kept):0}% accepted")
+            : $"draft: {name}";
+    }
+
+    /// <summary>
+    /// A model's name made short for a chip: its last part (after a folder, an owner or "store:"), without ".gguf", and of
+    /// a name with a size in it ("coder-1.5B") the size alone ("1.5B").
+    /// </summary>
+    public static string ShortModelName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string last = name.Trim().TrimEnd('/', '\\');
+        int cut = last.LastIndexOfAny(['/', '\\', ':']);
+        last = cut >= 0 ? last[(cut + 1)..] : last;
+        if (last.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
+        {
+            last = last[..^5];
+        }
+
+        foreach (string part in last.Split(['-', '_', '.'], StringSplitOptions.RemoveEmptyEntries).Reverse())
+        {
+            if (part.Length >= 2 && char.IsDigit(part[0]) && part[^1] is 'B' or 'b' or 'M' or 'm' && part[..^1].All(c => char.IsDigit(c) || c == '.'))
+            {
+                // "1.5B" splits at its point: take the size with its fraction from the name itself.
+                int end = last.LastIndexOf(part, StringComparison.Ordinal) + part.Length;
+                int start = end - part.Length;
+                while (start > 0 && (char.IsDigit(last[start - 1]) || last[start - 1] == '.'))
+                {
+                    start--;
+                }
+
+                return last[start..end];
+            }
+        }
+
+        return last.Length > 0 ? last : name;
     }
 
     /// <summary>
@@ -424,8 +477,10 @@ public static class ShellText
             string device = role.Device is { } running ? " on " + running
                 : role.Key is not null && role.Model is not null && PlannedDevice(status, role.Key) is { } planned ? " · " + planned
                 : "";
+            string draft = DraftText(role) is { } drafting ? " · " + drafting + (role.Draft is { } named && ShortModelName(named) != named ? $" ({named})" : "")
+                : role.DraftState is { } why ? " · no draft: " + why : "";
             lines.Add(!role.Enabled ? $"{role.Role}: off"
-                : $"{role.Role}: {role.Model ?? "none set"}{device} · {role.State}{(role.InheritsModel && role.Inherits is { } other ? $" (same as {other.ToLowerInvariant()})" : "")}");
+                : $"{role.Role}: {role.Model ?? "none set"}{device} · {role.State}{(role.InheritsModel && role.Inherits is { } other ? $" (same as {other.ToLowerInvariant()})" : "")}{draft}");
         }
 
         lines.Add("Pick a model with the chip under the chat's or the agent's input; each role's settings are on the settings page.");
@@ -454,6 +509,11 @@ public static class ShellText
         if (status.TokensPerSecond is { } speed)
         {
             parts.Add(string.Create(CultureInfo.InvariantCulture, $"{speed:0} tok/s"));
+        }
+
+        if (status.RoleOf(ModelRoleKeys.Chat) is { } chat && DraftText(chat) is { } draft)
+        {
+            parts.Add(draft);
         }
 
         return string.Join(" · ", parts);

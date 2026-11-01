@@ -46,6 +46,26 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     /// </summary>
     public Func<AiSettings>? SettingsSource { get; set; }
 
+    /// <summary>
+    /// Where <see cref="Status"/> reads each role's draft (speculative decoding: the session sets its models'
+    /// <see cref="AiModels.DraftOf"/>, so the chip and the status bar show "draft: 1.5B, 72% accepted"); null: none shown.
+    /// </summary>
+    public Func<string, AiModels.DraftStatus?>? DraftSource { get; set; }
+
+    /// <summary>Raises <see cref="StatusChanged"/> (a role's draft changed: loaded, refused, a reply measured).</summary>
+    internal void RaiseStatusChanged() => StatusChanged?.Invoke(this, EventArgs.Empty);
+
+    // A role's status with its draft (DraftSource), as the chip, the status bar and the tooltip read it.
+    private ModelRole WithDraft(ModelRole role)
+    {
+        if (role.Key is not { } key || DraftSource?.Invoke(key) is not { } draft)
+        {
+            return role;
+        }
+
+        return role with { Draft = draft.Model, DraftAcceptance = draft.Acceptance, DraftState = draft.State };
+    }
+
     /// <summary>The models loaded now.</summary>
     public IReadOnlyList<LoadedModel> Loaded => _models?.Loaded ?? [];
 
@@ -81,8 +101,8 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 Where = "local",
                 Roles =
                 [
-                    ChatRole(settings, loaded),
-                    AgentRole(settings, loaded),
+                    WithDraft(ChatRole(settings, loaded)),
+                    WithDraft(AgentRole(settings, loaded)),
                     CompletionRole(settings, loaded),
                 ],
                 Device = _device,
@@ -375,6 +395,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         {
             Tokenizer = model.Tokenizer,
             ChatTemplate = model.Pretrained.ChatTemplate,                   // the agent reads calls written as text and corrects in its format (note 27)
+            Draft = model.Draft,                                            // this copy drafting for another of its vocabulary, through its gate
             Underlying = model.Pretrained,                                  // the one copy, for a plug-in that trains it (B7)
             Exclusive = model.Gate.ExclusiveAsync,
         };
@@ -444,12 +465,14 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             int context = key.Context > 0 ? Math.Min(key.Context, model.MaxPositions) : model.MaxPositions;
             var layout = KeyValueLayouts.Get("float32");
             IChatModel? chat = model.ChatTemplate is null ? null : model.CreateChat(layout, context);
-            ITextModel text = model.CreateGenerator(layout, context);
-            // Every generation passes the copy's gate, so a training round on the copy (ModelLease.Exclusive) has it alone.
+            var generator = model.CreateGenerator(layout, context);
+            // Every generation passes the copy's gate, so a training round on the copy (ModelLease.Exclusive) has it alone;
+            // so does every drafting session for another model (speculative decoding), which never waits for it.
             var gate = new CopyGate();
-            return new LocalModel(model, chat is null ? null : new GatedChatModel(chat, gate), new GatedTextModel(text, gate), context, device.ToString(), gate)
+            return new LocalModel(model, chat is null ? null : new GatedChatModel(chat, gate), new GatedTextModel(generator, gate), context, device.ToString(), gate)
             {
                 Tokenizer = model.Tokenizer as IPretrainedTokenizer,
+                Draft = new GatedDraftModel(generator, gate),
             };
         }
         catch
@@ -523,6 +546,8 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         public string Device { get; } = device;
 
         public IPretrainedTokenizer? Tokenizer { get; init; }
+
+        public IDraftModel? Draft { get; init; }
 
         public void Dispose() => Pretrained.Dispose();
     }

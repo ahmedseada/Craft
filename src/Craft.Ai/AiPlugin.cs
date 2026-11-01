@@ -203,6 +203,9 @@ public sealed class AiSession : IDisposable
             Progress = new Progress<ModelLoadStatus>(status => _host.Dispatch("ai: a model load's stage", () => OnLoad(status))),
             Activities = host.Activities,
         };
+        // Each role's draft (speculative decoding) on the chip and the status bar: "draft: 1.5B, 72% accepted".
+        AiPlugin.Local.DraftSource = Models.DraftOf;
+        Models.DraftChanged += (_, _) => AiPlugin.Local.RaiseStatusChanged();
         // Phase U: the model's state as a status line of the notification centre (U2 moves the side panel's content there).
         _modelStatus = host.ShowStatus("Models", _modelState);
         Chat = new AiChatPanel(host, () => Settings, Models);
@@ -412,6 +415,11 @@ public sealed class AiSession : IDisposable
         CommitMessageProviders.Unregister(CommitMessages.Name);
         Chat.Dispose();
         Agent.Dispose();
+        if (ReferenceEquals(AiPlugin.Local.DraftSource?.Target, Models))
+        {
+            AiPlugin.Local.DraftSource = null;                           // a closed session's drafts are not shown
+        }
+
         Models.Dispose();
         _modelStatus.Dispose();
         _completionShown?.Dispose();

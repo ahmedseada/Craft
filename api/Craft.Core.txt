@@ -60,6 +60,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean InsertFinalNewline { get; init; }
   System.Boolean InsertSpaces { get; init; }
   System.Boolean Lightbulb { get; init; }
+  System.Boolean MarkdownPreviewFollow { get; init; }
   System.Boolean Minimap { get; init; }
   System.Boolean MinimapDiagnostics { get; init; }
   System.Boolean MinimapFind { get; init; }
@@ -70,10 +71,13 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean RestoreSession { get; init; }
   System.Boolean SearchIgnoreFiles { get; init; }
   System.Boolean SourceGenerators { get; init; }
+  System.Boolean SpellCheck { get; init; }
   System.Boolean SplitterSnap { get; init; }
   System.Boolean StickyScroll { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
   System.Boolean TerminalCursorBlink { get; init; }
+  System.Boolean TestGutter { get; init; }
+  System.Boolean TestProblems { get; init; }
   System.Boolean TreeDragMove { get; init; }
   System.Boolean TrimTrailingWhitespace { get; init; }
   System.Boolean WelcomeAtStart { get; init; }
@@ -86,6 +90,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Collections.Generic.IReadOnlyList<System.String> LoaderKinds { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> PluginFolders { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> TerminalEditorCommands { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> TodoTags { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceReaders { get; init; }
   System.Int32 ActivityFrameMilliseconds { get; init; }
@@ -120,12 +125,14 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 HostLogLines { get; init; }
   System.Int32 HoverDelayMilliseconds { get; init; }
   System.Int32 HoverHideMilliseconds { get; init; }
+  System.Int32 ImagePreviewMaxMegabytes { get; init; }
   System.Int32 LightbulbDelayMilliseconds { get; init; }
   System.Int32 LoaderCycleMilliseconds { get; init; }
   System.Int32 LoaderDelayMilliseconds { get; init; }
   System.Int32 LocalHistoryDays { get; init; }
   System.Int32 LocalHistoryFileMegabytes { get; init; }
   System.Int32 LocalHistoryMaxMegabytes { get; init; }
+  System.Int32 MarkdownPreviewDelayMilliseconds { get; init; }
   System.Int32 MaxCarets { get; init; }
   System.Int32 MenuSubmenuDelayMilliseconds { get; init; }
   System.Int32 MenuTypeAheadMilliseconds { get; init; }
@@ -162,6 +169,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SearchThreads { get; init; }
   System.Int32 SemanticColorsDelayMilliseconds { get; init; }
   System.Int32 SemanticMaxCharacters { get; init; }
+  System.Int32 SpellMinLength { get; init; }
+  System.Int32 SpellSuggestions { get; init; }
   System.Int32 SplitterHoverMilliseconds { get; init; }
   System.Int32 StickyScrollLines { get; init; }
   System.Int32 TabSize { get; init; }
@@ -173,6 +182,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 TerminalListFrom { get; init; }
   System.Int32 TerminalScrollback { get; init; }
   System.Int32 ToastMilliseconds { get; init; }
+  System.Int32 TodoMaxResults { get; init; }
   System.Int32 UiStallMilliseconds { get; init; }
   System.Int32 UiStallReports { get; init; }
   System.Int32 UiWatchdogMilliseconds { get; init; }
@@ -219,6 +229,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String RunInteractive { get; init; }
   System.String RunSandbox { get; init; }
   System.String SearchProvider { get; init; }
+  System.String SpellLanguage { get; init; }
   System.String TerminalArguments { get; init; }
   System.String TerminalCursor { get; init; }
   System.String TerminalDefaultProfile { get; init; }
@@ -239,6 +250,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   static System.Collections.Generic.IReadOnlyList<Craft.Core.CraftVariable> Variables { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultLoaderKinds { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultTerminalEditorCommands { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> DefaultTodoTags { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceIgnore { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceReaders { get; }
   static System.Int32[] ParseRulers(System.String rulers)

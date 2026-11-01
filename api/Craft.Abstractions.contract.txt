@@ -1809,10 +1809,10 @@ Craft.Abstractions.LineMarkKind  Bookmark = 4
 Craft.Abstractions.LineMarkKind  Changed = 1
 Craft.Abstractions.LineMarkKind  Conflict = 3
 Craft.Abstractions.LineMarkKind  Deleted = 2
-Craft.Abstractions.LineMarkKind  TestFailed = 6
-Craft.Abstractions.LineMarkKind  TestPassed = 5
-Craft.Abstractions.LineMarkKind  TestReady = 4
-Craft.Abstractions.LineMarkKind  TestSkipped = 7
+Craft.Abstractions.LineMarkKind  TestFailed = 7
+Craft.Abstractions.LineMarkKind  TestPassed = 6
+Craft.Abstractions.LineMarkKind  TestReady = 5
+Craft.Abstractions.LineMarkKind  TestSkipped = 8
 Craft.Abstractions.LineMarkKind : System.IComparable
 Craft.Abstractions.LineMarkKind : System.IConvertible
 Craft.Abstractions.LineMarkKind : System.IFormattable

@@ -16,7 +16,7 @@ namespace Craft.CSharp
         private static readonly LanguageRules MarkdownRules = new(null, "<!--", "-->", [new('(', ')'), new('[', ']')]);
 
         /// <summary>Markdown's language (made once): headings, emphasis marks, lists, quotes, code spans and fenced blocks, links, tables.</summary>
-        internal static ILanguage MarkdownLanguage { get; } = new ProjectLanguage(Markdown, "Markdown: headings, emphasis, lists, quotes, code (inline and fenced), links and tables; folded by heading",
+        internal static ILanguage MarkdownLanguage { get; } = new LineStateLanguage(Markdown, "Markdown: headings, emphasis, lists, quotes, code (inline and fenced), links and tables; folded by heading",
             [".md", ".markdown"], MarkdownRules, new MarkdownTokenizer(), null);
     }
 

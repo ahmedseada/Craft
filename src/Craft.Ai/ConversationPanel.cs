@@ -113,6 +113,65 @@ public abstract class ConversationPanel : IConversationPanel
     /// <inheritdoc />
     public virtual Task<int> AcceptDropAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) => Task.FromResult(0);
 
+    /// <inheritdoc />
+    public virtual ConversationCapabilities Capabilities => ConversationCapabilities.None;
+
+    /// <inheritdoc />
+    public virtual bool ShowsTimeline => false;
+
+    /// <inheritdoc />
+    public virtual IReadOnlyList<ConversationCommand> SlashCommands => [];
+
+    /// <inheritdoc />
+    public virtual Task RetryFromAsync(int index, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public virtual Task EditAndResendAsync(int index, string text, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public virtual void DeleteFrom(int index)
+    {
+    }
+
+    /// <inheritdoc />
+    public virtual Task<int>? AskInline(EditorQuestion question, CancellationToken cancellationToken) => null;
+
+    /// <summary>"coder-q4 · cuda:0": the model and the device its role runs on now (the provider's status), as the message's small header.</summary>
+    public static string HeaderOf(string model, string provider, string roleKey)
+    {
+        var status = ModelProviders.Find(provider)?.Status;
+        string? device = status?.Roles.FirstOrDefault(r => string.Equals(r.Key, roleKey, StringComparison.Ordinal))?.Device ?? status?.Device;
+        return device is { Length: > 0 } ? $"{model} · {device}" : model;
+    }
+
+    /// <summary>"212 tokens · 38 tok/s · 5.6 s": a finished reply's rate and time.</summary>
+    public static string Metrics(int tokens, double seconds) =>
+        Rate(tokens, seconds) + string.Create(CultureInfo.InvariantCulture, $" · {seconds:0.0} s");
+
+    /// <summary>A tool call's arguments and result as the timeline's details: the arguments (JSON), then the output's first lines.</summary>
+    public static string DetailsOf(ToolCall call, ToolResult? result, int outputLines = 40)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var text = new StringBuilder("Arguments: ").Append(call.Arguments.ToJsonString());
+        if (result is not null)
+        {
+            string output = result.Succeeded ? result.Content : "failed: " + result.Error;
+            var lines = output.ReplaceLineEndings("\n").Split('\n');
+            text.Append("\nOutput:");
+            for (int i = 0; i < Math.Min(lines.Length, outputLines); i++)
+            {
+                text.Append('\n').Append(lines[i]);
+            }
+
+            if (lines.Length > outputLines)
+            {
+                text.Append(CultureInfo.InvariantCulture, $"\n… {lines.Length - outputLines} more lines");
+            }
+        }
+
+        return text.ToString();
+    }
+
     /// <summary>Adds <paramref name="entry"/> at the end; its index.</summary>
     protected int Add(ConversationEntry entry)
     {

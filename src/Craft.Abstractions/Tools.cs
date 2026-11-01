@@ -112,4 +112,17 @@ public sealed record EditorQuestion(string Title, string Message, IReadOnlyList<
 
     /// <summary>The answer a dismissed question counts as (an index of <see cref="Choices"/>), or -1 for none.</summary>
     public int Dismissed { get; init; } = -1;
+
+    /// <summary>
+    /// What kind of question it is (<see cref="EditorQuestionKinds"/>), or null: a host may show a known kind where it
+    /// belongs (a command to approve inline in the agent's timeline) rather than in a dialog.
+    /// </summary>
+    public string? Kind { get; init; }
+}
+
+/// <summary>The known kinds of <see cref="EditorQuestion"/> (<see cref="EditorQuestion.Kind"/>).</summary>
+public static class EditorQuestionKinds
+{
+    /// <summary>A command the agent wants to run, asked by a sandbox: the conversation panel waiting on it may show it inline.</summary>
+    public const string Command = "command";
 }

@@ -21,10 +21,9 @@ namespace Craft.Maui.WinUI;
 /// </summary>
 public sealed class WindowsShellPlatform : IShellPlatform
 {
-    /// <summary>The Windows pieces; the messages' selectable text mapped once (<see cref="SelectableText"/>).</summary>
+    /// <summary>The Windows pieces (X part 10: the conversation is Craft's own read-only text surface, no selectable labels).</summary>
     public WindowsShellPlatform()
     {
-        SelectableText.Configure();
         WindowsControlStyles.Configure();                            // the owner's notes 10 and 12, before any control is made
         ComposerKeys.Configure();                                    // Enter sends, Shift+Enter a line, Escape leaves the composer
         EntryKeys.Configure();                                       // phase X: the palette's and find's keys before their text boxes

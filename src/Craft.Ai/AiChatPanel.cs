@@ -22,7 +22,7 @@ namespace Craft.Ai;
 /// (<see cref="AiSettings.ChatKeep"/>, <see cref="AiSettings.ChatFile"/>). State changes on the UI thread; the model runs
 /// on the thread pool.
 /// </summary>
-public sealed class AiChatPanel : ConversationPanel, IDisposable
+public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisposable
 {
     /// <summary>The panel's id.</summary>
     public const string PanelId = "ai.chat";
@@ -34,7 +34,14 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     private readonly Func<AiSettings> _settings;
     private readonly AiModels _models;
     private readonly IToolRegistry _tools;
-    private readonly List<ChatMessage> _history = [];
+    private readonly List<Turn> _turns = [];                 // the conversation's exchanges: the user's entry, what was sent, the reply
+    private readonly List<KeptConversation> _others = [];    // the workspace's other conversations (X part 10), the shown one excluded
+    private readonly Dictionary<string, KeptConversation> _deleted = new(StringComparer.Ordinal);   // deleted, kept for Undo
+    private string? _currentId;
+    private string _currentTitle = "";
+    private bool _titleSet;
+    private DateTimeOffset _currentTime;
+    private string _header = "";
     private readonly HashSet<string> _removed = new(StringComparer.Ordinal);
     private readonly List<ContextChip> _extra = [];
     private readonly Dictionary<string, ChatImage> _images = new(StringComparer.Ordinal);   // an image chip's id → its bytes, read off the UI thread at the drop
@@ -77,8 +84,310 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     /// <summary>The reply streaming now, or the last one (the tests await it); completes when it ended, was stopped or failed.</summary>
     public Task LastReply { get; private set; } = Task.CompletedTask;
 
-    /// <summary>The messages kept (user and assistant), oldest first.</summary>
-    public IReadOnlyList<ChatMessage> History => _history;
+    /// <summary>The messages kept (user and assistant, the answered exchanges), oldest first: what goes back to the model.</summary>
+    public IReadOnlyList<ChatMessage> History => HistoryMessages();
+
+    /// <summary>The chat's message menu: Retry from here, Edit and resend, Delete from here (X part 10).</summary>
+    public override ConversationCapabilities Capabilities =>
+        ConversationCapabilities.Retry | ConversationCapabilities.EditAndResend | ConversationCapabilities.DeleteFrom;
+
+    /// <inheritdoc />
+    public override IReadOnlyList<ConversationCommand> SlashCommands { get; } =
+    [
+        new("explain", "Explain the selection, or the problem at the caret"),
+        new("fix", "Fix the problem at the caret (a diff to accept)"),
+        new("doc", "Add doc comments to the selection"),
+        new("refactor", "Refactor the selection"),
+        new("tests", "Write tests for the selection"),
+        new("clear", "Start a new conversation (this one stays in the list)"),
+    ];
+
+    /// <inheritdoc />
+    public event EventHandler? ConversationsChanged;
+
+    /// <inheritdoc />
+    public IReadOnlyList<ConversationSummary> Conversations
+    {
+        get
+        {
+            var list = new List<ConversationSummary>(_others.Count + 1);
+            if (_currentId is not null)
+            {
+                list.Add(new ConversationSummary(_currentId, _currentTitle, _currentTime, _turns.Count));
+            }
+
+            list.AddRange(_others.Select(c => new ConversationSummary(c.Id, c.Title, c.Time, c.Turns.Count)));
+            return [.. list.OrderByDescending(c => c.Time)];
+        }
+    }
+
+    /// <inheritdoc />
+    public string? CurrentConversation => _currentId;
+
+    /// <inheritdoc />
+    public void NewConversation()
+    {
+        Stop();
+        Capture();
+        StartEmpty();
+        Save();
+        ConversationsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
+    public bool OpenConversation(string id)
+    {
+        if (string.Equals(id, _currentId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (_others.FirstOrDefault(c => c.Id == id) is not { } target)
+        {
+            return false;
+        }
+
+        Stop();
+        Capture();
+        _others.Remove(target);
+        Show(target);
+        Save();
+        ConversationsChanged?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public void RenameConversation(string id, string title)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        if (string.Equals(id, _currentId, StringComparison.Ordinal))
+        {
+            _currentTitle = title.Trim();
+            _titleSet = true;
+        }
+        else if (_others.FirstOrDefault(c => c.Id == id) is { } other)
+        {
+            other.Title = title.Trim();
+            other.TitleSet = true;
+        }
+        else
+        {
+            return;
+        }
+
+        Save();
+        ConversationsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc />
+    public bool DeleteConversation(string id)
+    {
+        if (string.Equals(id, _currentId, StringComparison.Ordinal))
+        {
+            Stop();
+            _deleted[id] = CaptureCurrent();
+            if (_others.OrderByDescending(c => c.Time).FirstOrDefault() is { } next)
+            {
+                _others.Remove(next);
+                Show(next);
+            }
+            else
+            {
+                StartEmpty();
+            }
+        }
+        else if (_others.FirstOrDefault(c => c.Id == id) is { } other)
+        {
+            _others.Remove(other);
+            _deleted[id] = other;
+        }
+        else
+        {
+            return false;
+        }
+
+        Save();
+        ConversationsChanged?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool RestoreConversation(string id)
+    {
+        if (!_deleted.Remove(id, out var kept))
+        {
+            return false;
+        }
+
+        _others.Add(kept);
+        Save();
+        ConversationsChanged?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>
+    /// Retry from here (X part 10): the exchange holding <paramref name="index"/> and every later one go, and its message
+    /// is asked again (with the context of now).
+    /// </summary>
+    public override Task RetryFromAsync(int index, CancellationToken cancellationToken = default)
+    {
+        if (TurnOf(index) is not { } turn || (uint)turn.Entry >= (uint)Entries.Count)
+        {
+            return Task.CompletedTask;
+        }
+
+        string message = Entries[turn.Entry].Text;
+        Stop();
+        Truncate(turn, keepUser: false);
+        return AskAsync(message, cancellationToken);
+    }
+
+    /// <summary>Edit and resend: the user's message at <paramref name="index"/> replaced by <paramref name="text"/>, what came after it dropped, and asked.</summary>
+    public override Task EditAndResendAsync(int index, string text, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        if (_turns.FirstOrDefault(t => t.Entry == index) is not { } turn)
+        {
+            return Task.CompletedTask;
+        }
+
+        Stop();
+        Truncate(turn, keepUser: false);
+        return AskAsync(text.Trim(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Delete from here: from the user's message, its exchange and every later one go; from a reply, that reply and every
+    /// later exchange (the message stays, unanswered, for a retry). The model is not told of what went.
+    /// </summary>
+    public override void DeleteFrom(int index)
+    {
+        if ((uint)index >= (uint)Entries.Count)
+        {
+            return;
+        }
+
+        Stop();
+        if (TurnOf(index) is { } turn)
+        {
+            if (index <= turn.Entry)
+            {
+                Truncate(turn, keepUser: false);
+            }
+            else
+            {
+                Truncate(turn, keepUser: true);
+                ReplaceFrom(index, []);
+            }
+        }
+        else
+        {
+            ReplaceFrom(index, []);
+        }
+
+        Status = null;
+        Touch();
+        Save();
+    }
+
+    // The exchange whose entries hold `index`: the last one starting at or before it.
+    private Turn? TurnOf(int index) => _turns.LastOrDefault(t => t.Entry >= 0 && t.Entry <= index);
+
+    // Drops `turn` (keeping its user message unanswered when asked) and every later exchange, with their entries.
+    private void Truncate(Turn turn, bool keepUser)
+    {
+        int at = _turns.IndexOf(turn);
+        if (at < 0)
+        {
+            return;
+        }
+
+        _turns.RemoveRange(keepUser ? at + 1 : at, _turns.Count - (keepUser ? at + 1 : at));
+        if (keepUser)
+        {
+            turn.Reply = null;
+            ReplaceFrom(turn.Entry + 1, []);
+        }
+        else
+        {
+            ReplaceFrom(turn.Entry, []);
+        }
+    }
+
+    // What goes back to the model: the answered exchanges, the last chatHistory messages.
+    private List<ChatMessage> HistoryMessages()
+    {
+        var messages = new List<ChatMessage>(_turns.Count * 2);
+        foreach (var turn in _turns)
+        {
+            if (turn.Reply is { Length: > 0 } reply)
+            {
+                messages.Add(turn.User);
+                messages.Add(new ChatMessage("assistant", reply));
+            }
+        }
+
+        int limit = Math.Max(0, _settings().ChatHistory);
+        if (messages.Count > limit)
+        {
+            messages.RemoveRange(0, messages.Count - limit);
+        }
+
+        return messages;
+    }
+
+    private void Touch()
+    {
+        _currentTime = DateTimeOffset.Now;
+        ConversationsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // The shown conversation into the list (when it has anything), so another can show.
+    private void Capture()
+    {
+        if (_currentId is not null && (Entries.Count > 0 || _turns.Count > 0))
+        {
+            _others.Add(CaptureCurrent());
+        }
+    }
+
+    private KeptConversation CaptureCurrent() => new()
+    {
+        Id = _currentId ?? NewId(), Title = _currentTitle, TitleSet = _titleSet, Time = _currentTime,
+        Turns = [.. _turns.Select(t => new KeptTurn(t.Entry, t.User.Content, t.Reply))],
+        Entries = [.. Entries.Select(KeptEntry.Of)],
+    };
+
+    private void StartEmpty()
+    {
+        _turns.Clear();
+        ClearEntries();
+        Status = null;
+        _currentId = null;
+        _currentTitle = "";
+        _titleSet = false;
+    }
+
+    // Shows a kept conversation: its exchanges and entries (a code block's actions made again).
+    private void Show(KeptConversation kept)
+    {
+        _turns.Clear();
+        _turns.AddRange(kept.Turns.Select(t => new Turn(t.Entry, new ChatMessage("user", t.User)) { Reply = t.Reply }));
+        _currentId = kept.Id;
+        _currentTitle = kept.Title;
+        _titleSet = kept.TitleSet;
+        _currentTime = kept.Time;
+        Status = null;
+        ReplaceFrom(0, [.. kept.Entries.Select(e => e.Role == ConversationRole.Code ? CodeEntry(e.Text, e.Language) with { Metrics = e.Metrics } : e.ToEntry())]);
+    }
+
+    private static string NewId() => Guid.NewGuid().ToString("N")[..12];
+
+    private static string TitleOf(string message)
+    {
+        string line = message.ReplaceLineEndings(" ").Trim();
+        return line.Length <= 60 ? line : string.Concat(line.AsSpan(0, 59), "…");
+    }
 
     /// <inheritdoc />
     public override string Placeholder => "Ask about this file. @ adds context, / runs a code action.";
@@ -287,9 +596,15 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         if (message[0] == '/')
         {
             string name = message[1..].Split(' ', 2)[0].ToLowerInvariant();
+            if (name == "clear")
+            {
+                NewConversation();
+                return;
+            }
+
             if (RunAction is not { } run || !await run(name, cancellationToken).ConfigureAwait(true))
             {
-                Add(new ConversationEntry(ConversationRole.Error, $"/{name} is not a code action here. Try /explain, /fix, /doc, /refactor or /tests (with a selection, or the caret on a problem)."));
+                Add(new ConversationEntry(ConversationRole.Error, $"/{name} is not a code action here. Try /explain, /fix, /doc, /refactor or /tests (with a selection, or the caret on a problem), or /clear."));
             }
 
             return;
@@ -329,9 +644,20 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         // The context is gathered here (the active document's text, the open files' snapshots, the images read at the
         // drop) and the files that are not open are read on the thread pool when the message goes, never on the UI thread.
         var gathered = BuildContext();
+        var history = HistoryMessages();
+        var turn = new Turn(Entries.Count, new ChatMessage("user", message));
         Add(new ConversationEntry(ConversationRole.User, message));
-        var messages = new List<ChatMessage>(_history.Count + 2) { new("system", SystemPrompt) };
-        messages.AddRange(_history);
+        _turns.Add(turn);
+        if (_currentId is null)
+        {
+            _currentId = NewId();
+            _currentTitle = TitleOf(message);
+            _titleSet = false;
+        }
+
+        Touch();
+        var messages = new List<ChatMessage>(history.Count + 2) { new("system", SystemPrompt) };
+        messages.AddRange(history);
         var asked = new Asked(message, context, gathered);
         _removed.Clear();
         _extra.Clear();
@@ -349,7 +675,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         // Phase U: the reply shows in the status bar (tokens, tok/s) with Cancel, which stops it as Stop does.
         var activity = Host.Activities.Start("Chat: " + Cut(message, 48), ActivityKinds.Generation, cancellable: true, source.Token);
-        _ = Task.Run(() => StreamAsync(messages, asked, settings, generation, activity, done), CancellationToken.None);
+        _ = Task.Run(() => StreamAsync(messages, asked, turn, settings, generation, activity, done), CancellationToken.None);
         LastReply = done.Task;
         return done.Task;
     }
@@ -361,15 +687,8 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     /// <summary>Stops the reply that streams (its text so far stays).</summary>
     public void Stop() => _running?.Cancel();
 
-    /// <summary>Clears the conversation (and its kept file).</summary>
-    public void NewChat()
-    {
-        Stop();
-        _history.Clear();
-        ClearEntries();
-        Status = null;
-        Save();
-    }
+    /// <summary>Starts a new conversation (the header's New chat); the one shown stays in the list of past conversations.</summary>
+    public void NewChat() => NewConversation();
 
     /// <inheritdoc />
     public void Dispose()
@@ -468,7 +787,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         ? new AiVerdict(answer.Id, AiVerdicts.Accepted) { Document = document, Start = edit.Start, Length = edit.Text.Length }
         : new AiVerdict(answer.Id, AiVerdicts.Rejected) { Document = document, Kept = answer.Before is { Length: > 0 } before ? before : null };
 
-    private async Task StreamAsync(List<ChatMessage> messages, Asked asked, AiSettings settings, int generation, IActivity activity, TaskCompletionSource done)
+    private async Task StreamAsync(List<ChatMessage> messages, Asked asked, Turn turn, AiSettings settings, int generation, IActivity activity, TaskCompletionSource done)
     {
         int tokens = 0;
         var watch = new Stopwatch();
@@ -500,9 +819,11 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             });
             var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot chat.");
             var kinds = chat.PartKinds;
+            string header = HeaderOf(lease.Model, settings.ModelProvider, ModelRoleKeys.Chat);
             Post(() =>
             {
                 _modelName = lease.Model;
+                _header = header;
                 Subtitle = $"{lease.Model} · {settings.ModelProvider}";
                 _partKinds = kinds;
                 _partKindsModel = settings.ChatRole.Model;
@@ -520,7 +841,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
                     }
 
                     RefreshChips();
-                    Finish(generation, user, null, $"Not sent: {lease.Model} takes no images. Remove the greyed image chip, then send again.");
+                    Finish(generation, turn, user, null, $"Not sent: {lease.Model} takes no images. Remove the greyed image chip, then send again.");
                 });
                 activity.Complete("not sent: the model takes no images");
                 return;
@@ -557,12 +878,12 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             string? cut = reason == "length"
                 ? string.Create(CultureInfo.InvariantCulture, $"The reply reached its limit ({tokens} tokens: chatMaxTokens {settings.ChatMaxTokens}, or the room the model's context of {lease.ContextLength} left after the prompt).")
                 : null;
-            Post(() => Finish(generation, user, Rate(tokens, seconds), cut));
+            Post(() => Finish(generation, turn, user, Rate(tokens, seconds), cut, Metrics(tokens, seconds)));
             activity.Complete(Rate(tokens, seconds));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            Post(() => Finish(generation, user, Rate(tokens, watch.Elapsed.TotalSeconds), "Stopped."));
+            Post(() => Finish(generation, turn, user, Rate(tokens, watch.Elapsed.TotalSeconds), "Stopped.", Metrics(tokens, watch.Elapsed.TotalSeconds)));
             activity.Dispose();
         }
 #pragma warning disable CA1031 // The failure is shown in the panel; the editor goes on.
@@ -572,7 +893,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             string said = AiErrors.Describe(error, settings);
             Post(() =>
             {
-                Finish(generation, user, null, said);
+                Finish(generation, turn, user, null, said);
                 Host.Log(EditorLogLevel.Error, "The chat reply failed.", error);       // the log is the UI thread's
             });
             activity.Fail("the reply failed: " + said, error);
@@ -640,7 +961,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
         _segment.Append(piece);
         _reply.Append(piece);
-        var entry = new ConversationEntry(ConversationRole.Assistant, _segment.ToString());
+        var entry = new ConversationEntry(ConversationRole.Assistant, _segment.ToString()) { IsStreaming = true, Header = _header };
         if (_segmentIndex < 0)
         {
             _segmentIndex = Add(entry);
@@ -659,10 +980,11 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             return;
         }
 
+        EndSegment();
         _segment.Clear();
         _segmentIndex = -1;
         _reply.Append('\n');
-        _toolRows[call] = Add(new ConversationEntry(ConversationRole.Tool, call.Name) { Detail = "running…" });
+        _toolRows[call] = Add(new ConversationEntry(ConversationRole.Tool, call.Name) { Detail = "running…", Details = DetailsOf(call, null) });
     }
 
     private void ToolEnded(int generation, ToolResult result)
@@ -673,10 +995,19 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             return;
         }
 
-        Update(index, new ConversationEntry(ConversationRole.Tool, result.Call.Name) { Detail = "→ " + Summarize(result), Succeeded = result.Succeeded });
+        Update(index, new ConversationEntry(ConversationRole.Tool, result.Call.Name) { Detail = "→ " + Summarize(result), Succeeded = result.Succeeded, Details = DetailsOf(result.Call, result) });
     }
 
-    private void Finish(int generation, ChatMessage user, string? status, string? problem)
+    // The streamed segment stops growing (a tool call starts after it): its caret goes.
+    private void EndSegment()
+    {
+        if (_segmentIndex >= 0 && _segmentIndex < Entries.Count && Entries[_segmentIndex].IsStreaming)
+        {
+            Update(_segmentIndex, Entries[_segmentIndex] with { IsStreaming = false });
+        }
+    }
+
+    private void Finish(int generation, Turn turn, ChatMessage user, string? status, string? problem, string? metrics = null)
     {
         FlushIncoming();
         if (generation != _generation)
@@ -693,7 +1024,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             var entry = Entries[i];
             if (entry.Role == ConversationRole.Assistant)
             {
-                rebuilt.AddRange(Split(entry.Text, CodeEntry));
+                rebuilt.AddRange(Split(entry.Text, CodeEntry).Select(e => e.Role == ConversationRole.Assistant ? e with { Header = _header } : e));
             }
             else
             {
@@ -707,7 +1038,13 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             rebuilt.Add(new ConversationEntry(note ? ConversationRole.Note : ConversationRole.Error, problem));
         }
 
-        if (status is not null)
+        // The reply's rate and time small under it (CRAFT_CHAT_SHOW_METRICS): on its last text or code.
+        int last = rebuilt.FindLastIndex(e => e.Role is ConversationRole.Assistant or ConversationRole.Code);
+        if (metrics is not null && last >= 0)
+        {
+            rebuilt[last] = rebuilt[last] with { Metrics = metrics };
+        }
+        else if (status is not null)
         {
             rebuilt.Add(new ConversationEntry(ConversationRole.Note, status));
         }
@@ -715,16 +1052,9 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         ReplaceFrom(_replyStart, rebuilt);
         Status = status;
         string reply = _reply.ToString().Trim();
-        if (reply.Length > 0)
-        {
-            _history.Add(user);
-            _history.Add(new ChatMessage("assistant", reply));
-            int limit = _settings().ChatHistory;
-            if (_history.Count > limit)
-            {
-                _history.RemoveRange(0, _history.Count - limit);
-            }
-        }
+        turn.User = user;
+        turn.Reply = reply.Length > 0 ? reply : null;
+        Touch();
 
         IsBusy = false;
         Save();
@@ -977,7 +1307,11 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         }
 
         _loadedFolder = Host.WorkspaceFolder;
-        _history.Clear();
+        _turns.Clear();
+        _others.Clear();
+        _deleted.Clear();
+        _currentId = null;
+        _currentTitle = "";
         ReplaceFrom(0, []);
         int generation = ++_keptGeneration;
         if (ChatPath() is not { } path)
@@ -991,10 +1325,10 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         _ = ShowKeptAsync(path, generation, shown);
     }
 
-    // The kept chat read and parsed on the thread pool, then shown on the UI thread (only if nothing was written meanwhile).
+    // The kept conversations read and parsed on the thread pool, then shown on the UI thread (only if nothing was written meanwhile).
     private async Task ShowKeptAsync(string path, int generation, TaskCompletionSource shown)
     {
-        KeptChat? kept = null;
+        KeptFile? kept = null;
         Exception? failure = null;
         try
         {
@@ -1012,15 +1346,21 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             try
             {
                 // Another folder meanwhile, or the user already wrote: what was read is not shown over it.
-                if (_disposed || generation != _keptGeneration || _history.Count > 0 || Entries.Count > 0)
+                if (_disposed || generation != _keptGeneration || _turns.Count > 0 || Entries.Count > 0)
                 {
                     return;
                 }
 
                 if (kept is not null)
                 {
-                    _history.AddRange(kept.Messages);
-                    ReplaceFrom(0, [.. kept.Entries.Select(e => e.Role == ConversationRole.Code ? CodeEntry(e.Text, e.Language) : new ConversationEntry(e.Role, e.Text) { Detail = e.Detail })]);
+                    _others.AddRange(kept.Conversations);
+                    if ((_others.FirstOrDefault(c => c.Id == kept.Current) ?? _others.OrderByDescending(c => c.Time).FirstOrDefault()) is { } current)
+                    {
+                        _others.Remove(current);
+                        Show(current);
+                    }
+
+                    ConversationsChanged?.Invoke(this, EventArgs.Empty);
                 }
                 else if (failure is not null)
                 {
@@ -1034,37 +1374,138 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         });
     }
 
-    private sealed record KeptEntry(ConversationRole Role, string Text, string? Detail, string? Language);
+    // An exchange: the index of the user's entry, what was sent (with its context), the reply (null: not answered).
+    private sealed class Turn(int entry, ChatMessage user)
+    {
+        public int Entry { get; } = entry;
 
-    private sealed record KeptChat(List<ChatMessage> Messages, List<KeptEntry> Entries);
+        public ChatMessage User { get; set; } = user;
 
-    // On the thread pool: the kept chat's file read and parsed (null when there is none); a broken one throws to be logged.
-    private static KeptChat? ReadKept(string path)
+        public string? Reply { get; set; }
+    }
+
+    private sealed record KeptTurn(int Entry, string User, string? Reply);
+
+    private sealed record KeptEntry(ConversationRole Role, string Text, string? Detail, string? Language, string? Header, string? Metrics)
+    {
+        public static KeptEntry Of(ConversationEntry entry) => new(entry.Role, entry.Text, entry.Detail, entry.Language, entry.Header, entry.Metrics);
+
+        public ConversationEntry ToEntry() => new(Role, Text) { Detail = Detail, Language = Language, Header = Header, Metrics = Metrics };
+    }
+
+    private sealed class KeptConversation
+    {
+        public string Id { get; init; } = "";
+
+        public string Title { get; set; } = "";
+
+        public bool TitleSet { get; set; }
+
+        public DateTimeOffset Time { get; init; }
+
+        public List<KeptTurn> Turns { get; init; } = [];
+
+        public List<KeptEntry> Entries { get; init; } = [];
+    }
+
+    private sealed record KeptFile(string? Current, List<KeptConversation> Conversations);
+
+    // On the thread pool: the kept file read and parsed (null when there is none); a broken one throws to be logged.
+    // Version 1 (one conversation: its messages and entries) is read as one conversation.
+    private static KeptFile? ReadKept(string path)
     {
         if (!File.Exists(path) || JsonNode.Parse(File.ReadAllText(path)) is not JsonObject kept)
         {
             return null;
         }
 
-        var messages = new List<ChatMessage>();
-        foreach (var node in kept["messages"] as JsonArray ?? [])
+        if (kept["conversations"] is JsonArray list)
         {
-            if (node?["role"]?.GetValue<string>() is { } role && node["content"]?.GetValue<string>() is { } content)
+            var conversations = new List<KeptConversation>();
+            foreach (var node in list)
             {
-                messages.Add(new ChatMessage(role, content));
+                if (node is JsonObject conversation)
+                {
+                    conversations.Add(ReadConversation(conversation));
+                }
+            }
+
+            return new KeptFile(kept["current"]?.GetValue<string>(), conversations);
+        }
+
+        var one = ReadConversation(kept);
+        if (one.Entries.Count == 0)
+        {
+            return null;
+        }
+
+        // Version 1: the user's and the model's messages in pairs, the k-th exchange at the k-th user entry.
+        var messages = kept["messages"] as JsonArray ?? [];
+        var users = one.Entries.Select((e, i) => (e, i)).Where(x => x.e.Role == ConversationRole.User).Select(x => x.i).ToList();
+        int k = 0;
+        for (int i = 0; i + 1 < messages.Count; i += 2)
+        {
+            if (messages[i]?["content"]?.GetValue<string>() is { } user && messages[i + 1]?["content"]?.GetValue<string>() is { } reply)
+            {
+                one.Turns.Add(new KeptTurn(k < users.Count ? users[k] : -1, user, reply));
+                k++;
             }
         }
 
+        string first = one.Entries.FirstOrDefault(e => e.Role == ConversationRole.User)?.Text ?? "Chat";
+        return new KeptFile(null, [new KeptConversation { Id = NewId(), Title = TitleOf(first), Time = File.GetLastWriteTimeUtc(path), Turns = one.Turns, Entries = one.Entries }]);
+    }
+
+    private static KeptConversation ReadConversation(JsonObject node)
+    {
         var entries = new List<KeptEntry>();
-        foreach (var node in kept["entries"] as JsonArray ?? [])
+        foreach (var item in node["entries"] as JsonArray ?? [])
         {
-            if (node?["role"]?.GetValue<string>() is { } role && Enum.TryParse<ConversationRole>(role, out var kind) && node["text"]?.GetValue<string>() is { } text)
+            if (item?["role"]?.GetValue<string>() is { } role && Enum.TryParse<ConversationRole>(role, out var kind) && item["text"]?.GetValue<string>() is { } text)
             {
-                entries.Add(new KeptEntry(kind, text, node["detail"]?.GetValue<string>(), node["language"]?.GetValue<string>()));
+                entries.Add(new KeptEntry(kind, text, item["detail"]?.GetValue<string>(), item["language"]?.GetValue<string>(), item["header"]?.GetValue<string>(), item["metrics"]?.GetValue<string>()));
             }
         }
 
-        return new KeptChat(messages, entries);
+        var turns = new List<KeptTurn>();
+        foreach (var item in node["turns"] as JsonArray ?? [])
+        {
+            if (item?["user"]?.GetValue<string>() is { } user)
+            {
+                turns.Add(new KeptTurn(item["entry"]?.GetValue<int>() ?? -1, user, item["reply"]?.GetValue<string>()));
+            }
+        }
+
+        DateTimeOffset time = node["time"]?.GetValue<string>() is { } stamp && DateTimeOffset.TryParse(stamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed) ? parsed : DateTimeOffset.UnixEpoch;
+        return new KeptConversation
+        {
+            Id = node["id"]?.GetValue<string>() ?? NewId(), Title = node["title"]?.GetValue<string>() ?? "", TitleSet = node["titleSet"]?.GetValue<bool>() ?? false,
+            Time = time, Turns = turns, Entries = entries,
+        };
+    }
+
+    private static JsonObject WriteConversation(KeptConversation conversation)
+    {
+        var turns = new JsonArray();
+        foreach (var turn in conversation.Turns)
+        {
+            turns.Add((JsonNode)new JsonObject { ["entry"] = turn.Entry, ["user"] = turn.User, ["reply"] = turn.Reply });
+        }
+
+        var entries = new JsonArray();
+        foreach (var entry in conversation.Entries)
+        {
+            entries.Add((JsonNode)new JsonObject
+            {
+                ["role"] = entry.Role.ToString(), ["text"] = entry.Text, ["detail"] = entry.Detail, ["language"] = entry.Language, ["header"] = entry.Header, ["metrics"] = entry.Metrics,
+            });
+        }
+
+        return new JsonObject
+        {
+            ["id"] = conversation.Id, ["title"] = conversation.Title, ["titleSet"] = conversation.TitleSet,
+            ["time"] = conversation.Time.ToString("O", CultureInfo.InvariantCulture), ["turns"] = turns, ["entries"] = entries,
+        };
     }
 
     private void Save()
@@ -1076,7 +1517,8 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
 
         try
         {
-            if (_history.Count == 0 && Entries.Count == 0)
+            bool hasCurrent = _currentId is not null && (_turns.Count > 0 || Entries.Count > 0);
+            if (!hasCurrent && _others.Count == 0)
             {
                 _writes = _writes.ContinueWith(_ =>
                 {
@@ -1092,20 +1534,19 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
                 return;
             }
 
-            var messages = new JsonArray();
-            foreach (var message in _history)
+            var conversations = new JsonArray();
+            if (hasCurrent)
             {
-                messages.Add((JsonNode)new JsonObject { ["role"] = message.Role, ["content"] = message.Content });
+                conversations.Add((JsonNode)WriteConversation(CaptureCurrent()));
             }
 
-            var entries = new JsonArray();
-            foreach (var entry in Entries)
+            foreach (var other in _others)
             {
-                entries.Add((JsonNode)new JsonObject { ["role"] = entry.Role.ToString(), ["text"] = entry.Text, ["detail"] = entry.Detail, ["language"] = entry.Language });
+                conversations.Add((JsonNode)WriteConversation(other));
             }
 
             // Serialized here (the entries are the UI thread's), written on the thread pool after the writes before it.
-            string json = new JsonObject { ["version"] = 1, ["messages"] = messages, ["entries"] = entries }.ToJsonString();
+            string json = new JsonObject { ["version"] = 2, ["current"] = hasCurrent ? _currentId : null, ["conversations"] = conversations }.ToJsonString();
             _writes = _writes.ContinueWith(_ =>
             {
                 try

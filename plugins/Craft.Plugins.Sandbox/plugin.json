@@ -2,6 +2,6 @@
   "name": "Craft.Plugins.Sandbox",
   "version": "0.1.0",
   "summary": "P5 · the approve-each command sandbox: every command an agent wants to run is shown to you first, and runs with its output live in the sandbox terminal [CommandSandboxes \"approve-each\", a new kind]",
-  "contractVersion": "1.0",
+  "contractVersion": "1.1",
   "capabilities": ["sandbox"]
 }

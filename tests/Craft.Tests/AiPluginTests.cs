@@ -182,7 +182,8 @@ public static class AiPluginTests
             Check.True(again.History.Count == 2 && again.Entries.Any(e => e.Role == ConversationRole.Code && e.Actions.Count == 1), "a new panel reads it back, its code still applicable");
             again.NewChat();
             await again.Kept.WaitAsync(TimeSpan.FromSeconds(10));
-            Check.True(!File.Exists(kept) && again.Entries.Count == 0, "New chat clears it");
+            Check.True(File.Exists(kept) && again.Entries.Count == 0 && again.Conversations.Count == 1,
+                "New chat starts an empty conversation; the last one stays in the list of past conversations (X part 10)");
             panel.Dispose();
             again.Dispose();
         }

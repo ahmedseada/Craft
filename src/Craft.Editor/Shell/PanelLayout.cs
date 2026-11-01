@@ -93,14 +93,83 @@ public sealed class PanelLayout
     /// <summary>Whether <paramref name="panel"/> is open.</summary>
     public bool IsOpen(ShellPanel panel) => _open[(int)panel];
 
+    /// <summary>
+    /// Whether the chat and agent were expanded over the editor area by the user (X part 10: the header's Expand, Ctrl+Shift+Alt+M;
+    /// <c>CRAFT_CHAT_EXPANDED</c>, kept per workspace). What shows is <see cref="IsChatExpanded"/>.
+    /// </summary>
+    public bool ChatExpanded { get; private set; }
+
+    /// <summary>The variable that keeps <see cref="ChatExpanded"/>.</summary>
+    public const string ChatExpandedVariable = "CRAFT_CHAT_EXPANDED";
+
+    private bool _narrowRestored;
+    private bool _roomRestored;
+
+    /// <summary>
+    /// Whether the chat shows over the whole editor area: in the narrow layout unless the user restored it (expanded is
+    /// the narrow window's default); in the wide one when the user expanded it, or when the editor beside the column
+    /// would have less than <see cref="MinimumSize"/> (<paramref name="editorRoom"/>, the measured width; 0 unknown) and
+    /// the user has not restored it.
+    /// </summary>
+    public bool IsChatExpanded(bool narrow, double editorRoom) =>
+        narrow ? !_narrowRestored : ChatExpanded || (!_roomRestored && editorRoom > 0 && editorRoom < MinimumSize);
+
+    /// <summary>Expands the chat when it shows as a column, restores the column when it shows expanded (the button, the command, Escape).</summary>
+    public Task ToggleChatExpandedAsync(bool narrow, double editorRoom)
+    {
+        bool shown = IsChatExpanded(narrow, editorRoom);
+        if (narrow)
+        {
+            _narrowRestored = shown;
+            Changed?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
+        }
+
+        if (shown && !ChatExpanded)
+        {
+            _roomRestored = true;                       // expanded for want of room: restored for this run, not written
+            Changed?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
+        }
+
+        _roomRestored = false;
+        return SetChatExpandedAsync(!shown);
+    }
+
+    /// <summary>Sets <see cref="ChatExpanded"/> and keeps it in the workspace's settings.</summary>
+    public Task SetChatExpandedAsync(bool expanded)
+    {
+        if (ChatExpanded == expanded)
+        {
+            return Task.CompletedTask;
+        }
+
+        ChatExpanded = expanded;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return Store(ChatExpandedVariable, expanded ? "true" : "false");
+    }
+
+    /// <summary>
+    /// The expanded chat's place across the window (X part 10): from the right of the rail and the side view (when open, at
+    /// its width) to the window's right edge, never over them.
+    /// </summary>
+    public static (double Left, double Width) ExpandedArea(double windowWidth, double railWidth, bool sideOpen, double sideWidth)
+    {
+        double left = Math.Max(0, railWidth) + (sideOpen ? Math.Max(0, sideWidth) : 0);
+        return (left, Math.Max(0, windowWidth - left));
+    }
+
     /// <summary>Takes the sizes and open states of <paramref name="options"/> (a folder opened, a setting changed).</summary>
     public void Load(CraftOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         MinimumSize = options.PanelMinimumSize;
+        bool expandedChanged = ChatExpanded != options.ChatExpanded;
+        ChatExpanded = options.ChatExpanded;
         bool changed = Set(ShellPanel.Explorer, options.TreeWidth, options.ExplorerOpen)
             | Set(ShellPanel.Chat, options.ChatWidth, options.ChatOpen)
-            | Set(ShellPanel.Bottom, options.BottomPanelHeight, options.BottomPanelOpen);
+            | Set(ShellPanel.Bottom, options.BottomPanelHeight, options.BottomPanelOpen)
+            | expandedChanged;
         if (changed)
         {
             Changed?.Invoke(this, EventArgs.Empty);

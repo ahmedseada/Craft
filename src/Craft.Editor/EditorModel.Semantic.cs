@@ -433,6 +433,7 @@ public sealed partial class EditorModel
     {
         _pointerX = viewX;
         _pointerY = viewY;
+        NoteHover(viewX, viewY);
         if (HoverCardHovered(viewX, viewY))
         {
             return;
@@ -483,6 +484,7 @@ public sealed partial class EditorModel
     /// <summary>The pointer left the editor: a hover card closes after <see cref="Core.CraftOptions.HoverHideMilliseconds"/> (at once for a plain tooltip).</summary>
     public void PointerExited()
     {
+        NoteExit();
         _hoverTimer?.Cancel();
         _hoverRequest?.Cancel();
         _hoverPosition = -1;

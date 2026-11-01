@@ -252,6 +252,7 @@ internal sealed class SandboxSession : IDisposable
                 $"Runs in: the {Settings.Inner} sandbox",
             ],
             Dismissed = 2,
+            Kind = EditorQuestionKinds.Command,   // X part 10: the agent's timeline shows it inline with Approve and Deny
         };
         var asked = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         _host.Dispatch(() =>

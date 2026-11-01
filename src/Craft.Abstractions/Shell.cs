@@ -156,6 +156,12 @@ public static class EditorContextMenus
     /// </summary>
     public const string ReadOnlyText = "context:readonly-text";
 
+    /// <summary>A message of the chat or the agent (X part 10: copy, copy as Markdown, quote, retry, edit and resend, delete from here).</summary>
+    public const string Conversation = "context:conversation";
+
+    /// <summary>The conversation panel's own menu (its header's "⋯": copy and export the conversation, the past conversations).</summary>
+    public const string ConversationPanel = "context:conversation-panel";
+
     /// <summary>
     /// A terminal's menu (B9: copy, paste, select all, clear, split, rename, kill), acting on the terminal it was opened on
     /// (the target's <see cref="ContextMenuTarget.Item"/>), else the active one.

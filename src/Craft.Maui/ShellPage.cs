@@ -188,7 +188,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         // The plug-ins' conversation panels (the AI plug-in's chat and agent run): the design's chat column when wide (its
         // splitter and close button, phase U2), a sheet over the editor when narrow (PhoneChat.dc.html); craft.chat
         // (Ctrl+Alt+I) shows or hides it, a plug-in's IEditorHost.ShowPanel brings one forward.
-        _conversations = new ConversationsView(_host, _shell.Options.FontFamily);
+        _conversations = new ConversationsView(_host, _shell.Options.FontFamily, _shell.UndoBar);
+        _conversations.WindowKeys = _keys;
+        _conversations.MenuRequested += (_, e) => OpenConversationMenu(e);
+        _conversations.ExpandRequested += (_, _) => _ = ToggleChatExpandedAsync();
+        _conversations.SymbolsSource = () => ConversationComposer.SymbolsOf(_shown?.Model);
         _conversations.LeaveRequested += (_, _) => _shown?.Focus();
         _chatSplit.Panel = _conversations;
         _conversations.PanelsChanged += (_, _) => ApplyLayout();
@@ -501,6 +505,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.PanelsChanged -= OnHostPanelsChanged;
         _host.PendingChordChanged -= OnPendingChordChanged;
         _host.SelectionRequested -= OnSelectionRequested;
+        _conversationCommands?.Dispose();
         _conversations.Dispose();
         foreach (var view in _sideViews.Values)
         {
@@ -823,6 +828,12 @@ public sealed class ShellPage : ContentPage, IDisposable
             return Task.CompletedTask;
         }, _ => _conversations.HasPanels, "The plug-ins' chat column (a sheet in the narrow layout)"));
         EditorKeyBindings.Register(new KeyBinding(new KeyChord(EditorKey.I, KeyModifiers.Control | KeyModifiers.Alt), "craft.chat"));
+        // X part 10: the conversation's menus and commands; Expand (Ctrl+Shift+Alt+M, a standard binding in both keymaps).
+        _conversationCommands = new ConversationCommands(ToggleChatExpandedAsync, () =>
+        {
+            ShowChatColumn();
+            _conversations.ShowList(true);
+        }, ExportConversationAsync);
         EditorCommands.Register(new EditorCommand(ContextMenuCommand, "Edit: Show the context menu", (_, _) =>
         {
             OpenEditorMenuAtCaret();
@@ -834,6 +845,71 @@ public sealed class ShellPage : ContentPage, IDisposable
             ToggleCentre();
             return Task.CompletedTask;
         }, null, "The notification centre: running operations with Cancel, how they ended, the plug-ins' messages"));
+    }
+
+    private ConversationCommands? _conversationCommands;
+
+    // The room the editor would have beside the chat column (0 before the page is measured).
+    private double EditorRoom() => Width <= 0 ? 0
+        : Width - _rail.Width - (_sideSplit.IsShown ? _sideSplit.Width : 0) - _shell.Panels.SizeOf(ShellPanel.Chat);
+
+    // X part 10: Expand over the editor area, or back to the column at its kept width (the button, the command, Escape).
+    private async Task ToggleChatExpandedAsync()
+    {
+        bool narrow = _shell.Layout.IsNarrow;
+        bool open = narrow ? _chatSheetOpen : _shell.Panels.IsOpen(ShellPanel.Chat);
+        if (!open)
+        {
+            ShowChatColumn();
+            if (_shell.Panels.IsChatExpanded(narrow, EditorRoom()))
+            {
+                return;                                   // opened, and it shows expanded already
+            }
+        }
+
+        await _shell.Panels.ToggleChatExpandedAsync(narrow, EditorRoom());
+        ApplyLayout();
+        _conversations.FocusInput();
+    }
+
+    private void ShowChatColumn()
+    {
+        if (_shell.Layout.IsNarrow)
+        {
+            _chatSheetOpen = true;
+            ApplyLayout();
+        }
+        else if (!_shell.Panels.IsOpen(ShellPanel.Chat))
+        {
+            _ = _shell.Panels.SetOpenAsync(ShellPanel.Chat, true);
+        }
+    }
+
+    // A conversation's menu (a message's, the panel's) at its place in the anchor.
+    private void OpenConversationMenu(ConversationMenuEventArgs e)
+    {
+        var below = _popup.Below(e.Anchor);
+        var at = new Point(below.X + e.At.X, below.Y - e.Anchor.Height + e.At.Y);
+        if (_menu.Open(e.Menu, e.Target))
+        {
+            ShowMenuAt(at);
+        }
+    }
+
+    // Export the conversation: where, through the save dialog (the workspace's folder first), then written off the UI thread.
+    private async Task ExportConversationAsync(ConversationController controller)
+    {
+        try
+        {
+            if (await _shell.FileDialogs.PickSavePathAsync(controller.ExportName(), _host.WorkspaceFolder) is { } path)
+            {
+                await controller.ExportAsync(path);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _status!.Notice.Text = "The conversation was not exported: " + error.Message;
+        }
     }
 
     private void ToggleChat()
@@ -2035,18 +2111,40 @@ public sealed class ShellPage : ContentPage, IDisposable
         _rail.Active = !narrow && sideVisible ? (ReferenceEquals(side, _explorer) ? "craft.explorer" : panels.SideView) : null;
         _center.IsVisible = layout.EditorVisible;
 
+        bool chatOpen = _conversations.HasPanels && (narrow ? _chatSheetOpen : panels.IsOpen(ShellPanel.Chat));
+        bool expanded = chatOpen && panels.IsChatExpanded(narrow, EditorRoom());
+        _conversations.IsExpanded = expanded;
+        Place(_chatSplit, expanded && !narrow ? _center : _body);
+        _editorStack.IsVisible = !(expanded && !narrow);
         if (narrow)
         {
-            // The sheet: over the body's lower part, the width of the window, no splitter.
+            // The sheet: over the body's lower part (all of it expanded, the narrow default), the width of the window, no splitter.
             Grid.SetColumn(_chatSplit, 0);
             Grid.SetColumnSpan(_chatSplit, 5);
+            Grid.SetRow(_chatSplit, 0);
+            Grid.SetRowSpan(_chatSplit, 1);
             _chatSplit.Fill = true;
             _chatSplit.Resizable = false;
-            _chatSplit.VerticalOptions = LayoutOptions.End;
-            _chatSplit.HeightRequest = Math.Max(240, Height * 0.62);
+            _chatSplit.VerticalOptions = expanded ? LayoutOptions.Fill : LayoutOptions.End;
+            _chatSplit.HeightRequest = expanded ? -1 : Math.Max(240, Height * 0.62);
+        }
+        else if (expanded)
+        {
+            // X part 10: over the editor groups only (the tab strip, the breadcrumb and the editors), between the rail and
+            // side view and the window's edge, following their widths; the bottom panel stays below.
+            Grid.SetColumn(_chatSplit, 0);
+            Grid.SetColumnSpan(_chatSplit, 1);
+            Grid.SetRow(_chatSplit, 0);
+            Grid.SetRowSpan(_chatSplit, 4);
+            _chatSplit.Fill = true;
+            _chatSplit.Resizable = false;
+            _chatSplit.VerticalOptions = LayoutOptions.Fill;
+            _chatSplit.HeightRequest = -1;
         }
         else
         {
+            Grid.SetRow(_chatSplit, 0);
+            Grid.SetRowSpan(_chatSplit, 1);
             Grid.SetColumn(_chatSplit, 4);
             Grid.SetColumnSpan(_chatSplit, 1);
             _chatSplit.Fill = false;
@@ -2056,10 +2154,10 @@ public sealed class ShellPage : ContentPage, IDisposable
             _chatSplit.HeightRequest = -1;
         }
 
-        _chatSplit.SetVisible(_conversations.HasPanels && (narrow ? _chatSheetOpen : panels.IsOpen(ShellPanel.Chat)), narrow ? 0 : ShellMotion.Milliseconds);
+        _chatSplit.SetVisible(chatOpen, narrow || expanded ? 0 : ShellMotion.Milliseconds);
         _bottomSplit.Size = panels.SizeOf(ShellPanel.Bottom);
         _bottomSplit.SetVisible(panels.IsOpen(ShellPanel.Bottom) && !narrow, narrow ? 0 : ShellMotion.Milliseconds);
-        _breadcrumb.IsVisible = !narrow && !(ReferenceEquals(_shell.Groups.Focused, _shell.Groups.Groups[0]) && _shell.Pages.Active is not null);
+        _breadcrumb.IsVisible = !narrow && !expanded && !(ReferenceEquals(_shell.Groups.Focused, _shell.Groups.Groups[0]) && _shell.Pages.Active is not null);
         _body.ColumnDefinitions[2].Width = narrow && layout.TreeVisible ? GridLength.Star : GridLength.Auto;
         _body.ColumnDefinitions[3].Width = layout.EditorVisible ? GridLength.Star : new GridLength(0);
         foreach (var pane in _panes)
@@ -2078,6 +2176,18 @@ public sealed class ShellPage : ContentPage, IDisposable
         {
             _popup.Hide();
         }
+    }
+
+    // Moves `view` into `grid` (the expanded chat goes into the editor area's grid and back).
+    private static void Place(View view, Grid grid)
+    {
+        if (ReferenceEquals(view.Parent, grid))
+        {
+            return;
+        }
+
+        (view.Parent as Grid)?.Children.Remove(view);
+        grid.Children.Add(view);
     }
 
     private void ApplyTheme()

@@ -184,6 +184,7 @@ public sealed class EditorRenderer : IDisposable
                 var runs = Runs(index, line, text, spans, spanIndex, theme, tabSize, ref expanded);
                 model.NoteLineColumns(runs.Columns);
 
+                model.LineBackdrop?.DrawLine(canvas, index, left, top, cell, height, viewportWidth);
                 if (findShown)
                 {
                     FindHighlightLayer.DrawLine(canvas, find, text, left, top, cell, height, tabSize, colors.FindMatch);

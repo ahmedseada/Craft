@@ -767,6 +767,20 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     internal async Task<int> AskAsync(EditorQuestion question, string source, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(question);
+        // X part 10: a question of a known kind (a command to approve) is offered to the conversation panels first, so the
+        // agent's timeline shows it inline with its answers; a panel that does not take it leaves it to the dialog.
+        if (question.Kind is not null)
+        {
+            foreach (var panel in Panels)
+            {
+                if (panel is IConversationPanel conversation && conversation.AskInline(question, cancellationToken) is { } inline)
+                {
+                    int chosen = await inline;
+                    return chosen >= 0 && chosen < question.Choices.Count ? chosen : question.Dismissed;
+                }
+            }
+        }
+
         if (Presenter is not { } presenter)
         {
             Log(source, EditorLogLevel.Warning, $"{question.Title}: nobody could be asked (the host has no presenter), so it counts as no.", null);

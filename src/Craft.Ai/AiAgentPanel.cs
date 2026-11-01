@@ -49,6 +49,8 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private string? _loadingModel;
     private IActivity? _activity;
     private bool _disposed;
+    private string _header = "";
+    private TaskCompletionSource<int>? _approval;     // the sandbox's question shown inline on the command's step, while it waits
 
     /// <summary>An agent panel in <paramref name="host"/>.</summary>
     public AiAgentPanel(IEditorHost host, Func<AiSettings> settings, AiModels models)
@@ -80,6 +82,92 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
 
     /// <summary>The agent's model role (note 25): the composer's chip shows and writes the agent's model and device.</summary>
     public override string? ModelRoleKey => ModelRoleKeys.Agent;
+
+    /// <summary>The run drawn as a timeline (X part 10): thinking, each tool call with its details, approvals, the files changed.</summary>
+    public override bool ShowsTimeline => true;
+
+    /// <inheritdoc />
+    public override IReadOnlyList<ConversationCommand> SlashCommands { get; } =
+    [
+        new("clear", "Start afresh: the next task is a new run on a new copy of the folder"),
+    ];
+
+    /// <summary>
+    /// The sandbox's question about the command waiting (<see cref="EditorQuestionKinds.Command"/>) shown on that command's
+    /// step with its answers as buttons (Approve, Allow for this run, Deny), not in a dialog (X part 10). Any other question,
+    /// or none waiting, is left to the host's dialog.
+    /// </summary>
+    public override Task<int>? AskInline(EditorQuestion question, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        if (question.Kind != EditorQuestionKinds.Command || !_waiting || _command < 0 || _command >= _log.Count || _approval is not null)
+        {
+            return null;
+        }
+
+        var answer = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _approval = answer;
+        int index = _command;
+        var actions = new List<PanelAction>(question.Choices.Count);
+        for (int i = 0; i < question.Choices.Count; i++)
+        {
+            int choice = i;
+            string label = question.Choices[i];
+            actions.Add(new PanelAction(label, _ => { Answer(index, choice, label); return Task.CompletedTask; }, Primary: i == 0));
+        }
+
+        var waiting = _log[index];
+        SetLog(index, waiting with { Actions = actions, Details = string.Join('\n', question.Details) is { Length: > 0 } facts ? facts : waiting.Details });
+        cancellationToken.Register(() => Post(() =>
+        {
+            if (ReferenceEquals(_approval, answer))
+            {
+                _approval = null;
+                answer.TrySetCanceled();
+            }
+        }));
+        return answer.Task;
+    }
+
+    // An inline answer: the buttons go, the step says what was chosen, and the sandbox has its answer.
+    private void Answer(int index, int choice, string label)
+    {
+        if (_approval is not { } answer)
+        {
+            return;
+        }
+
+        _approval = null;
+        if (index >= 0 && index < _log.Count && _log[index].Role == ConversationRole.Approval)
+        {
+            SetLog(index, _log[index] with { Actions = [], Detail = "you chose: " + label });
+        }
+
+        answer.TrySetResult(choice);
+    }
+
+    // A log entry replaced, and shown (in place while no change is listed, else with the list).
+    private void SetLog(int index, ConversationEntry entry)
+    {
+        _log[index] = entry;
+        if (_changes.Count == 0)
+        {
+            Update(index, entry);
+        }
+        else
+        {
+            ShowChanges();
+        }
+    }
+
+    // The model's text stops growing (a tool runs, a turn or the run ends): its caret goes.
+    private void EndAssistant()
+    {
+        if (_assistant >= 0 && _assistant < _log.Count && _log[_assistant].IsStreaming)
+        {
+            SetLog(_assistant, _log[_assistant] with { IsStreaming = false });
+        }
+    }
 
     /// <summary>Whether the next message continues the last run (its conversation and working copy) rather than starting a new one.</summary>
     public bool Continues => _conversation is not null && _copy is { } copy && Host.WorkspaceFolder is { } root
@@ -170,6 +258,12 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             message += "\n\nThe files this is about (paths in the folder): " + string.Join(", ", _files.Select(c => c.Text)) + ".";
             _files.Clear();
             SetChips([]);
+        }
+
+        if (message.Equals("/clear", StringComparison.OrdinalIgnoreCase) && !IsBusy)
+        {
+            Clear();
+            return Task.CompletedTask;
         }
 
         if (IsBusy && _agent is { } agent)
@@ -480,6 +574,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         _running = null;
         source.Dispose();
         _agent = null;
+        EndAssistant();
         Log(new ConversationEntry(ConversationRole.Note, end + (_changes.Count > 0 ? " Review the changed files below, or discard them." : "")));
         IsBusy = false;
         UpdateStatus();
@@ -528,9 +623,11 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
 
         var copy = existing ?? AgentWorkspace.Create(workspace, settings.AgentFolder, settings.AgentCopyIgnore, unsaved, token,
             files => activity.Report(null, string.Create(CultureInfo.InvariantCulture, $"copying the folder: {files:N0} files")));
+        string header = HeaderOf(lease.Model, settings.ModelProvider, ModelRoleKeys.Agent);
         Post(() =>
         {
             _copy = copy;
+            _header = header;
             Subtitle = lease.Model;
             Log(new ConversationEntry(ConversationRole.Note, existing is null
                 ? string.Create(CultureInfo.InvariantCulture, $"Working on a copy of the folder ({copy.Files:N0} files, {copy.Copy}); your files change only when you accept a diff.")
@@ -610,6 +707,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private void TurnStarted()
     {
         _turn++;
+        EndAssistant();
         _assistant = -1;
         _text.Clear();
         UpdateStatus();
@@ -625,7 +723,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private void Said(string piece)
     {
         _text.Append(piece);
-        var entry = new ConversationEntry(ConversationRole.Assistant, _text.ToString());
+        var entry = new ConversationEntry(ConversationRole.Assistant, _text.ToString()) { IsStreaming = true, Header = _header };
         if (_assistant < 0)
         {
             _assistant = Log(entry);
@@ -707,6 +805,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
 
     private void ToolDone(ToolResult result, IReadOnlyList<(AgentChange? Change, string Relative)>? edited)
     {
+        EndAssistant();
         _assistant = -1;
         _text.Clear();
         string what = result.Call.Arguments["path"]?.ToString() ?? result.Call.Arguments["pattern"]?.ToString() ?? "";
@@ -716,6 +815,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             {
                 Detail = string.Create(CultureInfo.InvariantCulture, $"{what} · turn {_turn} · {Summarize(result, 70)}"),
                 Succeeded = result.Succeeded,
+                Details = DetailsOf(result.Call, result),
             });
         }
 
@@ -730,6 +830,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
 
     private void CommandStarted(IReadOnlyList<string> command, CommandLimits limits)
     {
+        EndAssistant();
         _waiting = true;
         string programs = limits.Programs is { Count: > 0 } allowed ? string.Join(", ", allowed) : "any";
         _command = Log(new ConversationEntry(ConversationRole.Approval, string.Join(' ', command))
@@ -743,13 +844,18 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private void CommandEnded(CommandResult result)
     {
         _waiting = false;
+        _approval?.TrySetCanceled();
+        _approval = null;
         if (_command >= 0 && _command < _log.Count)
         {
             var entry = _log[_command];
             string outcome = result.Refused
                 ? "refused: " + FirstLine(result.Output)
                 : result.TimedOut ? "stopped at the time limit" : string.Create(CultureInfo.InvariantCulture, $"exit {result.ExitCode} · {result.Duration.TotalSeconds:F1} s · {FirstLine(result.Output)}");
-            _log[_command] = new ConversationEntry(ConversationRole.Tool, "run_command " + entry.Text) { Detail = outcome, Succeeded = result.Succeeded };
+            _log[_command] = new ConversationEntry(ConversationRole.Tool, "run_command " + entry.Text)
+            {
+                Detail = outcome, Succeeded = result.Succeeded, Details = "Command: " + entry.Text + "\nOutput:\n" + result.Output.TrimEnd(),
+            };
             ShowChanges();
         }
 

@@ -46,7 +46,8 @@ internal static class ComposerKeys
 
                     var modifiers = WindowsTextInputAdapter.Modifiers();
                     bool chord = (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) != 0;
-                    if ((key is EditorKey.Enter or EditorKey.Escape || chord) && route(key, modifiers))
+                    // X part 10: Up, Down and Tab too, for the picker ("/" and "@") and the history (an empty box).
+                    if ((key is EditorKey.Enter or EditorKey.Escape or EditorKey.Up or EditorKey.Down or EditorKey.Tab || chord) && route(key, modifiers))
                     {
                         e.Handled = true;
                     }

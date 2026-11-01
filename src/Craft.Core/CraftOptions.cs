@@ -382,6 +382,21 @@ public sealed record CraftOptions
     /// <summary>Whether the chat and agent column is open in the wide layout; its close button and Ctrl+Alt+I set it per workspace (<c>CRAFT_PANEL_CHAT_OPEN</c>).</summary>
     public bool ChatOpen { get; init; } = true;
 
+    /// <summary>Whether the chat and agent take the whole editor area (X part 10's Expand), kept per workspace (<c>CRAFT_CHAT_EXPANDED</c>).</summary>
+    public bool ChatExpanded { get; init; }
+
+    /// <summary>The lines the chat's and agent's message box grows to before it scrolls (<c>CRAFT_COMPOSER_MAX_LINES</c>).</summary>
+    public int ComposerMaxLines { get; init; } = 12;
+
+    /// <summary>What Ctrl+C copies from the conversation: markdown (code fenced, speakers named) or plain (<c>CRAFT_CHAT_COPY_FORMAT</c>); Ctrl+Shift+C the other.</summary>
+    public string ChatCopyFormat { get; init; } = "markdown";
+
+    /// <summary>A code block in the conversation longer than this many lines shows folded with "Show all"; 0 never folds (<c>CRAFT_CHAT_FOLD_CODE_LINES</c>).</summary>
+    public int ChatFoldCodeLines { get; init; } = 30;
+
+    /// <summary>Whether a finished reply shows its tokens per second and time small under it (<c>CRAFT_CHAT_SHOW_METRICS</c>).</summary>
+    public bool ChatShowMetrics { get; init; } = true;
+
     /// <summary>Whether the bottom panel is open; its chevron, Ctrl+J and a click on its active tab set it per workspace (<c>CRAFT_PANEL_BOTTOM_OPEN</c>).</summary>
     public bool BottomPanelOpen { get; init; } = true;
 
@@ -694,6 +709,11 @@ public sealed record CraftOptions
         new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units).") { Shape = SettingShape.Number(SettingSections.Files, "Tree indent", 0, 200, 1, "units", "Tree") },
         new("CRAFT_PANEL_EXPLORER_OPEN", "true", "Whether the explorer (the rail's side view) is open in the wide layout; Ctrl+B and the rail write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Explorer open", "Layout") },
         new("CRAFT_PANEL_CHAT_OPEN", "true", "Whether the chat and agent column is open in the wide layout; its close button and Ctrl+Alt+I write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Chat and agent column open", "Layout") },
+        new("CRAFT_CHAT_EXPANDED", "false", "Whether the chat and agent take the whole editor area (between the rail and side view and the window's right edge); the header's Expand and Ctrl+Shift+Alt+M write it to the workspace's settings. A narrow window shows it expanded.") { Shape = SettingShape.Toggle(SettingSections.Chat, "Chat expanded over the editor", "Conversation") },
+        new("CRAFT_COMPOSER_MAX_LINES", "12", "Lines the chat's and agent's message box grows to before it scrolls.") { Shape = SettingShape.Whole(SettingSections.Chat, "Message box grows to", 1, 200, "lines", "Conversation") },
+        new("CRAFT_CHAT_COPY_FORMAT", "markdown", "What Ctrl+C copies from the conversation: markdown (code blocks fenced, the speakers named) or plain; Ctrl+Shift+C copies the other.") { Shape = SettingShape.Choice(SettingSections.Chat, "Ctrl+C copies the conversation as", ["markdown", "plain"], "Conversation") },
+        new("CRAFT_CHAT_FOLD_CODE_LINES", "30", "A code block in the conversation longer than this shows folded with Show all; 0 never folds.") { Shape = SettingShape.Whole(SettingSections.Chat, "Fold code blocks longer than", 0, 100_000, "lines", "Conversation") },
+        new("CRAFT_CHAT_SHOW_METRICS", "true", "Whether a finished reply shows its tokens per second and time small under it.") { Shape = SettingShape.Toggle(SettingSections.Chat, "Show a reply's speed and time", "Conversation") },
         new("CRAFT_PANEL_BOTTOM_OPEN", "true", "Whether the bottom panel is open; its chevron, Ctrl+J and a click on its active tab write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Bottom panel open", "Layout") },
         new("CRAFT_SPLITTER_GRIP", "10", "The width of a splitter's grab area, centred on its one-unit line and over both neighbours (device-independent units).") { Shape = SettingShape.Number(SettingSections.Appearance, "Splitter grab area", 2, 40, 1, "units", "Layout") },
         new("CRAFT_SPLITTER_HOVER_MS", "100", "Milliseconds the pointer rests on a splitter before its line takes the accent.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Splitter highlight after", 0, 5000, "ms", "Layout", step: 50) },
@@ -1160,6 +1180,31 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_PANEL_CHAT_OPEN") is { } chatOpen)
         {
             options = options with { ChatOpen = Flag(chatOpen, "CRAFT_PANEL_CHAT_OPEN") };
+        }
+
+        if (Text(read, "CRAFT_CHAT_EXPANDED") is { } chatExpanded)
+        {
+            options = options with { ChatExpanded = Flag(chatExpanded, "CRAFT_CHAT_EXPANDED") };
+        }
+
+        if (Text(read, "CRAFT_COMPOSER_MAX_LINES") is { } composerLines)
+        {
+            options = options with { ComposerMaxLines = Whole(composerLines, "CRAFT_COMPOSER_MAX_LINES", 1, 200) };
+        }
+
+        if (Text(read, "CRAFT_CHAT_COPY_FORMAT") is { } copyFormat)
+        {
+            options = options with { ChatCopyFormat = OneOf(copyFormat, "CRAFT_CHAT_COPY_FORMAT", "markdown", "plain") };
+        }
+
+        if (Text(read, "CRAFT_CHAT_FOLD_CODE_LINES") is { } foldLines)
+        {
+            options = options with { ChatFoldCodeLines = Whole(foldLines, "CRAFT_CHAT_FOLD_CODE_LINES", 0, 100_000) };
+        }
+
+        if (Text(read, "CRAFT_CHAT_SHOW_METRICS") is { } showMetrics)
+        {
+            options = options with { ChatShowMetrics = Flag(showMetrics, "CRAFT_CHAT_SHOW_METRICS") };
         }
 
         if (Text(read, "CRAFT_PANEL_BOTTOM_OPEN") is { } bottomOpen)

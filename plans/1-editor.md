@@ -2913,6 +2913,18 @@ in File Explorer: plain text rows.
   Undo bar's time), stage all, a commit message box (Ctrl+Enter commits, amend as a toggle), Pull, Push, Fetch, Sync,
   branches (switch, create, the current one with ahead and behind), stash and pop; merge conflicts listed with Accept
   current, Accept incoming, Accept both inline in the editor.
+- **Generate the commit message** (the owner, 2026-11-01): a sparkle icon button in the commit message box (tooltip
+  "Generate commit message", its keys; the palette's "Source Control: Generate commit message"). It reads the staged
+  diff (else every change, said so) off the UI thread, trimmed to the commit role's context budget by file
+  (`CRAFT_PLUGIN_GIT_COMMITDIFFTOKENS`, the largest files summarised by name and counts), and asks the chat model through
+  the AI plug-in's public contract (a new `ICommitMessageProvider : IKind` registry in `Craft.Abstractions`, the AI
+  plug-in registers "ai"; the git plug-in never names a model). The message streams into the box as an editable draft
+  (never committed by itself), in the repository's own style (its recent `git log` subjects as examples,
+  `_COMMITSTYLE`: auto, conventional, plain), with Stop while it writes; with no model loaded it loads the chat role's
+  model as an activity (note 23's rule: only when asked), and with none set it says what to do. Settings: the role
+  (a fourth role "commit" in note 25's roles, empty: the chat's), the prompt (`_COMMITPROMPT`), the style. Tests in
+  `SourceControl`: a fake model's message streams into the box from a fixture diff, the budget trims by file, Stop,
+  no model said, nothing commits by itself.
 - **In the editor**: gutter marks for added, changed and deleted lines against the index (from `git diff` of the open
   file, recomputed off the UI thread after a pause), a click on a mark shows the change inline with Revert and Stage;
   the overview ruler (X part 4) shows them too.

@@ -147,32 +147,37 @@ public sealed class Lightbulb : IDisposable
         int version = _model.Snapshot.Version;
         int line = _model.CaretLine;
         Asks++;
-        _ = Task.Run(() =>
+        _ = AskAsync(probe, query, version, line);
+    }
+
+    // The probe awaited on the thread pool, then its answer posted back to the UI thread; nothing here blocks.
+    private async Task AskAsync(Func<LightbulbQuery, bool> probe, LightbulbQuery query, int version, int line)
+    {
+        bool has;
+        try
         {
-            try
-            {
-                return probe(query);
-            }
+            has = await Task.Run(() => probe(query)).ConfigureAwait(false);
+        }
 #pragma warning disable CA1031 // A provider's failure means no lightbulb, never a crash.
-            catch (Exception)
+        catch (Exception)
 #pragma warning restore CA1031
-            {
-                return false;
-            }
-        }).ContinueWith(done => _model.Post(() =>
+        {
+            has = false;
+        }
+
+        _model.Post(() =>
         {
             if (_disposed)
             {
                 return;
             }
 
-            bool has = done.IsCompletedSuccessfully && done.Result;
             Keep(version, query, has);
             if (_model.Snapshot.Version == version && Same(QueryAtCaret(), query))
             {
                 Show(query, version, has ? line : -1);
             }
-        }), TaskScheduler.Default);
+        });
     }
 
     private LightbulbQuery QueryAtCaret()

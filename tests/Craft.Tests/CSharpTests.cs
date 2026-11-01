@@ -670,12 +670,13 @@ public static class PluginTests
         Check.True(idrak.Contains("csharp=Craft.CSharp", StringComparison.Ordinal), $"Idrak's plug-in registry holds Craft.CSharp's \"csharp\" ({idrak})");
         Check.True(idrak.Contains("csharp-coding=Idrak.Reinforcement.Plugins", StringComparison.Ordinal), $"beside the learning plug-in's C# coding environment under its own name ({idrak})");
         var editor = Line("editor plugins:");
-        foreach (var plugin in (string[])["ai", "tools", "learning", "voice", "placement", "sampler", "sandbox"])
+        foreach (var plugin in (string[])["ai", "tools", "learning", "voice", "placement", "sampler", "sandbox", "git"])
         {
             Check.True(editor.Split([':', ','], StringSplitOptions.TrimEntries).Contains(plugin), $"the editor plug-in \"{plugin}\" is registered ({editor})");
         }
 
         Check.True(Line("tool sets:").Contains("editor", StringComparison.Ordinal), $"the tools plug-in's set \"editor\" is registered ({Line("tool sets:")})");
+        Check.Equal("source control: git", Line("source control:"), "the git plug-in's \"git\" is the source control provider (X part 8)");
         Check.Equal("library probes that threw: 0", Line("library probes that threw:"),
             "loading the pre-installed plug-ins makes Idrak's LibraryDefaults load only the libraries the program has: no first-chance FileNotFoundException for one it lacks (B5)");
     }

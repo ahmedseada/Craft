@@ -89,6 +89,7 @@ internal static class PluginProbe
         Console.WriteLine("language .csx: " + (EditorLanguages.ForFile("a.csx")?.Name ?? "(none)"));
         Console.WriteLine("editor plugins: " + string.Join(", ", EditorPlugins.Names));
         Console.WriteLine("tool sets: " + string.Join(", ", EditorToolSets.Names));
+        Console.WriteLine("source control: " + string.Join(", ", SourceControlProviders.Names));
         Console.WriteLine("idrak plugins: " + string.Join(", ", Idrak.Abstraction.Plugins.IdrakPlugins.Names.Order(StringComparer.Ordinal)
             .Select(n => $"{n}={Idrak.Abstraction.Plugins.IdrakPlugins.Find(n)?.GetType().Assembly.GetName().Name}")));
         lock (probes)

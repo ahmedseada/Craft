@@ -255,7 +255,15 @@ public sealed class ShellPage : ContentPage, IDisposable
             _menu.Close();
         };
 
-        _rail = new RailView(_host, _palette);
+        _rail = new RailView(_host, _palette) { Badge = _shell.RailBadge };
+        // X part 8: the rail's counts, the tree's file states and the status bar's branch follow the plug-ins' source control.
+        _shell.RailBadgesChanged += (_, _) => _rail.Rebuild();
+        _tree.StateOf = path => _shell.FileState(path) is { } file ? (file.Letter, StateColor(file.State)) : null;
+        _shell.SourceControlChanged += (_, _) =>
+        {
+            _tree.RefreshStates();
+            _status!.Branch.Text = _shell.BranchText;            // raised after the page is made
+        };
         _tree.Indent = _shell.Options.TreeIndent;
         _tree.FileActivated += (_, file) => _ = _shell.OpenFileAsync(file, fromTree: true);
         _tree.DragsFiles = true;                                 // phase X: a file dragged from the tree onto the editor opens
@@ -346,6 +354,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         _loader.Tapped += (_, _) => ToggleCentre(true);
         _host.ActivityCenter.Changed += OnActivitiesChanged;
         _status.ProblemsTapped += (_, _) => ShowBottom(BottomTab.Problems);
+        _status.BranchTapped += (_, _) =>
+        {
+            if (EditorCommands.Find(SourceControlProviders.BranchCommand) is not null)
+            {
+                _ = _host.ExecuteCommandAsync(SourceControlProviders.BranchCommand);
+            }
+        };
         var goToLine = new TapGestureRecognizer();
         goToLine.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.GoToLine);
         _status.Position.GestureRecognizers.Add(goToLine);
@@ -1203,7 +1218,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bell.Refresh();
         ToolTipProperties.SetText(_status.Problems, Tip("Show the problems", ShellCommandIds.ShowProblems));
         ToolTipProperties.SetText(_status.Position, Tip("Go to line", ShellCommandIds.GoToLine));
-        ToolTipProperties.SetText(_status.Branch, "The folder's git branch");
+        ToolTipProperties.SetText(_status.Branch, EditorCommands.Find(SourceControlProviders.BranchCommand) is null
+            ? "The folder's git branch"
+            : Tip("Switch or create a branch (↑ commits to push, ↓ to pull)", SourceControlProviders.BranchCommand));
         ToolTipProperties.SetText(_status.Indentation, "Indentation: CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES (Settings, Editor)");
         ToolTipProperties.SetText(_status.Encoding, "The file's encoding (kept when it is saved)");
         ToolTipProperties.SetText(_status.LineEnding, "The file's line breaks (kept when it is saved; CRAFT_LINE_ENDING for new files)");
@@ -2012,13 +2029,22 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
+    // A file state's colour in the tree (X part 8): the panel blocks' tones of the state, from the theme.
+    private Color StateColor(SourceControlState state) => SourceControlStates.Tone(state) switch
+    {
+        PanelTone.Success => _palette.Success,
+        PanelTone.Error => _palette.Error,
+        PanelTone.Accent => _palette.Accent,
+        _ => _palette.Warning,
+    };
+
     private void OnWorkspaceChanged()
     {
         using var label = UiDispatch.Enter("shell: the workspace opened (tree, explorer, layout)");
         _tree.Tree = _shell.Tree;
         _explorer.SetFolder(_shell.Workspace?.Root);
         UpdateExplorerEmpty();
-        _status.Branch.Text = _shell.Branch ?? "";
+        _status.Branch.Text = _shell.BranchText;
         _ = _quickOpen.IndexAsync(_shell.Workspace);
         UpdateTitle();
         ApplyLayout();

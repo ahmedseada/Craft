@@ -49,6 +49,12 @@ public interface IEditorPresenter
 
     /// <summary>Asks <paramref name="question"/>: the index of the answer picked, or its <see cref="EditorQuestion.Dismissed"/>; the default cannot ask (-1).</summary>
     Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken) => Task.FromResult(-1);
+
+    /// <summary>
+    /// Shows <paramref name="diff"/> of the file <paramref name="path"/> read-only (X part 8: a changed file against the
+    /// index or the last commit) under <paramref name="title"/>; completes when closed. The default has no such view (false).
+    /// </summary>
+    Task<bool> ShowDiffAsync(string title, string path, TextDiff diff, CancellationToken cancellationToken) => Task.FromResult(false);
 }
 
 /// <summary>

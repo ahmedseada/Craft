@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plan 1, X part 8: the Source Control view, a pre-installed, removable plug-in ("git"; delete plugins\Craft.Plugins.Git\
+    or CRAFT_PLUGINS_DISABLED=Craft.Plugins.Git). It runs the user's own git (found on PATH, or CRAFT_PLUGIN_GIT_PATH, a
+    machine-only setting), every call off the UI thread, its output parsed as bytes; it registers "git" in
+    Craft.Abstractions' SourceControlProviders, the Source Control side view with its rail item and count, the gutter's
+    marks against the index, the tree's and the tab's git items, and "Generate commit message" through
+    CommitMessageProviders (the AI plug-in's "ai"; this plug-in never names a model).
+
+    Built on Craft.Abstractions alone: nothing native, no libgit2. Android (phase M): it needs a git program on the device,
+    which a phone has not; the view then says so. No reflection of its own (trim-safe).
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Git</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

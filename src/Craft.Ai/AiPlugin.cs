@@ -224,6 +224,9 @@ public sealed class AiSession : IDisposable
         });
         InlineCompletionProviders.Register(Completion);
         CodeActionProviders.Register(Actions);
+        // X part 8: the git plug-in's Generate commit message writes with a model already loaded, through these leases.
+        CommitMessages = new AiCommitMessages(() => Settings, Models);
+        CommitMessageProviders.Register(CommitMessages);
         _host.AddPanel(Chat);
         _host.AddPanel(Agent);
         Completion.Unavailable += (_, reason) => _host.Dispatch("ai: completion's state", () => ShowUnavailable(reason));
@@ -245,6 +248,9 @@ public sealed class AiSession : IDisposable
 
     /// <summary>The models the plug-ins use (one lease per name, kept while the session lives).</summary>
     public AiModels Models { get; }
+
+    /// <summary>"ai" in <see cref="CommitMessageProviders"/>: a commit message written with a model already loaded.</summary>
+    public AiCommitMessages CommitMessages { get; }
 
     /// <summary>The chat panel.</summary>
     public AiChatPanel Chat { get; }
@@ -403,6 +409,7 @@ public sealed class AiSession : IDisposable
         _disposed = true;
         InlineCompletionProviders.Unregister(Completion.Name);
         CodeActionProviders.Unregister(Actions.Name);
+        CommitMessageProviders.Unregister(CommitMessages.Name);
         Chat.Dispose();
         Agent.Dispose();
         Models.Dispose();

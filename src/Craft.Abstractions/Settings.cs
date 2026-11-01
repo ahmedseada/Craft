@@ -61,6 +61,9 @@ public static class SettingSections
     /// <summary>The agent and its sandbox, proposals and the diff view.</summary>
     public const string Agent = "agent";
 
+    /// <summary>Source control (X part 8: the git plug-in, Generate commit message).</summary>
+    public const string SourceControl = "sourceControl";
+
     /// <summary>The terminal.</summary>
     public const string Terminal = "terminal";
 
@@ -87,6 +90,7 @@ public static class SettingSections
         (Completion, "Completion"),
         (Chat, "Chat"),
         (Agent, "Agent and sandbox"),
+        (SourceControl, "Source Control"),
         (Terminal, "Terminal"),
         (Voice, "Voice"),
         (Learning, "Learning"),

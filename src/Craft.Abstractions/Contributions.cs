@@ -115,6 +115,12 @@ public interface IEditorPanel
 
     /// <summary>Raised when <see cref="Title"/> or <see cref="Items"/> changed.</summary>
     event EventHandler? Changed;
+
+    /// <summary>
+    /// A short count on its rail item (X part 8: the Source Control view's changes, "12"), or null for none; raise
+    /// <see cref="Changed"/> when it changes. None by default.
+    /// </summary>
+    string? Badge => null;
 }
 
 /// <summary>A panel whose items are set (the usual way to make one); <see cref="SetItems"/> raises <see cref="Changed"/>.</summary>

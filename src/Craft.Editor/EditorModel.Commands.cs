@@ -167,6 +167,11 @@ public sealed partial class EditorModel
         CloseTooltips();
         _completion?.Close();
         _pointerMode = PointerMode.Select;
+        if (PressOnLineMark(viewX, viewY))
+        {
+            return;
+        }
+
         if (FoldChevronAt(viewX, viewY) is int foldLine)
         {
             _pointerDown = false;
@@ -538,6 +543,12 @@ public sealed partial class EditorModel
 
     private bool Escape()
     {
+        if (Tooltip is { Kind: EditorTooltipKind.Card })
+        {
+            CloseTooltips();
+            return true;
+        }
+
         if (CollapseCarets())
         {
             return true;

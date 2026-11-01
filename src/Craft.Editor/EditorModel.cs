@@ -117,6 +117,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         _lastDigits = TextReading.Digits(_lastLineCount);
         Folding = new EditorFolding(this);
         document.Buffer.Changed += OnBufferChanged;
+        AttachLineMarks();
     }
 
     /// <summary>
@@ -590,6 +591,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         _disposed = true;
         _document.Buffer.Changed -= OnBufferChanged;
+        DetachLineMarks();
         Folding.Dispose();
         InlineCompletion.Dispose();
         DisposeSemantic();

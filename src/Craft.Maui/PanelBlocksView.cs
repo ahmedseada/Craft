@@ -30,6 +30,8 @@ public sealed partial class PanelBlocksView : ContentView
     private readonly ContentView _resultsPlace = new() { IsVisible = false };
     private readonly Dictionary<string, string> _drafts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _open = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _boxVersions = new(StringComparer.Ordinal);
+    private string? _menuOpen;
     private ShellPalette _palette;
     private string? _focused;
 
@@ -157,6 +159,8 @@ public sealed partial class PanelBlocksView : ContentView
             PanelDisclosure disclosure => Disclosure(disclosure),
             PanelQuery query => Query(query, nested),
             PanelResults results => Results(results, nested),
+            PanelFileList files => FileList(files),
+            PanelMessageBox box => MessageBox(box),
             _ => new ContentView(),
         };
         if (block is PanelQuery or PanelResults)
@@ -636,6 +640,318 @@ public sealed partial class PanelBlocksView : ContentView
         }
 
         return stack;
+    }
+
+    // X part 8: a group of files (Changes, Staged changes, Merge conflicts): a flat title row with its chevron, count and
+    // actions that opens and closes it; each file a row with its type's icon, its name and folder, its state's letter in its
+    // colour, its actions while the pointer is over it; a click runs the row's action. No box: the rows sit on the view.
+    private VerticalStackLayout FileList(PanelFileList files)
+    {
+        var p = _palette;
+        bool open = _open.TryGetValue(files.Id, out bool kept) ? kept : files.Open;
+        var stack = new VerticalStackLayout { Spacing = 0 };
+        var header = new Grid
+        {
+            ColumnDefinitions = [new ColumnDefinition(new GridLength(16)), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)],
+            ColumnSpacing = 6,
+            Padding = new Thickness(2, 4),
+        };
+        header.Add(p.Label(open ? "▾" : "▸", p.Secondary, p.SmallSize), 0, 0);
+        var title = p.Label(files.Title.ToUpperInvariant(), p.Secondary, p.CaptionSize, FontWeight.SemiBold);
+        title.CharacterSpacing = 0.6;
+        title.VerticalTextAlignment = TextAlignment.Center;
+        header.Add(title, 1, 0);
+        var actions = new HorizontalStackLayout { Spacing = 2 };
+        foreach (var action in files.Actions)
+        {
+            actions.Children.Add(IconButton(action, null));
+        }
+
+        header.Add(actions, 2, 0);
+        if (files.Rows.Count > 0)
+        {
+            header.Add(Pill(files.Rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)), 3, 0);
+        }
+
+        p.States(header, InteractionKind.Row);
+        SemanticProperties.SetDescription(header, $"{files.Title}, {files.Rows.Count} {(files.Rows.Count == 1 ? "file" : "files")}, {(open ? "open" : "closed")}");
+        var toggle = new TapGestureRecognizer();
+        toggle.Tapped += (_, _) =>
+        {
+            _open[files.Id] = !open;
+            Redraw();
+        };
+        header.GestureRecognizers.Add(toggle);
+        stack.Children.Add(header);
+        if (!open)
+        {
+            return stack;
+        }
+
+        if (files.Rows.Count == 0 && files.Empty is { } empty)
+        {
+            var none = p.Label(empty, p.Secondary, p.SmallSize);
+            none.Margin = new Thickness(24, 2, 0, 4);
+            none.LineBreakMode = LineBreakMode.WordWrap;
+            stack.Children.Add(none);
+        }
+
+        foreach (var row in files.Rows)
+        {
+            stack.Children.Add(FileRow(row));
+        }
+
+        return stack;
+    }
+
+    private Grid FileRow(PanelFileRow row)
+    {
+        var p = _palette;
+        var grid = new Grid
+        {
+            ColumnDefinitions = [new ColumnDefinition(new GridLength(22)), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(new GridLength(16))],
+            ColumnSpacing = 6,
+            Padding = new Thickness(18, 3, 4, 3),
+            MinimumHeightRequest = 26,
+        };
+        // The file's type icon, as the tree and quick open show it (FileIcons: a plug-in's types too).
+        var icon = FileIcons.For(row.Name);
+        var badge = p.Label(icon.Badge, ThemeColors.Of(icon.Argb), p.CaptionSize, FontWeight.SemiBold);
+        badge.HorizontalTextAlignment = TextAlignment.Center;
+        badge.VerticalTextAlignment = TextAlignment.Center;
+        grid.Add(badge, 0, 0);
+        var tone = ToneColor(row.Tone, p.Text);
+        var names = new HorizontalStackLayout { Spacing = 6, VerticalOptions = LayoutOptions.Center };
+        var name = p.Label(row.Name, tone, p.SmallSize);
+        name.LineBreakMode = LineBreakMode.TailTruncation;
+        if (row.Struck)
+        {
+            name.TextDecorations = TextDecorations.Strikethrough;
+        }
+
+        names.Children.Add(name);
+        if (row.Folder is { Length: > 0 } folder)
+        {
+            var where = p.Label(folder, p.Secondary, p.CaptionSize);
+            where.LineBreakMode = LineBreakMode.HeadTruncation;
+            where.VerticalTextAlignment = TextAlignment.Center;
+            names.Children.Add(where);
+        }
+
+        grid.Add(names, 1, 0);
+        var actions = new HorizontalStackLayout { Spacing = 0, IsVisible = false, VerticalOptions = LayoutOptions.Center };
+        foreach (var action in row.Actions)
+        {
+            actions.Children.Add(IconButton(action, row.Path));
+        }
+
+        grid.Add(actions, 2, 0);
+        var letter = p.Label(row.Letter, tone, p.CaptionSize, FontWeight.SemiBold);
+        letter.HorizontalTextAlignment = TextAlignment.Center;
+        letter.VerticalTextAlignment = TextAlignment.Center;
+        grid.Add(letter, 3, 0);
+        var states = p.States(grid, InteractionKind.Row);
+        states.Label = name;
+        states.SetText(tone);
+        // The row's buttons show while the pointer is over it (and stay reachable by the tree's and the tab's menus).
+        var pointer = new PointerGestureRecognizer();
+        pointer.PointerEntered += (_, _) => actions.IsVisible = true;
+        pointer.PointerExited += (_, _) => actions.IsVisible = false;
+        grid.GestureRecognizers.Add(pointer);
+        if (row.ActionId is { } open)
+        {
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += (_, _) => Act(open, row.Path);
+            grid.GestureRecognizers.Add(tap);
+        }
+
+        var tip = row.Tooltip ?? (row.Folder is { Length: > 0 } f ? $"{f}/{row.Name}" : row.Name);
+        ToolTipProperties.SetText(grid, tip);
+        SemanticProperties.SetDescription(grid, $"{row.Name}, {row.Letter}");
+        return grid;
+    }
+
+    // A small icon button: the stroke icon on a flat 24-unit cell with the theme's hover, pressed and focus states; with a
+    // menu, a chevron beside it opens the options inline under the block (never a platform sheet).
+    private View IconButton(PanelIconButton button, string? value)
+    {
+        var p = _palette;
+        var color = button.Tone == PanelTone.Normal ? p.Secondary : ToneColor(button.Tone, p.Secondary);
+        var icon = new StrokeIcon(button.Icon, 16) { Color = color, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+        var cell = new Grid { WidthRequest = 26, HeightRequest = 24, IsEnabled = button.Enabled, Opacity = button.Enabled ? 1 : 0.45 };
+        cell.Add(icon);
+        var states = p.States(cell, InteractionKind.Flat, color);
+        states.Icon = icon;
+        ToolTipProperties.SetText(cell, button.Tooltip);
+        SemanticProperties.SetDescription(cell, button.Tooltip);
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += (_, _) =>
+        {
+            if (button.Enabled)
+            {
+                Act(button.ActionId, button.Value ?? value);
+            }
+        };
+        cell.GestureRecognizers.Add(tap);
+        if (button.Menu.Count == 0)
+        {
+            return cell;
+        }
+
+        var chevron = p.Label("▾", p.Secondary, p.CaptionSize);
+        chevron.VerticalTextAlignment = TextAlignment.Center;
+        chevron.HorizontalTextAlignment = TextAlignment.Center;
+        var more = new Grid { WidthRequest = 14, HeightRequest = 24 };
+        more.Add(chevron);
+        p.States(more, InteractionKind.Flat);
+        ToolTipProperties.SetText(more, "Choose the model");
+        var menu = new TapGestureRecognizer();
+        menu.Tapped += (_, _) =>
+        {
+            _menuOpen = _menuOpen == button.ActionId ? null : button.ActionId;
+            Redraw();
+        };
+        more.GestureRecognizers.Add(menu);
+        return new HorizontalStackLayout { Spacing = 0, Children = { cell, more } };
+    }
+
+    // The menu of an icon button, open under its block: one row per option, a click picks it.
+    private VerticalStackLayout? OpenMenu(IReadOnlyList<PanelIconButton> buttons)
+    {
+        if (_menuOpen is not { } open || buttons.FirstOrDefault(b => b.ActionId == open && b.Menu.Count > 0) is not { } button)
+        {
+            return null;
+        }
+
+        var p = _palette;
+        var list = new VerticalStackLayout { Spacing = 0, Padding = new Thickness(4) };
+        foreach (var option in button.Menu)
+        {
+            var label = p.Label(option.Title, p.Text, p.SmallSize);
+            label.Padding = new Thickness(8, 5);
+            var row = new ContentView { Content = label };
+            var states = p.States(row, InteractionKind.MenuItem);
+            states.Label = label;
+            if (option.Detail is { } detail)
+            {
+                ToolTipProperties.SetText(row, detail);
+            }
+
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += (_, _) =>
+            {
+                _menuOpen = null;
+                Act(button.MenuActionId ?? button.ActionId, option.Value);
+                Redraw();
+            };
+            row.GestureRecognizers.Add(tap);
+            list.Children.Add(row);
+        }
+
+        return list;
+    }
+
+    // X part 8: the commit message: a multi-line box in Craft's input style with its buttons at its top right (Generate,
+    // Stop), the submit keys through the composer's key route (Ctrl+Enter), what is typed told to the panel and kept across
+    // redraws; a new version from the panel (a streamed draft) replaces the text.
+    private VerticalStackLayout MessageBox(PanelMessageBox box)
+    {
+        var p = _palette;
+        var stack = new VerticalStackLayout { Spacing = 4 };
+        var editor = new ComposerEditor
+        {
+            Placeholder = box.Placeholder ?? "",
+            AutoSize = EditorAutoSizeOption.TextChanges,
+            MinimumHeightRequest = Math.Max(1, box.Lines) * p.FontSize * 1.5,
+            FontFamily = p.Font(),
+            FontSize = p.FontSize,
+            TextColor = p.Text,
+            PlaceholderColor = p.Secondary,
+            BackgroundColor = Colors.Transparent,
+            IsReadOnly = box.Busy,
+        };
+        bool fresh = !_boxVersions.TryGetValue(box.ActionId, out int version) || version != box.Version;
+        _boxVersions[box.ActionId] = box.Version;
+        editor.Text = fresh || !_drafts.TryGetValue(box.ActionId, out var draft) ? box.Text : draft;
+        _drafts[box.ActionId] = editor.Text ?? "";
+        SemanticProperties.SetDescription(editor, box.Placeholder ?? "Message");
+        editor.TextChanged += (_, e) =>
+        {
+            _drafts[box.ActionId] = e.NewTextValue ?? "";
+            Act(box.ActionId, e.NewTextValue ?? "");
+        };
+        editor.Focused += (_, _) => _focused = box.ActionId;
+        editor.Unfocused += (_, _) =>
+        {
+            if (_focused == box.ActionId)
+            {
+                _focused = null;
+            }
+        };
+        editor.RouteKey = (key, modifiers) =>
+        {
+            if (box.SubmitActionId is { } submit && key == EditorKey.Enter && (modifiers & KeyModifiers.Control) != 0)
+            {
+                Act(submit, editor.Text ?? "");
+                return true;
+            }
+
+            return false;
+        };
+        var buttons = new HorizontalStackLayout { Spacing = 0, VerticalOptions = LayoutOptions.Start, HorizontalOptions = LayoutOptions.End };
+        foreach (var action in box.Actions)
+        {
+            buttons.Children.Add(IconButton(action, null));
+        }
+
+        var inside = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 4 };
+        inside.Add(editor, 0, 0);
+        inside.Add(buttons, 1, 0);
+        stack.Children.Add(p.Box(inside, 6, new Thickness(8, 4, 4, 4), p.RaisedHigh, _focused == box.ActionId ? p.Accent : p.BorderStrong));
+        if (OpenMenu(box.Actions) is { } menu)
+        {
+            stack.Children.Add(p.Box(menu, 6, new Thickness(0), p.Raised, p.Border));
+        }
+
+        if (box.Status is { } status)
+        {
+            var line = p.Label(status, ToneColor(box.StatusTone, p.Secondary), p.CaptionSize);
+            line.LineBreakMode = LineBreakMode.WordWrap;
+            stack.Children.Add(line);
+        }
+
+        if (_focused == box.ActionId)
+        {
+            Dispatcher?.Dispatch(() => editor.Focus());             // drawn again while typing: the caret stays in the box
+        }
+
+        return stack;
+    }
+
+    // A count in a small pill (a group's files).
+    private Border Pill(string text)
+    {
+        var p = _palette;
+        var label = p.Label(text, p.Secondary, p.CaptionSize - 1, FontWeight.SemiBold);
+        label.HorizontalTextAlignment = TextAlignment.Center;
+        return new Border
+        {
+            StrokeThickness = 0,
+            StrokeShape = new RoundRectangle { CornerRadius = 8 },
+            BackgroundColor = p.RaisedHigh,
+            Padding = new Thickness(6, 0),
+            HeightRequest = 16,
+            VerticalOptions = LayoutOptions.Center,
+            Content = label,
+        };
+    }
+
+    // Every block drawn again (a group opened or closed, a menu opened).
+    private void Redraw()
+    {
+        _signatures.Clear();
+        _stack.Children.Clear();
+        Update();
     }
 
     // ---- helpers ----

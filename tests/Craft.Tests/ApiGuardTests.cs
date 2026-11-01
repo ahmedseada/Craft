@@ -31,6 +31,7 @@ public static class ApiGuardTests
         Assembly.Load(new AssemblyName("Craft.Plugins.Placement")),
         Assembly.Load(new AssemblyName("Craft.Voice")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Learning")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Git")),
     ];
 
     [Test]

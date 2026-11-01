@@ -364,7 +364,7 @@ public sealed class ProposalDiffPage : ContentPage
         }
     }
 
-    private static Grid MakeRow()
+    internal static Grid MakeRow()
     {
         var oldNumber = Mono(12, TextAlignment.End);
         oldNumber.SetBinding(Label.TextProperty, static (DiffRow row) => row.OldNumber);
@@ -461,5 +461,94 @@ public sealed class ProposalDiffPage : ContentPage
         warnings.Text = string.Create(culture, $"Warnings: {check.WarningsAfter}{(check.WarningsAfter == check.WarningsBefore ? " (unchanged)" : $" (now {check.WarningsBefore})")}");
         warnings.TextColor = ThemeColors.Of(check.WarningsAfter > check.WarningsBefore ? colors.Warning : colors.SecondaryText);
         firstErrors.Text = string.Join("\n", check.FirstErrors);
+    }
+}
+
+/// <summary>
+/// The diff view read-only (X part 8: a changed file's working copy against the index or the last commit): the same rows as
+/// <see cref="ProposalDiffPage"/>, hunk by hunk, with the file, the counts and Close; nothing to accept.
+/// </summary>
+public sealed class ChangesDiffPage : ContentPage
+{
+    private readonly TaskCompletionSource _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>The view of <paramref name="diff"/> of <paramref name="path"/> under <paramref name="title"/>, in <paramref name="theme"/>'s colours.</summary>
+    public ChangesDiffPage(string title, string path, TextDiff diff, ITheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(diff);
+        ArgumentNullException.ThrowIfNull(theme);
+        var colors = theme.Colors;
+        Title = title;
+        BackgroundColor = ThemeColors.Of(colors.Ground);
+        var heading = new Label { Text = $"{System.IO.Path.GetFileName(path)} · Changes", FontSize = 13, TextColor = ThemeColors.Of(colors.SecondaryText) };
+        var name = new Label { Text = title, FontSize = 17, FontAttributes = FontAttributes.Bold, TextColor = ThemeColors.Of(colors.Foreground) };
+        var detail = new Label
+        {
+            Text = diff.IsEmpty ? "No change." : string.Create(CultureInfo.InvariantCulture,
+                $"{diff.Hunks.Count} {(diff.Hunks.Count == 1 ? "hunk" : "hunks")}, +{diff.Added} −{diff.Removed}{(diff.Coarse ? " · a long change, shown whole" : "")}"),
+            FontSize = 13,
+            TextColor = ThemeColors.Of(colors.SecondaryText),
+        };
+        var close = new Button
+        {
+            Text = "Close",
+            FontSize = 13,
+            Padding = new Thickness(14, 6),
+            MinimumHeightRequest = 32,
+            CornerRadius = 6,
+            BorderWidth = 1,
+            BorderColor = ThemeColors.Of(colors.Border),
+            BackgroundColor = ThemeColors.Of(colors.Surface),
+            TextColor = ThemeColors.Of(colors.Foreground),
+            VerticalOptions = LayoutOptions.Center,
+        };
+        close.Clicked += (_, _) => _closed.TrySetResult();
+        var header = new Grid
+        {
+            Padding = new Thickness(16, 12),
+            BackgroundColor = ThemeColors.Of(colors.Surface),
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)],
+        };
+        header.Add(new VerticalStackLayout { Spacing = 2, Children = { heading, name, detail } }, 0, 0);
+        header.Add(close, 1, 0);
+        var list = new CollectionView
+        {
+            IsGrouped = true,
+            ItemsSource = ProposalDiffPage.Groups(diff, null, colors),
+            GroupHeaderTemplate = new DataTemplate(() =>
+            {
+                var lines = new Label { FontSize = 12, TextColor = ThemeColors.Of(colors.SecondaryText), Padding = new Thickness(12, 6), BackgroundColor = ThemeColors.Of(colors.Surface) };
+                lines.SetBinding(Label.TextProperty, static (DiffHunkGroup g) => g.Lines);
+                return lines;
+            }),
+            ItemTemplate = new DataTemplate(ProposalDiffPage.MakeRow),
+            SelectionMode = SelectionMode.None,
+            BackgroundColor = ThemeColors.Of(colors.Background),
+        };
+        var page = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(new GridLength(1)), new RowDefinition(GridLength.Star)] };
+        page.Add(header, 0, 0);
+        page.Add(new BoxView { Color = ThemeColors.Of(colors.Border) }, 0, 1);
+        page.Add(list, 0, 2);
+        Content = page;
+    }
+
+    /// <summary>Completes when the user closed it.</summary>
+    public Task Closed => _closed.Task;
+
+    /// <summary>Closes it (a cancelled request).</summary>
+    public void Close() => _closed.TrySetResult();
+
+    /// <inheritdoc />
+    protected override bool OnBackButtonPressed()
+    {
+        Close();
+        return base.OnBackButtonPressed();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDisappearing()
+    {
+        Close();
+        base.OnDisappearing();
     }
 }

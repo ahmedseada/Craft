@@ -436,6 +436,109 @@ public sealed record PanelResults(string Id, IReadOnlyList<PanelResultGroup> Gro
     public string? Empty { get; init; }
 }
 
+/// <summary>
+/// A small icon button (X part 8: a file row's Stage, a list's Stage all, the commit box's Generate): its icon, the action
+/// it runs and its tooltip; with <see cref="Menu"/> a chevron beside it opens a menu of options.
+/// </summary>
+/// <param name="Icon">SVG path data on a 24 by 24 box, drawn as a stroke (<see cref="RailIcons"/>' form).</param>
+/// <param name="ActionId">The action a press runs.</param>
+/// <param name="Tooltip">What hovering shows (its name, its keys).</param>
+public sealed record PanelIconButton(string Icon, string ActionId, string Tooltip)
+{
+    /// <summary>The value the action is called with, or null.</summary>
+    public string? Value { get; init; }
+
+    /// <summary>Whether it can be pressed now.</summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>Its colour role (Stop in the error's colour).</summary>
+    public PanelTone Tone { get; init; }
+
+    /// <summary>The options of its menu (the chevron beside it), or none.</summary>
+    public IReadOnlyList<PanelOption> Menu { get; init; } = [];
+
+    /// <summary>The action an option of the menu runs, with the option's value; null for <see cref="ActionId"/>.</summary>
+    public string? MenuActionId { get; init; }
+}
+
+/// <summary>A file of a <see cref="PanelFileList"/>: its icon (by its name), its name and folder, a state letter in its colour, and actions on hover.</summary>
+/// <param name="Path">Its full path (the click's and the actions' value unless they carry their own).</param>
+/// <param name="Name">Its name ("Program.cs").</param>
+/// <param name="Letter">Its state's letter ("M", "U"), or "".</param>
+public sealed record PanelFileRow(string Path, string Name, string Letter)
+{
+    /// <summary>Its folder, quieter beside the name ("src/Core"), or null.</summary>
+    public string? Folder { get; init; }
+
+    /// <summary>The letter's and the name's colour role.</summary>
+    public PanelTone Tone { get; init; }
+
+    /// <summary>Whether the name is struck through (a deleted file).</summary>
+    public bool Struck { get; init; }
+
+    /// <summary>The action a click on the row runs (with <see cref="Path"/>), or null.</summary>
+    public string? ActionId { get; init; }
+
+    /// <summary>The buttons shown while the pointer is over the row (and for the keyboard's focus), in order.</summary>
+    public IReadOnlyList<PanelIconButton> Actions { get; init; } = [];
+
+    /// <summary>What hovering shows, or null.</summary>
+    public string? Tooltip { get; init; }
+}
+
+/// <summary>A titled group of files (X part 8: Changes, Staged changes, Merge conflicts) that opens and closes, with its count and its own actions.</summary>
+/// <param name="Id">Its id, unique in the panel (its open state is kept by it across redraws).</param>
+/// <param name="Title">Its title.</param>
+/// <param name="Rows">Its files, in order.</param>
+public sealed record PanelFileList(string Id, string Title, IReadOnlyList<PanelFileRow> Rows) : PanelBlock
+{
+    /// <summary>The buttons on its title's row (Stage all), in order.</summary>
+    public IReadOnlyList<PanelIconButton> Actions { get; init; } = [];
+
+    /// <summary>Whether it starts open.</summary>
+    public bool Open { get; init; } = true;
+
+    /// <summary>What it shows when empty, or null to show nothing.</summary>
+    public string? Empty { get; init; }
+}
+
+/// <summary>
+/// A multi-line text box (X part 8: the commit message): what the user types is told to the panel as it changes
+/// (<see cref="ActionId"/> with the text); <see cref="SubmitActionId"/> runs on <see cref="SubmitKeys"/>. The box keeps the
+/// user's text across redraws and takes <see cref="Text"/> again only when <see cref="Version"/> changes (a draft streamed in).
+/// </summary>
+/// <param name="ActionId">The action told the text as the user types (nothing is redrawn for it).</param>
+/// <param name="Text">The text it shows when its <see cref="Version"/> is new.</param>
+public sealed record PanelMessageBox(string ActionId, string Text) : PanelBlock
+{
+    /// <summary>What an empty box shows ("Message (Ctrl+Enter to commit)").</summary>
+    public string? Placeholder { get; init; }
+
+    /// <summary>Raised by the panel whenever it sets <see cref="Text"/> for the box to take; the box keeps its own text while it stays.</summary>
+    public int Version { get; init; }
+
+    /// <summary>The action <see cref="SubmitKeys"/> runs with the text, or null.</summary>
+    public string? SubmitActionId { get; init; }
+
+    /// <summary>The keys that submit ("Ctrl+Enter").</summary>
+    public string SubmitKeys { get; init; } = "Ctrl+Enter";
+
+    /// <summary>The buttons inside the box, at its top right (Generate, Stop), in order.</summary>
+    public IReadOnlyList<PanelIconButton> Actions { get; init; } = [];
+
+    /// <summary>Whether text is being written into it (the box is read-only meanwhile).</summary>
+    public bool Busy { get; init; }
+
+    /// <summary>A quieter line under it (what wrote the draft, why nothing could), or null.</summary>
+    public string? Status { get; init; }
+
+    /// <summary>The status line's colour role.</summary>
+    public PanelTone StatusTone { get; init; }
+
+    /// <summary>The lines it shows at least.</summary>
+    public int Lines { get; init; } = 3;
+}
+
 /// <summary>What the blocks of a view panel say as text: one line per block (a host that draws lines, tests, a change's signature).</summary>
 public static class PanelBlocks
 {
@@ -636,6 +739,58 @@ public static class PanelBlocks
                 // The rows themselves are not written: the version says when they changed (thousands of rows, one number).
                 text.Append(c, $"[results {results.Id} v{results.Version}: {results.Groups.Count} groups]");
                 break;
+            case PanelFileList files:
+                text.Append("[files ").Append(files.Title).Append(c, $" ({files.Rows.Count})");
+                foreach (var action in files.Actions)
+                {
+                    text.Append(' ');
+                    IconButton(action, text);
+                }
+
+                text.Append(':');
+                foreach (var row in files.Rows)
+                {
+                    text.Append(' ').Append(row.Letter).Append(' ').Append(row.Name);
+                    if (row.Folder is { Length: > 0 } folder)
+                    {
+                        text.Append(" · ").Append(folder);
+                    }
+
+                    if (row.Struck)
+                    {
+                        text.Append(" (struck)");
+                    }
+
+                    foreach (var action in row.Actions)
+                    {
+                        text.Append(' ');
+                        IconButton(action, text);
+                    }
+
+                    text.Append(';');
+                }
+
+                if (files.Rows.Count == 0 && files.Empty is { } empty)
+                {
+                    text.Append(' ').Append(empty);
+                }
+
+                text.Append(']');
+                break;
+            case PanelMessageBox box:
+                text.Append(c, $"[box v{box.Version}{(box.Busy ? " busy" : "")}] ").Append(box.Text);
+                foreach (var action in box.Actions)
+                {
+                    text.Append(' ');
+                    IconButton(action, text);
+                }
+
+                if (box.Status is { } status)
+                {
+                    text.Append(" · ").Append(status);
+                }
+
+                break;
             case PanelDisclosure disclosure:
                 text.Append("[▸ ").Append(disclosure.Title).Append(':');
                 foreach (var inner in disclosure.Blocks)
@@ -657,6 +812,17 @@ public static class PanelBlocks
         }
     }
 
+    private static void IconButton(PanelIconButton button, StringBuilder text)
+    {
+        text.Append('(').Append(button.Tooltip).Append(button.Enabled ? "" : " disabled");
+        if (button.Menu.Count > 0)
+        {
+            text.Append(" ▾ ").Append(string.Join(" | ", button.Menu.Select(o => o.Title)));
+        }
+
+        text.Append(')');
+    }
+
     private static void Button(PanelButton button, StringBuilder text) =>
         text.Append('[').Append(button.Title).Append(button.Kind == PanelButtonKind.Primary ? " *" : "").Append(button.Enabled ? "" : " (disabled)").Append(']');
 }
@@ -671,6 +837,7 @@ public sealed class ViewPanel(string id, string title, Func<string, string?, Can
     private IReadOnlyList<PanelBlock> _blocks = [];
     private IReadOnlyList<PanelItem>? _items;
     private string _title = title ?? "";
+    private string? _badge;
 
     /// <inheritdoc />
     public string Id { get; } = !string.IsNullOrWhiteSpace(id) ? id : throw new ArgumentException("A panel needs an id.", nameof(id));
@@ -688,6 +855,21 @@ public sealed class ViewPanel(string id, string title, Func<string, string?, Can
 
     /// <inheritdoc />
     public IReadOnlyList<PanelBlock> Blocks => _blocks;
+
+    /// <inheritdoc />
+    /// <remarks>Setting it raises <see cref="Changed"/> when it changed.</remarks>
+    public string? Badge
+    {
+        get => _badge;
+        set
+        {
+            if (!string.Equals(_badge, value, StringComparison.Ordinal))
+            {
+                _badge = value;
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
 
     /// <inheritdoc />
     /// <remarks>Made from the blocks when first read after a change.</remarks>

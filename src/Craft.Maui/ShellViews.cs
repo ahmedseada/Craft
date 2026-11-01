@@ -27,7 +27,10 @@ public static class ThemeColors
 /// <param name="IsFolder">Whether it is a folder's row.</param>
 /// <param name="Badge">The file type's icon (<see cref="FileIcons"/>, as quick open shows it), or a folder's chevron.</param>
 /// <param name="BadgeColor">The icon's colour.</param>
-public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, bool Active, string? FontFamily, bool IsFolder = false, string Badge = "", Color? BadgeColor = null);
+/// <param name="StateLetter">The file's source control state's letter (X part 8: "M", "U"), or "".</param>
+/// <param name="StateColor">The name's and the letter's colour for that state, or null for the row's own.</param>
+public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, bool Active, string? FontFamily, bool IsFolder = false, string Badge = "", Color? BadgeColor = null,
+    string StateLetter = "", Color? StateColor = null);
 
 /// <summary>
 /// The folder tree (<see cref="FolderTree"/>) as a virtualized list (only the rows on screen are made): a folder's row
@@ -124,6 +127,15 @@ public sealed class FolderTreeView : ContentView
         }
     }
 
+    /// <summary>
+    /// The source control state of a file by its full path (X part 8: its letter and colour), or null for none; call
+    /// <see cref="RefreshStates"/> when the states changed.
+    /// </summary>
+    public Func<string, (string Letter, Color Color)?>? StateOf { get; set; }
+
+    /// <summary>Shows the files' states again (the repository's status changed).</summary>
+    public void RefreshStates() => Refresh();
+
     /// <summary>The active document's path (its row is filled), or null.</summary>
     public string? ActivePath
     {
@@ -197,10 +209,15 @@ public sealed class FolderTreeView : ContentView
         var badge = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, WidthRequest = 22, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center };
         badge.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Badge);
         badge.SetBinding(Label.TextColorProperty, static (FolderTreeItem item) => item.BadgeColor);
-        var line = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) }, ColumnSpacing = 4 };
+        // X part 8: the file's source control letter at the row's right, in its state's colour.
+        var state = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(4, 0, 0, 0) };
+        state.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.StateLetter);
+        state.SetBinding(Label.TextColorProperty, static (FolderTreeItem item) => item.StateColor);
+        var line = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 4 };
         line.SetBinding(MarginProperty, static (FolderTreeItem item) => item.Indent);
         line.Add(badge, 0, 0);
         line.Add(label, 1, 0);
+        line.Add(state, 2, 0);
         var row = new ContentView { Content = line };
         // Phase X: the row's hover, pressed and active looks from the theme (one mechanism); its text follows them.
         InteractiveStates? states = null;
@@ -214,6 +231,7 @@ public sealed class FolderTreeView : ContentView
             states ??= InteractiveStates.Attach(row, palette, InteractionKind.Row);
             states.Label = label;
             states.Apply(palette);
+            states.SetText(item.StateColor);                 // a changed file's name in its state's colour
             states.Selected = item.Active;
         };
         // A click opens the file or toggles the folder through the row's own tap: on Windows the drag recognizer below
@@ -316,6 +334,7 @@ public sealed class FolderTreeView : ContentView
             bool active = !row.Entry.IsFolder && string.Equals(row.Entry.FullPath, _activePath, StringComparison.OrdinalIgnoreCase);
             string badge;
             Color badgeColor;
+            var state = row.Entry.IsFolder ? null : StateOf?.Invoke(row.Entry.FullPath);
             if (row.Entry.IsFolder)
             {
                 badge = row.IsExpanded ? "▾" : "▸";
@@ -329,7 +348,7 @@ public sealed class FolderTreeView : ContentView
             }
 
             items[i] = new FolderTreeItem(row.Entry.Name, new Thickness(8 + (row.Depth * _indent), 0, 14, 0), _textColor, row.Entry.FullPath,
-                active, _fontFamily, row.Entry.IsFolder, badge, badgeColor);
+                active, _fontFamily, row.Entry.IsFolder, badge, badgeColor, state?.Letter ?? "", state?.Color);
         }
 
         // Only the run that differs is replaced; the rows before and after it stay the same items on screen.

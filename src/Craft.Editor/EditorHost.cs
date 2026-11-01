@@ -245,9 +245,6 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <inheritdoc />
     public SelectionState Selection => _activeDocument?.Selection ?? default;
 
-    /// <inheritdoc />
-    /// <remarks>Set by the shell when a folder opens or closes (the full path, or null).</remarks>
-    public string? WorkspaceFolder { get; set; }
 
     /// <inheritdoc />
     /// <remarks>The settings' data folder (<see cref="CraftOptions.ResolveDataFolder"/>: <c>CRAFT_DATA_FOLDER</c>, else the local application data's "Craft").</remarks>
@@ -415,6 +412,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         var open = new OpenDocument(this, document, language, languageName ?? language?.Name ?? "Plain text");
         _documents.Add(open);
         document.Buffer.Changed += open.OnBufferChanged;
+        WatchLineMarks(open);
         Raise(_opened, new EditorDocumentEventArgs(open), nameof(DocumentOpened));
         if (_activeDocument is null)
         {
@@ -433,6 +431,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         }
 
         open.Document.Buffer.Changed -= open.OnBufferChanged;
+        UnwatchLineMarks(open);
         open.IsClosed = true;
         Raise(_closed, new EditorDocumentEventArgs(open), nameof(DocumentClosed));
         if (ReferenceEquals(_activeDocument, open))
@@ -1253,6 +1252,14 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         public ISemanticLanguageSession? SemanticSession { get; set; }
 
         public bool IsClosed { get; set; }
+
+        public void OnLineMarkClicked(object? sender, LineMarkClickEventArgs e)
+        {
+            if (!IsClosed)
+            {
+                Host.OnLineMarkClicked(this, e);
+            }
+        }
 
         public void OnBufferChanged(object? sender, TextChangedEventArgs e)
         {

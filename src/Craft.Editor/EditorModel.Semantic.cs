@@ -20,6 +20,9 @@ public readonly record struct EditorTooltip(string Text, int Position, (int Star
 {
     /// <summary>What it is: plain (signature help, a description), a hover card that stays under the pointer, or a fold's preview.</summary>
     public EditorTooltipKind Kind { get; init; }
+
+    /// <summary>An inline card's actions (its row of buttons), or null.</summary>
+    public IReadOnlyList<Craft.Abstractions.InlineCardAction>? Actions { get; init; }
 }
 
 public sealed partial class EditorModel
@@ -434,9 +437,9 @@ public sealed partial class EditorModel
         _pointerX = viewX;
         _pointerY = viewY;
         NoteHover(viewX, viewY);
-        if (HoverCardHovered(viewX, viewY))
+        if (HoverCardHovered(viewX, viewY) || Tooltip is { Kind: EditorTooltipKind.Card })
         {
-            return;
+            return;                                         // an inline card stays until it is closed: no hover meanwhile
         }
 
         if (FoldPreviewAt(viewX, viewY) is int header)
@@ -489,6 +492,11 @@ public sealed partial class EditorModel
         _hoverRequest?.Cancel();
         _hoverPosition = -1;
         _pointerX = _pointerY = -1;
+        if (Tooltip is { Kind: EditorTooltipKind.Card })
+        {
+            return;
+        }
+
         if (Tooltip is { Kind: not EditorTooltipKind.Plain } && SignatureHelp is null)
         {
             ScheduleHoverHide();

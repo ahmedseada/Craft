@@ -14,6 +14,12 @@ public enum EditorTooltipKind
 
     /// <summary>A folded block's preview (the pointer rested on its "..." or its chevron): its hidden lines in their colours.</summary>
     FoldPreview,
+
+    /// <summary>
+    /// A plug-in's inline card under a line (X part 8: a change with Revert and Stage): it stays until Escape, a press outside
+    /// it or one of its actions, and a "- " or "+ " line is drawn as removed or added.
+    /// </summary>
+    Card,
 }
 
 /// <summary>
@@ -63,6 +69,12 @@ public sealed class HoverCard
 
     /// <summary>Whether the card ends with the "Go to definition" row (a hover on a symbol, in a language that finds definitions).</summary>
     public bool HasDefinitionRow { get; private set; }
+
+    /// <summary>Whether the card ends with its actions' row (an inline card with actions).</summary>
+    public bool HasActionRow { get; private set; }
+
+    /// <summary>The cells between two actions on the actions' row.</summary>
+    internal const int ActionGap = 3;
 
     /// <summary>The selection in the tooltip's text: its start and end offsets (equal when nothing is selected).</summary>
     public (int Start, int End) Selection => (Math.Min(_selectionAnchor, _selectionCaret), Math.Max(_selectionAnchor, _selectionCaret));
@@ -134,17 +146,35 @@ public sealed class HoverCard
             widest = Math.Max(widest, DefinitionLabel.Length + 2 + DefinitionKey.Length);
         }
 
+        HasActionRow = tooltip.Kind == EditorTooltipKind.Card && tooltip.Actions is { Count: > 0 };
+        if (HasActionRow)
+        {
+            int actions = 0;
+            foreach (var action in tooltip.Actions!)
+            {
+                actions += action.Title.Length + ActionGap;
+            }
+
+            widest = Math.Max(widest, actions - ActionGap);
+        }
+
         int most = interactive ? Math.Max(3, (int)(model.ViewportHeight / 2 / height)) : int.MaxValue;
         ShownRows = Math.Min(_lines.Count, most);
         FirstRow = Math.Clamp(FirstRow, 0, _lines.Count - ShownRows);
         float width = (widest + (2 * EditorModel.PopupPadding) + (ShownRows < _lines.Count ? 1 : 0)) * cell;
-        float boxHeight = (ShownRows + (HasDefinitionRow ? 1 : 0)) * height;
+        float boxHeight = (ShownRows + (HasDefinitionRow || HasActionRow ? 1 : 0)) * height;
         var anchor = model.PointFromPosition(Math.Clamp(tooltip.Position, 0, model.Snapshot.Length));
         float x = Math.Clamp(anchor.X - model.ScrollX, model.TextLeft, Math.Max(model.TextLeft, model.ViewportWidth - model.OverviewRulerWidth - width));
         float above = anchor.Y - model.ScrollY - boxHeight - 2;
         float below = anchor.Y + height - model.ScrollY + 2;
         float y;
-        if (preview)
+        if (tooltip.Kind == EditorTooltipKind.Card)
+        {
+            // Under its line, at the text's left edge; above it when it does not fit below.
+            x = Math.Clamp(model.TextLeft - model.ScrollX, model.TextLeft, Math.Max(model.TextLeft, model.ViewportWidth - model.OverviewRulerWidth - width));
+            y = below + boxHeight <= model.ViewportHeight || above < 0 ? below : above;
+        }
+        else if (preview)
         {
             x = Math.Clamp(model.TextLeft - model.ScrollX + (PreviewIndent * cell), model.TextLeft, Math.Max(model.TextLeft, model.ViewportWidth - model.OverviewRulerWidth - width));
             y = below + boxHeight <= model.ViewportHeight || above < 0 ? below : above;
@@ -170,6 +200,35 @@ public sealed class HoverCard
     /// <summary>Whether the view point is on the "Go to definition" row.</summary>
     public bool IsOnDefinitionRow(float viewX, float viewY) =>
         Layout() is { } box && HasDefinitionRow && box.Contains(viewX, viewY) && viewY >= box.Y + (ShownRows * _model.Metrics.LineHeight);
+
+    /// <summary>The index of the action under the view point on an inline card's actions' row, or null.</summary>
+    public int? ActionAt(float viewX, float viewY)
+    {
+        if (Layout() is not { } box || !HasActionRow || !box.Contains(viewX, viewY) || _model.Tooltip is not { Actions: { } actions })
+        {
+            return null;
+        }
+
+        var metrics = _model.Metrics;
+        if (viewY < box.Y + (ShownRows * metrics.LineHeight))
+        {
+            return null;
+        }
+
+        float x = box.X + (EditorModel.PopupPadding * metrics.CellWidth);
+        for (int i = 0; i < actions.Count; i++)
+        {
+            float right = x + ((actions[i].Title.Length + 1) * metrics.CellWidth);
+            if (viewX >= x - metrics.CellWidth && viewX < right)
+            {
+                return i;
+            }
+
+            x += (actions[i].Title.Length + ActionGap) * metrics.CellWidth;
+        }
+
+        return null;
+    }
 
     /// <summary>Scrolls the text rows by <paramref name="rows"/> (down when positive); false when it cannot move.</summary>
     public bool ScrollBy(int rows)

@@ -438,6 +438,12 @@ public sealed class RailView : ContentView
         Rebuild();
     }
 
+    /// <summary>
+    /// The badge of a rail item by its id (X part 8: the Source Control view's count of changes; the shell's
+    /// <c>RailBadge</c>), or null for none; call <see cref="Rebuild"/> when a badge changed.
+    /// </summary>
+    public Func<string, string?>? Badge { get; set; }
+
     /// <summary>The id of the item shown active (the explorer while the tree shows), or null.</summary>
     public string? Active
     {
@@ -490,12 +496,35 @@ public sealed class RailView : ContentView
             cell.Add(new BoxView { Color = _palette.Accent, WidthRequest = 2, HorizontalOptions = LayoutOptions.Start, InputTransparent = true });
         }
 
+        // X part 8: a count on the item (the changes of the Source Control view), a pill at the icon's top right.
+        string? badge = Badge?.Invoke(item.Id);
+        if (badge is { Length: > 0 })
+        {
+            var count = _palette.Label(badge, _palette.AccentInk, _palette.CaptionSize - 1, FontWeight.SemiBold);
+            count.HorizontalTextAlignment = TextAlignment.Center;
+            count.VerticalTextAlignment = TextAlignment.Center;
+            cell.Add(new Border
+            {
+                StrokeThickness = 0,
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+                BackgroundColor = _palette.Accent,
+                MinimumWidthRequest = 16,
+                HeightRequest = 16,
+                Padding = new Thickness(4, 0),
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.Start,
+                Margin = new Thickness(0, 5, 4, 0),
+                InputTransparent = true,
+                Content = count,
+            });
+        }
+
         // Phase X: hover and pressed from the theme (the icon follows), and the tooltip names the action and its keys in effect.
         var states = _palette.States(cell, InteractionKind.Rail);
         states.Icon = icon;
         states.Selected = active;
-        ToolTipProperties.SetText(cell, ShellTooltips.For(_host, item.Title, item.CommandId));
-        SemanticProperties.SetDescription(cell, item.Title);
+        ToolTipProperties.SetText(cell, ShellTooltips.For(_host, item.Title, item.CommandId) + (badge is { Length: > 0 } ? $" ({badge})" : ""));
+        SemanticProperties.SetDescription(cell, badge is { Length: > 0 } ? $"{item.Title}, {badge}" : item.Title);
         var tap = new TapGestureRecognizer();
         string command = item.CommandId;
         tap.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(command);
@@ -1180,6 +1209,9 @@ public sealed class StatusBarView : ContentView
         var tap = new TapGestureRecognizer();
         tap.Tapped += (_, _) => ProblemsTapped?.Invoke(this, EventArgs.Empty);
         Problems.GestureRecognizers.Add(tap);
+        var branch = new TapGestureRecognizer();
+        branch.Tapped += (_, _) => BranchTapped?.Invoke(this, EventArgs.Empty);
+        Branch.GestureRecognizers.Add(branch);
         Content = _bar;
         HeightRequest = 26;
         Apply(palette);
@@ -1211,6 +1243,9 @@ public sealed class StatusBarView : ContentView
 
     /// <summary>Raised when the problems' count is tapped.</summary>
     public event EventHandler? ProblemsTapped;
+
+    /// <summary>Raised when the branch is tapped (X part 8: the source control plug-in's branch command).</summary>
+    public event EventHandler? BranchTapped;
 
     /// <summary>Narrow: only the caret's place, the problems and the notice show, each a touch target tall.</summary>
     public void SetNarrow(bool narrow)

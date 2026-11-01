@@ -90,7 +90,7 @@ public sealed partial class EditorModel
     // The pointer left a hover card and its word: it closes after CRAFT_HOVER_HIDE_MS (once; moving on does not postpone it).
     private void ScheduleHoverHide()
     {
-        if (Tooltip is not { Kind: not EditorTooltipKind.Plain } || SignatureHelp is not null || _hideScheduled || _cardSelecting)
+        if (Tooltip is not { Kind: not EditorTooltipKind.Plain } || Tooltip is { Kind: EditorTooltipKind.Card } || SignatureHelp is not null || _hideScheduled || _cardSelecting)
         {
             return;
         }
@@ -229,6 +229,11 @@ public sealed partial class EditorModel
         {
             CancelHoverHide();
             _hoverTimer?.Cancel();
+            if (PressOnCardAction(viewX, viewY))
+            {
+                return true;
+            }
+
             if (HoverCard.IsOnDefinitionRow(viewX, viewY))
             {
                 _pointerDown = false;

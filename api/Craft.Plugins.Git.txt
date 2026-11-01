@@ -1,0 +1,247 @@
+static class Craft.Plugins.Git.CommitMessages
+  const System.Int32 BytesPerToken = 4
+  const System.String DefaultPrompt = You write git commit messages. Write one for the changes below: a subject line of at most 72 characters in the imperative mood ("Add", "Fix", "Remove"), then, only when the change needs it, a blank line and a short body that says why. Reply with the message only: no quotes, no code fences, no preamble.
+  static Craft.Plugins.Git.TrimmedDiff Trim(System.ReadOnlySpan<System.Byte> diff, System.Int32 budgetTokens)
+  static System.String Clean(System.String reply)
+  static System.String Instructions(Craft.Plugins.Git.GitSettings settings, System.Boolean hasExamples, System.Boolean allChanges, System.Int32 summarised)
+struct Craft.Plugins.Git.ConflictBlock : System.IEquatable<Craft.Plugins.Git.ConflictBlock>
+  System.Boolean Equals(Craft.Plugins.Git.ConflictBlock other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Base { get; init; }
+  System.Int32 End { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Middle { get; init; }
+  System.Int32 Start { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Base, out System.Int32 Middle, out System.Int32 End)
+  ctor(System.Int32 Start, System.Int32 Base, System.Int32 Middle, System.Int32 End)
+sealed class Craft.Plugins.Git.GitBranchInfo : System.IEquatable<Craft.Plugins.Git.GitBranchInfo>
+  Craft.Plugins.Git.GitBranchInfo <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Git.GitBranchInfo other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Ahead { get; init; }
+  System.Int32 Behind { get; init; }
+  System.Int32 GetHashCode()
+  System.String Name { get; init; }
+  System.String ToString()
+  System.String Upstream { get; init; }
+  System.Void Deconstruct(out System.String Name, out System.String Upstream, out System.Int32 Ahead, out System.Int32 Behind)
+  ctor(System.String Name, System.String Upstream, System.Int32 Ahead, System.Int32 Behind)
+sealed class Craft.Plugins.Git.GitException : System.Exception, System.Runtime.Serialization.ISerializable
+  ctor(System.String message)
+sealed class Craft.Plugins.Git.GitPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  const System.String PackageName = Craft.Plugins.Git
+  ctor()
+static class Craft.Plugins.Git.GitParsers
+  static Craft.Abstractions.SourceControlStatus Status(System.String root, System.ReadOnlySpan<System.Byte> output)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> Marks(Craft.Abstractions.TextDiff diff)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> Marks(System.Collections.Generic.IEnumerable<System.ValueTuple<System.Int32, System.Int32, System.Int32, System.Int32>> hunks)
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.Git.ConflictBlock> Conflicts(System.ReadOnlySpan<System.Char> text)
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.Git.GitBranchInfo> Branches(System.ReadOnlySpan<System.Byte> output)
+  static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.Int32, System.Int32, System.Int32, System.Int32>> Hunks(System.ReadOnlySpan<System.Byte> output)
+  static System.Collections.Generic.List<System.String> LinesWithBreaks(System.String text)
+sealed class Craft.Plugins.Git.GitPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  const System.String CommitCommand = git.commit
+  const System.String DiscardFileCommand = git.discardFile
+  const System.String FetchCommand = git.fetch
+  const System.String GenerateCommand = git.generateCommitMessage
+  const System.String ModelChoices = commit-models
+  const System.String OpenChangesCommand = git.openChanges
+  const System.String PullCommand = git.pull
+  const System.String PushCommand = git.push
+  const System.String RefreshCommand = git.refresh
+  const System.String RevealCommand = git.reveal
+  const System.String SideViewCommand = craft.sideView.scm.view
+  const System.String StageFileCommand = git.stageFile
+  const System.String SyncCommand = git.sync
+  const System.String UnstageFileCommand = git.unstageFile
+  static Craft.Plugins.Git.GitPlugin Instance { get; }
+  static Craft.Plugins.Git.GitProvider Provider { get; }
+  static Craft.Plugins.Git.GitSession Session { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+sealed class Craft.Plugins.Git.GitProgram
+  System.String Path { get; }
+  System.Threading.Tasks.Task<Craft.Plugins.Git.GitResult> RunAsync(System.String folder, System.Collections.Generic.IReadOnlyList<System.String> arguments, System.Byte[] input = null, System.Threading.CancellationToken cancellationToken = null)
+  static Craft.Plugins.Git.GitProgram Find(System.String configured, out System.String why, System.String searchPath = null)
+sealed class Craft.Plugins.Git.GitProvider : Craft.Abstractions.ISourceControlProvider, Idrak.Abstraction.IKind
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.String Unavailable { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.ISourceControlRepository> OpenAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
+  const System.String ProviderName = git
+  ctor(System.Func<Craft.Plugins.Git.GitSettings> settings, System.Action<System.Action> dispatch)
+sealed class Craft.Plugins.Git.GitRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()
+sealed class Craft.Plugins.Git.GitRepository : Craft.Abstractions.ISourceControlRepository, System.IDisposable
+  Craft.Abstractions.SourceControlStatus Status { get; }
+  Craft.Plugins.Git.GitProgram Program { get; }
+  System.Boolean Contains(System.String path)
+  System.Int32 Reads { get; }
+  System.String Provider { get; }
+  System.String RelativeOf(System.String path)
+  System.String Root { get; }
+  System.Threading.Tasks.Task CommitAsync(System.String message, System.Boolean amend, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task RefreshAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task StageAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task StageTextAsync(System.String path, System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task UnstageAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Plugins.Git.GitResult> RunAsync(System.Collections.Generic.IReadOnlyList<System.String> arguments, System.Threading.CancellationToken cancellationToken = null, System.Byte[] input = null)
+  System.Threading.Tasks.Task<System.Byte[]> ReadStagedBytesAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Plugins.Git.GitBranchInfo>> BranchesAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.String>> SubjectsAsync(System.Int32 count, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.Byte[]>>> DiscardAsync(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SourceControlFile> files, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> ReadCommittedAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> ReadStagedAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.ValueTuple<System.Byte[], System.Boolean>> CommitDiffAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Void Dispose()
+  System.Void ScheduleRefresh()
+  ctor(Craft.Plugins.Git.GitProgram git, System.String root, System.Action<System.Action> dispatch, System.Func<System.Int32> refreshDelay = null)
+  event System.EventHandler Changed
+  static System.Threading.Tasks.Task<System.String> FindRootAsync(Craft.Plugins.Git.GitProgram git, System.String folder, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Plugins.Git.GitResult : System.IEquatable<Craft.Plugins.Git.GitResult>
+  Craft.Plugins.Git.GitResult <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Git.GitResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Ok { get; }
+  System.Byte[] Output { get; init; }
+  System.Int32 ExitCode { get; init; }
+  System.Int32 GetHashCode()
+  System.String Error { get; init; }
+  System.String Problem { get; }
+  System.String Text { get; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 ExitCode, out System.Byte[] Output, out System.String Error)
+  ctor(System.Int32 ExitCode, System.Byte[] Output, System.String Error)
+sealed class Craft.Plugins.Git.GitSession : System.IDisposable
+  Craft.Abstractions.SourceControlFile FileOf(System.String path)
+  Craft.Abstractions.ViewPanel Panel { get; }
+  Craft.Plugins.Git.GitRepository Repository { get; }
+  Craft.Plugins.Git.GitSettings Settings { get; }
+  Craft.Plugins.Git.SourceControlViewState State { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> MarksOf(Craft.Abstractions.IEditorDocument document)
+  System.String Draft { get; }
+  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task DiscardPathAsync(System.String path)
+  System.Threading.Tasks.Task GutterOf(Craft.Abstractions.IEditorDocument document)
+  System.Threading.Tasks.Task OpenChangesAsync(System.String path)
+  System.Threading.Tasks.Task Opened { get; }
+  System.Threading.Tasks.Task PickBranchAsync()
+  System.Threading.Tasks.Task StagePathAsync(System.String path)
+  System.Threading.Tasks.Task UnstagePathAsync(System.String path)
+  System.Void Dispose()
+  System.Void Show()
+  const System.String MarkSource = git
+  ctor(Craft.Abstractions.IEditorHost host)
+sealed class Craft.Plugins.Git.GitSettings : System.IEquatable<Craft.Plugins.Git.GitSettings>
+  Craft.Plugins.Git.GitSettings <Clone>$()
+  System.Boolean ConfirmSync { get; init; }
+  System.Boolean Equals(Craft.Plugins.Git.GitSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Gutter { get; init; }
+  System.Int32 AutofetchMinutes { get; init; }
+  System.Int32 CommitDiffTokens { get; init; }
+  System.Int32 CommitExamples { get; init; }
+  System.Int32 CommitMaxTokens { get; init; }
+  System.Int32 DiscardUndoMegabytes { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 GutterDelayMilliseconds { get; init; }
+  System.Int32 RefreshMilliseconds { get; init; }
+  System.String CommitModel { get; init; }
+  System.String CommitPrompt { get; init; }
+  System.String CommitStyle { get; init; }
+  System.String Path { get; init; }
+  System.String ToString()
+  const System.String PluginName = git
+  ctor()
+  static Craft.Plugins.Git.GitSettings Read(Craft.Abstractions.IPluginSettings settings)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+static class Craft.Plugins.Git.SourceControlView
+  const System.String AcceptBoth = acceptBoth
+  const System.String AcceptCurrent = acceptCurrent
+  const System.String AcceptIncoming = acceptIncoming
+  const System.String Amend = amend
+  const System.String BothIcon = M8 5v14M16 5v14
+  const System.String Branch = branch
+  const System.String CheckIcon = M5 12.5l4.5 4.5L19 7.5
+  const System.String Commit = commit
+  const System.String CurrentIcon = M12 19V5M6 11l6-6 6 6
+  const System.String Discard = discard
+  const System.String DiscardAll = discardAll
+  const System.String DiscardIcon = M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3
+  const System.String Dismiss = dismiss
+  const System.String Fetch = fetch
+  const System.String Generate = generate
+  const System.String IncomingIcon = M12 5v14M6 13l6 6 6-6
+  const System.String Init = init
+  const System.String LoadModel = loadModel
+  const System.String Message = message
+  const System.String NewBranch = newBranch
+  const System.String Open = open
+  const System.String OpenFile = openFile
+  const System.String OpenFolder = openFolder
+  const System.String OpenIcon = M14 3h7v7M10 14L21 3M19 14v6H4V5h6
+  const System.String PanelId = scm.view
+  const System.String PickModel = pickModel
+  const System.String Pop = pop
+  const System.String Pull = pull
+  const System.String Push = push
+  const System.String Resolved = resolved
+  const System.String Retry = retry
+  const System.String Settings = settings
+  const System.String SparkleIcon = M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z
+  const System.String Stage = stage
+  const System.String StageAll = stageAll
+  const System.String StageIcon = M12 5v14M5 12h14
+  const System.String Stash = stash
+  const System.String Stop = stop
+  const System.String StopIcon = M7 7h10v10H7z
+  const System.String Sync = sync
+  const System.String Unstage = unstage
+  const System.String UnstageAll = unstageAll
+  const System.String UnstageIcon = M5 12h14
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks(Craft.Plugins.Git.SourceControlViewState state)
+  static System.String Badge(Craft.Plugins.Git.SourceControlViewState state)
+sealed class Craft.Plugins.Git.SourceControlViewState : System.IEquatable<Craft.Plugins.Git.SourceControlViewState>
+  Craft.Abstractions.PanelTone MessageTone { get; init; }
+  Craft.Abstractions.SourceControlStatus Status { get; init; }
+  Craft.Plugins.Git.SourceControlViewState <Clone>$()
+  System.Boolean Amend { get; init; }
+  System.Boolean CanGenerate { get; init; }
+  System.Boolean Equals(Craft.Plugins.Git.SourceControlViewState other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Generating { get; init; }
+  System.Boolean NoFolder { get; init; }
+  System.Boolean Opening { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CommitModelChoice> Models { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.Git.GitBranchInfo> Branches { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 MessageVersion { get; init; }
+  System.String Error { get; init; }
+  System.String GenerateTooltip { get; init; }
+  System.String LoadCommand { get; init; }
+  System.String Message { get; init; }
+  System.String MessageStatus { get; init; }
+  System.String NotRepository { get; init; }
+  System.String ToString()
+  System.String Unavailable { get; init; }
+  System.String Working { get; init; }
+  ctor()
+sealed class Craft.Plugins.Git.TrimmedDiff : System.IEquatable<Craft.Plugins.Git.TrimmedDiff>
+  Craft.Plugins.Git.TrimmedDiff <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Git.TrimmedDiff other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 Files { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Summarised { get; init; }
+  System.Int32 Tokens { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Text, out System.Int32 Files, out System.Int32 Summarised, out System.Int32 Tokens)
+  ctor(System.String Text, System.Int32 Files, System.Int32 Summarised, System.Int32 Tokens)

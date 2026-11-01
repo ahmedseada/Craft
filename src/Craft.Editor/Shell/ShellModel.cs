@@ -321,6 +321,7 @@ public sealed partial class ShellModel : IDisposable
         RegisterCommands();
         CreateViews();
         WatchMemory();
+        WatchSourceControl();
     }
 
     /// <summary>The inline bar with Undo (phase X: in place of a confirmation for a change that can be taken back).</summary>
@@ -1061,6 +1062,7 @@ public sealed partial class ShellModel : IDisposable
         }
 
         _disposed = true;
+        UnwatchSourceControl();
         UndoBar.Dispose();
         foreach (var binding in _bindings)
         {

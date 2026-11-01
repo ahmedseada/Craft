@@ -119,6 +119,43 @@ public sealed partial class EditorHost
 
         public IDisposable AddPanel(IEditorPanel panel) => Keep(() => host.AddPanel(panel, name), "a panel");
 
+        public event EventHandler? WorkspaceFolderChanged
+        {
+            add => Track(host._workspaceChanged, value);
+            remove => host._workspaceChanged.Remove(value);
+        }
+
+        public event EventHandler<LineMarkEventArgs>? LineMarkClicked
+        {
+            add => Track(host._lineMarkClicked, value);
+            remove => host._lineMarkClicked.Remove(value);
+        }
+
+        public bool SetLineMarks(IEditorDocument document, string source, IReadOnlyList<LineMark> marks)
+        {
+            if (_closed || !host.SetLineMarks(document, source, marks))
+            {
+                return false;
+            }
+
+            // Taken back with the plug-in: its marks leave the document when it is deactivated.
+            _undo.Add(() =>
+            {
+                if (document is OpenDocument { IsClosed: false } open)
+                {
+                    DocumentLineMarks.Of(open.Document).Set(source, []);
+                }
+            });
+            return true;
+        }
+
+        public bool ShowInlineCard(IEditorDocument document, InlineCard card) => !_closed && host.ShowInlineCard(document, card);
+
+        public IDisposable AddRepository(ISourceControlRepository repository) => Keep(() => host.AddRepository(repository, name), "a repository");
+
+        public Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult(false) : host.ShowDiffAsync(title, path, before, after, cancellationToken);
+
         public IEditorProgress StartProgress(string title)
         {
             var item = host.StartProgress(title, name);

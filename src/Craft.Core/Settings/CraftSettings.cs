@@ -64,7 +64,9 @@ public sealed class CraftSettings
         // X part 6: where and how the Run view's commands run (what runs is code).
         "CRAFT_RUN_SANDBOX", "CRAFT_RUN_APPROVAL",
         // The crash watch starts before a workspace is read (the owner's note 21).
-        "CRAFT_CRASH_TRAIL", "CRAFT_CRASH_TRAIL_KB", "CRAFT_CRASH_TRAIL_EXCEPTIONS", "CRAFT_CRASH_RUNS_KEPT", "CRAFT_CRASH_TICKET_OFFER" };
+        "CRAFT_CRASH_TRAIL", "CRAFT_CRASH_TRAIL_KB", "CRAFT_CRASH_TRAIL_EXCEPTIONS", "CRAFT_CRASH_RUNS_KEPT", "CRAFT_CRASH_TICKET_OFFER",
+        // X part 8: the git program the git plug-in runs is the machine's (a folder someone else wrote names no program to run).
+        "CRAFT_PLUGIN_GIT_PATH" };
 
     private readonly Func<string, string?> _environment;
 

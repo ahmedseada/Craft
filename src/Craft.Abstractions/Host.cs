@@ -317,4 +317,65 @@ public interface IEditorHost
     /// </summary>
     IEditorNotification ShowStatus(string title, string text, NotificationSeverity severity = NotificationSeverity.Information, IReadOnlyList<NotificationAction>? actions = null) =>
         NoNotification.Instance;
+
+    /// <summary>
+    /// <see cref="WorkspaceFolder"/> changed (a folder opened or closed), on the UI thread (X part 8: the git plug-in opens
+    /// the folder's repository). Never by default.
+    /// </summary>
+    event EventHandler? WorkspaceFolderChanged
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
+    /// Shows <paramref name="marks"/> in the gutter and on the overview ruler of every editor of <paramref name="document"/>
+    /// (X part 8: the lines added, changed and removed against the repository's index), in place of the marks
+    /// <paramref name="source"/> set before; an empty list takes them away. False when the host draws no marks (the default).
+    /// </summary>
+    bool SetLineMarks(IEditorDocument document, string source, IReadOnlyList<LineMark> marks) => false;
+
+    /// <summary>A gutter mark a plug-in set was clicked (on the UI thread). Never by default.</summary>
+    event EventHandler<LineMarkEventArgs>? LineMarkClicked
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
+    /// Shows <paramref name="card"/> under its line in the editor of <paramref name="document"/> the user last clicked a
+    /// mark of (else its focused one): a change inline with Revert and Stage, a conflict's choices. Its actions run only
+    /// when the user presses them; one that changes the document still proposes the edit (<see cref="ProposeAsync"/>).
+    /// False when the host cannot (the default).
+    /// </summary>
+    bool ShowInlineCard(IEditorDocument document, InlineCard card) => false;
+
+    /// <summary>
+    /// Publishes <paramref name="repository"/> until the result is disposed (or the plug-in is deactivated): the shell shows
+    /// its branch, ahead and behind in the status bar and colours the folder tree's names by their state. Nothing by default.
+    /// </summary>
+    IDisposable AddRepository(ISourceControlRepository repository) => NoRepository.Instance;
+
+    /// <summary>
+    /// Shows the change from <paramref name="before"/> to <paramref name="after"/> of the file <paramref name="path"/> in
+    /// the diff view, read-only (X part 8: a changed file's working copy against the index or the last commit), under
+    /// <paramref name="title"/>; completes when the user closed it. False when the host has no diff view (the default).
+    /// </summary>
+    Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) => Task.FromResult(false);
+}
+
+/// <summary>What <see cref="IEditorHost.AddRepository"/> gives when the host shows no repository.</summary>
+public sealed class NoRepository : IDisposable
+{
+    private NoRepository()
+    {
+    }
+
+    /// <summary>The one instance.</summary>
+    public static NoRepository Instance { get; } = new();
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+    }
 }

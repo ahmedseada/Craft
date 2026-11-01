@@ -198,11 +198,18 @@ internal static class EditorPopupRenderer
             int highlightEnd = highlightStart + highlightLength;
             var (selectionStart, selectionEnd) = card.Selection;
             var text = tooltip.Text;
+            bool inline = tooltip.Kind == EditorTooltipKind.Card;
             for (int row = 0; row < card.ShownRows; row++)
             {
                 var (start, length, lineText) = card.Line(card.FirstRow + row);
                 float top = popup.Y + (row * height);
                 int end = start + length;
+                if (inline && length >= 2 && text[start + 1] == ' ' && text[start] is '-' or '+')
+                {
+                    // An inline card's change: a removed line on the diff's removed fill, an added one on its added fill.
+                    canvas.FillRect(popup.X + 1, top, popup.Width - 2, height, text[start] == '-' ? colors.DiffRemoved : colors.DiffAdded);
+                }
+
                 if (selectionEnd > selectionStart && selectionStart <= end && selectionEnd >= start)
                 {
                     int from = Math.Max(start, selectionStart) - start;
@@ -248,6 +255,19 @@ internal static class EditorPopupRenderer
             canvas.DrawLine(popup.X, top, popup.X + popup.Width, top, colors.PopupBorder, 1);
             canvas.DrawText(HoverCard.DefinitionLabel, left, top, new TextStyle(colors.Info));
             canvas.DrawText(HoverCard.DefinitionKey, left + ((HoverCard.DefinitionLabel.Length + 2) * cell), top, new TextStyle(colors.GutterText));
+        }
+
+        if (card.HasActionRow && tooltip.Actions is { } actions)
+        {
+            // The inline card's buttons, in the link colour, the first (the change's own action) bold.
+            float top = popup.Y + (card.ShownRows * height);
+            canvas.DrawLine(popup.X, top, popup.X + popup.Width, top, colors.PopupBorder, 1);
+            float x = left;
+            for (int i = 0; i < actions.Count; i++)
+            {
+                canvas.DrawText(actions[i].Title, x, top, new TextStyle(colors.Info, Bold: i == 0));
+                x += (actions[i].Title.Length + HoverCard.ActionGap) * cell;
+            }
         }
 
         DrawBorder(canvas, popup, colors.PopupBorder);

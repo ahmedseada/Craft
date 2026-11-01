@@ -22,6 +22,10 @@ public sealed class OverviewRuler : IDisposable
     private const byte Warning = 2;
     private const byte Find = 4;
     private const byte Caret = 8;
+    private const byte Added = 16;
+    private const byte Changed = 32;
+    private const byte Deleted = 64;
+    private const byte Conflict = 128;
 
     private byte[] _buckets = [];
     private int[] _runs = [];              // (first bucket, buckets, lane) triples
@@ -35,6 +39,7 @@ public sealed class OverviewRuler : IDisposable
     private int _keyRows = -1;
     private float _keyContent = -1;
     private int _keyBuckets = -1;
+    private int _keyMarks = -1;
 
     internal OverviewRuler()
     {
@@ -94,6 +99,16 @@ public sealed class OverviewRuler : IDisposable
                 case Error:
                     canvas.FillRect(left + 1 + half, top, half, height, colors.RulerError);
                     break;
+                case Added or Changed or Deleted or Conflict:
+                    // X part 8: a repository's changes, a thin strip at the ruler's left edge (the gutter's colours).
+                    canvas.FillRect(left + 1, top, Math.Max(2, (width - 1) / 4), height, EditorRenderer.LineMarkColor(lane switch
+                    {
+                        Added => LineMarkKind.Added,
+                        Changed => LineMarkKind.Changed,
+                        Deleted => LineMarkKind.Deleted,
+                        _ => LineMarkKind.Conflict,
+                    }, colors));
+                    break;
                 default:
                     canvas.FillRect(left + 1, top, width - 1, Math.Min(height, 2), colors.RulerCaret);
                     break;
@@ -134,7 +149,8 @@ public sealed class OverviewRuler : IDisposable
         int buckets = Math.Max(1, (int)MathF.Ceiling(viewportHeight));
         float content = model.ContentHeight;
         if (ReferenceEquals(model, _keyModel) && snapshot.Version == _keyVersion && ReferenceEquals(diagnostics, _keyDiagnostics) && ReferenceEquals(findList, _keyFind)
-            && model.SelectionStamp == _keySelections && model.FoldsStamp == _keyFolds && model.RowCount == _keyRows && content == _keyContent && buckets == _keyBuckets)
+            && model.SelectionStamp == _keySelections && model.FoldsStamp == _keyFolds && model.RowCount == _keyRows && content == _keyContent && buckets == _keyBuckets
+            && model.LineMarksVersion == _keyMarks)
         {
             return;
         }
@@ -148,6 +164,7 @@ public sealed class OverviewRuler : IDisposable
         _keyRows = model.RowCount;
         _keyContent = content;
         _keyBuckets = buckets;
+        _keyMarks = model.LineMarksVersion;
         Rebuilds++;
         if (_buckets.Length < buckets)
         {
@@ -187,11 +204,31 @@ public sealed class OverviewRuler : IDisposable
             marks[Bucket(model, snapshot, Math.Clamp(selection.Caret, 0, length), rowHeight, buckets)] |= Caret;
         }
 
-        // The runs, lane by lane (find, the diagnostics, the carets), each a run of equal neighbours.
+        int lines = snapshot.LineCount;
+        foreach (ref readonly var mark in model.LineMarks)
+        {
+            byte kind = mark.Kind switch
+            {
+                LineMarkKind.Added => Added,
+                LineMarkKind.Changed => Changed,
+                LineMarkKind.Deleted => Deleted,
+                _ => Conflict,
+            };
+            int firstLine = Math.Clamp(mark.Line, 0, lines - 1);
+            int from = Math.Clamp((int)(model.RowOfLine(firstLine) * rowHeight), 0, buckets - 1);
+            int to = Math.Clamp((int)(model.RowOfLine(Math.Clamp(mark.LastLine, 0, lines - 1)) * rowHeight), 0, buckets - 1);
+            for (int b = from; b <= to; b++)
+            {
+                marks[b] |= kind;
+            }
+        }
+
+        // The runs, lane by lane (find, the diagnostics, the carets, the repository's marks), each a run of equal neighbours.
         _runCount = 0;
         AddRuns(marks, Find);
         AddRuns(marks, Error | Warning);
         AddRuns(marks, Caret);
+        AddRuns(marks, Added | Changed | Deleted | Conflict);
     }
 
     private static int Bucket(EditorModel model, ITextSnapshot snapshot, int position, float rowHeight, int buckets) =>
@@ -238,6 +275,10 @@ public sealed class OverviewRuler : IDisposable
     private static int Lane(byte mark, int mask)
     {
         int value = mark & mask;
-        return (value & Error) != 0 ? Error : value;
+        return (value & Error) != 0 ? Error
+            : (value & Conflict) != 0 ? Conflict
+            : (value & Deleted) != 0 ? Deleted
+            : (value & Changed) != 0 ? Changed
+            : value;
     }
 }

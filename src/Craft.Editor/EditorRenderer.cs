@@ -298,6 +298,8 @@ public sealed class EditorRenderer : IDisposable
             }
         }
 
+        DrawLineMarks(canvas, model, visible, scrollY, colors);
+
         Step = StepSticky;
         var sticky = model.StickyScroll;
         sticky.Draw(canvas, this, scrollX, viewportWidth);
@@ -455,6 +457,90 @@ public sealed class EditorRenderer : IDisposable
     private const string StepClassify = "classify the lines on screen";
     private const string StepLines = "draw the lines";
     private const string StepGutter = "draw the gutter";
+
+    /// <summary>The line marks the last frame drew (X part 8: a repository's changes in the gutter).</summary>
+    public int LineMarksDrawn { get; private set; }
+
+    /// <summary>The colour of a line mark of <paramref name="kind"/> (added: success, changed: info, removed: error, a conflict: warning).</summary>
+    public static uint LineMarkColor(LineMarkKind kind, EditorColors colors)
+    {
+        ArgumentNullException.ThrowIfNull(colors);
+        return kind switch
+        {
+            LineMarkKind.Added => colors.Success,
+            LineMarkKind.Changed => colors.Info,
+            LineMarkKind.Deleted => colors.Error,
+            _ => colors.Warning,
+        };
+    }
+
+    // X part 8: the marks on the visible lines, a bar in the gutter's strip (a removed run a wedge between two lines); the
+    // first is found by a binary search, so a frame reads only the marks it draws.
+    private void DrawLineMarks(IEditorCanvas canvas, EditorModel model, LineRange visible, float scrollY, EditorColors colors)
+    {
+        LineMarksDrawn = 0;
+        var marks = model.LineMarks;
+        if (marks.Length == 0)
+        {
+            return;
+        }
+
+        var (left, width) = model.LineMarkStrip();
+        float height = model.Metrics.LineHeight;
+        var map = model.Folding.Map;
+        bool hidden = map.HasHidden;
+        int low = 0, high = marks.Length;
+        while (low < high)
+        {
+            int middle = (low + high) >>> 1;
+            if (marks[middle].Line < visible.First)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        while (low > 0 && marks[low - 1].LastLine >= visible.First)
+        {
+            low--;
+        }
+
+        for (int i = low; i < marks.Length && marks[i].Line <= visible.Last + 1; i++)
+        {
+            var mark = marks[i];
+            uint color = LineMarkColor(mark.Kind, colors);
+            if (mark.Kind == LineMarkKind.Deleted)
+            {
+                int at = Math.Clamp(mark.Line, 0, Math.Max(0, model.Snapshot.LineCount - 1));
+                if (hidden && map.IsHidden(at))
+                {
+                    continue;
+                }
+
+                float edge = (model.RowOfLine(at) * height) - scrollY + (mark.Line > at ? height : 0);
+                canvas.FillRect(left, edge - (height * 0.15f), width * 2, height * 0.3f, color);
+                LineMarksDrawn++;
+                continue;
+            }
+
+            int first = Math.Max(mark.Line, visible.First);
+            int last = Math.Min(mark.LastLine, visible.Last);
+            for (int line = first; line <= last; line++)
+            {
+                if (hidden && map.IsHidden(line))
+                {
+                    continue;
+                }
+
+                canvas.FillRect(left, (model.RowOfLine(line) * height) - scrollY, width, height, color);
+            }
+
+            LineMarksDrawn++;
+        }
+    }
     private const string StepSticky = "draw the sticky headers";
     private const string StepRuler = "draw the overview ruler";
     private const string StepCarets = "draw the carets";

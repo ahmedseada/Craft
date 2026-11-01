@@ -111,8 +111,10 @@ public sealed partial class PanelBlocksView
     }
 
     /// <summary>
-    /// A search field: Craft's input style with the toggles inside at its right (on in the accent's fill, as the find
-    /// overlay's) and the icon buttons after it; every change of the text runs the action, Enter the submit action; the
+    /// A search field: Craft's input style holding only the text, its toggles (on in the accent's fill, as the find
+    /// overlay's) and icon buttons beside it while the measured width leaves the text
+    /// <see cref="PanelBlockLayout.QueryTextMinimum"/>, else on the row under it (the owner's Windows run: toggles drawn
+    /// inside a narrow box clipped the text); every change of the text runs the action, Enter the submit action; the
     /// keyboard taken when the panel raises <see cref="PanelQuery.Focus"/>.
     /// </summary>
     private sealed class QueryField : ContentView
@@ -122,7 +124,14 @@ public sealed partial class PanelBlocksView
         private readonly Entry _entry;
         private readonly CraftInput _field;
         private readonly HorizontalStackLayout _toggles = new() { Spacing = 2, VerticalOptions = LayoutOptions.Center };
-        private readonly HorizontalStackLayout _buttons = new() { Spacing = 2, VerticalOptions = LayoutOptions.Center };
+        private readonly HorizontalStackLayout _buttons = new() { Spacing = 2, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.End };
+        private readonly Grid _row = new()
+        {
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)],
+            RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto)],
+            ColumnSpacing = 4,
+        };
+        private bool? _oneRow;
         private PanelQuery? _shown;
         private string? _submit;
         private bool _setting;
@@ -133,7 +142,7 @@ public sealed partial class PanelBlocksView
             _owner = owner;
             _action = action;
             var p = owner._palette;
-            _entry = p.Input("", 30);
+            _entry = Grown(p.Input("", 30));
             _entry.ReturnType = ReturnType.Search;
             _entry.TextChanged += (_, e) =>
             {
@@ -150,16 +159,37 @@ public sealed partial class PanelBlocksView
                 }
             };
             _field = p.Field(_entry);
-            // The toggles sit inside the field, at its right.
-            var inside = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 4 };
-            _field.Content = inside;
-            inside.Add(_entry, 0, 0);
-            inside.Add(_toggles, 1, 0);
-            _field.HeightRequest = 32;
-            var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 4 };
-            row.Add(_field, 0, 0);
-            row.Add(_buttons, 1, 0);
-            Content = row;
+            _field.MinimumHeightRequest = 32;
+            _row.Add(_field, 0, 0);
+            _row.Add(_toggles, 1, 0);
+            _row.Add(_buttons, 2, 0);
+            Content = _row;
+            SizeChanged += (_, _) => Place();
+        }
+
+        // The controls' width beside the box: each toggle 24 and each icon button 28, with their spacing.
+        private double ControlsWidth =>
+            (_toggles.Children.Count * 26) + (_buttons.Children.Count * 30) + (_toggles.Children.Count > 0 && _buttons.Children.Count > 0 ? 4 : 0);
+
+        // One row (the box, its toggles, its buttons) while the text keeps its room at the measured width, else the
+        // toggles at the left and the buttons at the right of a row under the box.
+        private void Place()
+        {
+            bool one = PanelBlockLayout.QueryOnOneRow(Width, ControlsWidth);
+            if (_oneRow == one)
+            {
+                return;
+            }
+
+            _oneRow = one;
+            Grid.SetColumnSpan(_field, one ? 1 : 3);
+            Grid.SetRow(_toggles, one ? 0 : 1);
+            Grid.SetColumn(_toggles, one ? 1 : 0);
+            Grid.SetRow(_buttons, one ? 0 : 1);
+            Grid.SetColumn(_buttons, one ? 2 : 1);
+            Grid.SetColumnSpan(_buttons, one ? 1 : 2);
+            _toggles.HorizontalOptions = LayoutOptions.Start;
+            _row.RowSpacing = one ? 0 : 4;
         }
 
         public void Update(PanelQuery query)
@@ -191,6 +221,9 @@ public sealed partial class PanelBlocksView
                 {
                     _buttons.Children.Add(_owner.IconButton(button, 28));
                 }
+
+                _oneRow = null;
+                Place();
             }
 
             _shown = query;

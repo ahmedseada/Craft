@@ -15,7 +15,9 @@ namespace Craft.Maui;
 /// tokens: cards (a card inside a card is a titled section, never a box inside a box), text, a row of steps with their
 /// icons, a numbered checklist with its buttons, switches, the palette's buttons with their hover, pressed, focus and
 /// disabled states, meters and sparklines drawn on a canvas, pickers, Craft's input style, facts and a disclosure. Each
-/// block's tooltip shows on hover and its variable small under it. Only the top-level blocks whose signature changed are
+/// block's tooltip shows on hover with its setting's variable (a variable is never printed in the view: the settings page
+/// shows it). Every block takes its measured height (no fixed heights, no row drawn over another; the owner's Windows run).
+/// Only the top-level blocks whose signature changed are
 /// drawn again (<see cref="PanelBlockLayout.Changed"/>); what is typed in a field and whether a disclosure is open stay
 /// across redraws. Called on the UI thread; an action runs through <see cref="IEditorViewPanel.ActAsync"/>.
 /// </summary>
@@ -174,25 +176,28 @@ public sealed partial class PanelBlocksView : ContentView
             return view;
         }
 
-        if (block.Tooltip is { } tip)
+        // The tooltip, with the setting's variable after it (the owner's Windows run: a variable printed under a dropdown
+        // read as a second input); the settings page is where a variable shows.
+        if (block.Tooltip is not null || block.Variable is not null)
         {
-            ToolTipProperties.SetText(view, block.Variable is { } variable ? tip + Environment.NewLine + variable : tip);
+            ToolTipProperties.SetText(view, block.Tooltip is { } tip ? (block.Variable is { } variable ? tip + Environment.NewLine + variable : tip) : block.Variable ?? "");
         }
 
-        if (block.Variable is not { } shown || block is PanelCard)
+        return view;
+    }
+
+    // A control in a panel takes its measured height, at least its design height (a fixed height clipped a button's text
+    // and let a field draw over the row under it on Windows).
+    private static T Grown<T>(T view)
+        where T : VisualElement
+    {
+        if (view.HeightRequest > 0)
         {
-            return view;
+            view.MinimumHeightRequest = Math.Max(view.MinimumHeightRequest, view.HeightRequest);
+            view.HeightRequest = -1;
         }
 
-        // The variable small under the block, as the settings page shows a setting's.
-        var p = _palette;
-        var name = p.Label(shown, p.Secondary, p.CaptionSize);
-        name.FontFamily = p.Options.FontFamily;
-        name.Opacity = 0.75;
-        var stack = new VerticalStackLayout { Spacing = 2 };
-        stack.Children.Add(view);
-        stack.Children.Add(name);
-        return stack;
+        return view;
     }
 
     // ---- the kinds ----
@@ -268,8 +273,7 @@ public sealed partial class PanelBlocksView : ContentView
             label.TextColor = ToneColor(text.Tone, label.TextColor);
         }
 
-        label.LineBreakMode = LineBreakMode.WordWrap;
-        label.LineHeight = 1.25;
+        label.LineBreakMode = LineBreakMode.WordWrap;            // no line height multiplier: Windows measured it one line short
         return label;
     }
 
@@ -394,14 +398,13 @@ public sealed partial class PanelBlocksView : ContentView
         return stack;
     }
 
-    private FlexLayout Buttons(IReadOnlyList<PanelButton> buttons)
+    // The buttons left to right, wrapping at the measured width; the row as tall as its rows (WrapLayout).
+    private WrapLayout Buttons(IReadOnlyList<PanelButton> buttons)
     {
-        var row = new FlexLayout { Wrap = FlexWrap.Wrap, AlignItems = FlexAlignItems.Center };
+        var row = new WrapLayout { Spacing = 8, RowSpacing = 6 };
         foreach (var one in buttons)
         {
-            var button = Button(one);
-            button.Margin = new Thickness(0, 0, 8, 6);
-            row.Children.Add(button);
+            row.Children.Add(Button(one));
         }
 
         return row;
@@ -417,6 +420,7 @@ public sealed partial class PanelBlocksView : ContentView
             PanelButtonKind.Danger => p.Flat(action.Title, p.Error, 30, p.SmallSize),
             _ => p.SecondaryButton(action.Title, 30),
         };
+        Grown(button);
         button.IsEnabled = action.Enabled;
         if (action.Tooltip is { } tip)
         {
@@ -440,7 +444,6 @@ public sealed partial class PanelBlocksView : ContentView
         {
             var under = p.Label(detail, p.Secondary, p.SmallSize);
             under.LineBreakMode = LineBreakMode.WordWrap;
-            under.LineHeight = 1.25;
             text.Children.Add(under);
         }
 
@@ -492,11 +495,12 @@ public sealed partial class PanelBlocksView : ContentView
         return row;
     }
 
+    // One compact dropdown, as the settings page draws its choices: the title inline at its left, the platform's own picker
+    // on the raised fill (one border, its own chevron), as wide as its choices, not the row; the chosen option's detail under it.
     private VerticalStackLayout Picker(PanelPicker picker)
     {
         var p = _palette;
         var stack = new VerticalStackLayout { Spacing = 4 };
-        stack.Children.Add(p.Label(picker.Title, p.Secondary, p.SmallSize));
         int selected = -1;
         for (int i = 0; i < picker.Options.Count; i++)
         {
@@ -513,9 +517,13 @@ public sealed partial class PanelBlocksView : ContentView
             IsEnabled = picker.Enabled,
             TextColor = p.Text,
             TitleColor = p.Secondary,
-            BackgroundColor = Colors.Transparent,
+            BackgroundColor = p.Raised,
             FontFamily = p.Font(),
-            FontSize = p.FontSize,
+            FontSize = p.SmallSize,
+            HorizontalOptions = LayoutOptions.Start,
+            VerticalOptions = LayoutOptions.Center,
+            MinimumWidthRequest = 96,
+            Opacity = picker.Enabled ? 1 : 0.55,
         };
         SemanticProperties.SetDescription(control, picker.Title);
         control.SelectedIndexChanged += (_, _) =>
@@ -525,12 +533,15 @@ public sealed partial class PanelBlocksView : ContentView
                 Act(picker.ActionId, picker.Options[control.SelectedIndex].Value);
             }
         };
-        var box = p.Box(control, 6, new Thickness(6, 0), p.RaisedHigh, p.BorderStrong);
-        box.Opacity = picker.Enabled ? 1 : 0.55;
-        stack.Children.Add(box);
+        var title = p.Label(picker.Title, p.Secondary, p.SmallSize);
+        title.VerticalOptions = LayoutOptions.Center;
+        var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)], ColumnSpacing = 8 };
+        row.Add(title, 0, 0);
+        row.Add(control, 1, 0);
+        stack.Children.Add(row);
         if (selected >= 0 && picker.Options[selected].Detail is { } detail)
         {
-            var under = p.Label(detail, p.Secondary, p.SmallSize);
+            var under = p.Label(detail, p.Secondary, p.CaptionSize);
             under.LineBreakMode = LineBreakMode.WordWrap;
             stack.Children.Add(under);
         }
@@ -544,7 +555,7 @@ public sealed partial class PanelBlocksView : ContentView
         var p = _palette;
         var stack = new VerticalStackLayout { Spacing = 4 };
         stack.Children.Add(p.Label(input.Title, p.Secondary, p.SmallSize));
-        var entry = p.Input(input.Placeholder ?? "", 32, input.Code);
+        var entry = Grown(p.Input(input.Placeholder ?? "", 32, input.Code));
         entry.Text = _drafts.TryGetValue(input.ActionId, out var draft) ? draft : input.Value;
         if (input.Numeric)
         {
@@ -571,14 +582,15 @@ public sealed partial class PanelBlocksView : ContentView
         entry.Completed += (_, _) => Submit();
         var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 8 };
         var field = p.Field(entry);
-        field.HeightRequest = 32;
+        field.MinimumHeightRequest = 32;
         row.Add(field, 0, 0);
         if (input.Unit is { } unit)
         {
             row.Add(p.Label(unit, p.Secondary, p.SmallSize), 1, 0);
         }
 
-        var button = p.SecondaryButton(input.Submit, 32);
+        var button = Grown(p.SecondaryButton(input.Submit, 32));
+        button.VerticalOptions = LayoutOptions.Center;
         button.Clicked += (_, _) => Submit();
         row.Add(button, 2, 0);
         stack.Children.Add(row);
@@ -613,7 +625,7 @@ public sealed partial class PanelBlocksView : ContentView
         var p = _palette;
         bool open = _open.TryGetValue(disclosure.Id, out bool kept) ? kept : disclosure.Open;
         var stack = new VerticalStackLayout { Spacing = 6 };
-        var header = p.Flat((open ? "▾  " : "▸  ") + disclosure.Title, p.Accent, 28, p.SmallSize);
+        var header = Grown(p.Flat((open ? "▾  " : "▸  ") + disclosure.Title, p.Accent, 28, p.SmallSize));
         header.HorizontalOptions = LayoutOptions.Start;
         header.Padding = new Thickness(4, 0);
         SemanticProperties.SetDescription(header, disclosure.Title + (open ? ", open" : ", closed"));

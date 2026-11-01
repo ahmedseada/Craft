@@ -57,6 +57,14 @@ drew a warm frame in 172 ms against 0.8 ms), Enter asks for ghost text (the code
 Open: the device switch crash (its report wanted), "Ambiguity between 'TestClass.MyProperty' and 'TestClass.MyProperty'"
 (Program.cs twice in the workspace, to trace), the lint plug-in's 1.5 s start on the UI thread.
 
+**Queued (the owner, 2026-11-01), after the status bar's progress bar:**
+- **Model settings in the chat and the agent:** from the conversation itself, every sampling setting (temperature, top-k,
+  top-p, min-p, repeat penalty, seed, max tokens), the context, the weights (float32, float16, int8, int4), the device,
+  offload, the draft. Save applies to that chat or agent session only; a separate "Apply to the environment" writes the
+  global settings (`.craft/settings.json` and the settings page). The load-time ones (weights, device, offload, context)
+  need a model copy of their own or a reload of the shared one: the panel says which and its memory cost before it
+  happens.
+
 **The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
 before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a
 leftover or a new enhancement while a W piece is ready. What a W slot leaves undone goes into one "Left, for later"

@@ -357,6 +357,8 @@ public static class AiTests
             ["agentChangesIgnore"] = "obj;out", ["agentSaveOnAccept"] = "false",
             // Note 27 (calls written as text) and X part 5 (images dropped on the chat).
             ["agentNudges"] = "5", ["agentCallsInText"] = "false", ["chatImageMaxMb"] = "7",
+            // X part 11 item 1: speculative decoding's draft per role.
+            ["draftModel"] = "store:small", ["draftTokens"] = "6", ["agentDraftModel"] = "off", ["agentDraftTokens"] = "2",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -369,6 +371,7 @@ public static class AiTests
             CompletionSuffixCharacters: 128, CompletionPrefixCharacters: 4000, CompletionChunk: 2, ChatMaxTokens: 300, ChatToolRounds: 2, ChatKeep: false,
             ChatFile: "c.json", ChatHistory: 10, ChatFileLines: 50, Placement: "csharp-tokens", PlacementMaxError: 0.1, AgentSandbox: "container", AgentMaxTurns: 5, AgentMinutes: 3,
             AgentMaxTokens: 500, AgentFolder: "/copies", CompletionLoad: false, LoadOnStart: true, AgentNudges: 5, AgentCallsInText: false, ChatImageMaxMegabytes: 7,
+            DraftModel: "store:small", DraftTokens: 6, AgentDraftModel: "off", AgentDraftTokens: 2,
         } && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && settings.AgentChangesIgnore.SequenceEqual(["obj", "out"]) && !settings.AgentSaveOnAccept && settings.ChatStops.SequenceEqual(["END", "<x;y>"]) && settings.AgentStops.SequenceEqual(["DONE"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
             "each value is read");
         Check.True(settings is

@@ -3795,6 +3795,65 @@ sandbox with approval.
   `RepoCompletion`, `CommitReview`, `BuildFix` (scripted fake models, diffs of one undo step, cancel on keystroke).
 - Slot: after X part 10; item 1's Idrak part may start earlier in any free slot (it touches only Idrak's generation).
 
+#### Speculative decoding as built (2026-11-01)
+Item 1, slot s1. Idrak `main` 2ab9c3a, then Craft `main` (this commit and the one before it).
+- **Idrak.** A contract `IDraftModel`/`IDraftSession` (`Idrak.Abstraction.Generation`), carried per request by
+  `GenerationOptions.Draft` with `DraftTokens` (0: adapted), `DraftMinTokens` (1), `DraftMaxTokens` (12); `TextGenerator`
+  is a draft (`StartDraft`; its drafting cache kept apart from `KeepCache`'s, `HoldsDraftCache`, freed by `ReleaseCache`).
+  `TextGenerator.Stream` with a draft runs rounds: the draft proposes K tokens, the target checks them in one pass over its
+  KV cache (every position's logits), both caches cut back to what was kept (`DecodingContext.Truncate`; a full window is
+  re-read from its last half as without a draft). Greedy (`TopK` 1): a proposal is kept while it is the target's pick, so
+  the tokens are the target's alone. Sampled: kept with min(1, p/q), a refused one replaced from max(0, p - q), p and q the
+  sampler's own distributions (`TokenSampler.Probabilities`/`Penalize`: the CPU kernel's per-row weights are now one
+  helper, `SamplingWeights`, so the check reads exactly what a step samples from). Refused with the reason
+  (`SpeculativeDecoding.Refusal`): a vocabulary that differs (entry by entry, padding allowed: a family pads its models to
+  different widths), and a generator with a sampler of its own. Telemetry: `InferenceStageKind.Draft` and `Verify`;
+  `GenerationStats.DraftTokens`, `DraftAccepted`, `DraftAcceptance`, `DraftRounds`. The reply's text handling (stops,
+  loops, bytes held back) is one `ReplyText` both paths use. CLI: `idrak bench MODEL --draft DRAFT [--draft-tokens N]`
+  (with and without, the draft's first run apart, the acceptance, and whether the greedy tokens are the same);
+  `--verbose` sums the rounds. Tests `speculative decoding` (8).
+- **Craft.** Settings `draftModel` (`CRAFT_PLUGIN_AI_DRAFTMODEL`), `draftTokens` (`_DRAFTTOKENS`, 0 adapted),
+  `agentDraftModel` (`_AGENTDRAFTMODEL`) and `agentDraftTokens` (`_AGENTDRAFTTOKENS`), empty agent ones the chat's; on the
+  settings page under Chat and Agent, group "Speculative decoding". `AiModels` gives a role's lease its draft once ready:
+  the completion model's own lease (one copy for completion and drafting), loaded after the role's model and off its
+  request (the first replies may go without it; nothing waits), checked with Idrak's `Refusal`. `ModelLease.Draft`
+  (Craft.Abstractions) is the copy's generator behind its gate (`GatedDraftModel`). The chip and the status bar show
+  "draft: 1.5B, 72% accepted"; the tooltip names the draft in full or why a role has none. Tests `DraftModel` (5) and
+  `Ai.TheSettingsReadEveryVariable` extended.
+- Decisions (recommended, one line each):
+  - The contract is the smallest additive one, a draft per request (`GenerationOptions.Draft`), not a strategy registry: a draft is an instance the app holds (a lease), like a tokenizer, not a named kind.
+  - Greedy is `TopK` 1 (what the library's tests and bench use); `Temperature` 0 samples at 1/1000 as without a draft, by the standard rule.
+  - The check runs on the host from the target's logits of the round (copied once a round), by the sampler's exact rule; a device-side check is a later step if the GPU numbers show the copy matters.
+  - Rounds adapt as transformers' heuristic does: +2 after a round kept whole, -1 after a refusal, within the bounds, first round `DraftMinTokens` + 3.
+  - A prompt with images, a batch decoded together and `UseCache` false decode without the draft (documented); `UseCache` false ignores it.
+  - Acceptance on the chip comes from each reply's `GenerationStats` (the library's counts, per target and draft pair); the `Verify` stage events serve the telemetry panel and the CLI.
+  - Empty `draftModel` uses the completion model only while inline completion is on (it would otherwise load a model the user turned off).
+  - A draft session passes the copy's gate without waiting (`CopyGate.TryEnter`): during a training round the reply goes on alone.
+- **Measured (CPU, this container, `speculative decoding: tokens a second`).** A pair built in the test: the target 8 blocks
+  (dim 512, 25.2M parameters), the draft its first block with its embedding, norm and head (3.19M), the target's other
+  blocks scaled toward the identity (x0.15: a draft that agrees; x0.3: one that agrees half the time). Greedy, 64 tokens,
+  the same tokens with and without in every run.
+  - Quiet machine, x0.15: alone 64 tokens/s cold, 83 warm; with the draft 167 cold, 182 warm (x2.20); 56 of 58 kept (97%) in 7 rounds; the draft 1.68 ms a proposal, the target's pass 37.3 ms a round of 9.3 positions, 12.1 ms a token alone.
+  - Loaded machine (other slots building), x0.15: alone 12 / 12, with the draft 42 / 35 (x2.84). x0.3: alone 20 / 25, with the draft 17 / 37 (x1.49); 46 of 83 kept (55%) in 17 rounds; 7.28 ms a proposal, 126 ms a pass of 5.9 positions, 40.6 ms a token alone.
+  - An earlier pair (x0.35, 45% kept) gained nothing (x0.99): on a CPU a pass of K+1 positions costs about three single steps, so speculation pays from roughly half kept. The GPU numbers are the owner's (below).
+- Left: a draft's steps are not recorded as a device graph (each runs as it is); the round's logits come to the host (on a large vocabulary a few MB a round on a GPU); the Models page does not show drafts; `bench --draft` has no CLI test of its own; the owner's GPU and Windows runs.
+- **Owner's commands, Idrak** (TARGET: the chat model, DRAFT: the completion model, both as named in Craft's settings):
+  ```powershell
+  cd D:\Projects\Idrak; git checkout main; git pull origin main
+  dotnet build -c Release tests\Idrak.Tests
+  $env:IDRAK_FILTER="speculative decoding|generation:|sampler:|conformance kit|public API|abstraction inventory|cli measure"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+  dotnet run -c Release --no-build --project src\Idrak.Cli -- bench TARGET --draft DRAFT -d cuda:0 -w int8 --tokens 256 --save draft-cuda > test-output\bench-draft.txt
+  ```
+- **Owner's commands, Craft:**
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="DraftModel|Ai.|AiPlugins|ModelLoading|ModelsPage|Settings|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app: send a chat message; once the completion model has loaded the chip reads "draft: …, NN% accepted".
+
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 10 (the chat
   and the agent redesigned); then X part 8 (Source Control); 1c (last) the interaction times.

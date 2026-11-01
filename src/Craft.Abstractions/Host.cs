@@ -123,6 +123,12 @@ public interface IEditorHost
     string? DataFolder => null;
 
     /// <summary>
+    /// What the app knows about itself (its version, its reports, the crash trail, Output, its telemetry), for a plug-in
+    /// that diagnoses it (the Claude Code plug-in's MCP tools); null when the host keeps none.
+    /// </summary>
+    IEditorDiagnostics? Diagnostics => null;
+
+    /// <summary>
     /// Opens <paramref name="path"/> (a folder or a file) outside the editor, in the system's own way (a folder in the file
     /// manager); false when the host cannot (a plug-in then shows the path instead).
     /// </summary>
@@ -288,6 +294,14 @@ public interface IEditorHost
     /// (the default): a plug-in that needs the user's yes treats that as no.
     /// </summary>
     Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) => Task.FromResult(-1);
+
+    /// <summary>
+    /// Asks the user for a line of text (a name) in the host's own dialog: <paramref name="title"/>, what it is for
+    /// (<paramref name="text"/>), a hint in the empty box (<paramref name="placeholder"/>) and <paramref name="initial"/>;
+    /// the text, or null when the user cancelled or nobody can be asked (the default).
+    /// </summary>
+    Task<string?> PromptAsync(string title, string text, string placeholder, string initial = "", CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
 
     /// <summary>Writes a line to the editor's log, under the plug-in's name.</summary>
     void Log(EditorLogLevel level, string message, Exception? error = null);

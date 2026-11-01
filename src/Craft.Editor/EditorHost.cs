@@ -58,6 +58,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         Options = options ?? new CraftOptions();
         _dispatch = dispatch ?? (static action => action());
         Labels = new UiWorkLabels();
+        Diagnostics = new HostDiagnostics(this);
         ActivityCenter = new ActivityCenter(action => Dispatch("activities: show", action), Options);
         Notifications = new NotificationCenter(ActivityCenter, action => Dispatch("notifications: show", action), Options);
         Presenter = presenter;
@@ -249,6 +250,12 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <inheritdoc />
     /// <remarks>The settings' data folder (<see cref="CraftOptions.ResolveDataFolder"/>: <c>CRAFT_DATA_FOLDER</c>, else the local application data's "Craft").</remarks>
     public string? DataFolder => Options.ResolveDataFolder();
+
+    /// <summary>What the app knows about itself (its version, reports, trail, Output, telemetry): <see cref="IEditorHost.Diagnostics"/>.</summary>
+    public HostDiagnostics Diagnostics { get; }
+
+    /// <inheritdoc />
+    IEditorDiagnostics? IEditorHost.Diagnostics => Diagnostics;
 
     /// <summary>The shell's folder dialog for <see cref="PickFolderAsync"/> (the shell sets it); null: the call gives null.</summary>
     public Func<string?, CancellationToken, Task<string?>>? FolderPicker { get; set; }
@@ -783,6 +790,10 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
 
     /// <inheritdoc />
     public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) => AskAsync(question, HostSource, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<string?> PromptAsync(string title, string text, string placeholder, string initial = "", CancellationToken cancellationToken = default) =>
+        Presenter is { } presenter ? presenter.PromptAsync(title, text, placeholder, initial, cancellationToken) : Task.FromResult<string?>(null);
 
     /// <summary>Asks <paramref name="question"/> for <paramref name="source"/> through the presenter; without one, -1 (logged: nobody could answer).</summary>
     internal async Task<int> AskAsync(EditorQuestion question, string source, CancellationToken cancellationToken)

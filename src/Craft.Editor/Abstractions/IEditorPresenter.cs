@@ -50,6 +50,9 @@ public interface IEditorPresenter
     /// <summary>Asks <paramref name="question"/>: the index of the answer picked, or its <see cref="EditorQuestion.Dismissed"/>; the default cannot ask (-1).</summary>
     Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken) => Task.FromResult(-1);
 
+    /// <summary>Asks for a line of text in a dialog (<see cref="IEditorHost.PromptAsync"/>); null when cancelled or there is none.</summary>
+    Task<string?> PromptAsync(string title, string text, string placeholder, string initial, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+
     /// <summary>
     /// Shows <paramref name="diff"/> of the file <paramref name="path"/> read-only (X part 8: a changed file against the
     /// index or the last commit) under <paramref name="title"/>; completes when closed. The default has no such view (false).

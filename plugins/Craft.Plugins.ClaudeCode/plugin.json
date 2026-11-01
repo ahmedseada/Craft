@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.ClaudeCode",
+  "version": "0.1.0",
+  "summary": "Claude Code as the agent: your own Claude Code CLI, headless, picked at the agent's model chip (one per account), on a copy of the folder with its own tools on this machine, every change a diff you accept; Craft's MCP tools for diagnosing the app (reports, trail, Output, telemetry, problems, run_tests) and Ask Claude Code on a failure or a stall [AgentEngines \"claude-code\", EditorToolSets \"craft-diagnostics\", EditorReportActions]",
+  "contractVersion": "1.1",
+  "capabilities": ["files", "network"]
+}

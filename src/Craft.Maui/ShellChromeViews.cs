@@ -912,6 +912,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private readonly LogSurface _log;
     private readonly EditorView _output;
     private readonly MetricsTable _metrics;
+
+    /// <summary>The telemetry table (the diagnostics' measures read it, on the UI thread).</summary>
+    public MetricsTable Metrics => _metrics;
     private readonly PanelListView _metricsView;
     private readonly ProblemsList _problems;
     private readonly PanelListView _problemsView;

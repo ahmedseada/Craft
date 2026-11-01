@@ -41,6 +41,7 @@ public static class ApiGuardTests
         Assembly.Load(new AssemblyName("Craft.Plugins.Html")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Angular")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Lint")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.ClaudeCode")),
     ];
 
     [Test]

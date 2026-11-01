@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Claude Code plug-in (pre-installed, removable: delete plugins\Craft.Plugins.ClaudeCode\ or
+    CRAFT_PLUGINS_DISABLED=Craft.Plugins.ClaudeCode). It runs the user's own Claude Code CLI headless as an agent engine
+    (Craft.Abstractions' AgentEngines): picked at the agent's model chip ("Claude Code", "Claude Code (claude-work)"), it
+    works on the agent panel's copy of the open folder with its own tools on this machine, its stream drawn as the agent's
+    timeline, its changes offered as diffs the user accepts. It connects Claude Code to Craft's running MCP server (a
+    config file with the address and the token, in the user's data folder) and adds the diagnostic tools there (reports,
+    trail, Output, telemetry, problems, open a file, run_tests through the command sandbox), "Ask Claude Code" on the
+    failure dialog and the stall notice, and its commands. It never installs anything.
+
+    Built on Craft.Abstractions alone (public contracts only). Android and iOS (phase M): Claude Code does not run there;
+    the engine lists no model and says so. No reflection (trim-safe); JSON read with JsonDocument.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.ClaudeCode</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

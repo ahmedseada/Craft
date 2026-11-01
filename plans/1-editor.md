@@ -7213,3 +7213,131 @@ parameter count before any weight is read, through its checkpoint formats and th
   chat…": move the temperature and Save (the next reply uses it; Settings › Chat is unchanged). Then "Apply to the
   environment" (Settings › Chat shows it). Set the weights to int8 and Save: the confirm shows the copy's memory and
   whether it fits. Start a new chat: that copy goes.
+
+## The Claude Code plug-in as built (2026-11-01)
+
+The owner: "Add plugin for Claude Code so it can run from the editor itself, diagnose the problem, test MCP and use the
+device resources … to build faster and test also the GPU functionality", then "1c 2b 3b" (Claude Code as Craft's agent,
+the MCP tools with editor actions, Ask Claude Code on a failure or a stall), two accounts (two subscriptions), full
+capabilities, "I want the chat agent" (the terminal-tab launch kept for later), and last "Don't tune to my PowerShell
+profile; ask for login" (accounts are Craft's own, each logged in by Claude Code's own login). `plugins/Craft.Plugins.ClaudeCode`: pre-installed, removable (delete its folder, or
+`CRAFT_PLUGINS_DISABLED=Craft.Plugins.ClaudeCode`), on public contracts only.
+
+- **Claude Code as the agent (the plug-in's main part).** A new contract, `IAgentEngine` with its registry
+  `AgentEngines` (Craft.Abstractions, additive, contract 1.1 kept): an outside agent the AI plug-in's agent panel runs in
+  place of a local model. The plug-in registers "claude-code" with one model per account: "Claude Code (default)" and
+  one per account added in Craft ("Claude Code (work)", "Claude Code (personal)"). The agent's composer chip lists them under the local
+  models (`ShellText.ModelPicks`, the agent role only); a pick loads nothing and is kept per workspace (the workspace's
+  `.craft/settings.json`, `CRAFT_PLUGIN_AI_AGENTMODEL`), and the panel's header names it. The agent panel
+  (`AiAgentPanel`) hands the task to the engine with its working copy of the open folder (`AgentWorkspace`, as for a
+  local model); the engine runs `claude --print --output-format stream-json --verbose --permission-mode acceptEdits`
+  there, the task on its standard input, as the account (its variables, `CLAUDE_CONFIG_DIR`), with Craft's MCP config;
+  the stream becomes the timeline (its start with the model and the MCP servers' state, its text streaming, each tool
+  call one step its result completes, its end with turns, time and cost). Every file it wrote in the copy is listed and
+  reviewed as diffs the user accepts, one undo step each (Review diff, Discard all), as the local agent's are. A
+  follow-up resumes its session (`--resume`) on the same copy; Clear starts afresh. Stop (and the status bar's Cancel on
+  the run's indeterminate activity) ends its process tree. Its tools are not trimmed: it runs with all of them, on this
+  machine, with the owner's CPU, GPU, dotnet, git and sign-in.
+- **The CLI.** Found on PATH (PATHEXT: `claude.exe`, or npm's `claude.cmd`, started through `%ComSpec%` with the Windows
+  quoting rules) or at `CRAFT_PLUGIN_CLAUDECODE_PATH` (this machine's only); never installed. Its `--version` and
+  `--help` are read once at start, off the UI thread: the status bar's item shows "Claude Code 2.0.31" (a click opens
+  the agent with it), or "not found" with the install hint. A flag the installed version lacks is left out and said
+  ("--permission-prompt-tool is not supported by this version …"); without `--print` or `--output-format` the agent
+  refuses, saying "not supported by this version". On a phone or a browser (phase M, AOT) the engine lists no model and
+  says Claude Code runs only on a desktop.
+- **Accounts, Craft's own.** One account to start, "default": the CLI's own configuration, so an already logged-in
+  CLI works with no setup. "Claude Code: add an account…" asks a name ("work", "personal": a new `IEditorHost.PromptAsync`,
+  Craft's dialog) and makes that account's own Claude Code configuration folder, `<data folder>/claude-code/accounts/<name>`
+  (refused inside the open folder, never git, private to the user: Unix mode 700, a Windows ACL of the user alone), then
+  opens Claude Code's own login for it in a terminal tab with `CLAUDE_CONFIG_DIR` set to that folder: the CLI's `login`
+  command when its `--help` lists one, else Claude Code itself, whose first run with a new folder walks through its login
+  (`/login` inside it logs in again); a notification says what to do. The user completes the login in Claude Code's own
+  flow; Craft never sees, stores or logs a password or a token (it only checks whether the CLI's credentials file is
+  present in the folder, never its content). A headless run uses the picked account's folder; when the account is not
+  logged in (no credentials file, or the run ends saying so), the agent asks "Log in" instead of failing. "Log in again…"
+  reruns the login; "Remove an account…" deletes its folder after a confirm ("default" is never removed). Nothing on the
+  machine is searched for accounts: no PowerShell profile, no Windows Terminal setting is read. `account` (default
+  "default") picks the commands' account when the agent's model is not a Claude Code one.
+- **Craft's MCP server for it.** A new contract, `IEditorMcpServer` with `EditorMcpServers` (the AI plug-in registers
+  "craft": its address and token while it runs, `ai.mcpStart` to start it). Each run writes
+  `<data folder>/claude-code/mcp-craft.json` (the server "craft" over HTTP with its bearer token): in the user's data
+  folder, refused inside the open folder, never git; made private before the token is written (Unix mode 600, a Windows
+  ACL of the user alone, no inheritance), then moved into place. With the server off, `mcpWhenOff` (ask, start,
+  without) asks "Start it and run" or "Run without it", and the timeline says which. With it, Claude Code asks Craft
+  before what needs permission (`--permission-prompt-tool mcp__craft__claude_code_approve`: Allow once, Allow TOOL for
+  this run, Deny; `approvals`, on).
+- **The MCP tools (2b)**, a new tool set "craft-diagnostics" beside the editor's own (read, search, `propose_edit`):
+  `craft_app_state` (version, folder, open documents, running activities), `craft_reports`, `craft_read_report` (by name
+  or latest), `craft_trail`, `craft_output`, `craft_telemetry` (the slowest first), `craft_problems`, each bounded by
+  `toolOutputCharacters` (16,000); `open_file` (a file at a line, nothing changed); `run_tests` (a CRAFT_FILTER, each part
+  three characters or more and no wildcard, never the full suite; through the `testSandbox` command sandbox,
+  approve-each by default, so the user approves; `build` first optionally) and `claude_code_approve`. No tool edits: a
+  change is `propose_edit`'s diff. They read the app through a new `IEditorHost.Diagnostics` (`IEditorDiagnostics`: the
+  version, the crash folder's crash, callback and stall reports, the crash trail, Output's last lines, the telemetry
+  table), `HostDiagnostics` in Craft.Editor.
+- **Ask Claude Code (3b).** A new contract, `IEditorReportAction` with `EditorReportActions`: the failure dialog
+  ("Something failed; Craft kept running") and the stall notice show each registered action; the plug-in's "Ask Claude
+  Code" opens the agent with Claude Code and the report named (`AgentEngines.Ask`).
+- **Commands** (palette and the Run menu): Claude Code: open in the agent panel, diagnose the last crash (the newest
+  crash or caught failure), diagnose the last stall, test Craft's MCP server, build and test on this machine (Craft's and
+  Idrak's targeted builds and tests, the Windows app, Idrak's GPU tests with `IDRAK_DEVICES` and `IDRAK_FILTER`), find the
+  program and accounts again. Each prompt is a setting (`promptCrash`, `promptStall`, `promptMcp`, `promptBuild`;
+  {report}, {kind}, {craft}, {idrak}, {workspace} filled in; Craft's repository found above the app's folder, Idrak's
+  beside it, or `craftRepository`, `idrakRepository`).
+
+**Decisions on the recommendation (one line each).**
+- File changes come as diffs by running Claude Code on the agent panel's copy of the folder (AgentWorkspace) with all its tools, not by forbidding its edit tools: a shell command can write files too, so only the copy keeps "no silent edit" with full capabilities.
+- `--permission-mode acceptEdits` on the copy (its edits there are reviewed as diffs anyway); its commands and other permission requests go to the user through Craft's approval tool.
+- The engine contract lives in Craft.Abstractions and the agent panel stays the AI plug-in's, so Claude Code reuses its copy, timeline, review and activity rather than a second agent panel.
+- The chat tab keeps the local models; Claude Code answers in the agent tab of the chat column (an agent that edits and runs).
+- A model per account at the chip, the pick kept per workspace; the task goes on standard input (no quoting of a prompt in a command line).
+- Accounts are Craft's own configuration folders logged in by Claude Code's own login; nothing is tuned to or read from the machine's launchers (the owner: "Don't tune to my PowerShell profile; ask for login").
+- Whether an account is logged in is read from the presence of the CLI's credentials file only (never its content); where the CLI keeps it in the keychain (macOS) or for "default", the run's own words say so.
+- A new account logs in by running Claude Code itself in a terminal tab (its first run's login) unless its help lists a `login` command; nothing is typed into it for the user.
+- The MCP config is written before every run (the token changes with the server), private before the token goes in.
+- `run_tests` refuses any filter part shorter than three characters or with a wildcard, since such a part matches nearly every test.
+- The manifest's capabilities are files and network, as the git plug-in's (the loader knows no "process").
+- The status bar's Cancel on the run's activity is its Stop; no new label.
+
+**Compiled and tested here.** Every project for net10.0 (no Windows-only code was added: the ACL calls are guarded by
+`OperatingSystem.IsWindows()` in the plug-in). New group `ClaudeCodePlugin` (8): the CLI on a fake PATH (npm's .cmd with
+PATHEXT, claude elsewhere, the install hint, the configured path), the quoting, the flags and the headless arguments (a
+missing flag said), Craft's own accounts (default with no setup, a folder per account under the data folder and never
+the workspace, private, its CLAUDE_CONFIG_DIR, not logged in until the CLI's login wrote its sign-in, names refused,
+remove, the login's command read from --help, its shell, a run that ends not signed in asking to log in), the MCP config (address, token,
+mode 600, refused inside the workspace), the stream read as steps, a whole run through a stand-in process (and a failed
+one with its exit code and error), each diagnostic tool bounded on fake reports, `run_tests` refusing missing or wide
+filters and going through the sandbox with CRAFT_FILTER, the prompts naming the right report, the agent chip's picks.
+`AiPlugins.AnAgentEngineRunsOnTheCopyStreamsItsStepsAndItsChangesComeAsDiffs`: an engine's run on the copy, its steps in
+the timeline, its files listed and untouched until accepted, a follow-up resuming the session, one diff per file, Ask
+taken. The full filter `ClaudeCodePlugin|Mcp|Terminal|Plugins|ApiGuard|Inventory|AiPlugins|ModelRoles|LookAndFeel|ModelLoading|Settings|Ui`,
+run once on the final code: 161 of 162 passed; the one failure,
+`WebAngular.TheLanguageIsChosenByAngularJsonByNameAndBySettings` (picked up by "Settings"), fails under load and passes
+alone (a timing flake of the Angular plug-in's test, not touched here). API dumps (Craft.Abstractions, Craft.Ai,
+Craft.Editor, the new Craft.Plugins.ClaudeCode), B3's contract list and the inventory regenerated: lines added only.
+
+**Not run here.** Claude Code itself (no CLI and no sign-in in the container): the owner's run below.
+
+**Left, for later.** Claude Code in a terminal tab under its own permission prompts (1a; the owner starts it from a
+saved terminal profile for now); "Stop" as the status bar's label for an engine's run (it says Cancel); the approval
+shown inline on its step (it asks in Craft's dialog); text streamed token by token (`--include-partial-messages`); the
+chat tab answered by Claude Code.
+
+**The owner's commands** (once `slot/claude-code` is merged into `main`; Idrak is unchanged). Check Claude Code with
+`claude --version`. In the app: the status bar shows Claude Code's version; the agent tab's model chip lists "Claude Code
+(default)" (your CLI's own sign-in). For your two subscriptions, run Run › Claude Code: add an account…, name it "work",
+and log in with Claude Code's own steps in the tab that opens; again for "personal". Pick "Claude Code (work)" at the
+agent's chip, give it a task (it asks before its commands, works on a copy, and its changes come as diffs); then Run ›
+Claude Code: diagnose the last crash, and Claude Code: test Craft's MCP server (answer "Start it and run" when asked).
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="ClaudeCodePlugin|Mcp|Terminal|Plugins|ApiGuard|Inventory|AiPlugins|ModelRoles|LookAndFeel|ModelLoading|Settings|Ui"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+claude --version
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+The branch to delete once merged:
+```powershell
+git push origin --delete slot/claude-code
+```

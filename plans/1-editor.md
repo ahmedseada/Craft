@@ -19,10 +19,8 @@ Windows run (2026-11-01)" at the end.
 | 7 | X part 9: language 3-5, 10-12 (snippets, inlay hints, code lens, linked tags, Outline, hierarchy) and two C# session speed fixes | Stopped for W, tests being fixed (one real bug found: a mirrored `$1` must repeat its placeholder's text), not pushed; for later, after W |
 | 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test) | Built (46d6e17) |
 | 8b | The recovery prompt at start, X part 9's look group 24-26 | Stopped for W, just begun; for later, after W |
-| 9 | Phase W, the web languages | Running: W0, W-files and W-npm first (the owner, 2026-11-01: "start Web now", "stop all") |
-| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); W-script's "Left, for later" line (re-reading a project on WorkspaceChanged, a contextual word split across lines, generics in a JSX tag, Prettier-style layout) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
-
-| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); left of W-tools: a closed file's Fix in Problems, ESLint's multi-pass fix, ESLint and Angular output in the Run view's problems (lint as you type waits for W-semantic) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
+| 9 | Phase W, the web languages | Built 2026-11-01: W0, W-files, W-npm, W-style, W-script, W-tools, W-markup (phase W complete; W-semantic waits for the owner's word) |
+| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); left of W-tools: a closed file's Fix in Problems, ESLint's multi-pass fix, ESLint and Angular output in the Run view's problems (lint as you type waits for W-semantic); W-script's "Left, for later" line (re-reading a project on WorkspaceChanged, a contextual word split across lines, generics in a JSX tag, Prettier-style layout) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan; W-markup's "Left, for later" line (open tabs re-picked when angular.json changes, a JSON script by the JSON plug-in's lexer, block parameters over lines) |
 | 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned; starts only on the owner's word |
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
@@ -5455,6 +5453,129 @@ a.js closed fills Problems; hover the status bar's language item: "Formatter: Pr
 Shift+Alt+F (approve-each asks for node; Allow once): quotes and semicolons by .prettierrc; Settings › Editor › Lint ›
 "Allowed to run on their own" lists the folder (remove it: the next save asks again). In `test-output\WebTestPOC` (W's
 Angular project, no ESLint): save a .ts, the status entry "Set up ESLint", run it and answer npm's questions in its tab.
+
+### W-markup as built (2026-11-01)
+
+Slot w2, on Craft `main` f12282b (W0, W-files, W-npm, W-style, W-script, W-tools merged) and Idrak `main` e3d656c. Craft only:
+no cause was found in Idrak. Pushed to `slot/w-markup` for the main session to merge (not rebased).
+- **The HTML lexer** (`src/Craft.Web/Markup/HtmlTokenizer.cs`, public `HtmlTokenizer : LineTokenizer` with `HtmlOptions`): the
+  living standard's tags, attributes (quoted values may span lines), entities (named, decimal, hex), the doctype, comments,
+  `<!…>`/`<?…>`; raw text `<script>` and `<style>` ended by `</script`/`</style` followed by a space, `/`, `>` or the line's
+  end, in any case, also inside a script's string (as the browser does; `<\/script>` does not end it); RCDATA `<textarea>`
+  and `<title>` (entities as escapes, no tags). A script by its `type`: none, `module`, the JavaScript MIME types and
+  `text/babel` as JavaScript; `importmap`, `speculationrules` and any JSON type JSON-like (the JavaScript lexer: strings,
+  numbers, true/false/null); `text/x-template`, `text/ng-template`, `text/html` as HTML; others plain. `style="…"` as CSS
+  declarations and `on*="…"` as JavaScript (`CRAFT_PLUGIN_HTML_ATTRIBUTESASCODE`). The embedded lexer's state rides in
+  HTML's: one frame of HTML (mode, element, script type, attribute kind, Angular's block depth) and the embedded state,
+  interned in the tokenizer's `LineStates`, so a long `<script>` is incremental and its spans are the JavaScript session's own
+  (proven, shifted). Colours: tags `Keyword`, custom elements (a `-` in the name) `ClassName`, attributes `PropertyName`,
+  plain values one `String`, entities `StringEscape`, the doctype `PreprocessorKeyword`/`PreprocessorText`, comments,
+  `<` `>` `</` `/>` `Punctuation`, `=` `Operator`.
+- **The Angular dialect** (the same lexer, `HtmlOptions.AngularTemplate`): `{{ }}` in text (over lines) and in attributes;
+  `[x]`, `[(x)]`, `[class.x]`, `bind-`, `bindon-` (properties), `(x)`, `on-` (events, `EventName`), `#ref`, `ref-`, `let-`
+  (`LocalName`), `*ngIf`/`*ngFor` (`ControlKeyword`, microsyntax with `let`, `of`, `as`); `@if`/`@else if`/`@else`,
+  `@for (…; track …; let i = $index)`/`@empty`, `@switch`/`@case`/`@default`, `@defer (on …; prefetch on …; when …)`/
+  `@placeholder (minimum …)`/`@loading (after …; minimum …)`/`@error`, `@let x = expr;` (`ControlKeyword`, a parameter's
+  leading word and `@defer`'s triggers `Keyword`, `@let`'s name `LocalName`), a `}` in text closing the innermost block; the
+  expressions in W-script's Angular-expression dialect, completed here: pipes `| name:arg` as `MethodName`, `?.`, `!`,
+  template literals, `let x of xs` outside parentheses. Version gate: `@if`, `@for`, `@switch`, `@defer` from Angular 17,
+  `@let` from 18.1 (before, the text they are).
+- **Inline templates and styles** ("angular-typescript", `AngularTypeScriptTokenizer`): TypeScript's lexer, except that a
+  `template:` property's string or template literal is an Angular template and `styles:` (one literal, or each literal of its
+  array) the project's inline style language (angular.json's `inlineStyleLanguage`, else the component schematic's `style`:
+  CSS, SCSS or LESS); a key inside a string or a comment is TypeScript's; the states ride together, interned.
+- **The formatter** (`HtmlFormatter`, HTML and Angular templates): only white space between tokens changes. Lines indented
+  by the elements and blocks open at their start, void elements and optional end tags known (an `<li>` closes the open one,
+  a block element an open `<p>`, a cell the open cell, …); a start tag's attribute lines one step in, its `>` line back at
+  the tag; inside a tag runs of spaces made one, none around `=` nor before `>`, one before `/>`; `@if (…) {` and
+  `} @else {` spaced; trailing spaces off, one empty line kept. Text keeps its spaces; `<pre>`, `<textarea>`, comments,
+  multi-line values and interpolations kept as written. A `<script>`'s JavaScript and a `<style>`'s CSS are formatted by
+  W-script's and W-style's formatters one step inside their element (a `FormatStyle` whose line break carries the element's
+  indentation, so neither formatter changed), kept as written when they do not parse. Malformed (an element whose end tag is
+  required, a tag, a comment, a value, a block, an interpolation or `@let` not closed; an end tag that closes nothing or
+  would close a required one): unchanged, "line L, column C: …".
+- **Folding** (`HtmlFolding`): elements over several lines (an optional-end element closed by the next ends a line above
+  it), start tags over several lines (void elements), Angular's blocks (to the line before `} @else {`), comments,
+  `<!-- #region -->` to `<!-- #endregion -->` (marked). `RulesAt`: `//` inside a JavaScript `<script>`, `/* */` inside
+  `<style>`, HTML's `<!-- -->` elsewhere; in an inline template HTML's, in inline styles `/* */`.
+- **Angular workspaces** (`AngularWorkspaces`): angular.json's projects (their roots, the inline style language) and the
+  Angular installed (`node_modules/@angular/core/package.json`) else asked for (`package.json`), as UTF-8 bytes with
+  `Utf8JsonReader`, off the UI thread, once per folder (bounded at 1,024), forgotten and read again on the host's
+  `WorkspaceChanged` (open, switch, Refresh).
+- **The plug-ins** (contract 1.1, pre-installed and removable, each carrying its own Craft.Web): `plugins/Craft.Plugins.Html`
+  ("html": .html, .htm; `CRAFT_PLUGIN_HTML_EMBEDDED`, `CRAFT_PLUGIN_HTML_ATTRIBUTESASCODE`) and `plugins/Craft.Plugins.Angular`
+  ("angular-html": an angular.json project's .html by the selector "angular", every `*.component.html` by name;
+  "angular-typescript": an Angular project's .ts by the selector, so removing the plug-in gives them back to "html" and
+  "typescript"; `CRAFT_PLUGIN_ANGULAR_TEMPLATES` project|suffix|off, `_INLINETEMPLATES`, `_VERSION`, `_PROJECTVERSION`), on the
+  settings page (Editor › HTML, Editor › Angular), their foldings and icons (W-files' drawn set: .html, .htm,
+  .component.html, .component.ts).
+- **Android and AOT**: `Craft.Web` (Markup/) and both plug-ins are pure C#, no reflection, nothing native, `Utf8JsonReader`
+  only (`IsAotCompatible`, trim-safe).
+
+**Decisions on the recommendation (the owner away; one line each).**
+- One `HtmlTokenizer` per `HtmlOptions` (Angular or not, its version, embedded, attributes as code), shared, with its own `LineStates`; an embedded state is the second frame of an interned pair, a plain HTML state a plain number.
+- A script ends at its end tag even inside a string (the standard's tokenizer), so an editor colours a page as a browser reads it; the formatter then refuses the stray end tag.
+- JSON script types use the JavaScript lexer (JSON-like: strings, numbers, keywords), not the JSON plug-in's (another plug-in's internals).
+- A self-closing `/>` closes any element in the formatter and folding (Angular components, SVG); the lexer still enters raw text after `<script/>`, as the standard says.
+- Custom elements (a `-` in the name, Angular components) colour as classes, standard tags as keywords.
+- A plain attribute value is one `String` span; one with code (`style`, `on*`, Angular bindings, an Angular plain value with `{{ }}`) is lexed by its language.
+- Structural directives (`*ngIf`) are control keywords, events `EventName`, references `LocalName`, `{{ }}` and block braces `Punctuation`.
+- A block's parameters are split at `;`: each part's leading words (`track`, `let`, `on`, `when`, `prefetch`, `hydrate`, `minimum`, `after`, `as`, and triggers after `on`) are keywords, the rest an Angular expression.
+- Block parameters over several lines keep their parentheses' depth only (each line's expressions read from the start); `{{ }}` and `@let` carry the expression's state across lines.
+- The formatter formats `<script>` and `<style>` with the existing formatters through a `FormatStyle` whose line break carries the element's indentation (no change to either), and leaves them as written when they do not parse (the page still formats).
+- `<pre>` and `<textarea>` content, and the line their end tag starts, are kept as written (their white space is content).
+- Text keeps its spaces inside a line (inline formatting can matter); only line starts and tags change.
+- An end tag closes the optional-end elements above its element; one that would close a required one is malformed (strict, unlike a browser, so a format never moves text into another element).
+- Angular's version is the installed `@angular/core` before package.json's range; the setting wins over both; a file whose folder was not read opens at the latest and switches through `Reclassified`.
+- The selector picks "angular-html" for any .html under a project's root (Angular 20's `app.html` has no `.component.` part) and "angular-typescript" for any .ts but .d.ts; `templates = off` gives a `*.component.html` to "html".
+- `template:`/`styles:` are recognised anywhere in an Angular project's .ts (not only inside `@Component`), outside strings and comments.
+- The Angular plug-in follows `IEditorHost.WorkspaceChanged` (its editor part's `attach`) and reads angular.json again off the UI thread; the open tabs keep their language until reopened (the host re-picks on a folder's opening).
+- Settings in the Editor section grouped "HTML" and "Angular", as W-script's and W-style's.
+
+**Tests**: new groups `WebMarkup` (7: the page's colours, embedded on and off; embedded spans equal standalone JavaScript and
+CSS sessions shifted; `</script` inside a string and the script types; 3,000 random edits equal a fresh session in HTML and
+Angular; a warm screen at 0 B, a keystroke, the worst flip and the bench file; the formatter's exact output, idempotent, only
+white space, a script that does not parse kept, five malformed cases with where and what; through the editor the caret kept,
+one undo step, a malformed file's message, Format Selection; folding and the rules) and `WebAngular` (5: every block,
+binding, event, pipe, `@let`, `@defer` trigger and microsyntax; the version gate 16/17/18.1 and the settings' precedence;
+inline templates and styles, SCSS over lines, their rules; the language by angular.json (two projects, the longest root,
+SCSS and LESS inline styles, Angular 18.0 installed over ^19.2), by name, by `templates`/`inlineTemplates`, a session switched
+through `Reclassified`, the plug-in removed giving back "typescript" and "html", angular.json read again on
+`WorkspaceChanged`; blocks formatted, malformed and folded); `WebPlugins` (+1: both plug-ins from their folders with their
+Craft.Web, a script and style coloured with no JavaScript or CSS plug-in, folding, the selector, settings and variables,
+icons, removed and disabled). First run of `WebMarkup|WebAngular|WebPlugins|ApiGuard|Inventory` (32): 31 passed; the one
+failure was real (a plain attribute value came out as three spans): one span now. The full filter
+`WebMarkup|WebAngular|WebScript|WebStyle|WebPlugins|WebFiles|WebKit|Folding|Editor|Settings|ApiGuard|Inventory`: 159 of 159.
+Dumps: `api/Craft.Web.txt` (additions), `api/Craft.Plugins.Html.txt` and `api/Craft.Plugins.Angular.txt` (new); the
+inventory and the contract list unchanged (no contract added).
+
+**Measured** (this container, 4 cores, Release; `test-output/benches/web-markup.txt`): a 2,007-line Angular template with
+HTML pages: a 60-line screen at line 1,000, cold (1,000 states learned, JIT included) 7.8 ms; a warm screen 0.050 ms and
+**0 bytes** (target 0.5 ms); a letter typed in a tag's name: no line read beyond the screen, the rest settles. A 20,011-line
+page: its states on first read 9.9 ms; `<!--` typed on line 1, then the screen: 0.08 ms, nothing read beyond it. A 2,001-line
+page: Format document 20 ms cold, 3.0 ms warm (1,795 edits); folding 2.2 ms (345 ranges).
+
+**Left, for later**: linked tag rename and the semantic layers (W-semantic: Angular's language service, HTML completion);
+open tabs re-picked when angular.json changes (they take the new language when reopened); a JSON script read by the JSON
+plug-in's own lexer (property names coloured); `@`-blocks' parameters spanning lines read each line's expressions afresh;
+the formatter does not wrap long tags or text.
+
+**The owner's check** on `test-output\WebTestPOC` (W's Angular project; else add `site.html` to `test-output\CarftTestPOC`):
+open `src\index.html` (the doctype, `<script>`/`<style>` coloured, folding of elements, Ctrl+/ inside `<script>` uses `//`,
+elsewhere `<!-- -->`), `src\app\app.html` (bindings, `{{ }}`, `@if`/`@for` coloured and folded; Shift+Alt+F), `src\app\app.ts`
+(an inline `template:` coloured as Angular if you add one); Settings › Editor › Angular › "Angular templates" = suffix turns
+app.html to HTML on reopening; Settings › Plug-ins: disable Craft.Plugins.Angular and restart, app.html opens as HTML and
+app.ts as TypeScript.
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebMarkup|WebAngular|WebScript|WebStyle|WebPlugins|WebFiles|WebKit|Folding|Editor|Settings|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\WebTestPOC
+```
+
+**Phase W is complete** (W0, W-files, W-npm, W-style, W-script, W-tools, W-markup, 2026-11-01): the web languages are built;
+W-semantic and every other phase wait for the owner's word.
 
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 

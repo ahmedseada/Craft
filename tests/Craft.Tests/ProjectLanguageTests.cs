@@ -12,6 +12,7 @@ using Craft.CSharp.Project;
 using Craft.Editor;
 using Craft.Editor.Abstractions;
 using Craft.Editor.Shell;
+using Craft.Plugins.Json;
 using Craft.Tests.Editor;
 using Craft.Tests.Runner;
 
@@ -19,7 +20,8 @@ namespace Craft.Tests;
 
 /// <summary>
 /// The owner's notes 17 and 18: the languages of a C# project's other files in the C# plug-in (their colours, by lines,
-/// incremental) and their Format document (XML and JSON), one undo step, on Shift+Alt+F and on save.
+/// incremental, on the public line-state kit since phase W) and their Format document (XML). JSON's moved with JSON to
+/// its own plug-in (group WebPlugins).
 /// </summary>
 [TestGroup("ProjectLanguages")]
 public static class ProjectLanguageTests
@@ -30,8 +32,7 @@ public static class ProjectLanguageTests
         ("Craft.sln", ProjectLanguages.Solution), ("Craft.slnx", ProjectLanguages.Xml), ("data.xml", ProjectLanguages.Xml),
         ("MainPage.xaml", ProjectLanguages.Xaml), ("app.config", ProjectLanguages.Xml), ("Resources.resx", ProjectLanguages.Xml),
         ("Pages/Counter.razor", ProjectLanguages.Razor), ("Views/Index.cshtml", ProjectLanguages.Razor),
-        ("/repo/.editorconfig", ProjectLanguages.EditorConfig), ("appsettings.json", ProjectLanguages.Json),
-        ("Properties/launchSettings.json", ProjectLanguages.Json), ("global.json", ProjectLanguages.Json),
+        ("/repo/.editorconfig", ProjectLanguages.EditorConfig),
     ];
 
     /// <summary>Each file of a C# project and the language it opens as with the C# plug-in loaded (the Plugins group checks them from its folder).</summary>
@@ -56,7 +57,7 @@ public static class ProjectLanguageTests
 
             Check.True(EditorLanguages.Get(ProjectLanguages.MsBuild).Rules.Brackets.Any(p => p is { Open: '<', Close: '>' }), "markup matches < and >");
             Check.Equal("<!--", EditorLanguages.Get(ProjectLanguages.Xml).Rules.BlockCommentOpen, "XML's comment");
-            Check.Equal("//", EditorLanguages.Get(ProjectLanguages.Json).Rules.LineComment, "JSON's comment (as .NET's configuration reads it)");
+            Check.True(EditorLanguages.ForFile("appsettings.json") is null, "JSON is its own plug-in's since phase W, not the C# plug-in's");
             Check.Equal("#", EditorLanguages.Get(ProjectLanguages.EditorConfig).Rules.LineComment, ".editorconfig's comment");
         }
         finally
@@ -160,27 +161,8 @@ public static class ProjectLanguageTests
     }
 
     [Test]
-    public static void JsonEditorConfigAndSolutionHaveTheirColours()
+    public static void EditorConfigAndSolutionHaveTheirColours()
     {
-        const string json = """
-            {
-              // the log levels
-              "Logging": { "LogLevel": { "Default": "Information", "Path": "c:\\temp\n" } },
-              "Enabled": true, "Count": -3.5e2, "Nothing": null, /* trailing */
-            }
-            """;
-        var spans = Classify(ProjectLanguages.Json, json);
-        Expect(spans, "// the log levels", TokenClasses.Comment, "a line comment");
-        Expect(spans, "\"Logging\"", TokenClasses.PropertyName, "a property's name");
-        Expect(spans, "\"Information\"", TokenClasses.String, "a string value");
-        Expect(spans, "\\\\", TokenClasses.StringEscape, "an escape");
-        Expect(spans, "\\n", TokenClasses.StringEscape, "another escape");
-        Expect(spans, "true", TokenClasses.Keyword, "true");
-        Expect(spans, "null", TokenClasses.Keyword, "null");
-        Expect(spans, "-3.5e2", TokenClasses.Number, "a number");
-        Expect(spans, "/* trailing */", TokenClasses.Comment, "a block comment");
-        Expect(spans, "{", TokenClasses.Punctuation, "a brace");
-
         var config = Classify(ProjectLanguages.EditorConfig, """
             # top
             root = true
@@ -260,10 +242,10 @@ public static class ProjectLanguageTests
 
         var random = new Random(17);
         string[] fragments = ["<", ">", "</Item>", "<!--", "-->", "\"", "'", "\n", "$(", ")", "&amp;", "<![CDATA[", "]]>", "<?x ", "?>", " a=\"b\"", "x"];
-        foreach (var name in new[] { ProjectLanguages.MsBuild, ProjectLanguages.Razor, ProjectLanguages.Json })
+        foreach (var name in new[] { ProjectLanguages.MsBuild, ProjectLanguages.Razor, JsonLanguage.LanguageName })
         {
-            var each = ProjectLanguages.All.First(l => l.Name == name);
-            var edited = new PieceTableBuffer(name == ProjectLanguages.Json ? "{\n  \"a\": [1, 2, /* x */ 3],\n  \"b\": \"c\"\n}\n" : SampleRazorish);
+            var each = name == JsonLanguage.LanguageName ? JsonLanguage.Language : ProjectLanguages.All.First(l => l.Name == name);
+            var edited = new PieceTableBuffer(name == JsonLanguage.LanguageName ? "{\n  \"a\": [1, 2, /* x */ 3],\n  \"b\": \"c\"\n}\n" : SampleRazorish);
             using var live = each.Open(edited);
             for (int round = 0; round < 150; round++)
             {
@@ -308,27 +290,6 @@ public static class ProjectLanguageTests
     private static readonly string[] RazorFragments = ["@{", "}", "@code {", "@*", "*@", "@if (a) {", "<p>", "\"", "@\"", "/*", "*/", "\n", "@x.y", "@(1)", "{"];
 
     [Test]
-    public static void JsonFormatsKeepsCommentsAndTrailingCommasAndIsIdempotent()
-    {
-        const string messy = "{\n// the logs\n\"Logging\":{\"LogLevel\":{\"Default\":\"Information\",   \"Microsoft\" :\"Warning\" , }}, // after\n\n\n\"Empty\": { }, \"List\":[1,2,\n3],\"None\":[]\n}";
-        const string formatted = "{\n    // the logs\n    \"Logging\": {\n        \"LogLevel\": {\n            \"Default\": \"Information\",\n            \"Microsoft\": \"Warning\",\n        }\n    }, // after\n\n    \"Empty\": {},\n    \"List\": [\n        1,\n        2,\n        3\n    ],\n    \"None\": []\n}";
-        var style = new FormatStyle("    ", "\n");
-        Check.Equal(formatted, Format(new JsonFormatter(), messy, style), "JSON formatted: indented, comments and the trailing comma kept, one empty line kept");
-        Check.Equal(formatted, Format(new JsonFormatter(), formatted, style), "formatting again changes nothing");
-        var edits = new List<TextEdit>();
-        new JsonFormatter().Format(formatted, style, edits);
-        Check.Equal(0, edits.Count, "and makes no edits");
-        Check.Equal("{\n\t\"a\": [\n\t\t1\n\t]\n}\n", Format(new JsonFormatter(), "{\"a\":[1]}\n", new FormatStyle("\t", "\n")), "tabs when the editor indents with tabs; the last line break kept");
-        Check.Equal("{\r\n  \"a\": 1\r\n}", Format(new JsonFormatter(), "{ \"a\" : 1 }", new FormatStyle("  ", "\r\n")), "the tab size and the document's line break");
-
-        foreach (var (bad, where) in new[] { ("{\"a\": 1 \"b\": 2}", "line 1, column 9"), ("{\"a\": [1, 2}", "line 1, column 12"), ("{\n\"a\" 1}", "line 2"), ("{\"a\": tru}", "line 1"), ("[1, 2", "line 1, column 1"), ("{\"a\": \"open", "line 1") })
-        {
-            var error = Check.Throws<FormatException>(() => Format(new JsonFormatter(), bad, style), $"malformed JSON is refused: {bad}");
-            Check.True(error.Message.StartsWith(where, StringComparison.Ordinal), $"the message says where ({error.Message})");
-        }
-    }
-
-    [Test]
     public static void XmlFormatsKeepsTextAndMixedContentAndIsIdempotent()
     {
         const string messy = "<?xml version=\"1.0\"?>\n<Project Sdk=\"Microsoft.NET.Sdk\">\n<PropertyGroup>\n      <TargetFramework>net10.0</TargetFramework> <!-- the framework -->\n<Nullable>enable</Nullable>\n</PropertyGroup>\n\n\n  <ItemGroup><PackageReference Include=\"A\"\n Version=\"1.0\" /><None></None>\n<Doc xml:space=\"preserve\">  <b>  kept </b>  </Doc><Mixed>text <i>in</i> it</Mixed>\n  </ItemGroup>\n</Project>\n";
@@ -348,79 +309,7 @@ public static class ProjectLanguageTests
         }
     }
 
-    [Test]
-    public static async Task FormatIsOneUndoStepAndAMalformedFileIsLeftWithAMessage()
-    {
-        var json = ProjectLanguages.All.First(l => l.Name == ProjectLanguages.Json);
-        var options = new CraftOptions { TabSize = 2, InsertSpaces = true };
-        var (model, document, _) = Editors.Make("{\"a\":[1,2],\"b\":{}}", options, json);
-        model.Dispatch = action => action();
-        int steps = document.Kinds.Count;
-        Check.True(model.FormattingSession is not null && model.SemanticSession is null, "JSON formats without a semantic layer");
-        Check.True(await model.FormatDocumentAsync(), "the format applied edits");
-        Check.Equal("{\n  \"a\": [\n    1,\n    2\n  ],\n  \"b\": {}\n}".Replace("\n", Environment.NewLine, StringComparison.Ordinal), document.Text, "formatted with the editor's tab size and spaces (a one-line file takes the platform's line break)");
-        Check.Equal(steps + 1, document.Kinds.Count, "as one step");
-        model.OnKey(EditorKey.Z, KeyModifiers.Control);
-        Check.Equal("{\"a\":[1,2],\"b\":{}}", document.Text, "one undo takes the whole format back");
-
-        model.OnKey(EditorKey.F, KeyModifiers.Shift | KeyModifiers.Alt);
-        for (int wait = 0; wait < 500 && model.SemanticRequestsInFlight > 0; wait++)
-        {
-            await Task.Delay(10);
-        }
-
-        Check.True(document.Text.StartsWith("{" + Environment.NewLine + "  \"a\"", StringComparison.Ordinal), "Shift+Alt+F formats it too");
-
-        var (broken, brokenDocument, _) = Editors.Make("{\"a\": 1 \"b\": 2}", options, json);
-        broken.Dispatch = action => action();
-        Check.True(!await broken.FormatDocumentAsync(), "a malformed file is not formatted");
-        Check.Equal("{\"a\": 1 \"b\": 2}", brokenDocument.Text, "and left unchanged");
-        Check.True(broken.LastFormatMessage is { } message && message.Contains("line 1, column 9", StringComparison.Ordinal), $"with a message saying where ({broken.LastFormatMessage})");
-
-        var (plain, _, _) = Editors.Make("text", options, null);
-        Check.True(!await plain.FormatDocumentAsync() && plain.LastFormatMessage is null, "plain text has nothing to format");
-    }
-
-    [Test]
-    public static async Task FormatOnSaveFormatsFirstWhenItIsOn()
-    {
-        ProjectLanguages.Register();
-        try
-        {
-            foreach (bool on in new[] { false, true })
-            {
-                using var folder = new TempFolder();
-                string file = folder.File("appsettings.json");
-                await File.WriteAllTextAsync(file, "{\"a\":1}");
-                var settings = new CraftSettings(folder.Isolated(name => name == "CRAFT_FORMAT_ON_SAVE" ? (on ? "true" : "false") : null), SettingsFile.Load(folder.File("data/settings.json")));
-                var recent = RecentList.Load(folder.File("data/recent.json"), 10);
-                using var host = new EditorHost();
-                using var shell = new ShellModel(host, settings, recent, new NoDialogs(), new SilentUi());
-                Check.Equal(on, shell.Options.FormatOnSave, "CRAFT_FORMAT_ON_SAVE reaches the shell's options");
-                var tab = (await shell.OpenFileAsync(file))!;
-                Check.Equal(ProjectLanguages.Json, tab.Language?.Name, "appsettings.json opens as JSON");
-                var model = new EditorModel(tab.Document, tab.Language, shell.Options, null, new FixedMeasurer(), new FakeClipboard()) { Dispatch = action => action() };
-                shell.EditorOf = t => ReferenceEquals(t, tab) ? model : null;
-                ((TextDocument)tab.Document).Edit([TextEdit.Insert(6, ",\"b\":2")], EditKind.Paste, SelectionState.At(6), SelectionState.At(12));
-                Check.True(await shell.SaveAsync(tab), "saved");
-                string saved = await File.ReadAllTextAsync(file);
-                Check.Equal(on ? "{\n    \"a\": 1,\n    \"b\": 2\n}" : "{\"a\":1,\"b\":2}", saved.Replace("\r\n", "\n", StringComparison.Ordinal), on ? "formatted before it was written" : "written as it is when the option is off");
-                if (on)
-                {
-                    ((TextDocument)tab.Document).Undo();
-                    Check.Equal("{\"a\":1,\"b\":2}", tab.Document.Buffer.Current.GetText(0, tab.Document.Buffer.Current.Length), "the format on save is one undo step");
-                }
-
-                model.Dispose();
-            }
-        }
-        finally
-        {
-            ProjectLanguages.Unregister();
-        }
-    }
-
-    private static string Format(ITextFormatter formatter, string text, FormatStyle style)
+    internal static string Format(ITextFormatter formatter, string text, FormatStyle style)
     {
         var edits = new List<TextEdit>();
         formatter.Format(text, style, edits);
@@ -429,9 +318,9 @@ public static class ProjectLanguageTests
         return buffer.Current.GetText(0, buffer.Current.Length);
     }
 
-    private static List<(string Text, string Class)> Classify(string languageName, string text)
+    internal static List<(string Text, string Class)> Classify(string languageName, string text)
     {
-        var language = ProjectLanguages.All.First(l => l.Name == languageName);
+        var language = languageName == JsonLanguage.LanguageName ? JsonLanguage.Language : ProjectLanguages.All.First(l => l.Name == languageName);
         var buffer = new PieceTableBuffer(text);
         using var session = language.Open(buffer);
         using var spans = new TokenSpanBuffer();
@@ -448,13 +337,13 @@ public static class ProjectLanguageTests
         return result;
     }
 
-    private static void Expect(List<(string Text, string Class)> spans, string text, string tokenClass, string what)
+    internal static void Expect(List<(string Text, string Class)> spans, string text, string tokenClass, string what)
     {
         Check.True(spans.Any(s => s.Text == text && s.Class == tokenClass),
             $"{what}: \"{text}\" is {tokenClass} (found: {string.Join(", ", spans.Where(s => s.Text == text).Select(s => s.Class).DefaultIfEmpty("no span"))})");
     }
 
-    private sealed class NoDialogs : IFileDialogs
+    internal sealed class NoDialogs : IFileDialogs
     {
         public Task<string?> PickFolderAsync(string? startFolder = null, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
 
@@ -463,7 +352,7 @@ public static class ProjectLanguageTests
         public Task<string?> PickSavePathAsync(string suggestedName, string? folder, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
     }
 
-    private sealed class SilentUi : IShellUi
+    internal sealed class SilentUi : IShellUi
     {
         public Task ShowMessageAsync(string title, string message) => Task.CompletedTask;
 

@@ -919,6 +919,18 @@ struct Craft.Abstractions.FontMetrics : System.IEquatable<Craft.Abstractions.Fon
   System.String ToString()
   System.Void Deconstruct(out System.Single CellWidth, out System.Single LineHeight, out System.Single Baseline)
   ctor(System.Single CellWidth, System.Single LineHeight, System.Single Baseline)
+sealed class Craft.Abstractions.FormatStyle : System.IEquatable<Craft.Abstractions.FormatStyle>
+  Craft.Abstractions.FormatStyle <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.FormatStyle other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Break(System.Int32 depth, System.Int32 blankLines = 0)
+  System.String Indent { get; init; }
+  System.String NewLine { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Indent, out System.String NewLine)
+  ctor(System.String Indent, System.String NewLine)
+  static Craft.Abstractions.FormatStyle For(Craft.Abstractions.LanguageSettings settings, Craft.Abstractions.ITextSnapshot snapshot)
 sealed class Craft.Abstractions.GitIgnore
   Craft.Abstractions.GitIgnore Parent { get; }
   System.Boolean Ignores(System.ReadOnlySpan<System.Char> relativePath, System.Boolean isFolder)
@@ -1128,6 +1140,7 @@ interface Craft.Abstractions.ILanguage : Idrak.Abstraction.IKind
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindSymbolsAsync(System.String workspaceRoot, System.String query, System.Int32 maxResults, Craft.Abstractions.LanguageSettings settings, System.Threading.CancellationToken cancellationToken)
   System.Void ReleaseMemory()
 interface Craft.Abstractions.ILanguageSession : System.IDisposable
+  Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
   System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> ScopeAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol>> GetDocumentSymbolsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken)
@@ -1228,6 +1241,9 @@ interface Craft.Abstractions.ITextDocument : System.IDisposable
   System.String FilePath { get; }
   System.Threading.Tasks.Task SaveAsync(System.String path = null, System.Threading.CancellationToken cancellationToken = null)
   event System.EventHandler StateChanged
+interface Craft.Abstractions.ITextFormatter
+  System.Void Format(System.ReadOnlySpan<System.Char> text, Craft.Abstractions.FormatStyle style, System.Collections.Generic.List<Craft.Abstractions.TextEdit> edits)
+  static System.FormatException Malformed(System.ReadOnlySpan<System.Char> text, System.Int32 position, System.String what)
 interface Craft.Abstractions.ITextInputAdapter
   System.IDisposable Attach(System.Object platformView, Craft.Abstractions.IEditorInputSink sink)
 interface Craft.Abstractions.ITextMeasurer
@@ -1432,6 +1448,49 @@ enum Craft.Abstractions.LineMarkKind : System.IComparable, System.IConvertible, 
   Changed = 1
   Conflict = 3
   Deleted = 2
+class Craft.Abstractions.LineStateLanguage : Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
+  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
+  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
+  Craft.Abstractions.ITextFormatter Formatter { get; }
+  Craft.Abstractions.LanguageRules Rules { get; }
+  Craft.Abstractions.LineTokenizer Tokenizer { get; }
+  System.Boolean Formats { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor(System.String name, System.String summary, System.Collections.Generic.IReadOnlyList<System.String> extensions, Craft.Abstractions.LanguageRules rules, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter = null)
+  protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
+sealed class Craft.Abstractions.LineStateSession : Craft.Abstractions.IFormattingLanguageSession, Craft.Abstractions.ILanguageSession, System.IDisposable
+  Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
+  Craft.Abstractions.LineTokenizer Tokenizer { get; }
+  System.Boolean ChangeDialect(Craft.Abstractions.LineTokenizer tokenizer)
+  System.Int32 KnownLines { get; }
+  System.Int64 LinesScanned { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
+  System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+  System.Void Dispose()
+  ctor(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter, Craft.Abstractions.LanguageSettings settings)
+  event System.EventHandler Reclassified
+sealed class Craft.Abstractions.LineStates
+  System.Boolean TryIntern(System.ReadOnlySpan<System.UInt64> frames, out System.UInt64 state)
+  System.Int32 Capacity { get; }
+  System.Int32 Count { get; }
+  System.Int32 MaxDepth { get; }
+  System.Int64 Overflows { get; }
+  System.ReadOnlySpan<System.UInt64> Frames(System.UInt64 state)
+  System.UInt64 Fallback { get; }
+  System.UInt64 Intern(System.ReadOnlySpan<System.UInt64> frames)
+  const System.Int32 DefaultCapacity = 4096
+  const System.Int32 DefaultMaxDepth = 64
+  const System.UInt64 InternedBit = 9223372036854775808
+  ctor(System.Int32 capacity = 4096, System.Int32 maxDepth = 64, System.UInt64 fallback = 0)
+  static System.Boolean IsInterned(System.UInt64 state)
+abstract class Craft.Abstractions.LineTokenizer
+  Craft.Abstractions.LanguageRules RulesAt(System.ReadOnlySpan<System.Char> line, System.Int32 column, System.UInt64 state)
+  System.UInt64 Initial { get; }
+  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
+  protected ctor()
+  protected static System.Void Add(Craft.Abstractions.TokenSpanBuffer into, System.Int32 start, System.Int32 length, System.String tokenClass)
 sealed class Craft.Abstractions.ListPanel : Craft.Abstractions.IEditorPanel
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
   System.String Id { get; }

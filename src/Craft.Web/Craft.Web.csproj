@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The web languages' lexers (plan phase W): a plain shared library, never a plug-in and never referenced by the app.
+      Script/  JavaScript (ES2025 and later), JSX, TypeScript, TSX (slot W-script)
+      Style/   CSS, SCSS, LESS (slot W-style)
+      Markup/  HTML (living standard), Angular templates (slot W-markup)
+    Each lexer is a LineTokenizer of Craft.Abstractions' public line-state kit: one state per line (frames past 64 bits in
+    a LineStates table), no regex, nothing allocated per token, keywords in FrozenSet alternate lookups, specials in
+    SearchValues (Idrak's docs/optimization.md, rules 15, 17, 75, 88, 89).
+
+    How each web plug-in carries its own copy: a plugins/Craft.Plugins.<Language>/ project references this one as a plain
+    ProjectReference (copied, Private true), so Craft.Web.dll lands in the plug-in's own output folder and Craft.App's
+    CraftPreinstalledPlugins targets copy that folder whole to plugins\Craft.Plugins.<Language>\. The app has no Craft.Web
+    of its own, so each plug-in's load context loads the copy in its folder: HTML's <script> still colours with the
+    JavaScript plug-in removed. Craft.Abstractions is the host's (not copied).
+
+    Android and AOT: pure C#, no reflection, nothing native (IsAotCompatible, trim-safe).
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Web</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+    <InternalsVisibleTo Include="Craft.Benches" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

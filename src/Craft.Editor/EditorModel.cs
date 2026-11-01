@@ -151,6 +151,12 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>The language's comment and bracket rules (<see cref="LanguageRules.Plain"/> for plain text).</summary>
     public LanguageRules Rules => _language?.Rules ?? LanguageRules.Plain;
 
+    /// <summary>
+    /// The rules at <paramref name="position"/> (phase W): an embedded language's where the session says so
+    /// (<see cref="ILanguageSession.RulesAt"/>: an HTML file's script comments with <c>//</c>), else <see cref="Rules"/>.
+    /// </summary>
+    public LanguageRules RulesAt(int position) => _session?.RulesAt(Snapshot, Math.Clamp(position, 0, Snapshot.Length)) ?? Rules;
+
     /// <summary>The language's name, or "Plain text" with the reason ("Plain text — no language for .xyz").</summary>
     public string LanguageName { get; }
 

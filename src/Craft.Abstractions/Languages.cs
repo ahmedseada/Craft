@@ -136,6 +136,13 @@ public interface ILanguageSession : IDisposable
     /// </summary>
     Task<IReadOnlyList<DocumentSymbol>> GetDocumentSymbolsAsync(ITextSnapshot snapshot, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<DocumentSymbol>>([]);
+
+    /// <summary>
+    /// The editing rules at <paramref name="position"/> (phase W, contract 1.1): an embedded language's there (an HTML
+    /// file's <c>&lt;script&gt;</c> toggles <c>//</c>, its <c>&lt;style&gt;</c> <c>/* */</c>), or null for the language's
+    /// own <see cref="ILanguage.Rules"/> (the default). Asked on the UI thread when a command needs them; it never waits.
+    /// </summary>
+    LanguageRules? RulesAt(ITextSnapshot snapshot, int position) => null;
 }
 
 /// <summary>

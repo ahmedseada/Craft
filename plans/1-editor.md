@@ -4758,6 +4758,77 @@ brackets, folding, toggle comment; "npm: run build" and "npm install"; "Set up E
 diff, "Lint workspace"; Shift+Alt+F on the .scss; the Angular plug-in disabled turns .html to plain HTML; typing at the
 top of a long .ts with the paint and keystroke numbers written here.
 
+### W0 as built (2026-11-01)
+
+Slot w1, on Craft `main` 0f14e72 and Idrak `main` 9e63a92. Craft only: no cause was found in Idrak.
+- **The line-state kit is public** (`Craft.Abstractions/LineStates.cs`, contract 1.1, additions only): `LineTokenizer`,
+  `LineStateSession`, `ITextFormatter` (with `ITextFormatter.Malformed`, the "line 3, column 9: …" message JSON and XML
+  shared), `FormatStyle` and `LineStateLanguage` (the C# plug-in's internal `ProjectLanguage`, made public), unchanged in
+  behaviour. New: `LineStates`, a thread-safe interning table for states past 64 bits (a stack of template, JSX or
+  embedded frames gets one number with `LineStates.InternedBit` set; a held stack is found with nothing allocated),
+  bounded to `Capacity` stacks (4,096) of `MaxDepth` frames (64), past which `Intern` gives the `Fallback` state (the
+  tokenizer's reset state) and counts `Overflows` (rule 77); `LineStateSession.ChangeDialect(tokenizer)` (a version
+  learned later) drops the states and raises `Reclassified`; `LineStateLanguage.TokenizerFor(context)` picks a dialect per
+  file; `LineTokenizer.RulesAt(line, column, state)` lets an embedded part answer its own rules; `KnownLines` and
+  `LinesScanned` are public (a third party's incremental tests). The C# plug-in's project languages (MSBuild, XML, XAML,
+  Razor, .editorconfig, .sln) are `LineStateLanguage`s on the public kit (proof a third party can do the same).
+- **`ILanguageSession.RulesAt(snapshot, position)`** (default null: the language's own rules), forwarded by
+  `SyntacticLanguageSession`; `LineStateSession` answers from its tokenizer at the line's state. `EditorModel.RulesAt(position)`.
+  Toggle comment (Ctrl+/, Ctrl+K Ctrl+C, Ctrl+K Ctrl+U) reads the rules at the first caret's first non-blank character, and
+  a language with no line comment but a block comment (CSS, HTML, and today XML, XAML, MSBuild) wraps each caret's lines in
+  it (`/* … */`, `<!-- … -->`) or unwraps them, one undo step.
+- **JSON is its own pre-installed, removable plug-in** `plugins/Craft.Plugins.Json` ("json"; package `Craft.Plugins.Json`):
+  the language (.json, .jsonc: package.json, tsconfig.json, appsettings.json, launchSettings.json, global.json), its
+  colours, brackets, folding (`JsonFolding`, moved), Format document (`JsonFormatter`, moved) and the icons of .json and
+  .jsonc, on `Craft.Abstractions` alone; JSON with comments and trailing commas as before. The C# plug-in keeps only what
+  is C#'s (`ProjectLanguages.Json` and `JsonFolding` left its public API; its summary and plugin.json say so). Craft.App's
+  `CraftPreinstalledPlugins` targets copy it with the others (`plugins\*\*.csproj`), so no app change was needed.
+- **`src/Craft.Web`**, empty (net10.0, `IsAotCompatible`, no reflection), its folders `Script/`, `Style/`, `Markup/` (one
+  file each naming its slot), in `Craft.slnx`, referenced by the tests and the API guard (`api/Craft.Web.txt`, empty).
+  How each web plug-in carries its own copy: its project references `src/Craft.Web` as a plain (copied) project reference,
+  so `Craft.Web.dll` lands in the plug-in's output folder and the app's targets copy that folder whole; the app has no
+  Craft.Web of its own, so each plug-in's load context loads the copy in its folder (HTML's `<script>` colours with the
+  JavaScript plug-in removed).
+- **Android and AOT**: `Craft.Web` and `Craft.Plugins.Json` are pure C# with no reflection and nothing native
+  (`IsAotCompatible` true, trim-safe); the kit in `Craft.Abstractions` adds none either.
+- **Decisions (each the recommended option, one line each)**:
+  - The kit lives in the `Craft.Abstractions` namespace (no `Craft.Abstractions.Text`): one `using` for a plug-in, as every other contract.
+  - `ILanguageSession.RulesAt` returns null for "the language's own" (a session does not know its language's rules).
+  - A dialect is a tokenizer: `ChangeDialect` swaps it; the formatter stays the language's.
+  - `LineStates` is per tokenizer (shared by its sessions), append-only and bounded; full, it gives the reset state rather than clearing (an id a session holds never changes meaning).
+  - `FormatStyle`'s equality is its indent and line break (the record's cache of breaks left out).
+  - The comment fallback wraps whole lines (first line's indent to last line's last non-blank character), one pair per caret's block, and unwraps when every block is wrapped; blank blocks are left.
+  - The comment's language is read once, at the first caret's first line (a multi-caret toggle across a `<script>` boundary uses that one).
+  - JSON also opens `.jsonc` (VS Code's settings); names without an extension (`.babelrc`) wait for W-files' patterns.
+  - The JSON plug-in registers .json's icon over the library's (the library's answers again when it is removed) and .jsonc's.
+  - `LineStates`' capacity and depth are constructor arguments (each web plug-in carries them as its settings when its lexer needs them).
+- **Tests** (CPU, here): new groups `WebKit` (5: a test-only third-party language on the public kit with interned frames,
+  400 random edits equal to a fresh session's, typing settling on the next line, a warm 60-line screen at 0 B, its
+  formatter through the editor as one undo step and `Malformed`'s message; the C# plug-in's languages on the kit; the
+  dialect switch raising `Reclassified` through the session and the editor, per-file dialects; interning bounded with the
+  reset fallback, 0 B lookups, a tokenizer resuming at the top level past the bound; `RulesAt` and the block-comment toggle
+  for a block-only language, XML and an embedded part) and `WebPlugins` (5: the JSON plug-in from its own folder,
+  removed and disabled, `package.json` coloured with the C# plug-in disabled, icons and folding with it; the C# plug-in
+  holds no JSON; JSON's colours, format, format undo and format on save, moved from `ProjectLanguages`). Touched: `Plugins`
+  (the project languages' tokenizers from the plug-in's context; the app layout's probe opens package.json as JSON),
+  `ProjectLanguages` (JSON's cases moved out, the rest unchanged), `Folding` (JSON's ranges from the plug-in). First run:
+  49 of 51 passed; the two failures were the tests' "from the plug-in's own context" read on the language object, which is
+  now the host's `LineStateLanguage` (fixed to read its tokenizer). API dumps of Craft.Abstractions, Craft.CSharp and
+  Craft.Editor regenerated (Craft.CSharp lost its JSON members), `api/Craft.Plugins.Json.txt` and `api/Craft.Web.txt`
+  added, the contract list (1.1) with lines added only.
+- **Left**: nothing of W0. The lexers, the `LineStates` settings per plug-in and the plug-ins' copies of Craft.Web come with
+  W-script, W-style and W-markup.
+- **The owner's check** on `test-output\CarftTestPOC`: open `appsettings.json` (colours, folding, Shift+Alt+F); Settings ›
+  Plug-ins: disable Craft.CSharp and restart, `appsettings.json` still coloured, then disable Craft.Plugins.Json too and it
+  opens as plain text; in a `.csproj`, Ctrl+/ on a line wraps it in `<!-- -->` and again unwraps it.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "WebKit|WebPlugins|ProjectLanguages|Plugins|PluginKit|PhaseP|Folding|BracketColors|Editor|Settings|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 
 Planned by a read-only agent from `wip/p-batch-2` (`74a5c21` on `e04652c`; `main` 47 commits ahead). The WIP holds P6

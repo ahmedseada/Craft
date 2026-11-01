@@ -3,6 +3,7 @@
     <Project Path="src/Craft.Abstractions/Craft.Abstractions.csproj" />
     <Project Path="src/Craft.Core/Craft.Core.csproj" />
     <Project Path="src/Craft.CSharp/Craft.CSharp.csproj" />
+    <Project Path="src/Craft.Web/Craft.Web.csproj" />
     <Project Path="src/Craft.Ai/Craft.Ai.csproj" />
     <Project Path="src/Craft.Editor/Craft.Editor.csproj" />
     <Project Path="src/Craft.Maui/Craft.Maui.csproj" />
@@ -17,6 +18,7 @@
     <Project Path="plugins/Craft.Voice/Craft.Voice.csproj" />
     <Project Path="plugins/Craft.Plugins.Learning/Craft.Plugins.Learning.csproj" />
     <Project Path="plugins/Craft.Plugins.Git/Craft.Plugins.Git.csproj" />
+    <Project Path="plugins/Craft.Plugins.Json/Craft.Plugins.Json.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />

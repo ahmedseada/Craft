@@ -31,6 +31,8 @@ public sealed partial class EditorModel
     private readonly SynchronizationContext? _uiContext = SynchronizationContext.Current;
     private readonly List<(int Version, TextEdit[] Edits)> _history = [];
     private EditorDiagnostic[] _diagnostics = [];
+    private EditorDiagnostic[] _semanticDiagnostics = [];
+    private DocumentDiagnostics? _published;
 
     /// <summary>The diagnostics' array as it is now (replaced, never changed in place: the overview ruler keys on it).</summary>
     internal EditorDiagnostic[] DiagnosticsArray => _diagnostics;
@@ -308,29 +310,56 @@ public sealed partial class EditorModel
     /// </summary>
     public string? LastFormatMessage { get; private set; }
 
+    /// <summary>
+    /// Whether Format Document can do anything here: the language formats, or a registered document formatter formats files
+    /// like this one (W, contract 8: Prettier where the project has it).
+    /// </summary>
+    public bool CanFormat => FormattingSession is not null || (_document.FilePath is { } path && DocumentFormatters.Handles(path, LanguageName));
+
+    /// <summary>What formats this document, in words, as far as known without reading (the status bar's tooltip), or null when nothing does.</summary>
+    public string? FormatterDescription =>
+        _document.FilePath is { } path && DocumentFormatters.Describe(path, LanguageName) is { } fit ? fit.Description
+        : FormattingSession is not null ? $"the {LanguageName} language's own"
+        : null;
+
     /// <summary>Shift+Alt+F (or Ctrl+K Ctrl+D): formats the document, applied as one undo step if the text is still the one formatted.</summary>
     public void FormatDocument() => _ = FormatDocumentAsync();
 
     /// <summary>
     /// Formats the document off the UI thread and applies the edits on it as one undo step, when the text is still the one
-    /// formatted: true when edits were applied. A malformed document is left unchanged, and why is said
+    /// formatted: true when edits were applied. A registered document formatter that applies here (W, contract 8: the
+    /// project's Prettier) is asked first, else the language's own. A malformed document is left unchanged, and why is said
     /// (<see cref="LastFormatMessage"/>, a failed activity); a language with no formatter changes nothing. Format on save
     /// awaits it before it writes. The task never faults.
     /// </summary>
-    public Task<bool> FormatDocumentAsync(CancellationToken cancellationToken = default)
+    public Task<bool> FormatDocumentAsync(CancellationToken cancellationToken = default) => FormatDocumentAsync(automatic: false, cancellationToken);
+
+    /// <summary>
+    /// <see cref="FormatDocumentAsync(CancellationToken)"/>, saying whether nobody asked just now (<paramref name="automatic"/>:
+    /// format on save), which a document formatter may treat differently (a run it must be allowed to make on its own).
+    /// </summary>
+    public Task<bool> FormatDocumentAsync(bool automatic, CancellationToken cancellationToken = default)
     {
-        if (FormattingSession is not { } session)
+        var session = FormattingSession;
+        string? path = _document.FilePath is { } file && DocumentFormatters.Handles(file, LanguageName) ? Path.GetFullPath(file) : null;
+        if (session is null && path is null)
         {
             return Task.FromResult(false);
         }
 
         var snapshot = Snapshot;
         var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        string name = Path.GetFileName(_document.FilePath) is { Length: > 0 } file ? file : "the document";
+        string name = Path.GetFileName(_document.FilePath) is { Length: > 0 } fileName ? fileName : "the document";
         var activity = _activities.Start($"Formatting {name}", ActivityKinds.General, cancellable: false, cancellationToken);
-        Track(FormatOrReasonAsync(session, snapshot, cancellationToken), result =>
+        var request = path is null ? null : new DocumentFormatRequest(path, snapshot, WorkspaceRoot)
         {
-            var (edits, reason, error) = result;
+            TabSize = Options.TabSize,
+            InsertSpaces = Options.InsertSpaces,
+            Automatic = automatic,
+        };
+        Track(FormatOrReasonAsync(session, request, LanguageName, Options.DiffLineLimit, automatic, snapshot, cancellationToken), result =>
+        {
+            var (edits, reason, error, by) = result;
             if (reason is not null)
             {
                 LastFormatMessage = reason;
@@ -350,7 +379,7 @@ public sealed partial class EditorModel
 
             if (edits.Count == 0)
             {
-                activity.Complete("already formatted");
+                activity.Complete(by is null ? "already formatted" : "already formatted · " + by);
                 done.TrySetResult(false);
                 return;
             }
@@ -358,7 +387,8 @@ public sealed partial class EditorModel
             int caret = MapThroughEdits(_selection.Caret, edits);
             ApplyEdits([.. edits], EditKind.Command, SelectionState.At(caret));
             EnsureCaretVisible();
-            activity.Complete(edits.Count == 1 ? "1 change" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{edits.Count} changes"));
+            string changes = edits.Count == 1 ? "1 change" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{edits.Count} changes");
+            activity.Complete(by is null ? changes : changes + " · " + by);
             done.TrySetResult(true);
         }, () =>
         {
@@ -368,20 +398,42 @@ public sealed partial class EditorModel
         return done.Task;
     }
 
-    // The formatter's answer, or why there is none: a malformed text's message (FormatException), or the error it threw.
-    private static async Task<(IReadOnlyList<TextEdit> Edits, string? Reason, Exception? Error)> FormatOrReasonAsync(IFormattingLanguageSession session, ITextSnapshot snapshot, CancellationToken cancellationToken)
+    // The formatter's answer, or why there is none: a registered document formatter that applies here first (its whole text
+    // turned into one edit per changed run of lines), else the language's own; a malformed text's message (FormatException),
+    // or the error it threw.
+    private static async Task<(IReadOnlyList<TextEdit> Edits, string? Reason, Exception? Error, string? By)> FormatOrReasonAsync(
+        IFormattingLanguageSession? session, DocumentFormatRequest? request, string languageName, int lineLimit, bool automatic, ITextSnapshot snapshot,
+        CancellationToken cancellationToken)
     {
+        string? by = null;
         try
         {
-            return (await session.FormatAsync(snapshot, 0, -1, cancellationToken).ConfigureAwait(false), null, null);
+            if (request is not null)
+            {
+                var (formatter, description) = await DocumentFormatters.ChooseAsync(request.FilePath, languageName, request.WorkspaceRoot, cancellationToken).ConfigureAwait(false);
+                if (formatter is not null)
+                {
+                    by = formatter.Title;
+                    string text = await formatter.FormatAsync(request, cancellationToken).ConfigureAwait(false);
+                    return (Shell.LineEdits.Between(snapshot, text, lineLimit), null, null, by);
+                }
+
+                if (session is null)
+                {
+                    // Nothing formats it here: said when the user asked, quiet on save.
+                    return ([], automatic ? null : $"Not formatted: {(description.Length > 0 ? description : "no formatter applies here")}", null, null);
+                }
+            }
+
+            return (await session!.FormatAsync(snapshot, 0, -1, cancellationToken).ConfigureAwait(false), null, null, null);
         }
         catch (FormatException malformed)
         {
-            return ([], $"Not formatted: {malformed.Message}", null);
+            return ([], $"Not formatted: {malformed.Message}", null, by);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
-            return ([], $"Not formatted: the formatter failed ({error.Message})", error);
+            return ([], $"Not formatted: {(by is null ? "the formatter" : by)} failed ({error.Message})", error, by);
         }
     }
 
@@ -675,7 +727,40 @@ public sealed partial class EditorModel
     private void SetDiagnostics(EditorDiagnostic[] diagnostics)
     {
         // The owner's crash report hunt (2026-10-31): whatever arrives, the diagnostics shown lie inside the current text.
-        diagnostics = ClampTo(diagnostics, Snapshot.Length);
+        _semanticDiagnostics = ClampTo(diagnostics, Snapshot.Length);
+        JoinDiagnostics(always: true);
+    }
+
+    // W, contract 6: the language's diagnostics joined with what plug-ins published for the document (both sorted by
+    // position), once the published ones are in the current text's positions (an edit moves them right after this one).
+    private void JoinDiagnostics(bool always = false)
+    {
+        var published = _published is { } shared && shared.TextVersion == Snapshot.Version ? shared.All : [];
+        EditorDiagnostic[] diagnostics;
+        if (published.IsEmpty)
+        {
+            diagnostics = _semanticDiagnostics;
+        }
+        else
+        {
+            var own = _semanticDiagnostics;
+            diagnostics = new EditorDiagnostic[own.Length + published.Length];
+            int a = 0, b = 0, at = 0;
+            while (a < own.Length || b < published.Length)
+            {
+                bool takeOwn = b >= published.Length
+                    || (a < own.Length && (own[a].Start < published[b].Start || (own[a].Start == published[b].Start && own[a].Length <= published[b].Length)));
+                diagnostics[at++] = takeOwn ? own[a++] : published[b++];
+            }
+
+            diagnostics = ClampTo(diagnostics, Snapshot.Length);
+        }
+
+        if (!always && ReferenceEquals(diagnostics, _diagnostics))
+        {
+            return;
+        }
+
         _diagnostics = diagnostics;
         int longest = 0;
         int errors = 0;
@@ -709,9 +794,9 @@ public sealed partial class EditorModel
             _history.RemoveRange(0, _history.Count - MaxHistory);
         }
 
-        if (_diagnostics.Length > 0)
+        if (_semanticDiagnostics.Length > 0)
         {
-            var mapped = MapThrough(_diagnostics, edits);
+            var mapped = MapThrough(_semanticDiagnostics, edits);
             SetDiagnostics(mapped);
         }
 
@@ -761,6 +846,31 @@ public sealed partial class EditorModel
     }
 
     private void OnSessionDiagnosticsChanged(object? sender, EventArgs e) => Post(ApplyDiagnostics);
+
+    // W, contract 6: what plug-ins published for this document (shared by its editors), joined with the language's own.
+    private void AttachPublishedDiagnostics()
+    {
+        _published = DocumentDiagnostics.Of(_document);
+        _published.Changed += OnPublishedDiagnosticsChanged;
+        JoinDiagnostics();
+    }
+
+    private void DetachPublishedDiagnostics()
+    {
+        if (_published is { } published)
+        {
+            published.Changed -= OnPublishedDiagnosticsChanged;
+            _published = null;
+        }
+    }
+
+    private void OnPublishedDiagnosticsChanged(object? sender, EventArgs e)
+    {
+        if (!_disposed)
+        {
+            JoinDiagnostics();
+        }
+    }
 
     /// <summary>The keys of the semantic layer (completion's own while its list is open first); true when handled.</summary>
     private bool OnSemanticKey(EditorKey key, KeyModifiers modifiers)

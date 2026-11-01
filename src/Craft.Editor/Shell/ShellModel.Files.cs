@@ -365,13 +365,13 @@ public sealed partial class ShellModel
     {
         if (EditorContextMenus.Target is { Item: DocumentTab tab } && EditorOf?.Invoke(tab) is { } editor)
         {
-            return editor.FormattingSession is not null;
+            return editor.CanFormat;
         }
 
         var file = TargetFile() ?? (TargetTab() is { } active && EditorContextMenus.Target is null ? active.FilePath : null);
         if (file is null)
         {
-            return TargetTab() is { } shown && EditorOf?.Invoke(shown)?.FormattingSession is not null;
+            return TargetTab() is { } shown && EditorOf?.Invoke(shown)?.CanFormat == true;
         }
 
         return LanguageFor(file) is not null;
@@ -400,7 +400,7 @@ public sealed partial class ShellModel
             return;
         }
 
-        if (editor.FormattingSession is null)
+        if (!editor.CanFormat)
         {
             Host.ShowStatus("Format file", $"{tab.Title}: its language has no formatter.", NotificationSeverity.Warning);
             return;

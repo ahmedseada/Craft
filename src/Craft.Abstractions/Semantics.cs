@@ -96,6 +96,12 @@ public readonly record struct EditorDiagnostic(int Start, int Length, Diagnostic
 {
     /// <summary>The end (exclusive).</summary>
     public int End => Start + Length;
+
+    /// <summary>
+    /// Who published it (W, contract 6: a plug-in's tool, "eslint", through <see cref="IEditorHost.PublishDiagnostics"/>,
+    /// whose <see cref="Id"/> then reads "eslint(no-unused-vars)"), or null for the language's own.
+    /// </summary>
+    public string? Source { get; init; }
 }
 
 /// <summary>A snapshot's diagnostics, in order of position: the snapshot they were computed for travels with them.</summary>

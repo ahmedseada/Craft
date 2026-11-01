@@ -217,6 +217,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.Notice += (_, text) => _status!.Notice.Text = text;
         _host.PanelShowRequested += OnPanelShowRequested;
         _host.PanelsChanged += OnHostPanelsChanged;
+        _host.PublishedDiagnosticsChanged += OnPublishedDiagnosticsChanged;     // W: closed files' problems from plug-ins
         _host.PendingChordChanged += OnPendingChordChanged;
         _host.SelectionRequested += OnSelectionRequested;
         // A plug-in's IEditorHost.OpenExternalAsync (the learning plug-in's folder): the system's own launcher, any platform.
@@ -553,6 +554,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.PanelShowRequested -= OnPanelShowRequested;
         _host.PanelsChanged -= OnHostPanelsChanged;
+        _host.PublishedDiagnosticsChanged -= OnPublishedDiagnosticsChanged;
         _host.PendingChordChanged -= OnPendingChordChanged;
         _host.SelectionRequested -= OnSelectionRequested;
         _conversationCommands?.Dispose();
@@ -1080,6 +1082,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         return view;
     }
 
+    private void OnPublishedDiagnosticsChanged(object? sender, EventArgs e) => UpdateProblems();
+
     private void OnHostPanelsChanged(object? sender, EventArgs e)
     {
         foreach (var (id, view) in _sideViews.ToArray())
@@ -1132,6 +1136,14 @@ public sealed class ShellPage : ContentPage, IDisposable
     // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
     private void OnCodeActionRequested(ProblemItem item, string kind)
     {
+        if (item.Group.Owner is ClosedProblemFile closed)
+        {
+            // W: a closed file's row has no text to act on: the file opens at its place, its problems then on its text.
+            OnProblemChosen(item);
+            _status.Notice.Text = $"Opened {Path.GetFileName(closed.Path)}: its problems are on its text now; {kind} from its row again.";
+            return;
+        }
+
         if (item.Group.Owner is DocumentTab owner && !ReferenceEquals(owner, _shell.Tabs.Active) && _shell.Groups.GroupOf(owner) is { } ownerGroup)
         {
             ownerGroup.Tabs.Activate(owner);                // a row of another file: its file first (its group focused)
@@ -2097,7 +2109,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         var listed = new HashSet<ITextDocument>(ReferenceEqualityComparer.Instance);
         foreach (var tab in _shell.Groups.AllTabs)
         {
-            if (tab.View is EditorView { Model: { } open } && open.SemanticSession is not null && listed.Add(tab.Document))
+            // W, contract 6: a document with plug-ins' diagnostics only (a linted .ts) is listed too.
+            if (tab.View is EditorView { Model: { } open } && (open.SemanticSession is not null || open.Diagnostics.Length > 0) && listed.Add(tab.Document))
             {
                 sources.Add(new ProblemSource(tab.FilePath ?? tab.Title, tab.Title, open.Snapshot, open.Diagnostics.ToArray(), tab));
             }
@@ -2109,15 +2122,23 @@ public sealed class ShellPage : ContentPage, IDisposable
             sources.Add(new ProblemSource(file.Path + "|run", Path.GetFileName(file.Path) + " (build)", file.Snapshot, [.. file.Diagnostics], file));
         }
 
+        // W, contract 6: closed files' published diagnostics, by line and column (no file read).
+        foreach (var file in _host.ClosedProblemFiles)
+        {
+            sources.Add(ProblemSource.ForClosedFile(file.Path, file.Diagnostics, file));
+        }
+
         _bottom.ShowProblems(sources, model, _shell.Tabs.Active?.Title);
-        _status.Problems.Text = model?.SemanticSession is null ? "" : ShellText.Problems(model.ErrorCount, model.WarningCount);
+        _status.Problems.Text = model is null || (model.SemanticSession is null && model.Diagnostics.Length == 0) ? "" : ShellText.Problems(model.ErrorCount, model.WarningCount);
         _status.Problems.TextColor = model is { ErrorCount: > 0 } ? _palette.Error : _palette.Warning;
         var card = ShellText.Semantic(model);
         _workspaceNotices.Observe(model);
         _status.Semantic.Text = card?.StatusBarText ?? "";
         _status.Semantic.TextColor = card is { IsFailed: true } ? _palette.Error : _palette.Secondary;
         ToolTipProperties.SetText(_status.Semantic, card is { IsFailed: true } ? card.Tooltip + " (a click shows the notification)" : card?.Tooltip ?? "");
-        ToolTipProperties.SetText(_status.Language, card is null ? "The file's language and the plug-in that brings it" : "The file's language and the plug-in that brings it · " + card.Tooltip);
+        string formatter = ShellText.FormatterTooltip(model);
+        ToolTipProperties.SetText(_status.Language, card is null ? "The file's language and the plug-in that brings it · " + formatter
+            : "The file's language and the plug-in that brings it · " + formatter + " · " + card.Tooltip);
     }
 
     private void OnProblemChosen(ProblemItem item)
@@ -2125,6 +2146,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         if (item.Group.Owner is Craft.Editor.Run.RunProblemFile built)
         {
             _ = OpenRunProblemAsync(built.Path, item.Line, item.Column);
+            return;
+        }
+
+        if (item.Group.Owner is ClosedProblemFile closed)
+        {
+            _ = OpenRunProblemAsync(closed.Path, item.Line, item.Column);  // W: a closed file's problem opens it at its line and column
             return;
         }
 

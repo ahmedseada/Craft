@@ -1195,6 +1195,8 @@ public sealed class EditorRenderer : IDisposable
         }
 
         string message = diagnostics[best].Message;
+        // W, contract 6: a published diagnostic says whose it is after its message ("… eslint(no-unused-vars)").
+        string? tag = diagnostics[best].Source is null ? null : diagnostics[best].Id;
         int room = (int)MathF.Floor((right - Math.Max(x, textLeft)) / cell);
         if (x >= right || room < MinInlineColumns || string.IsNullOrEmpty(message))
         {
@@ -1212,7 +1214,7 @@ public sealed class EditorRenderer : IDisposable
         int hiddenLeft = x < textLeft ? (int)MathF.Ceiling((textLeft - x) / cell) : 0;
         int columns = room + hiddenLeft;
         string shown;
-        if (breakAt < 0 && message.Length <= columns)
+        if (tag is null && breakAt < 0 && message.Length <= columns)
         {
             shown = message;
         }
@@ -1222,7 +1224,8 @@ public sealed class EditorRenderer : IDisposable
         }
         else
         {
-            shown = first.Length <= columns ? first.ToString() : string.Concat(first[..Math.Max(0, columns - 1)], "\u2026");
+            string full = tag is null ? first.ToString() : string.Concat(first, "  ", tag);
+            shown = full.Length <= columns ? full : string.Concat(full.AsSpan(0, Math.Max(0, columns - 1)), "\u2026");
             _inlineTexts[index] = (message, columns, shown);
         }
 

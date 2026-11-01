@@ -20,6 +20,7 @@
     <Project Path="plugins/Craft.Plugins.Git/Craft.Plugins.Git.csproj" />
     <Project Path="plugins/Craft.Plugins.Json/Craft.Plugins.Json.csproj" />
     <Project Path="plugins/Craft.Plugins.Npm/Craft.Plugins.Npm.csproj" />
+    <Project Path="plugins/Craft.Plugins.Lint/Craft.Plugins.Lint.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />

@@ -1647,6 +1647,13 @@ static class Craft.Editor.Shell.GitBranch
 enum Craft.Editor.Shell.GroupOrientation : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Column = 1
   Row = 0
+sealed class Craft.Editor.Shell.IconPathCache<TPath>
+  System.Int32 Count { get; }
+  System.Int32 Limit { get; }
+  System.Int32 Parses { get; }
+  System.Void Clear()
+  TPath Get(Craft.Abstractions.FileIconShape shape, Craft.Abstractions.FileIconLayer layer, System.Single size)
+  ctor(System.Func<System.String, System.Single, TPath> build, System.Int32 limit = 4096)
 enum Craft.Editor.Shell.InteractionKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Chip = 7
   Flat = 0
@@ -2022,6 +2029,7 @@ enum Craft.Editor.Shell.PluginState : System.IComparable, System.IConvertible, S
   Outdated = 1
   Problem = 2
 sealed class Craft.Editor.Shell.ProblemGroup
+  Craft.Abstractions.FileIcon Icon { get; }
   System.Boolean Collapsed { get; }
   System.Collections.Generic.List<Craft.Editor.Shell.ProblemItem> Items { get; }
   System.Object Owner { get; }
@@ -2402,6 +2410,7 @@ static class Craft.Editor.Shell.ShellMenus
 sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Abstractions.ContextMenuTarget DescribeMenuTarget(Craft.Abstractions.ContextMenuTarget target)
   Craft.Abstractions.FileSettings CachedFileSettings(System.String path)
+  Craft.Abstractions.ILanguage LanguageFor(System.String path)
   Craft.Abstractions.ITheme Theme { get; }
   Craft.Abstractions.SourceControlFile FileState(System.String path)
   Craft.Abstractions.SourceControlStatus SourceControl { get; }
@@ -2513,6 +2522,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Void OnConfigurationFileChanged(System.String path)
   System.Void OnMemoryPressure(Craft.Abstractions.MemoryPressureLevel level)
   System.Void ReloadOptions()
+  System.Void RepickLanguages()
   System.Void ShowSettings(System.String section = null)
   System.Void ShowWelcome()
   System.Void ToggleTheme()

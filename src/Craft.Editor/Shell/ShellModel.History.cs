@@ -241,6 +241,7 @@ public sealed partial class ShellModel
             {
                 Glyph = icon.Badge,
                 GlyphArgb = icon.Argb,
+                FileIcon = icon,
                 Badge = rows.Count.ToString(CultureInfo.InvariantCulture),
                 Tooltip = path,
             }])

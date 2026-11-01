@@ -88,6 +88,15 @@ public sealed record CraftOptions
 
     /// <summary>The folder names a workspace skips by default.</summary>
     public static IReadOnlyList<string> DefaultWorkspaceIgnore { get; } = ["bin", "obj", ".git", ".vs", "node_modules", "test-output"];
+
+    /// <summary>
+    /// Whether the folder tree shows the folders the workspace skips (<see cref="WorkspaceIgnore"/>: node_modules, bin, obj,
+    /// .git), dimmed and closed, which are still never indexed or searched (W; <c>CRAFT_WORKSPACE_SHOW_IGNORED</c>).
+    /// </summary>
+    public bool WorkspaceShowIgnored { get; init; } = true;
+
+    /// <summary>The file and folder icons' theme (W; <c>CRAFT_ICON_THEME</c>): "craft", Craft's own, or one a plug-in registered.</summary>
+    public string IconTheme { get; init; } = "craft";
     /// <summary>Milliseconds between the caret's blinks; 0 shows it solid (<c>CRAFT_CARET_BLINK_MS</c>).</summary>
     public int CaretBlinkMilliseconds { get; init; } = 530;
 
@@ -814,6 +823,7 @@ public sealed record CraftOptions
         new("CRAFT_TAB_SIZE", "4", "The columns a tab spans.") { Shape = SettingShape.Whole(SettingSections.Editor, "Tab size", 1, 32, "columns", "Typing") },
         new("CRAFT_INSERT_SPACES", "true", "Whether Tab inserts spaces rather than a tab character.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Insert spaces for Tab", "Typing") },
         new("CRAFT_THEME", "dark", "The theme's name (dark, light, or a registered one).") { Shape = SettingShape.From(SettingSections.Appearance, "Theme", SettingChoiceSources.Themes, null, false, "Theme") },
+        new("CRAFT_ICON_THEME", "craft", "The file and folder icons' theme: craft (Craft's own), or one a plug-in registered.") { Shape = SettingShape.From(SettingSections.Appearance, "File icon theme", SettingChoiceSources.IconThemes, null, false, "Theme") },
         new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off.") { Shape = SettingShape.Whole(SettingSections.Files, "Autosave a recovery copy every", 0, 86_400, "s", "Recovery") },
         new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step.") { Shape = SettingShape.Whole(SettingSections.Editor, "Undo groups typing paused less than", 0, 60_000, "ms", "Typing", step: 100) },
         new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept.") { Shape = SettingShape.PathTo(SettingSections.Files, "Recovery folder", "Recovery") },
@@ -823,6 +833,7 @@ public sealed record CraftOptions
         new("CRAFT_PLUGIN_FOLDERS", "(none)", "Folders of user plug-ins (a Name/Name.dll folder each), loaded after the app's own; separated by ';'.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Plug-in folders", "Loading") },
         new("CRAFT_PLUGINS_DISABLED", "(none)", "Plug-ins not loaded, by folder name (Craft.CSharp), the pre-installed ones included; separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Disabled plug-ins", "Loading") },
         new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','.") { Shape = SettingShape.ListOf(SettingSections.Files, "Folders the workspace skips", "Workspace") },
+        new("CRAFT_WORKSPACE_SHOW_IGNORED", "true", "Whether the explorer shows the folders the workspace skips (node_modules, bin, obj), dimmed and closed; they are never indexed or searched.") { Shape = SettingShape.Toggle(SettingSections.Files, "Show skipped folders in the explorer, dimmed", "Workspace") },
         new("CRAFT_CARET_BLINK_MS", "530", "Milliseconds between the caret's blinks; 0 shows it solid.") { Shape = SettingShape.Whole(SettingSections.Editor, "Caret blink", 0, 10_000, "ms", "Caret", step: 10) },
         new("CRAFT_CARET_WIDTH", "2", "The caret bar's width, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Editor, "Caret width", 0.5, 50, 0.5, "units", "Caret") },
         new("CRAFT_DOUBLE_CLICK_MS", "500", "Clicks closer in time than this count as a double or triple click.") { Shape = SettingShape.Whole(SettingSections.Editor, "Double-click time", 0, 10_000, "ms", "Mouse", step: 10) },
@@ -1039,6 +1050,16 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_INSERT_SPACES") is { } spaces)
         {
             options = options with { InsertSpaces = Flag(spaces, "CRAFT_INSERT_SPACES") };
+        }
+
+        if (Text(read, "CRAFT_ICON_THEME") is { } iconTheme)
+        {
+            options = options with { IconTheme = iconTheme };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_SHOW_IGNORED") is { } showIgnored)
+        {
+            options = options with { WorkspaceShowIgnored = Flag(showIgnored, "CRAFT_WORKSPACE_SHOW_IGNORED") };
         }
 
         if (Text(read, "CRAFT_THEME") is { } theme)

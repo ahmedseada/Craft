@@ -22,6 +22,7 @@ public sealed class ProblemGroup
         Key = key;
         Title = title;
         Owner = owner;
+        Icon = FileIcons.For(key);
     }
 
     /// <summary>Its source's key.</summary>
@@ -29,6 +30,9 @@ public sealed class ProblemGroup
 
     /// <summary>Its title.</summary>
     public string Title { get; }
+
+    /// <summary>Its file's icon (W: the tree's, by the file's name), drawn before the header.</summary>
+    public FileIcon Icon { get; }
 
     /// <summary>Its source's owner.</summary>
     public object? Owner { get; internal set; }
@@ -336,6 +340,8 @@ public sealed class ProblemsList : PanelList
         var text = new TextStyle(colors.Text);
         var quiet = new TextStyle(colors.SecondaryText);
         canvas.FillRect(0, 0, width, height, colors.Surface);
+        bool dark = ColorContrast.Luminance(colors.Surface) < 0.18;
+        float icon = MathF.Min(metrics.LineHeight, 16);
         var (first, last) = Visible(metrics, scrollY, height);
         for (int index = first; index <= last; index++)
         {
@@ -346,7 +352,8 @@ public sealed class ProblemsList : PanelList
                 case ProblemGroup group:
                     canvas.FillRect(0, top, width, rowHeight, RowFill(colors, index == Hover, false));
                     canvas.DrawText(group.Collapsed ? "▸" : "▾", cell, y, quiet);
-                    canvas.DrawText(group.Header, 3 * cell, y, text);
+                    FileIconDrawing.Draw(canvas, group.Icon, 3 * cell, top + ((rowHeight - icon) / 2), icon, false, dark);
+                    canvas.DrawText(group.Header, (4 * cell) + icon, y, text);
                     break;
                 case ProblemItem item:
                     bool picked = Selection.Contains(item);

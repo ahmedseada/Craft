@@ -675,7 +675,7 @@ public sealed class BreadcrumbView : ContentView
     private const string Separator = "›";
     private readonly HorizontalStackLayout _parts = new() { Spacing = Gap, Padding = new Thickness(SidePadding, 0), VerticalOptions = LayoutOptions.Center };
     private readonly Dictionary<string, double> _widths = new(StringComparer.Ordinal);
-    private readonly List<(Label Label, string Key)> _labels = [];
+    private readonly List<(View Label, string Key)> _labels = [];
     private IReadOnlyList<BreadcrumbPart> _all = [];
     private ShellPalette _palette;
     private double _width;
@@ -835,17 +835,25 @@ public sealed class BreadcrumbView : ContentView
                 : _palette.Secondary;
             var label = _palette.Label(part.Text, color, _palette.SmallSize);
             label.Padding = new Thickness(2, 1);
-            _labels.Add((label, part.Text));
+            View shown = label;
+            if (part.Kind == BreadcrumbPartKind.File)
+            {
+                // W: the file's drawn icon before its name (the tree's and the tab's), measured with it.
+                var icon = FileIconView.Of(FileIcons.For(part.Path ?? part.Text), _palette, 14);
+                shown = new HorizontalStackLayout { Spacing = 4, VerticalOptions = LayoutOptions.Center, Children = { icon, label } };
+            }
+
+            _labels.Add((shown, part.Text));
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) => PartClicked?.Invoke(this, part.Target);
-            label.GestureRecognizers.Add(tap);
+            shown.GestureRecognizers.Add(tap);
             ToolTipProperties.SetText(label, part.Kind switch
             {
                 BreadcrumbPartKind.Ellipsis => string.Join(" › ", part.Folded.Select(f => f.Text)),
                 BreadcrumbPartKind.Symbol => $"{SymbolKinds.Word(part.Scope)} {part.Text}: its siblings ('@')",
                 _ => part.Path is { } path ? path + ": its entries" : part.Text,
             });
-            _parts.Children.Add(label);
+            _parts.Children.Add(shown);
         }
     }
 }

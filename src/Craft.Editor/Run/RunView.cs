@@ -1340,6 +1340,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                     Badge = rows.Count.ToString(Culture),
                     Glyph = icon.Badge,
                     GlyphArgb = icon.Argb,
+                    FileIcon = icon,
                     Tooltip = provider.Summary,
                 });
             }

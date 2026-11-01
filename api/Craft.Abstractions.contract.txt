@@ -761,6 +761,7 @@ Craft.Abstractions.EditorKeyMaps  static System.Void Register(Craft.Abstractions
 Craft.Abstractions.EditorLanguages
 Craft.Abstractions.EditorLanguages  static Craft.Abstractions.ILanguage Find(System.ReadOnlySpan<System.Char> name)
 Craft.Abstractions.EditorLanguages  static Craft.Abstractions.ILanguage ForFile(System.String path)
+Craft.Abstractions.EditorLanguages  static Craft.Abstractions.ILanguage ForFile(System.String path, System.String workspaceRoot)
 Craft.Abstractions.EditorLanguages  static Craft.Abstractions.ILanguage Get(System.ReadOnlySpan<System.Char> name)
 Craft.Abstractions.EditorLanguages  static System.Boolean Unregister(System.String name)
 Craft.Abstractions.EditorLanguages  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ILanguage> All { get; }
@@ -883,6 +884,9 @@ Craft.Abstractions.EditorToolSets  static System.String Origin(System.String nam
 Craft.Abstractions.EditorToolSets  static System.Void Register(Craft.Abstractions.IEditorToolSet set)
 Craft.Abstractions.FileIcon
 Craft.Abstractions.FileIcon  Craft.Abstractions.FileIcon <Clone>$()
+Craft.Abstractions.FileIcon  Craft.Abstractions.FileIconShape OpenShape { get; init; }
+Craft.Abstractions.FileIcon  Craft.Abstractions.FileIconShape Shape { get; init; }
+Craft.Abstractions.FileIcon  Craft.Abstractions.FileIconShape ShapeFor(System.Boolean open)
 Craft.Abstractions.FileIcon  System.Boolean Equals(Craft.Abstractions.FileIcon other)
 Craft.Abstractions.FileIcon  System.Boolean Equals(System.Object obj)
 Craft.Abstractions.FileIcon  System.Int32 GetHashCode()
@@ -893,18 +897,78 @@ Craft.Abstractions.FileIcon  System.String Name { get; }
 Craft.Abstractions.FileIcon  System.String Summary { get; }
 Craft.Abstractions.FileIcon  System.String ToString()
 Craft.Abstractions.FileIcon  System.UInt32 Argb { get; init; }
+Craft.Abstractions.FileIcon  System.UInt32 BadgeArgb(System.Boolean dark)
+Craft.Abstractions.FileIcon  System.UInt32 LightArgb { get; init; }
 Craft.Abstractions.FileIcon  System.Void Deconstruct(out System.String Extension, out System.String Badge, out System.UInt32 Argb, out System.String Language)
 Craft.Abstractions.FileIcon  ctor(System.String Extension, System.String Badge, System.UInt32 Argb, System.String Language)
 Craft.Abstractions.FileIcon : Idrak.Abstraction.IKind
 Craft.Abstractions.FileIcon : System.IEquatable<Craft.Abstractions.FileIcon>
+Craft.Abstractions.FileIconDrawing
+Craft.Abstractions.FileIconDrawing  static System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Abstractions.FileIcon icon, System.Single x, System.Single top, System.Single size, System.Boolean open, System.Boolean dark)
+Craft.Abstractions.FileIconLayer
+Craft.Abstractions.FileIconLayer  Craft.Abstractions.FileIconLayer <Clone>$()
+Craft.Abstractions.FileIconLayer  System.Boolean Equals(Craft.Abstractions.FileIconLayer other)
+Craft.Abstractions.FileIconLayer  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.FileIconLayer  System.Int32 GetHashCode()
+Craft.Abstractions.FileIconLayer  System.Single StrokeWidth { get; init; }
+Craft.Abstractions.FileIconLayer  System.String Path { get; init; }
+Craft.Abstractions.FileIconLayer  System.String ToString()
+Craft.Abstractions.FileIconLayer  System.UInt32 Argb { get; init; }
+Craft.Abstractions.FileIconLayer  System.UInt32 ColorFor(System.Boolean dark)
+Craft.Abstractions.FileIconLayer  System.UInt32 LightArgb { get; init; }
+Craft.Abstractions.FileIconLayer  System.Void Deconstruct(out System.String Path, out System.UInt32 Argb)
+Craft.Abstractions.FileIconLayer  ctor(System.String Path, System.UInt32 Argb)
+Craft.Abstractions.FileIconLayer : System.IEquatable<Craft.Abstractions.FileIconLayer>
+Craft.Abstractions.FileIconShape
+Craft.Abstractions.FileIconShape  Craft.Abstractions.FileIconShape <Clone>$()
+Craft.Abstractions.FileIconShape  System.Boolean Equals(Craft.Abstractions.FileIconShape other)
+Craft.Abstractions.FileIconShape  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.FileIconShape  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIconLayer> Layers { get; init; }
+Craft.Abstractions.FileIconShape  System.Int32 GetHashCode()
+Craft.Abstractions.FileIconShape  System.Single ViewBox { get; init; }
+Craft.Abstractions.FileIconShape  System.String Problem()
+Craft.Abstractions.FileIconShape  System.String ToString()
+Craft.Abstractions.FileIconShape  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIconLayer> Layers)
+Craft.Abstractions.FileIconShape  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIconLayer> Layers)
+Craft.Abstractions.FileIconShape  static System.String Problem(System.String pathData)
+Craft.Abstractions.FileIconShape  static System.String Transform(System.String pathData, System.Single scale, System.Single dx, System.Single dy)
+Craft.Abstractions.FileIconShape : System.IEquatable<Craft.Abstractions.FileIconShape>
+Craft.Abstractions.FileIconTheme
+Craft.Abstractions.FileIconTheme  Craft.Abstractions.FileIcon ForFile(System.ReadOnlySpan<System.Char> fileName)
+Craft.Abstractions.FileIconTheme  Craft.Abstractions.FileIcon ForFolder(System.ReadOnlySpan<System.Char> folderName)
+Craft.Abstractions.FileIconTheme  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIcon> Files { get; }
+Craft.Abstractions.FileIconTheme  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIcon> Folders { get; }
+Craft.Abstractions.FileIconTheme  System.String Name { get; }
+Craft.Abstractions.FileIconTheme  System.String Summary { get; }
+Craft.Abstractions.FileIconTheme  ctor(System.String name, System.String summary, System.Collections.Generic.IEnumerable<Craft.Abstractions.FileIcon> files, System.Collections.Generic.IEnumerable<Craft.Abstractions.FileIcon> folders = null)
+Craft.Abstractions.FileIconTheme : Craft.Abstractions.IFileIconTheme
+Craft.Abstractions.FileIconTheme : Idrak.Abstraction.IKind
+Craft.Abstractions.FileIconThemes
+Craft.Abstractions.FileIconThemes  const System.String Craft = craft
+Craft.Abstractions.FileIconThemes  event System.EventHandler Changed
+Craft.Abstractions.FileIconThemes  static Craft.Abstractions.IFileIconTheme Active { get; }
+Craft.Abstractions.FileIconThemes  static Craft.Abstractions.IFileIconTheme Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.FileIconThemes  static Craft.Abstractions.IFileIconTheme Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.FileIconThemes  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.FileIconThemes  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.FileIconThemes  static System.String Current { get; }
+Craft.Abstractions.FileIconThemes  static System.Void Register(Craft.Abstractions.IFileIconTheme theme)
+Craft.Abstractions.FileIconThemes  static System.Void Use(System.String name)
 Craft.Abstractions.FileIcons
 Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon Find(System.ReadOnlySpan<System.Char> extension)
 Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon For(System.ReadOnlySpan<System.Char> path)
+Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon ForFolder(System.ReadOnlySpan<System.Char> name)
 Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon Get(System.ReadOnlySpan<System.Char> extension)
 Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon Plain { get; }
+Craft.Abstractions.FileIcons  static Craft.Abstractions.FileIcon PlainFolder { get; }
 Craft.Abstractions.FileIcons  static System.Boolean Unregister(System.String extension)
+Craft.Abstractions.FileIcons  static System.Boolean UnregisterFolder(System.String key)
+Craft.Abstractions.FileIcons  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIcon> All { get; }
+Craft.Abstractions.FileIcons  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIcon> AllFolders { get; }
+Craft.Abstractions.FileIcons  static System.Collections.Generic.IReadOnlyList<System.String> FolderNames { get; }
 Craft.Abstractions.FileIcons  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.FileIcons  static System.Void Register(Craft.Abstractions.FileIcon icon)
+Craft.Abstractions.FileIcons  static System.Void RegisterFolder(Craft.Abstractions.FileIcon icon)
 Craft.Abstractions.FileLineLinks
 Craft.Abstractions.FileLineLinks  System.Int32 Find(System.ReadOnlySpan<System.Char> line, System.Span<Craft.Abstractions.OutputLink> into)
 Craft.Abstractions.FileLineLinks  System.String Name { get; }
@@ -912,6 +976,24 @@ Craft.Abstractions.FileLineLinks  System.String Summary { get; }
 Craft.Abstractions.FileLineLinks  ctor()
 Craft.Abstractions.FileLineLinks : Craft.Abstractions.IOutputLinkDetector
 Craft.Abstractions.FileLineLinks : Idrak.Abstraction.IKind
+Craft.Abstractions.FilePatternKind
+Craft.Abstractions.FilePatternKind  Extension = 3
+Craft.Abstractions.FilePatternKind  Glob = 2
+Craft.Abstractions.FilePatternKind  Name = 0
+Craft.Abstractions.FilePatternKind  Suffix = 1
+Craft.Abstractions.FilePatternKind : System.IComparable
+Craft.Abstractions.FilePatternKind : System.IConvertible
+Craft.Abstractions.FilePatternKind : System.IFormattable
+Craft.Abstractions.FilePatternKind : System.ISpanFormattable
+Craft.Abstractions.FilePatternTable<T>
+Craft.Abstractions.FilePatternTable<T>  System.Int32 Count { get; }
+Craft.Abstractions.FilePatternTable<T>  T Find(System.ReadOnlySpan<System.Char> fileName)
+Craft.Abstractions.FilePatternTable<T>  T FindForPath(System.ReadOnlySpan<System.Char> path)
+Craft.Abstractions.FilePatternTable<T>  ctor(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<System.String, T>> entries)
+Craft.Abstractions.FilePatternTable<T>  static Craft.Abstractions.FilePatternKind KindOf(System.ReadOnlySpan<System.Char> pattern)
+Craft.Abstractions.FilePatternTable<T>  static Craft.Abstractions.FilePatternTable<T> Empty { get; }
+Craft.Abstractions.FilePatternTable<T>  static System.Boolean GlobMatches(System.ReadOnlySpan<System.Char> pattern, System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.FilePatternTable<T>  static System.Int32 RankOf(System.ReadOnlySpan<System.Char> pattern)
 Craft.Abstractions.FileSettings
 Craft.Abstractions.FileSettings  Craft.Abstractions.FileSettings <Clone>$()
 Craft.Abstractions.FileSettings  Craft.Abstractions.FileSettings Over(Craft.Abstractions.FileSettings under)
@@ -1231,6 +1313,10 @@ Craft.Abstractions.IEditorViewPanel
 Craft.Abstractions.IEditorViewPanel  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
 Craft.Abstractions.IEditorViewPanel  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorViewPanel : Craft.Abstractions.IEditorPanel
+Craft.Abstractions.IFileIconTheme
+Craft.Abstractions.IFileIconTheme  Craft.Abstractions.FileIcon ForFile(System.ReadOnlySpan<System.Char> fileName)
+Craft.Abstractions.IFileIconTheme  Craft.Abstractions.FileIcon ForFolder(System.ReadOnlySpan<System.Char> folderName)
+Craft.Abstractions.IFileIconTheme : Idrak.Abstraction.IKind
 Craft.Abstractions.IFileSettingsProvider
 Craft.Abstractions.IFileSettingsProvider  Craft.Abstractions.FileSettings Cached(System.String path)
 Craft.Abstractions.IFileSettingsProvider  System.Boolean IsConfigurationFile(System.String path)
@@ -1248,6 +1334,8 @@ Craft.Abstractions.IFormattingLanguageSession
 Craft.Abstractions.IFormattingLanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.IFormattingLanguageSession : Craft.Abstractions.ILanguageSession
 Craft.Abstractions.IFormattingLanguageSession : System.IDisposable
+Craft.Abstractions.IIconCanvas
+Craft.Abstractions.IIconCanvas  System.Boolean DrawIcon(Craft.Abstractions.FileIcon icon, System.Single x, System.Single y, System.Single size, System.Boolean open, System.Boolean dark)
 Craft.Abstractions.IInlineCompletionProvider
 Craft.Abstractions.IInlineCompletionProvider  System.Boolean Accepts(Craft.Abstractions.InlineCompletionRequest request)
 Craft.Abstractions.IInlineCompletionProvider  System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.InlineCompletionPiece> CompleteAsync(Craft.Abstractions.InlineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
@@ -1262,9 +1350,14 @@ Craft.Abstractions.ILanguage  Craft.Abstractions.ILanguageSession Open(Craft.Abs
 Craft.Abstractions.ILanguage  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
 Craft.Abstractions.ILanguage  Craft.Abstractions.LanguageRules Rules { get; }
 Craft.Abstractions.ILanguage  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+Craft.Abstractions.ILanguage  System.Collections.Generic.IReadOnlyList<System.String> FilePatterns { get; }
 Craft.Abstractions.ILanguage  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindSymbolsAsync(System.String workspaceRoot, System.String query, System.Int32 maxResults, Craft.Abstractions.LanguageSettings settings, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ILanguage  System.Void ReleaseMemory()
 Craft.Abstractions.ILanguage : Idrak.Abstraction.IKind
+Craft.Abstractions.ILanguageSelector
+Craft.Abstractions.ILanguageSelector  Craft.Abstractions.ILanguage Select(System.String path, System.String workspaceRoot)
+Craft.Abstractions.ILanguageSelector  System.Threading.Tasks.Task PrepareAsync(System.String workspaceRoot, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ILanguageSelector : Idrak.Abstraction.IKind
 Craft.Abstractions.ILanguageSession
 Craft.Abstractions.ILanguageSession  Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
 Craft.Abstractions.ILanguageSession  System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
@@ -1575,6 +1668,14 @@ Craft.Abstractions.LanguageRules  System.Void Deconstruct(out System.String Line
 Craft.Abstractions.LanguageRules  ctor(System.String LineComment, System.String BlockCommentOpen, System.String BlockCommentClose, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.BracketPair> Brackets)
 Craft.Abstractions.LanguageRules  static Craft.Abstractions.LanguageRules Plain { get; }
 Craft.Abstractions.LanguageRules : System.IEquatable<Craft.Abstractions.LanguageRules>
+Craft.Abstractions.LanguageSelectors
+Craft.Abstractions.LanguageSelectors  static Craft.Abstractions.ILanguageSelector Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.LanguageSelectors  static Craft.Abstractions.ILanguageSelector Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.LanguageSelectors  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.LanguageSelectors  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ILanguageSelector> All { get; }
+Craft.Abstractions.LanguageSelectors  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.LanguageSelectors  static System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.String>> PrepareAsync(System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.LanguageSelectors  static System.Void Register(Craft.Abstractions.ILanguageSelector selector)
 Craft.Abstractions.LanguageSettings
 Craft.Abstractions.LanguageSettings  Craft.Abstractions.LanguageSettings <Clone>$()
 Craft.Abstractions.LanguageSettings  System.Boolean Equals(Craft.Abstractions.LanguageSettings other)
@@ -2371,6 +2472,7 @@ Craft.Abstractions.PanelQuery : Craft.Abstractions.PanelBlock
 Craft.Abstractions.PanelQuery : System.IEquatable<Craft.Abstractions.PanelBlock>
 Craft.Abstractions.PanelQuery : System.IEquatable<Craft.Abstractions.PanelQuery>
 Craft.Abstractions.PanelResultGroup
+Craft.Abstractions.PanelResultGroup  Craft.Abstractions.FileIcon FileIcon { get; init; }
 Craft.Abstractions.PanelResultGroup  Craft.Abstractions.PanelResultGroup <Clone>$()
 Craft.Abstractions.PanelResultGroup  System.Boolean Collapsed { get; init; }
 Craft.Abstractions.PanelResultGroup  System.Boolean Equals(Craft.Abstractions.PanelResultGroup other)
@@ -2833,6 +2935,7 @@ Craft.Abstractions.SettingChoiceSources
 Craft.Abstractions.SettingChoiceSources  const System.String Accents = accents
 Craft.Abstractions.SettingChoiceSources  const System.String FolderWatchers = folderWatchers
 Craft.Abstractions.SettingChoiceSources  const System.String Fonts = fonts
+Craft.Abstractions.SettingChoiceSources  const System.String IconThemes = iconThemes
 Craft.Abstractions.SettingChoiceSources  const System.String InlineCompletion = inlineCompletion
 Craft.Abstractions.SettingChoiceSources  const System.String KeyMaps = keymaps
 Craft.Abstractions.SettingChoiceSources  const System.String MemoryMonitors = memoryMonitors

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using Craft.Abstractions;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
@@ -150,7 +151,9 @@ public sealed class WelcomeView : ContentView, IDisposable
                 Padding = new Thickness(6, 2),
                 MinimumHeightRequest = 28,
             };
-            row.Add(name, 0, 0);
+            // W: the folder's drawn icon before its name (the tree's, by its name).
+            var named = new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { FileIconView.Of(FileIcons.ForFolder(folder.Name), p, 16), name } };
+            row.Add(named, 0, 0);
             row.Add(place, 1, 0);
             row.Add(remove, 2, 0);
             ToolTipProperties.SetText(row, path);

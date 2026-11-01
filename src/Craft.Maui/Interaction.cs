@@ -512,22 +512,19 @@ public sealed class MenuView : ContentView
 
         if (MenuIcons.FileOf(icon) is { } file)
         {
-            var type = FileIcons.For(file);
-            return new Label
-            {
-                Text = type.Badge,
-                TextColor = ThemeColors.Of(type.Argb),
-                FontSize = 10,
-                FontAttributes = FontAttributes.Bold,
-                WidthRequest = IconSize + 4,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.Start,
-                InputTransparent = true,
-            };
+            // W: the file type's drawn icon (the tree's), in the theme's darkness (read off the row's colour).
+            bool dark = ColorContrast.Luminance(ColorArgb(color)) > 0.18;
+            return new FileIconView(IconSize) { Icon = FileIcons.For(file), Dark = dark, HorizontalOptions = LayoutOptions.Start };
         }
 
         return new StrokeIcon(icon, IconSize, 1.5) { Color = color, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Start };
+    }
+
+    // A MAUI colour as 0xAARRGGBB.
+    private static uint ColorArgb(Color color)
+    {
+        color.ToRgba(out byte r, out byte g, out byte b, out byte a);
+        return ((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
     }
 
     // The pointer on a row: the keyboard's row follows it; resting on a row with a submenu opens it, on another closes

@@ -385,7 +385,12 @@ public sealed partial class PanelBlocksView
                     Column(new StrokeIcon(group.Collapsed ? "M9 6l6 6l-6 6" : "M6 9l6 6l6-6", 12) { Color = p.Secondary, VerticalOptions = LayoutOptions.Center, InputTransparent = true }, new GridLength(14));
                 }
 
-                if (group.Glyph is { } glyph)
+                if (group.FileIcon is { } fileIcon)
+                {
+                    // W: the file's drawn icon (the tree's).
+                    Column(FileIconView.Of(fileIcon, p, 15), GridLength.Auto);
+                }
+                else if (group.Glyph is { } glyph)
                 {
                     var badge = p.Label(glyph, ThemeColors.Of(group.GlyphArgb), p.CaptionSize, FontWeight.SemiBold);
                     badge.VerticalOptions = LayoutOptions.Center;

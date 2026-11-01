@@ -99,7 +99,7 @@ public sealed partial class ShellModel
         string? language = target.Language ?? (target.Item is DocumentTab tab ? tab.Language?.Name : null);
         if (language is null && !isFolder && path is not null)
         {
-            language = EditorLanguages.ForFile(path)?.Name;
+            language = LanguageFor(path)?.Name;
         }
 
         IReadOnlyList<string> kinds = [];
@@ -374,7 +374,7 @@ public sealed partial class ShellModel
             return TargetTab() is { } shown && EditorOf?.Invoke(shown)?.FormattingSession is not null;
         }
 
-        return EditorLanguages.ForFile(file) is not null;
+        return LanguageFor(file) is not null;
     }
 
     // Format file: the file opened first when it is not (in the focused group), then formatted by its editor off the UI

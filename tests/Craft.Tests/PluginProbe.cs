@@ -60,6 +60,20 @@ internal static class PluginProbe
     /// </summary>
     public static int RunInstalled(string root)
     {
+        // B5: Idrak's LibraryDefaults loaded every library it knows by name, so each one the program lacks threw a
+        // first-chance FileNotFoundException (13 in the owner's trail); it now loads only those the program has.
+        var probes = new List<string>();
+        AppDomain.CurrentDomain.FirstChanceException += (_, e) =>
+        {
+            if (e.Exception is FileNotFoundException or FileLoadException && Environment.StackTrace.Contains("LibraryDefaults", StringComparison.Ordinal))
+            {
+                lock (probes)
+                {
+                    probes.Add((e.Exception as FileNotFoundException)?.FileName ?? e.Exception.Message);
+                }
+            }
+        };
+
         foreach (var result in CraftPlugins.LoadInstalled(new CraftOptions { PluginFolders = [root] }))
         {
             Console.WriteLine($"plugin {result.Name}: {result.Loaded} {result.Error}");
@@ -77,6 +91,11 @@ internal static class PluginProbe
         Console.WriteLine("tool sets: " + string.Join(", ", EditorToolSets.Names));
         Console.WriteLine("idrak plugins: " + string.Join(", ", Idrak.Abstraction.Plugins.IdrakPlugins.Names.Order(StringComparer.Ordinal)
             .Select(n => $"{n}={Idrak.Abstraction.Plugins.IdrakPlugins.Find(n)?.GetType().Assembly.GetName().Name}")));
+        lock (probes)
+        {
+            Console.WriteLine($"library probes that threw: {probes.Count} {string.Join(", ", probes)}".TrimEnd());
+        }
+
         return 0;
     }
 

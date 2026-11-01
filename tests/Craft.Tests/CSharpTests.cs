@@ -676,6 +676,8 @@ public static class PluginTests
         }
 
         Check.True(Line("tool sets:").Contains("editor", StringComparison.Ordinal), $"the tools plug-in's set \"editor\" is registered ({Line("tool sets:")})");
+        Check.Equal("library probes that threw: 0", Line("library probes that threw:"),
+            "loading the pre-installed plug-ins makes Idrak's LibraryDefaults load only the libraries the program has: no first-chance FileNotFoundException for one it lacks (B5)");
     }
 
     /// <summary>

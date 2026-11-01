@@ -3360,6 +3360,54 @@ Also in the trail, for the slots: `WindowsShellPlatform.RouteKeys` threw "The wi
 (hook the keys once the page appeared), a WinRT `InvalidOperationException` at start, and three 0.2-0.3 s "unlabelled UI
 work" stalls at start-up (the plug-ins' rail, menus and models; the window's resize) still to label and move off.
 
+### B5 as built (2026-11-01)
+
+Learning never needed Idrak.Audio or Vision. Two causes were Idrak's and are fixed in Idrak (`ed1a94f` on Idrak's
+`main`). The third (the voice plug-in's `IdrakAudioForConditionalGeneration` in the list of registered names) is
+correct and is left as it is.
+- **The 13 first-chance `FileNotFoundException`s.** `LibraryDefaults.Find` loaded all 13 library names with
+  `Assembly.Load`. Idrak's new internal `LibraryFiles` now reads the program's files once (rule 75): the host's
+  trusted assemblies (the deps list) and the files beside Idrak.Abstraction. `Find` loads a name only when the program
+  has it as a file or has already loaded it, so a missing library throws nothing. A host that gives no files
+  (single-file, a phone's assembly store) loads every name as before. This works the same on every platform (rule 70).
+  Rule 71: a test shows that a host with every library finds exactly what loading each name finds.
+- **The message that suggested Vision to everyone.** Each plug-in package now declares the architectures it registers
+  with `[assembly: IdrakPluginNames(nameof(PretrainedArchitectures), …)]` (Text, Vision and Audio; the constants come
+  from their own family classes). A new contract, `IPluginPackageCatalog`, has a `SlotTable` registry,
+  `PluginPackageCatalogs`. Its library default, "present", reads those declarations from the loaded assemblies and from
+  the program's files (metadata only, without loading them, once). An app can register a catalog of packages it does
+  not ship. The refusal now names the package that declares the name ("Idrak.Text.Plugins declares it: call that
+  package's RegisterAll() …"). When no package declares it, the refusal names no package.
+- Decision: presence is read from the host's deps list plus the folder beside Idrak.Abstraction, not by trying a load
+  (the recommended option; no exception, platform-neutral, behaviour unchanged where nothing can be read).
+- Decision: package names come from attributes the packages declare and the library reads, never from a table of
+  families in the library (Idrak's "no family-specific code in the library").
+- Decision: the catalog contract lives in `Idrak.Abstraction.Plugins` and is listed in Idrak's `shared-contracts.txt`,
+  because any package's refusals can use it; today only `PretrainedArchitectures` does.
+- Decision: Idrak's `-P` test said Idrak.Mcp declares nothing, but Idrak.Mcp now declares library registrations, so
+  the test failed before this change. It now uses Idrak.AspNetCore, which declares neither.
+- Craft: no source change was needed. `PluginProbe.RunInstalled` now counts first-chance exceptions whose stack passes
+  through `LibraryDefaults`, and `EveryPreinstalledPluginLoadsFromTheAppsLayout` checks there are none. The test
+  runner lacks 5 of the 13 libraries (Vision, Diffusion, Cluster, Network, Onnx.Runtime), so the old code would have
+  thrown 5 there.
+- Results: Idrak `IDRAK_DEVICES=cpu`, filter `plugins: packages|override loop|kind table|public API|abstraction
+  inventory`: 26 passed. Craft `CRAFT_FILTER=Plugins|PluginKit|PhaseP|Learning`: 44 passed.
+
+The owner's list (Idrak first, then Craft):
+```powershell
+cd D:\Projects\Idrak; git checkout main; git pull origin main
+dotnet build -c Release tests\Idrak.Tests
+$env:IDRAK_DEVICES="cpu"; $env:IDRAK_FILTER="plugins: packages|override loop|kind table|public API|abstraction inventory"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="Plugins|PluginKit|PhaseP|Learning"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app's trail (`test-output\crashes`), check that there is no `FileNotFoundException` from `LibraryDefaults.Find`.
+A training round before any chat load still needs B4 (the slot handling the plug-ins). Until then, its message now
+names Idrak.Text.Plugins.
+
 ### The order and the slots
 
 1. B1-B7, three slots: B1 and B2 (the canvas), B3, B4, B6 and B7 (the plug-ins, the agent and learning), B5

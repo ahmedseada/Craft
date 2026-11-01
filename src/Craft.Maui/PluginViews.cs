@@ -309,6 +309,24 @@ public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<IThe
         return true;
     }
 
+    /// <inheritdoc />
+    /// <remarks>The read-only diff view with the notes under their lines (X part 11: a review's findings).</remarks>
+    public async Task<bool> ShowDiffAsync(string title, string path, TextDiff diff, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(diff);
+        ArgumentNullException.ThrowIfNull(notes);
+        var view = new ChangesDiffPage(title, path, diff, Theme(), notes);
+        await using var cancel = cancellationToken.Register(view.Close);
+        await _page.Navigation.PushModalAsync(view);
+        await view.Closed;
+        if (_page.Navigation.ModalStack.Contains(view))
+        {
+            await _page.Navigation.PopModalAsync();
+        }
+
+        return true;
+    }
+
     private ITheme Theme() => theme?.Invoke()
         ?? EditorThemes.Get(Application.Current?.RequestedTheme == AppTheme.Light ? EditorThemes.Light : EditorThemes.Dark);
 

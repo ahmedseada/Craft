@@ -124,6 +124,37 @@ struct Craft.Abstractions.BracketPair : System.IEquatable<Craft.Abstractions.Bra
   System.String ToString()
   System.Void Deconstruct(out System.Char Open, out System.Char Close)
   ctor(System.Char Open, System.Char Close)
+static class Craft.Abstractions.BuildFixProviders
+  event System.EventHandler Changed
+  static Craft.Abstractions.IBuildFixProvider Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IBuildFixProvider For(Craft.Abstractions.BuildFixRequest request)
+  static Craft.Abstractions.IBuildFixProvider Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IBuildFixProvider> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.IBuildFixProvider provider)
+sealed class Craft.Abstractions.BuildFixRequest : System.IEquatable<Craft.Abstractions.BuildFixRequest>
+  Craft.Abstractions.BuildFixRequest <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.BuildFixRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunProblem> Problems { get; init; }
+  System.Int32 GetHashCode()
+  System.String Title { get; init; }
+  System.String ToString()
+  System.String WorkspaceFolder { get; init; }
+  System.Void Deconstruct(out System.String Title, out System.String WorkspaceFolder, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunProblem> Problems)
+  ctor(System.String Title, System.String WorkspaceFolder, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunProblem> Problems)
+sealed class Craft.Abstractions.BuildFixResult : System.IEquatable<Craft.Abstractions.BuildFixResult>
+  Craft.Abstractions.BuildFixResult <Clone>$()
+  System.Boolean Accepted { get; init; }
+  System.Boolean Equals(Craft.Abstractions.BuildFixResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Changed { get; init; }
+  System.Int32 GetHashCode()
+  System.String Summary { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Boolean Accepted, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Changed, out System.String Summary)
+  ctor(System.Boolean Accepted, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Changed, System.String Summary)
 sealed class Craft.Abstractions.CodeAction : System.IEquatable<Craft.Abstractions.CodeAction>
   Craft.Abstractions.CodeAction <Clone>$()
   System.Boolean Equals(Craft.Abstractions.CodeAction other)
@@ -163,6 +194,40 @@ static class Craft.Abstractions.CodeActionProviders
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ICodeActionProvider> All { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.ICodeActionProvider provider)
+sealed class Craft.Abstractions.CodeReviewPlan : System.IEquatable<Craft.Abstractions.CodeReviewPlan>
+  Craft.Abstractions.CodeReviewPlan <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.CodeReviewPlan other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 ContextTokens { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 ReplyTokens { get; init; }
+  System.String LoadCommand { get; init; }
+  System.String Model { get; init; }
+  System.String Role { get; init; }
+  System.String ToString()
+  System.String Why { get; init; }
+  System.Void Deconstruct(out System.String Model, out System.String Role, out System.String Why)
+  ctor(System.String Model, System.String Role, System.String Why)
+static class Craft.Abstractions.CodeReviewProviders
+  event System.EventHandler Changed
+  static Craft.Abstractions.ICodeReviewProvider Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.ICodeReviewProvider First { get; }
+  static Craft.Abstractions.ICodeReviewProvider Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ICodeReviewProvider> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.ICodeReviewProvider provider)
+sealed class Craft.Abstractions.CodeReviewRequest : System.IEquatable<Craft.Abstractions.CodeReviewRequest>
+  Craft.Abstractions.CodeReviewRequest <Clone>$()
+  System.Boolean AllChanges { get; init; }
+  System.Boolean Equals(Craft.Abstractions.CodeReviewRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Summarised { get; init; }
+  System.Int32 GetHashCode()
+  System.String Diff { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Diff)
+  ctor(System.String Diff)
 static class Craft.Abstractions.ColorContrast
   const System.Double Line = 3
   const System.Double Text = 4.5
@@ -438,6 +503,18 @@ enum Craft.Abstractions.DiffLineKind : System.IComparable, System.IConvertible, 
   Added = 2
   Context = 0
   Removed = 1
+sealed class Craft.Abstractions.DiffNote : System.IEquatable<Craft.Abstractions.DiffNote>
+  Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
+  Craft.Abstractions.DiffNote <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.DiffNote other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Line { get; init; }
+  System.String Reason { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Line, out Craft.Abstractions.DiagnosticSeverity Severity, out System.String Text, out System.String Reason)
+  ctor(System.Int32 Line, Craft.Abstractions.DiagnosticSeverity Severity, System.String Text, System.String Reason)
 sealed class Craft.Abstractions.DocumentFormatRequest : System.IEquatable<Craft.Abstractions.DocumentFormatRequest>
   Craft.Abstractions.DocumentFormatRequest <Clone>$()
   Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
@@ -550,6 +627,7 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 RulerWarning { get; init; }
   System.UInt32 SecondaryText { get; init; }
   System.UInt32 Selection { get; init; }
+  System.UInt32 Spelling { get; init; }
   System.UInt32 Success { get; init; }
   System.UInt32 Surface { get; init; }
   System.UInt32 Text { get; init; }
@@ -1088,8 +1166,14 @@ interface Craft.Abstractions.IActivity : System.IDisposable
 interface Craft.Abstractions.IAiEventSink : Idrak.Abstraction.IKind
   System.Void Answered(Craft.Abstractions.AiAnswer answer)
   System.Void Judged(Craft.Abstractions.AiVerdict verdict)
+interface Craft.Abstractions.IBuildFixProvider : Idrak.Abstraction.IKind
+  System.Boolean Offers(Craft.Abstractions.BuildFixRequest request)
+  System.Threading.Tasks.Task<Craft.Abstractions.BuildFixResult> FixAsync(Craft.Abstractions.BuildFixRequest request, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.ICodeActionProvider : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeAction> ActionsFor(Craft.Abstractions.CodeActionContext context)
+interface Craft.Abstractions.ICodeReviewProvider : Idrak.Abstraction.IKind
+  Craft.Abstractions.CodeReviewPlan Plan()
+  System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.ReviewFinding> ReviewAsync(Craft.Abstractions.CodeReviewRequest request, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.ICommitMessageProvider : Idrak.Abstraction.IKind
   Craft.Abstractions.CommitModelPlan Plan(System.String choice)
   System.Collections.Generic.IAsyncEnumerable<System.String> WriteAsync(Craft.Abstractions.CommitMessageRequest request, System.Threading.CancellationToken cancellationToken)
@@ -1164,6 +1248,7 @@ interface Craft.Abstractions.IEditorHost
   Craft.Abstractions.IEditorTerminals Terminals { get; }
   Craft.Abstractions.IPluginSettings Settings { get; }
   Craft.Abstractions.SelectionState Selection { get; }
+  System.Boolean CopyText(System.String text)
   System.Boolean PublishDiagnostics(System.String path, System.String source, Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileDiagnostic> items)
   System.Boolean Select(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
   System.Boolean SetLineMarks(Craft.Abstractions.IEditorDocument document, System.String source, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> marks)
@@ -1186,6 +1271,7 @@ interface Craft.Abstractions.IEditorHost
   System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ProposeWorkspaceAsync(Craft.Abstractions.WorkspaceEdit edit, System.String title, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DiffNote> notes, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
@@ -1268,6 +1354,9 @@ interface Craft.Abstractions.IFormattingLanguageSession : Craft.Abstractions.ILa
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit>> FormatAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.IIconCanvas
   System.Boolean DrawIcon(Craft.Abstractions.FileIcon icon, System.Single x, System.Single y, System.Single size, System.Boolean open, System.Boolean dark)
+interface Craft.Abstractions.IInlineChatProvider : Idrak.Abstraction.IKind
+  Craft.Abstractions.InlineChatPlan Plan()
+  System.Collections.Generic.IAsyncEnumerable<System.String> EditAsync(Craft.Abstractions.InlineChatRequest request, System.Threading.CancellationToken cancellationToken)
 interface Craft.Abstractions.IInlineCompletionProvider : Idrak.Abstraction.IKind
   System.Boolean Accepts(Craft.Abstractions.InlineCompletionRequest request)
   System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.InlineCompletionPiece> CompleteAsync(Craft.Abstractions.InlineCompletionRequest request, System.Threading.CancellationToken cancellationToken)
@@ -1358,6 +1447,11 @@ interface Craft.Abstractions.ISourceControlRepository
   System.Threading.Tasks.Task<System.String> ReadCommittedAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> ReadStagedAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
   event System.EventHandler Changed
+interface Craft.Abstractions.ISpellDictionary : Idrak.Abstraction.IKind
+  System.Boolean Contains(System.ReadOnlySpan<System.Char> word)
+  System.Boolean IsReady { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Suggest(System.ReadOnlySpan<System.Char> word, System.Int32 max)
+  System.Threading.Tasks.Task Ready { get; }
 interface Craft.Abstractions.IStatusItem
   Craft.Abstractions.StatusAlignment Alignment { get; }
   System.Int32 Priority { get; }
@@ -1380,6 +1474,12 @@ interface Craft.Abstractions.ITerminalSession : System.IDisposable
   System.Threading.Tasks.ValueTask<System.Int32> ReadAsync(System.Memory<System.Byte> buffer, System.Threading.CancellationToken cancellationToken = null)
   System.Void Resize(Craft.Abstractions.TerminalSize size)
   System.Void Write(System.ReadOnlySpan<System.Byte> input)
+interface Craft.Abstractions.ITestProvider : Idrak.Abstraction.IKind
+  Craft.Abstractions.RunCommand Command(Craft.Abstractions.TestRunRequest request)
+  System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> Discover(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestResult> ReadResults(Craft.Abstractions.TestRunRequest request, System.String output, System.Threading.CancellationToken cancellationToken = null)
+  System.String Title { get; }
 interface Craft.Abstractions.ITextBuffer
   Craft.Abstractions.ITextSnapshot Apply(System.ReadOnlySpan<Craft.Abstractions.TextEdit> edits, Craft.Abstractions.TextChangeReason reason = Edit)
   Craft.Abstractions.ITextSnapshot Current { get; }
@@ -1445,6 +1545,53 @@ sealed class Craft.Abstractions.InlineCardAction : System.IEquatable<Craft.Abstr
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.Action Run)
   ctor(System.String Title, System.Action Run)
+sealed class Craft.Abstractions.InlineChatPlan : System.IEquatable<Craft.Abstractions.InlineChatPlan>
+  Craft.Abstractions.InlineChatPlan <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.InlineChatPlan other)
+  System.Boolean Equals(System.Object obj)
+  System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> LoadAsync { get; init; }
+  System.Int32 GetHashCode()
+  System.String LoadTitle { get; init; }
+  System.String Model { get; init; }
+  System.String ToString()
+  System.String Why { get; init; }
+  System.Void Deconstruct(out System.String Model, out System.String Why)
+  ctor(System.String Model, System.String Why)
+static class Craft.Abstractions.InlineChatProviders
+  static Craft.Abstractions.IInlineChatProvider Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.IInlineChatProvider First { get; }
+  static Craft.Abstractions.IInlineChatProvider Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IInlineChatProvider> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.IInlineChatProvider provider)
+sealed class Craft.Abstractions.InlineChatRequest : System.IEquatable<Craft.Abstractions.InlineChatRequest>
+  Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
+  Craft.Abstractions.InlineChatRequest <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.InlineChatRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.EditorDiagnostic> Diagnostics { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.InlineChatTurn> History { get; init; }
+  System.Int32 End { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Start { get; init; }
+  System.String FilePath { get; init; }
+  System.String Instruction { get; init; }
+  System.String LanguageName { get; init; }
+  System.String ToString()
+  System.String WorkspaceFolder { get; init; }
+  System.Void Deconstruct(out Craft.Abstractions.ITextSnapshot Snapshot, out System.Int32 Start, out System.Int32 End, out System.String Instruction, out System.String FilePath, out System.String LanguageName)
+  ctor(Craft.Abstractions.ITextSnapshot Snapshot, System.Int32 Start, System.Int32 End, System.String Instruction, System.String FilePath, System.String LanguageName)
+sealed class Craft.Abstractions.InlineChatTurn : System.IEquatable<Craft.Abstractions.InlineChatTurn>
+  Craft.Abstractions.InlineChatTurn <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.InlineChatTurn other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Answer { get; init; }
+  System.String Instruction { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Instruction, out System.String Answer)
+  ctor(System.String Instruction, System.String Answer)
 struct Craft.Abstractions.InlineCompletionPiece : System.IEquatable<Craft.Abstractions.InlineCompletionPiece>
   System.Boolean Equals(Craft.Abstractions.InlineCompletionPiece other)
   System.Boolean Equals(System.Object obj)
@@ -1592,6 +1739,7 @@ struct Craft.Abstractions.LineMark : System.IEquatable<Craft.Abstractions.LineMa
   Craft.Abstractions.LineMarkKind Kind { get; init; }
   System.Boolean Equals(Craft.Abstractions.LineMark other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean IsGlyph { get; }
   System.Int32 Count { get; init; }
   System.Int32 GetHashCode()
   System.Int32 LastLine { get; }
@@ -1610,6 +1758,11 @@ enum Craft.Abstractions.LineMarkKind : System.IComparable, System.IConvertible, 
   Changed = 1
   Conflict = 3
   Deleted = 2
+  Note = 9
+  TestFailed = 7
+  TestPassed = 6
+  TestReady = 5
+  TestSkipped = 8
 class Craft.Abstractions.LineStateLanguage : Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
   Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
   Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
@@ -2600,6 +2753,21 @@ sealed class Craft.Abstractions.RenameTarget : System.IEquatable<Craft.Abstracti
   System.String ToString()
   System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out System.String Name, out System.String Refusal)
   ctor(System.Int32 Start, System.Int32 Length, System.String Name, System.String Refusal = null)
+sealed class Craft.Abstractions.ReviewFinding : System.IEquatable<Craft.Abstractions.ReviewFinding>
+  Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
+  Craft.Abstractions.ReviewFinding <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.ReviewFinding other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Line { get; init; }
+  System.String Message { get; init; }
+  System.String Path { get; init; }
+  System.String Reason { get; init; }
+  System.String Text { get; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Path, out System.Int32 Line, out Craft.Abstractions.DiagnosticSeverity Severity, out System.String Message, out System.String Reason)
+  ctor(System.String Path, System.Int32 Line, Craft.Abstractions.DiagnosticSeverity Severity, System.String Message, System.String Reason)
+  static System.String SeverityWord(Craft.Abstractions.DiagnosticSeverity severity)
 enum Craft.Abstractions.RunActions : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Build = 2
   None = 0
@@ -2931,6 +3099,20 @@ sealed class Craft.Abstractions.SourceControlStatus : System.IEquatable<Craft.Ab
   System.Void Deconstruct(out System.String Root, out System.String Branch)
   ctor(System.String Root, System.String Branch)
   static Craft.Abstractions.SourceControlStatus None { get; }
+static class Craft.Abstractions.SpellDictionaries
+  static Craft.Abstractions.ISpellDictionary Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.ISpellDictionary Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ISpellDictionary> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.ISpellDictionary dictionary)
+static class Craft.Abstractions.SpellWords
+  static Craft.Abstractions.SpellWords.Enumerator Of(System.ReadOnlySpan<System.Char> text)
+  static System.Boolean InUrlOrPath(System.ReadOnlySpan<System.Char> text, System.Int32 start, System.Int32 length)
+struct Craft.Abstractions.SpellWords.Enumerator
+  Craft.Abstractions.SpellWords.Enumerator GetEnumerator()
+  System.Boolean MoveNext()
+  System.ValueTuple<System.Int32, System.Int32> Current { get; }
 sealed class Craft.Abstractions.SpokenCommand : Idrak.Abstraction.IKind
   System.Boolean TakesNumber { get; }
   System.String CommandId { get; }
@@ -3125,6 +3307,78 @@ sealed class Craft.Abstractions.TerminalStartInfo : System.IEquatable<Craft.Abst
   System.String WorkingDirectory { get; init; }
   System.Void Deconstruct(out Craft.Abstractions.TerminalShell Shell, out System.String WorkingDirectory, out Craft.Abstractions.TerminalSize Size, out System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment)
   ctor(Craft.Abstractions.TerminalShell Shell, System.String WorkingDirectory, Craft.Abstractions.TerminalSize Size, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment)
+static class Craft.Abstractions.TestConsoleResults
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestResult> Read(System.String output)
+sealed class Craft.Abstractions.TestItem : System.IEquatable<Craft.Abstractions.TestItem>
+  Craft.Abstractions.TestItem <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.TestItem other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Line { get; init; }
+  System.String Class { get; init; }
+  System.String ClassName { get; }
+  System.String File { get; init; }
+  System.String Framework { get; init; }
+  System.String Id { get; init; }
+  System.String Method { get; init; }
+  System.String Project { get; init; }
+  System.String Provider { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Provider, out System.String Id, out System.String Project, out System.String Class, out System.String Method)
+  ctor(System.String Provider, System.String Id, System.String Project, System.String Class, System.String Method)
+enum Craft.Abstractions.TestOutcome : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Failed = 3
+  NotRun = 0
+  Passed = 2
+  Running = 1
+  Skipped = 4
+static class Craft.Abstractions.TestProviders
+  event System.EventHandler Changed
+  static Craft.Abstractions.ITestProvider Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.ITestProvider Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ITestProvider> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Void Register(Craft.Abstractions.ITestProvider provider)
+sealed class Craft.Abstractions.TestResult : System.IEquatable<Craft.Abstractions.TestResult>
+  Craft.Abstractions.TestOutcome Outcome { get; init; }
+  Craft.Abstractions.TestResult <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.TestResult other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Id { get; init; }
+  System.String Message { get; init; }
+  System.String Output { get; init; }
+  System.String StackTrace { get; init; }
+  System.String ToString()
+  System.TimeSpan Duration { get; init; }
+  System.Void Deconstruct(out System.String Id, out Craft.Abstractions.TestOutcome Outcome)
+  ctor(System.String Id, Craft.Abstractions.TestOutcome Outcome)
+sealed class Craft.Abstractions.TestRunRequest : System.IEquatable<Craft.Abstractions.TestRunRequest>
+  Craft.Abstractions.TestRunRequest <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.TestRunRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> Tests { get; init; }
+  System.Int32 GetHashCode()
+  System.String Project { get; init; }
+  System.String ResultsFile { get; init; }
+  System.String Root { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Root, out System.String Project, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> Tests, out System.String ResultsFile)
+  ctor(System.String Root, System.String Project, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestItem> Tests, System.String ResultsFile)
+sealed class Craft.Abstractions.TestStackFrame : System.IEquatable<Craft.Abstractions.TestStackFrame>
+  Craft.Abstractions.TestStackFrame <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.TestStackFrame other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Int32 Line { get; init; }
+  System.String File { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Text, out System.String File, out System.Int32 Line)
+  ctor(System.String Text, System.String File, System.Int32 Line)
+  static System.Boolean TryPlace(System.ReadOnlySpan<System.Char> frame, out System.String file, out System.Int32 line)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestStackFrame> Parse(System.String stackTrace)
 enum Craft.Abstractions.TextChangeReason : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Edit = 0
   Redo = 2
@@ -3258,6 +3512,10 @@ sealed class Craft.Abstractions.TokenSpanBuffer : System.IDisposable
   System.Void Clear()
   System.Void Dispose()
   ctor(System.Int32 capacity = 256)
+static class Craft.Abstractions.TrxResults
+  static Craft.Abstractions.TestOutcome OutcomeOf(System.ReadOnlySpan<System.Char> outcome)
+  static Craft.Abstractions.TestResult Join(Craft.Abstractions.TestResult first, Craft.Abstractions.TestResult second)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TestResult> Read(System.IO.Stream trx, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorPanel, Craft.Abstractions.IEditorViewPanel
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }

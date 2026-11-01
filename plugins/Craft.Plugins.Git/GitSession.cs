@@ -15,7 +15,7 @@ namespace Craft.Plugins.Git;
 /// with a model already loaded. Called on the host's UI thread; git, the files and the diffs run on the thread pool and
 /// come back through <see cref="IEditorHost.Dispatch(string, Action)"/>.
 /// </summary>
-public sealed class GitSession : IDisposable
+public sealed partial class GitSession : IDisposable
 {
     /// <summary>The source name of its gutter marks.</summary>
     public const string MarkSource = "git";
@@ -49,6 +49,7 @@ public sealed class GitSession : IDisposable
         host.DocumentClosed += OnDocumentClosed;
         host.LineMarkClicked += OnLineMarkClicked;
         CommitMessageProviders.Changed += OnProvidersChanged;
+        CodeReviewProviders.Changed += OnProvidersChanged;
         Render();
         _ = OpenAsync();
     }
@@ -118,6 +119,26 @@ public sealed class GitSession : IDisposable
                 return OpenChangesAsync(value);
             case SourceControlView.OpenFile when value is not null:
                 return _host.OpenDocumentAsync(value, cancellationToken);
+            case SourceControlView.Review:
+                return ReviewAsync();
+            case SourceControlView.StopReview:
+                return _reviewing?.CancelAsync() ?? Task.CompletedTask;
+            case SourceControlView.LoadReviewModel when _state.ReviewLoadCommand is { } loadReview:
+                Update(_state with { ReviewLoadCommand = null, ReviewStatus = "Loading the model… press Review once it is loaded (its progress is in the status bar).", ReviewTone = PanelTone.Normal });
+                return _host.ExecuteCommandAsync(loadReview, cancellationToken);
+            case SourceControlView.OpenFinding when value is not null:
+                return OpenFindingAsync(value);
+            case SourceControlView.ApplyFix when value is not null:
+                return ApplyFixAsync(value, cancellationToken);
+            case SourceControlView.DismissFinding when value is not null:
+                DismissFinding(value);
+                return Task.CompletedTask;
+            case SourceControlView.CopyFindings:
+                CopyFindings();
+                return Task.CompletedTask;
+            case SourceControlView.ClearFindings:
+                ClearFindings();
+                return Task.CompletedTask;
         }
 
         if (_repository is not { } repository)
@@ -218,7 +239,11 @@ public sealed class GitSession : IDisposable
                 : _host.Documents.FirstOrDefault(d => SamePath(d.FilePath, path)) is { } open ? open.Document.Buffer.Current.GetText(0, open.Document.Buffer.Current.Length)
                 : File.Exists(path) ? await File.ReadAllTextAsync(path).ConfigureAwait(true) : "";
             string title = $"{Path.GetFileName(path)} ({(staged ? "staged, against the last commit" : "working copy, against the index")})";
-            if (!await _host.ShowDiffAsync(title, path, before, after).ConfigureAwait(true))
+            var notes = NotesOf(path);
+            bool shown = notes.Count > 0
+                ? await _host.ShowDiffAsync(title, path, before, after, notes).ConfigureAwait(true)
+                : await _host.ShowDiffAsync(title, path, before, after).ConfigureAwait(true);
+            if (!shown)
             {
                 await _host.OpenDocumentAsync(path).ConfigureAwait(true);   // a host without the diff view opens the file
             }
@@ -248,7 +273,9 @@ public sealed class GitSession : IDisposable
         _host.DocumentClosed -= OnDocumentClosed;
         _host.LineMarkClicked -= OnLineMarkClicked;
         CommitMessageProviders.Changed -= OnProvidersChanged;
+        CodeReviewProviders.Changed -= OnProvidersChanged;
         _writing?.Cancel();
+        _reviewing?.Cancel();
         _opening?.Cancel();
         Close();
         foreach (var held in _held)
@@ -476,7 +503,21 @@ public sealed class GitSession : IDisposable
                 : $"Generate commit message{Keys()}: {plan.Why}";
         }
 
-        _state = _state with { Branches = _branches, Models = models, GenerateTooltip = tooltip, CanGenerate = provider is not null };
+        var reviewer = CodeReviewProviders.First;
+        string reviewTooltip = "Review changes: needs the AI plug-in (Craft.Ai), which is not loaded";
+        if (reviewer is not null)
+        {
+            var reviewPlan = reviewer.Plan();
+            reviewTooltip = reviewPlan.Model is { } reviewModel
+                ? $"Review changes with {reviewModel} ({reviewPlan.Role}): the staged changes, else every change"
+                : $"Review changes: {reviewPlan.Why}";
+        }
+
+        _state = _state with
+        {
+            Branches = _branches, Models = models, GenerateTooltip = tooltip, CanGenerate = provider is not null,
+            ReviewTooltip = reviewTooltip, CanReview = reviewer is not null,
+        };
         _panel.SetBlocks(SourceControlView.Blocks(_state));
         _panel.Badge = SourceControlView.Badge(_state);
     }
@@ -836,7 +877,11 @@ public sealed class GitSession : IDisposable
 
     // ---- the gutter ----
 
-    private void OnDocumentOpened(object? sender, EditorDocumentEventArgs e) => ScheduleGutter(e.Document, 0);
+    private void OnDocumentOpened(object? sender, EditorDocumentEventArgs e)
+    {
+        ScheduleGutter(e.Document, 0);
+        MarkFindings(e.Document);
+    }
 
     private void OnDocumentChanged(object? sender, EditorDocumentChangedEventArgs e)
     {
@@ -925,6 +970,12 @@ public sealed class GitSession : IDisposable
     // A click on a mark: the change inline (its old lines, its new ones) with Revert and Stage; a conflict's choices.
     private void OnLineMarkClicked(object? sender, LineMarkEventArgs e)
     {
+        if (e.Source == ReviewMarkSource)
+        {
+            ShowFindingCard(e.Document, e.Mark.Line);
+            return;
+        }
+
         if (e.Source != MarkSource || !_gutters.TryGetValue(e.Document, out var gutter))
         {
             return;

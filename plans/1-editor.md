@@ -25,6 +25,20 @@ Windows run (2026-11-01)" at the end.
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
 
+**X leftovers, split (the owner, 2026-11-01: "will work on phase x leftover only, split in phases and start the first";
+then "1 agent to run").** Only X's leftovers (row 10's X items; not W's "Left, for later" lines, not P batch 2), one
+agent at a time, each piece resumed in the agent that wrote its stopped work (its worktree already merged with `main` by
+the session), each pushed to its `slot/<piece>` branch and merged by the session:
+- **XL1, the stopped work finished:** 1 `slot/x-tools` (tools 18-22: Test explorer, Markdown and image preview, TODO
+  list, spell check); 2 `slot/x-ai` (item 23 inline chat, part 11 items 4-5: AI review, fix the build); 3 `slot/x-look`
+  (the recovery prompt, look 24-26: theme picker, Zen and full screen, status pickers); 4 `slot/x-language` (language
+  3-5, 10-12: snippets, inlay hints, code lens, linked tags, Outline, hierarchy, two C# session speed fixes; its merge
+  with word wrap finished by its agent).
+- **XL2, the rest of X:** 5 `slot/x-nextedit` (part 11 item 2); 6 `slot/x-repocompletion` (part 11 item 3); 7
+  `slot/x-timings` (1c, measured input-to-response times).
+- Decision (noted): the one agent takes the pieces in that order without a pause (XL2 follows XL1 as a slot frees);
+  nothing outside this list starts.
+
 **The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
 before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a
 leftover or a new enhancement while a W piece is ready. What a W slot leaves undone goes into one "Left, for later"
@@ -4227,6 +4241,124 @@ Output. Craft only; Idrak unchanged (nothing in the library was needed: the link
   the same line in Output by a click; split the editor, fold a block, close the window and start it again on the same
   folder (the groups, tabs, carets, folds and pins back); `$env:CRAFT_LINKS_UNDERLINE="always"` underlines every link.
 
+### X part 9, tools 18-22, as built (2026-11-01)
+
+Slot s1: the Test explorer, the Markdown and image previews, the TODO list and the spell check. Craft only; Idrak
+unchanged (no cause was in the library; the run goes through Idrak's `CommandSandboxes` as the Run view's do).
+- **Contracts** (`Craft.Abstractions`, additions to contract 1.1): `Testing.cs`: `TestOutcome`, `TestItem`, `TestResult`,
+  `TestRunRequest`, `ITestProvider : IKind` and `TestProviders` (none built in; W's npm tests can join), `TrxResults` (a
+  TRX read as a stream: each result named by its definition's class and method, a theory's cases joined),
+  `TestConsoleResults` (the console logger's lines when no file came), `TestStackFrame` (a frame's `file:line`);
+  `Spelling.cs`: `ISpellDictionary : IKind`, `SpellDictionaries`, `SpellWords` (camelCase, acronyms, snake_case, digits
+  split, allocation-free); `LineMarkKind.TestReady/TestPassed/TestFailed/TestSkipped` and `LineMark.IsGlyph`;
+  `EditorColors.Spelling` (the info colour at 60% unless a theme sets it).
+- **18 Test explorer** (`Craft.Editor.Testing.TestExplorerView`, the rail's Testing; the C# plug-in's
+  `Craft.CSharp.Run.DotnetTestProvider` "dotnet"): xUnit's `[Fact]`/`[Theory]`, NUnit's `[Test]`/`[TestCase]`, MSTest's
+  `[TestMethod]`/`[DataTestMethod]` found in Roslyn's syntax tree off the UI thread, in the test projects the Run view
+  reads (a file parsed only when its bytes hold an attribute's word; abstract and generic classes left out; nested classes
+  as `Outer+Inner`); joined with the Run view's test targets that list no test (their Run runs them all). Tree: project ›
+  class › method with Run all, Run failed, Stop, Refresh, Collapse, a filter, Run per project, class and test; each row's
+  ✓ ✗ ○ and time; a failed test's card with its message and its stack, each `file:line` frame opening its place. A run is
+  `dotnet test PROJECT --filter FullyQualifiedName=…` (classes past 40 tests) with a TRX logger into
+  `.craft/test-results` (deleted once read) and the console logger, through the Run view's new `RunCommandAsync`: the
+  user's approval, `CRAFT_RUN_SANDBOX`, a "Test: …" terminal tab, an activity with Cancel; results read off the UI thread.
+  The gutter of an open test file draws ▶ at each test (a click runs it), then ✓ ✗ ○; failures go to Problems as
+  "File.cs (tests)" at the stack's first frame in the workspace, else the test's line. Commands: Test: Run all, Run failed,
+  Run the test at the caret (Run menu).
+- **19 Markdown preview** (`Craft.Editor.Preview.MarkdownPreview`, `Craft.Maui.MarkdownPreviewView`): Ctrl+Shift+V opens a
+  preview page tab, Ctrl+K V beside (the source shown in a group on the right too); rendered by X part 10's
+  `TranscriptWriter` (headings, lists, tables, quotes, rules, links, emphasis, code blocks coloured by their language with
+  Copy only), on Craft's own read-only editor surface (only the shown lines laid out and drawn); re-rendered on the thread
+  pool `CRAFT_MARKDOWN_PREVIEW_DELAY_MS` after the last edit; each line knows its source line, so it follows the source's
+  scroll (`CRAFT_MARKDOWN_PREVIEW_FOLLOW`); a link opens (an image in its preview, a file in its tab, an address in the
+  browser). A "markdown" language joined the C# plug-in's project languages (`LineStateLanguage` with `MarkdownTokenizer`:
+  headings, quotes, lists, code spans and fences, links, tables, HTML comments; prose left plain) and `MarkdownFolding`
+  (headings to the next of their level, fenced blocks).
+- **20 Image preview** (`Craft.Editor.Preview.ImagePreview`, `ImageFormats`, `SvgDrawing`; `Craft.Maui.ImagePreviewView`): a
+  png, jpg, gif, bmp, ico or svg opened from the tree or quick open is a page tab (Image: Open as text gives an SVG's
+  source; a plug-in's `OpenDocumentAsync` still opens text); read off the UI thread up to `CRAFT_IMAGE_PREVIEW_MAX_MB`;
+  format and size from the header bytes; zoom −, +, 100%, Fit (fit never enlarges); "PNG · 640 × 480 · 12.3 KB · 50%
+  (fit)" in the status bar while it shows; an SVG of paths, rectangles, circles, ellipses, lines, polylines and polygons
+  (fills and strokes inherited, currentColor) drawn through MAUI Graphics' `PathBuilder`, one with text, gradients,
+  transforms, styles or images said instead.
+- **21 TODO list** (`Craft.Editor.Tools.TodoScanner`, `TodoListView`; the bottom panel's TODO tab with its count):
+  `CRAFT_TODO_TAGS` (TODO, FIXME, HACK, NOTE) as whole words with their case, in comments only (the file's language session
+  classifies just the lines holding a tag; plain text files by line); files read as bytes, skipped undecoded without a
+  tag's bytes, binary or past `CRAFT_SEARCH_MAX_FILE_MB`; the workspace in parallel as an activity; grouped by file; a saved
+  file read again alone; a click opens the place; `CRAFT_TODO_MAX_RESULTS`.
+- **22 Spell check** (`Craft.Editor.Spelling`: `WordListDictionary`, `SpellChecker`, `SpellCheckLayer`,
+  `SpellingCodeActions`): a bundled English list (SCOWL size 60's en_US Hunspell, affixes expanded, 88,000 words, plain
+  text, its licence in `Spelling/Words/scowl-license.txt`) and the words of code, read once off the UI thread from their
+  bytes into a `FrozenSet` ignoring case, looked up by span; only the lines a frame draws, their comments and strings
+  (prose files: all but code), identifiers split; each line's unknown words kept while its text, spans and the checker stay,
+  so a warm frame checks and allocates nothing; faint squiggles in `EditorColors.Spelling`; Ctrl+. on a word: up to
+  `CRAFT_SPELL_SUGGESTIONS` suggestions by Damerau distance (the user's pick typed in its place, one undo step), Add to your
+  dictionary (`spelling/words.txt` in the data folder), Ignore in this workspace (`.craft/words.txt`). Options
+  `CRAFT_SPELL_CHECK` (on), `CRAFT_SPELL_LANGUAGE` (en), `CRAFT_SPELL_MIN_LENGTH` (4).
+- **Options** (each a `CRAFT_*` variable with its shape on the settings page): `CRAFT_TEST_GUTTER`, `CRAFT_TEST_PROBLEMS`
+  (Terminal › Tests); `CRAFT_MARKDOWN_PREVIEW_DELAY_MS` (300), `CRAFT_MARKDOWN_PREVIEW_FOLLOW` (Editor › Markdown);
+  `CRAFT_IMAGE_PREVIEW_MAX_MB` (64, Files › Images); `CRAFT_TODO_TAGS`, `CRAFT_TODO_MAX_RESULTS` (5000, Files › TODO list);
+  `CRAFT_SPELL_CHECK`, `CRAFT_SPELL_LANGUAGE`, `CRAFT_SPELL_SUGGESTIONS` (5), `CRAFT_SPELL_MIN_LENGTH` (Editor › Spelling).
+
+**Decisions on the recommendation (the owner asleep; one line each).**
+- The Test explorer, TODO list and previews are the shell's own views drawn from the public block contract and registries (as the Run view), the test provider in the C# plug-in; no new plug-in project.
+- Tests run through the Run view (`RunCommandAsync`), so approval, sandbox, terminal tab, activity and Stop are one code path.
+- Discovery reads syntax only (no build); a test project with no test found keeps a Run-all row from the Run view.
+- Results come from a TRX in `.craft/test-results` (deleted after reading), else the console logger's lines.
+- A theory's cases join into their method (failed if any failed); the tree shows methods, not cases.
+- Discovery runs again when a watched file (.cs, .csproj) is saved, not on every keystroke; the gutter marks follow the saved lines.
+- Test glyphs sit in the gutter's first cell and stay off the overview ruler; the marks' bar strip is unchanged.
+- The previews are page tabs (pages show in the first group), so "beside" shows the source in a new group on the right.
+- The preview reuses the chat's renderer (one Markdown renderer), with a preview mode: Copy only on code, images as links.
+- Images in a preview are links that open the image preview: the editor canvas draws no bitmaps.
+- Markdown joined the C# plug-in's project languages (README.md is in every project); W had none.
+- An image opened by the user opens its preview; Image: Open as text (and any plug-in's open) gives the text.
+- SVGs with features beyond simple shapes are said, never drawn half.
+- TODO tags match whole words with their case, in comments only where a language classifies; plain text by line.
+- The spell list is SCOWL size 60 (permissive licence, kept beside it), case ignored, possessives accepted; all-caps words, words touching digits, addresses and paths are passed over.
+- A spelling fix chosen by the user is typed as the user's own input (one undo step), not a proposed diff.
+- The Markdown preview's keys bind in the text editor only, so a terminal keeps Ctrl+Shift+V for paste.
+
+**Measured** (the 4-core Linux container, Release; written to `test-output/benches/`; the first run quiet, the filter
+run under load): test discovery of 2,000 tests in 100 files plus 200 files without tests: cold 17.9 ms, warm median
+10.4 ms (75.0 / 63.9 ms under load); a TODO scan of Craft's own `src` (295 files then, 344 after W): cold 318 ms, warm
+median 79 ms (1,067 / 50 ms under load), 20 entries; spell check on 21 shown lines with a comment and a string each:
+warm frame median 22.9 µs, p99 44.7 µs, **0 B over 500 frames**, each line checked once cold. The paint's warm frame of a
+C# file stays 0 B with the spell check on.
+
+**Tests**: `TestExplorer` (4: discovery of every framework from a fixture with its lines, filters and the command; TRX and
+console parsing and stack frames; a run asked first, refused then run through a fake sandbox writing a TRX, the tree's
+marks and times, the gutter's ▶ ✓ ✗ ○, failures in Problems at their frame, the failure card, Run failed's filter, a click
+on ▶ running its test; 2,000 tests timed), `MarkdownPreview` (2), `ImagePreview` (2), `TodoList` (3, one scanning
+Craft's `src`), `SpellCheck` (3); `Inventory.OptionsReadEveryVariable` extended; the test program reads the bundled
+words before the tests so every frame draws the same squiggles. First run: 9 of 14; the five failures were the tests' own
+expectations (two lines, a column, a fold's end, a scroll the fake host never applied, stale lines counted) and one bug
+(Ctrl+K V moved the source and its emptied group closed: the source is now shown in both groups). After the merge of
+main: filter `TestExplorer|MarkdownPreview|ImagePreview|TodoList|SpellCheck|RunView|Conversation|Plugins|Shell|Editor|Paint|Settings|Ui|ApiGuard|Inventory|Bookmarks|LocalHistory|Problems|OverviewRuler|SourceControl`:
+151 of 151. API dumps of Craft.Abstractions (and its contract list), Craft.Core, Craft.Editor, Craft.CSharp and the
+inventory regenerated, lines added only.
+
+**Not compiled here**: nothing under `Platforms/` changed; Craft.Maui compiled on net10.0. **Not run here** (the owner's):
+the Testing view, the TODO tab, both preview tabs and the squiggles on WinUI; a real `dotnet test` of a test project.
+
+**Left, for later**: images drawn inside the Markdown preview (needs an image call on `IEditorCanvas`); a preview in any
+editor group (pages show in the first); test marks that move with unsaved edits; a folder watcher for test discovery;
+other spelling languages (a plug-in registers a dictionary).
+
+**The owner's commands** (Craft only; Idrak unchanged since its last list):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="TestExplorer.|MarkdownPreview.|ImagePreview.|TodoList.|SpellCheck.|RunView.|Shell.|Editor.|Paint.|Settings.|Ui.|ApiGuard.|Inventory."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: add an xUnit test project to CarftTestPOC (`dotnet new xunit -o Tests`), open the rail's Testing (the tests
+listed before any build), Run all (asked once, "Test: Tests" tab), a failing test's ✗ in the tree, its card's stack line
+opening the file, the gutter's ▶ and ✓/✗, Problems' "(tests)" group; write a README.md, Ctrl+Shift+V and Ctrl+K V (the
+preview follows the scroll and updates as you type); open a .png and an .svg from the tree (zoom, status bar); View › TODO
+list; a misspelled word in a comment (Ctrl+. for suggestions, Add to dictionary); light and dark themes.
+
 ### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
 good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow
 it to expand to cover the full editor space, not just the right side, without overflowing the left side bar")
@@ -4597,6 +4729,91 @@ Item 1, slot s1. Idrak `main` 2ab9c3a, then Craft `main` (this commit and the on
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
   In the app: send a chat message; once the completion model has loaded the chip reads "draft: …, NN% accepted".
+
+#### Inline chat, AI review and the build fix as built (2026-11-01)
+X part 9 item 23 and X part 11 items 4 and 5, slot s2 (`slot/x-ai`). Craft only; nothing was missing in Idrak (the chat
+and the agent run on its `FakeChatModel`, `CodingAgent` and `CommandSandboxes` as they are; no cause was in the library).
+- **Contracts** (`Craft.Abstractions`, additions to contract 1.1): `IInlineChatProvider : IKind` in `InlineChatProviders`
+  (`InlineChatRequest` with the lines, the instruction, the problems on them and the earlier `InlineChatTurn`s;
+  `InlineChatPlan` with the model, or why none and `LoadAsync`); `ICodeReviewProvider : IKind` in `CodeReviewProviders`
+  (`CodeReviewRequest`, `CodeReviewPlan`, `ReviewFinding`); `IBuildFixProvider : IKind` in `BuildFixProviders`
+  (`BuildFixRequest`, `BuildFixResult`, `For` = the first that offers); `LineMarkKind.Note`; `DiffNote` with
+  `IEditorHost.ShowDiffAsync(…, notes)` (and `IEditorPresenter`'s, the diff page's note rows); `IEditorHost.CopyText`
+  (the shell's clipboard through `EditorHost.ClipboardWriter`).
+- **Inline chat** (`Craft.Editor.InlineChatController`, `InlineChatRenderer`, `EditorModel.InlineChat`): Ctrl+I (both
+  keymaps, Edit menu, the editor's context menu; `craft.editor.inlineChat`) opens a box under the caret's line or over the
+  selection's whole lines, with the keyboard; Enter sends to the first registered provider; the answer streams line by
+  line as a ghost diff drawn over the lines (kept plain, removed struck on the removed fill, added on the added fill,
+  lines the stream has not reached faded); Ctrl+Enter or Accept applies it as one undo step (the original's line breaks
+  kept), Escape or Discard leaves the text, Retry asks again without the answer it replaces, a follow-up typed in the
+  box sends the earlier exchanges and refines the same edit against the original lines; Up and Down walk the box's
+  history; a change to the lines meanwhile is said on Accept. The AI plug-in's "ai" (`AiInlineChat`): the chat role's
+  model only once loaded, its temperature and reply limit; none loaded, the box says so and its button loads it, the
+  instruction then sent. Settings `inlineChat` (`CRAFT_PLUGIN_AI_INLINECHAT`, on), `inlineChatContextLines` (40),
+  `inlineChatMaxTokens` (0: the chat's), Settings › Chat › Inline chat.
+- **Review changes** (git plug-in `GitSession.Review.cs`, `CodeReviews`; the AI plug-in's `AiCodeReview`): a checked-box
+  button beside Generate in the commit box and the palette's "Source Control: Review changes" (`git.reviewChanges`); the
+  staged diff (else every change, said so), each kept and added line numbered in the new text, trimmed by file to
+  `CRAFT_PLUGIN_GIT_REVIEWDIFFTOKENS` (6000) within the model's context (the files left out named); the model writes one
+  finding a line, read as each line ends; findings stream into the view (by file: line, severity, one line, the reason;
+  Apply fix, Dismiss; Copy all, Clear), as notes in the open files' gutters (a click or a row shows the card: Apply fix,
+  Dismiss, Copy all) and under their lines in the diff view; Apply fix runs the registered code actions' Fix on the
+  finding's line (a diff the user accepts); Stop keeps what was found; nothing loaded: said, with the load offered.
+  Settings `reviewModel` (`CRAFT_PLUGIN_AI_REVIEWMODEL`, chat; loaded, agent, completion or a name), `reviewPrompt`,
+  `reviewMaxTokens`, under Source Control › Review changes.
+- **Fix with AI** (`RunView.Fix.cs`, the AI plug-in's `AiBuildFix`): a Run-view build or test that fails with errors
+  shows a card ("Build: App failed", its errors) with Fix with AI and Run again; a build's Problems row says "Fix with
+  AI"; one error goes to the chat's model through the code action Fix (its lines rewritten, a diff), several to the agent
+  as one task with each error and `buildFixContextLines` (8) of numbered code around it, its changes then proposed file
+  by file; Run again saves the documents the accepted fix changed and runs the same configuration (asked as any run);
+  the fix is an activity with Stop. Settings `buildFix` (`CRAFT_PLUGIN_AI_BUILDFIX`, on), `buildFixContextLines`.
+- **Decisions on the recommendation (one line each):**
+  - The inline chat answers through a registry beside the code actions (the same shape, "ai" its provider); the ghost diff is the review, so Accept applies in place without the diff page.
+  - The box and the ghost diff are an overlay over the lines below (as the ghost text), not inserted rows: the text moves only on Accept.
+  - The range is whole lines (the selection's, else the caret's line); the model answers their full replacement.
+  - The first registered provider answers (as the commit message's); its on and off is the AI plug-in's setting.
+  - The answer streams by whole lines; prose before a fenced block is dropped, an answer with no block is taken whole at its end.
+  - While it streams, the removed lines past those the answer has replaced so far are pending, not removed.
+  - Retry has no key of its own (its button): Ctrl+R and Alt chords belong to the keymaps and the menu.
+  - The box's history is shared by the editors of the process, the newest 50.
+  - Pressing the box's load button is the user's asking (note 23): the model loads, then the waiting instruction goes.
+  - A review's model is the review's own choice (`reviewModel`, chat by default), read like the commit message's.
+  - The review's lines are numbered in the new text in the diff given to the model, so a finding names a line of the file.
+  - The review's budget is a git setting (it trims the diff) bounded by the model's context; large files are named, not reviewed.
+  - Apply fix reuses the code actions' Fix (the AI plug-in's rewrite), so a finding's fix is the same diff path as a problem's.
+  - Findings show in the gutter as one new mark kind (`Note`, the accent colour) whose card holds the actions.
+  - One error goes to the chat's Fix, several to the agent; pressing Fix with AI is the user's asking, so the model may load then.
+  - Run again is a button, never automatic, and saves only what the accepted fix changed before it runs.
+  - Only a build or test that failed with errors keeps a failure; the same configuration's success clears it.
+- **Tests**: `InlineChat` (4: the ghost diff drawn and one undo step on accept; discard, retry, a follow-up refining the
+  same edit and the history; no model said and the load only on the press, no provider said, read-only refused, Ctrl+I;
+  the streaming rows, the replacement's line breaks and the request's context), `CommitReview` (4: the parser, the
+  numbering and the budget; a real repository reviewed into the view, the gutter, the card, the diff view's notes, Copy
+  all and Apply fix as one undo step; Stop and no model; the AI provider on a loaded lease, never loading), `BuildFix`
+  (2: two errors to the agent, both fixes accepted as diffs, Run again succeeding; one error to the chat's fix, the
+  Problems row's "Fix with AI", Run again saving it, turned off offering nothing); `Ai.TheSettingsReadEveryVariable` and
+  a `SourceControl` expectation (two buttons in the box) updated. First run: 27 of 31; the four (two expectations, prose
+  before a fence leaking into the answer, a replaced line shown pending while streaming) fixed. The filter
+  `InlineChat|CommitReview|BuildFix|AiPlugins|Ai.|Conversation|SourceControl|RunView|ProblemsPanel|DraftModel|ModelLoading|Editor|Settings|Keys|Paint|ApiGuard|Inventory`:
+  143 passed, 0 failed. API dumps (`Craft.Abstractions` and its contract list, `Craft.Ai`, `Craft.Editor`,
+  `Craft.Plugins.Git`) and `plans/inventory.md` regenerated: lines added only.
+- **Windows only (not run here; Craft.Maui compiled on net10.0):** the box's keys through WinUI (Ctrl+I, Ctrl+Enter,
+  Escape, Up and Down reaching the editor), the overlay's look, the diff page's note rows, the Problems row's wider button.
+- **Left, for later:** the ghost rows are not syntax-coloured and not wrapped; the Run view does not redraw its card when
+  `buildFix` changes until the next run; findings are not kept across sessions.
+- **The owner's commands:**
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="InlineChat|CommitReview|BuildFix|AiPlugins|Ai.|Conversation|SourceControl|RunView|ProblemsPanel|Editor|Settings|Keys|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app, with the chat model loaded: in `Program.cs` select a method, Ctrl+I, "add a null check", Enter (the ghost
+  diff), type a follow-up, Ctrl+Enter, then Ctrl+Z once; Ctrl+I with no model loaded (the box's load button); in Source
+  Control (after `git init` in the test project and a change) the checked-box button beside the sparkle (findings,
+  a note in the gutter, its card's Apply fix, Copy all, Open changes); make two errors, Ctrl+Shift+B, the Run view's Fix
+  with AI (the agent), accept, Run again; with one error, the Problems row's "Fix with AI".
 
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 10 (the chat

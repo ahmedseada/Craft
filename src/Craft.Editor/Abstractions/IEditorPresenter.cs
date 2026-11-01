@@ -55,6 +55,13 @@ public interface IEditorPresenter
     /// index or the last commit) under <paramref name="title"/>; completes when closed. The default has no such view (false).
     /// </summary>
     Task<bool> ShowDiffAsync(string title, string path, TextDiff diff, CancellationToken cancellationToken) => Task.FromResult(false);
+
+    /// <summary>
+    /// <see cref="ShowDiffAsync(string, string, TextDiff, CancellationToken)"/> with <paramref name="notes"/> under their
+    /// new lines (X part 11: a review's findings). The default shows the diff alone.
+    /// </summary>
+    Task<bool> ShowDiffAsync(string title, string path, TextDiff diff, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken) =>
+        ShowDiffAsync(title, path, diff, cancellationToken);
 }
 
 /// <summary>

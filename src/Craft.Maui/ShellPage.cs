@@ -355,6 +355,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         // X part 9: Ctrl+click on a file:line link in a terminal opens it, resolved against the terminal's folder first.
         _terminalPanel.LinkActivated += (_, link) => _ = _shell.OpenLinkAsync(link.Path, link.TargetLine, link.TargetColumn, link.Folder);
         _bottom.TerminalContent = _terminalPanel;
+        _bottom.Todo = _shell.Todo;                                      // X part 9: the TODO list's tab
         _terminals.ViewRequested += (_, request) => OnTerminalView(request);
         // Phase U: the running operations in the status bar, the bell, the notification centre and its toasts.
         _activity = new ActivityStatusView(_host.ActivityCenter, _palette);
@@ -471,6 +472,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _shell.WorkspaceChanged += (_, _) => OnWorkspaceChanged();
         _shell.OptionsChanged += (_, _) => OnOptionsChanged();
         _shell.Run.ProblemsChanged += (_, _) => UpdateProblems();      // X part 6: a run's errors in Problems
+        _shell.Tests.ProblemsChanged += (_, _) => UpdateProblems();    // X part 9: the failed tests in Problems
         // A plug-in's setting changes no option: the model chip and the model item read the AI plug-in's settings again.
         _shell.SettingApplied += (_, variable) =>
         {
@@ -1107,6 +1109,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             ShellPageIds.Models => new ModelsPage(_shell),
             ShellPageIds.Welcome => new WelcomeView(_shell, _palette),
             ShellPageIds.Plugins => new PluginsPage(_shell, () => PluginList.Rows(CraftPlugins.Installed, _host.Plugins)),
+            // X part 9: a Markdown document's preview and an image's.
+            _ when _shell.MarkdownPreviews.TryGetValue(page.Id, out var preview) => new MarkdownPreviewView(_shell, preview, _palette),
+            _ when page.Id.StartsWith(ShellModel.ImagePagePrefix, StringComparison.Ordinal) => new ImagePreviewView(_shell, page.Id, _palette),
             _ => _palette.Label($"No view for the page '{page.Id}'.", _palette.Secondary),
         };
         return (View)page.View;
@@ -1136,6 +1141,21 @@ public sealed class ShellPage : ContentPage, IDisposable
     // An explanation answers in the chat, so the chat shows; an edit arrives as a diff the user accepts.
     private void OnCodeActionRequested(ProblemItem item, string kind)
     {
+        // X part 11 item 5: a build's or test's row: Fix with AI fixes its one error (a diff to accept; Run again in the
+        // Run view); Explain opens its file first, then explains it there.
+        if (item.Group.Owner is Craft.Editor.Run.RunProblemFile built)
+        {
+            if (kind == CodeActionKinds.Fix)
+            {
+                _ = FixBuildProblemAsync(built, item.Diagnostic);
+            }
+            else
+            {
+                _ = OpenRunProblemAsync(built.Path, item.Line, item.Column);
+            }
+            return;
+        }
+
         if (item.Group.Owner is ClosedProblemFile closed)
         {
             // W: a closed file's row has no text to act on: the file opens at its place, its problems then on its text.
@@ -1175,6 +1195,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         _ = RunCodeActionAsync(action);
+    }
+
+    private async Task FixBuildProblemAsync(Craft.Editor.Run.RunProblemFile file, EditorDiagnostic diagnostic)
+    {
+        if (await _shell.Run.FixProblemAsync(file, diagnostic) is null && !_shell.Run.IsFixing)
+        {
+            _status.Notice.Text = "No plug-in offers to fix this build problem (the AI plug-in's Fix with AI).";
+        }
     }
 
     private async Task RunCodeActionAsync(CodeAction action)
@@ -1468,6 +1496,9 @@ public sealed class ShellPage : ContentPage, IDisposable
                 break;
             case ShellViewNames.Telemetry:
                 ShowBottom(BottomTab.Telemetry);
+                break;
+            case ShellViewNames.Todo:
+                ShowBottom(BottomTab.Todo);
                 break;
         }
     }
@@ -2122,6 +2153,12 @@ public sealed class ShellPage : ContentPage, IDisposable
             sources.Add(new ProblemSource(file.Path + "|run", Path.GetFileName(file.Path) + " (build)", file.Snapshot, [.. file.Diagnostics], file));
         }
 
+        // X part 9: the last test run's failures, each at its failure's place.
+        foreach (var file in _shell.Tests.ProblemFiles)
+        {
+            sources.Add(new ProblemSource(file.Path + "|tests", Path.GetFileName(file.Path) + " (tests)", file.Snapshot, [.. file.Diagnostics], file));
+        }
+
         // W, contract 6: closed files' published diagnostics, by line and column (no file read).
         foreach (var file in _host.ClosedProblemFiles)
         {
@@ -2462,6 +2499,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         _groupsView.Apply(p);
         _breadcrumb.Apply(p);
         _bottom.Apply(p);
+        foreach (var page in _shell.Pages.Tabs)
+        {
+            (page.View as MarkdownPreviewView)?.Apply(p);
+            (page.View as ImagePreviewView)?.Apply(p);
+        }
+
         _terminalPanel.Apply(p);
         _status.Apply(p);
         _loader.Apply(_shell.Options, p.Accent);

@@ -16,6 +16,9 @@ public static class AiSettingShapes
 {
     private const string ModelGroup = "Model";
     private const string DraftGroup = "Speculative decoding";
+    private const string InlineChatGroup = "Inline chat";
+    private const string ReviewGroup = "Review changes";
+    private const string BuildFixGroup = "Fix the build";
     private static readonly string[] Devices = ["auto", "cpu", "cuda:0", "vulkan:0"];
     private static readonly string[] Weights = ["", "int8", "int4", "bfloat16"];
 
@@ -29,7 +32,9 @@ public static class AiSettingShapes
     public static string SectionOf(PluginSetting setting)
     {
         ArgumentNullException.ThrowIfNull(setting);
-        return setting.Key.StartsWith("completion", StringComparison.Ordinal) ? SettingSections.Completion
+        return setting.Key.StartsWith("inlineChat", StringComparison.Ordinal) || setting.Key.StartsWith("buildFix", StringComparison.Ordinal) ? SettingSections.Chat
+            : setting.Key.StartsWith("review", StringComparison.Ordinal) ? SettingSections.SourceControl
+            : setting.Key.StartsWith("completion", StringComparison.Ordinal) ? SettingSections.Completion
             : setting.Key.StartsWith("agent", StringComparison.Ordinal) ? SettingSections.Agent
             : setting.Key.StartsWith("chat", StringComparison.Ordinal) || setting.Key.StartsWith("draft", StringComparison.Ordinal)
               || setting.Key is "model" or "device" or "weights" or "context" or "keepAliveMinutes" ? SettingSections.Chat
@@ -76,6 +81,16 @@ public static class AiSettingShapes
         "agentCallsInText" => SettingShape.Toggle(SettingSections.Agent, "Read tool calls written as text", "Tool calls"),
 
         "chatImageMaxMb" => SettingShape.Whole(SettingSections.Chat, "Largest image", 1, 4096, "MB", "Context"),
+
+        // X part 9 item 23 and X part 11 items 4 and 5.
+        "inlineChat" => SettingShape.Toggle(SettingSections.Chat, "Inline chat (Ctrl+I)", InlineChatGroup),
+        "inlineChatContextLines" => SettingShape.Whole(SettingSections.Chat, "File lines around it", 0, 100_000, "lines", InlineChatGroup, step: 10),
+        "inlineChatMaxTokens" => SettingShape.Whole(SettingSections.Chat, "Most answer tokens (0: the chat's)", 0, 1_000_000, "tokens", InlineChatGroup, step: 64),
+        "reviewModel" => SettingShape.From(SettingSections.SourceControl, "Model", "commit-models", [ModelRoleKeys.Chat, "loaded", ModelRoleKeys.Agent, ModelRoleKeys.Completion], other: true, group: ReviewGroup),
+        "reviewPrompt" => SettingShape.Text(SettingSections.SourceControl, "Instructions", ReviewGroup),
+        "reviewMaxTokens" => SettingShape.Whole(SettingSections.SourceControl, "Most reply tokens (0: the role's)", 0, 1_000_000, "tokens", ReviewGroup, step: 64),
+        "buildFix" => SettingShape.Toggle(SettingSections.Chat, "Fix with AI on a failed build or test", BuildFixGroup),
+        "buildFixContextLines" => SettingShape.Whole(SettingSections.Chat, "Code lines around each error", 0, 10_000, "lines", BuildFixGroup),
 
         "placementMaxError" => SettingShape.Number(SettingSections.Models, "Placement's largest difference", 0, 1, 0.05),
         _ => null,

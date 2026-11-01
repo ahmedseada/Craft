@@ -601,6 +601,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         DetachPublishedDiagnostics();
         Folding.Dispose();
         InlineCompletion.Dispose();
+        _inlineChat?.Dispose();
         DisposeSemantic();
         if (_session is not null)
         {
@@ -805,6 +806,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         OnSemanticBufferChanged(e);
         InlineCompletion.OnChanged();
+        _inlineChat?.OnBufferChanged(e);
         Invalidate();
     }
 

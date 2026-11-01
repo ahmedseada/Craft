@@ -44,6 +44,7 @@ public sealed class EditorRenderer : IDisposable
     private readonly Dictionary<int, LineRuns> _lines = [];
     private readonly Dictionary<int, string> _numbers = [];
     private readonly GhostTextRenderer _ghost = new();
+    private readonly InlineChatRenderer _inlineChat = new();
     private TokenSpan[] _clipped = ArrayPool<TokenSpan>.Shared.Rent(64);
     private EditorModel? _model;
     private ITheme? _theme;
@@ -96,6 +97,12 @@ public sealed class EditorRenderer : IDisposable
 
     /// <summary>Whether the inline completion's hint bar was drawn in the last frame.</summary>
     public bool GhostHintDrawn => _ghost.HintDrawn;
+
+    /// <summary>The inline chat's ghost diff rows drawn in the last frame (X part 9 item 23).</summary>
+    public int InlineChatRowsDrawn => _inlineChat.RowsDrawn;
+
+    /// <summary>Whether the inline chat's box was drawn in the last frame.</summary>
+    public bool InlineChatBoxDrawn => _inlineChat.BoxDrawn;
 
     /// <summary>
     /// Draws <paramref name="model"/> scrolled to (<paramref name="scrollX"/>, <paramref name="scrollY"/>) in a viewport of
@@ -211,6 +218,10 @@ public sealed class EditorRenderer : IDisposable
         var whitespace = WhitespaceModeOf(options.RenderWhitespace);
         int inline = InlineModeOf(options.InlineDiagnostics);
         SquiggleSegmentsDrawn = 0;
+        // X part 9: the spell check of the lines drawn (kept per line; a warm frame checks and allocates nothing).
+        var spellChecker = model.SpellCheckerForFrame;
+        var spelling = spellChecker is not null && model.Spelling.Begin(spellChecker, visible, options.PaintCacheLines) ? model.Spelling : null;
+        var spellScope = Spelling.SpellCheckLayer.ScopeOf(model.Language);
         GuidesDrawn = 0;
         WordHighlightsDrawn = 0;
         WhitespaceMarksDrawn = 0;
@@ -391,6 +402,8 @@ public sealed class EditorRenderer : IDisposable
                 {
                     DrawInlineDiagnostic(canvas, model, diagnostics, firstDiagnostic, index, line, inline, endX + (2 * cell), endTop, cell, textLeft, viewportWidth - model.OverviewRulerWidth, colors);
                 }
+
+                spelling?.DrawLine(canvas, spellChecker!, spellScope, index, line.Start, text, spans[spanIndex..], left, top, cell, height, tabSize, textLeft, viewportWidth, colors.Spelling);
             }
         }
         finally
@@ -474,6 +487,11 @@ public sealed class EditorRenderer : IDisposable
 
         Step = StepGhost;
         _ghost.Draw(canvas, model, scrollX, scrollY, viewportWidth, viewportHeight);
+        if (model.InlineChatOpen || _inlineChat.BoxDrawn || _inlineChat.RowsDrawn > 0)
+        {
+            _inlineChat.Draw(canvas, model, viewportWidth, viewportHeight);
+        }
+
         Step = StepPopups;
         EditorPopupRenderer.Draw(canvas, model, this);
         model.NotePainted();
@@ -491,7 +509,7 @@ public sealed class EditorRenderer : IDisposable
     public static bool CaretsOnTextLayer(EditorModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
-        return model.InlineCompletion.IsShown || model.Tooltip is not null || model.CompletionBox() is not null;
+        return model.InlineCompletion.IsShown || model.InlineChatOpen || model.Tooltip is not null || model.CompletionBox() is not null;
     }
 
     /// <summary>
@@ -635,7 +653,7 @@ public sealed class EditorRenderer : IDisposable
     /// <summary>The line marks the last frame drew (X part 8: a repository's changes in the gutter).</summary>
     public int LineMarksDrawn { get; private set; }
 
-    /// <summary>The colour of a line mark of <paramref name="kind"/> (added: success, changed: info, removed: error, a conflict: warning).</summary>
+    /// <summary>The colour of a line mark of <paramref name="kind"/> (added: success, changed: info, removed: error, a conflict: warning, a note: the accent).</summary>
     public static uint LineMarkColor(LineMarkKind kind, EditorColors colors)
     {
         ArgumentNullException.ThrowIfNull(colors);
@@ -644,10 +662,23 @@ public sealed class EditorRenderer : IDisposable
             LineMarkKind.Added => colors.Success,
             LineMarkKind.Changed => colors.Info,
             LineMarkKind.Deleted => colors.Error,
+            LineMarkKind.TestReady => colors.GutterText,
+            LineMarkKind.TestPassed => colors.Success,
+            LineMarkKind.TestFailed => colors.Error,
+            LineMarkKind.Note => colors.Accent,
             LineMarkKind.Bookmark => colors.Accent,
             _ => colors.Warning,
         };
     }
+
+    /// <summary>The glyph a test's mark draws at the gutter's left (X part 9): ▶ to run, ✓ passed, ✗ failed, ○ skipped.</summary>
+    public static string LineMarkGlyph(LineMarkKind kind) => kind switch
+    {
+        LineMarkKind.TestPassed => "✓",
+        LineMarkKind.TestFailed => "✗",
+        LineMarkKind.TestSkipped => "○",
+        _ => "▶",
+    };
 
     // X part 8: the marks on the visible lines, a bar in the gutter's strip (a removed run a wedge between two lines); the
     // first is found by a binary search, so a frame reads only the marks it draws.
@@ -687,6 +718,19 @@ public sealed class EditorRenderer : IDisposable
         {
             var mark = marks[i];
             uint color = LineMarkColor(mark.Kind, colors);
+            if (mark.IsGlyph)
+            {
+                // X part 9: a test's glyph in the gutter's first cell (left of the line numbers).
+                if (mark.Line < visible.First || mark.Line > visible.Last || (hidden && map.IsHidden(mark.Line)))
+                {
+                    continue;
+                }
+
+                canvas.DrawText(LineMarkGlyph(mark.Kind), model.Metrics.CellWidth * 0.15f, (model.RowOfLine(mark.Line) * height) - scrollY, new TextStyle(color));
+                LineMarksDrawn++;
+                continue;
+            }
+
             if (mark.Kind == LineMarkKind.Bookmark)
             {
                 // X part 9: a bookmark is the accent's tag at the gutter's left edge (clear of the numbers and the change bar).

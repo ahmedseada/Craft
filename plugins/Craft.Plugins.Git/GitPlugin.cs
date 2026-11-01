@@ -88,6 +88,9 @@ public sealed class GitPlugin : IEditorPlugin
     /// <summary>Writes the commit message with a model already loaded.</summary>
     public const string GenerateCommand = "git.generateCommitMessage";
 
+    /// <summary>Reviews the changes with a model already loaded (X part 11 item 4).</summary>
+    public const string ReviewCommand = "git.reviewChanges";
+
     /// <summary>Commits the staged changes with the message in the box.</summary>
     public const string CommitCommand = "git.commit";
 
@@ -133,6 +136,7 @@ public sealed class GitPlugin : IEditorPlugin
         Command(SourceControlProviders.ShowCommand, "Source Control: Show the view", s => { s.Show(); return Task.CompletedTask; }),
         Command(SourceControlProviders.BranchCommand, "Source Control: Switch branch", s => s.PickBranchAsync()),
         Command(GenerateCommand, "Source Control: Generate commit message", s => s.ActAsync(SourceControlView.Generate, null)),
+        Command(ReviewCommand, "Source Control: Review changes", s => s.ActAsync(SourceControlView.Review, null)),
         Command(CommitCommand, "Source Control: Commit", s => s.ActAsync(SourceControlView.Commit, null)),
         Command(RefreshCommand, "Source Control: Refresh", s => s.Repository?.RefreshAsync() ?? Task.CompletedTask),
         Command(PullCommand, "Source Control: Pull", s => s.ActAsync(SourceControlView.Pull, null)),
@@ -150,7 +154,7 @@ public sealed class GitPlugin : IEditorPlugin
     public string Name => GitSettings.PluginName;
 
     /// <inheritdoc />
-    public string Summary => "Source control on your own git: the Source Control view, the changes in the gutter, the branch in the status bar, Generate commit message";
+    public string Summary => "Source control on your own git: the Source Control view, the changes in the gutter, the branch in the status bar, Generate commit message, Review changes";
 
     /// <inheritdoc />
     public IReadOnlyList<PluginSetting> Settings => GitSettings.Declared;

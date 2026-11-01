@@ -115,6 +115,7 @@ public sealed class ProblemItem
 public sealed class ProblemsList : PanelList
 {
     private const string FixTitle = "Fix";
+    private const string BuildFixTitle = "Fix with AI";
     private const string ExplainTitle = "Explain";
     private readonly List<ProblemGroup> _groups = [];
     private readonly List<object> _rows = [];
@@ -336,7 +337,7 @@ public sealed class ProblemsList : PanelList
                 Toggle(group);
                 break;
             case ProblemItem item:
-                if (HasActions && (index == Hover || ReferenceEquals(item, Selection.Focus)) && ButtonAt(metrics, viewX, width) is { } kind)
+                if (HasActions && (index == Hover || ReferenceEquals(item, Selection.Focus)) && ButtonAt(metrics, viewX, width, FixTitleOf(item)) is { } kind)
                 {
                     ActionRequested?.Invoke(this, (item, kind));
                     return;
@@ -426,14 +427,15 @@ public sealed class ProblemsList : PanelList
                     canvas.DrawText(item.Text, 5 * cell, y, text);
                     // The place at the right, over the message's end; the buttons on the hovered or keyboard's row.
                     bool buttons = HasActions && (index == Hover || ReferenceEquals(item, Selection.Focus));
-                    float right = buttons ? ButtonsLeft(cell, width) : width - cell;
+                    string fix = FixTitleOf(item);
+                    float right = buttons ? ButtonsLeft(cell, width, fix) : width - cell;
                     float place = right - ((item.Place.Length + 2) * cell);
                     canvas.FillRect(place - cell, top, width - place + cell, rowHeight, fill);
                     canvas.DrawText(item.Place, place, y, quiet);
                     if (buttons)
                     {
-                        DrawButton(canvas, colors, FixTitle, ButtonsLeft(cell, width), top, rowHeight, cell, y);
-                        DrawButton(canvas, colors, ExplainTitle, ButtonsLeft(cell, width) + ((FixTitle.Length + 3) * cell), top, rowHeight, cell, y);
+                        DrawButton(canvas, colors, fix, ButtonsLeft(cell, width, fix), top, rowHeight, cell, y);
+                        DrawButton(canvas, colors, ExplainTitle, ButtonsLeft(cell, width, fix) + ((fix.Length + 3) * cell), top, rowHeight, cell, y);
                     }
 
                     if (picked && ReferenceEquals(item, Selection.Focus))
@@ -447,19 +449,29 @@ public sealed class ProblemsList : PanelList
     }
 
     /// <summary>The code action kind of the button at <paramref name="viewX"/> on a row with buttons, or null.</summary>
-    public static string? ButtonAt(FontMetrics metrics, float viewX, float width)
+    public static string? ButtonAt(FontMetrics metrics, float viewX, float width) => ButtonAt(metrics, viewX, width, FixTitle);
+
+    /// <summary>
+    /// The code action kind of the button at <paramref name="viewX"/> on a row whose Fix button reads <paramref name="fixTitle"/>
+    /// ("Fix with AI" on a build's row, X part 11), or null.
+    /// </summary>
+    public static string? ButtonAt(FontMetrics metrics, float viewX, float width, string fixTitle)
     {
+        ArgumentNullException.ThrowIfNull(fixTitle);
         float cell = metrics.CellWidth;
-        float left = ButtonsLeft(cell, width);
-        float fixEnd = left + ((FixTitle.Length + 2) * cell);
-        float explainStart = left + ((FixTitle.Length + 3) * cell);
+        float left = ButtonsLeft(cell, width, fixTitle);
+        float fixEnd = left + ((fixTitle.Length + 2) * cell);
+        float explainStart = left + ((fixTitle.Length + 3) * cell);
         float explainEnd = explainStart + ((ExplainTitle.Length + 2) * cell);
         return viewX >= left && viewX < fixEnd ? CodeActionKinds.Fix
             : viewX >= explainStart && viewX < explainEnd ? CodeActionKinds.Explain
             : null;
     }
 
-    private static float ButtonsLeft(float cell, float width) => width - ((FixTitle.Length + ExplainTitle.Length + 6) * cell);
+    private static float ButtonsLeft(float cell, float width, string fixTitle) => width - ((fixTitle.Length + ExplainTitle.Length + 6) * cell);
+
+    /// <summary>What a row's Fix button says: "Fix with AI" on a build's or test's row (X part 11 item 5), else "Fix".</summary>
+    public static string FixTitleOf(ProblemItem item) => (item ?? throw new ArgumentNullException(nameof(item))).Group.Owner is Run.RunProblemFile ? BuildFixTitle : FixTitle;
 
     private static void DrawButton(IEditorCanvas canvas, EditorColors colors, string title, float left, float top, float rowHeight, float cell, float y)
     {

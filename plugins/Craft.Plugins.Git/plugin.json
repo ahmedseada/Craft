@@ -1,7 +1,7 @@
 {
   "name": "Craft.Plugins.Git",
   "version": "0.1.0",
-  "summary": "X part 8 · source control: the Source Control view on your own git, its count on the rail, the changes in the gutter, the branch in the status bar, Generate commit message with a model already loaded [SourceControlProviders \"git\", EditorRailItems, EditorMenus]",
+  "summary": "X part 8 · source control: the Source Control view on your own git, its count on the rail, the changes in the gutter, the branch in the status bar, Generate commit message and Review changes with a model already loaded [SourceControlProviders \"git\", EditorRailItems, EditorMenus]",
   "contractVersion": "1.1",
   "capabilities": ["files", "network"]
 }

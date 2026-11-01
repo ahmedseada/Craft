@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Lint",
+  "version": "0.1.0",
+  "summary": "W · Lint: the project's ESLint (TSLint where a project still has tslint.json) on save and on \"Lint workspace\", its problems in the editor and in Problems, its fixes as one diff, \"Set up ESLint\"; the project's Prettier as the formatter where it has a Prettier config [Linters \"eslint\", \"tslint\", DocumentFormatters \"prettier\", CodeActionProviders \"lint\", EditorCommands]",
+  "contractVersion": "1.1",
+  "capabilities": ["files", "sandbox"]
+}

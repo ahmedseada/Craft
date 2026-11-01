@@ -21,6 +21,8 @@ Windows run (2026-11-01)" at the end.
 | 8b | The recovery prompt at start, X part 9's look group 24-26 | Stopped for W, just begun; for later, after W |
 | 9 | Phase W, the web languages | Running: W0, W-files and W-npm first (the owner, 2026-11-01: "start Web now", "stop all") |
 | 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); W-script's "Left, for later" line (re-reading a project on WorkspaceChanged, a contextual word split across lines, generics in a JSX tag, Prettier-style layout) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
+
+| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); left of W-tools: a closed file's Fix in Problems, ESLint's multi-pass fix, ESLint and Angular output in the Run view's problems (lint as you type waits for W-semantic) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
 | 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned; starts only on the owner's word |
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
@@ -5296,6 +5298,163 @@ $env:CRAFT_FILTER="WebScript|WebKit|WebPlugins|WebFiles|WebStyle|ProjectLanguage
 dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
 $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
 ```
+
+### W-tools as built (2026-11-01)
+
+Slot w3, Craft only: Idrak needed nothing more (W-npm's `CommandLimits.Requester` and `Purpose` carry the lint plug-in's
+questions); no cause was found in Idrak.
+
+**Contracts** (`Craft.Abstractions`, additive, contract 1.1; the dumps and the contract list grew by lines only):
+- (6) `IEditorHost.PublishDiagnostics(path, source, snapshot or null, items)` and `ClearDiagnostics(source)` (default: false,
+  nothing); `FileDiagnostic` (lines and UTF-16 columns from 1, end exclusive; `In(snapshot)`, `Of(snapshot, diagnostic)`,
+  `PositionIn`); `EditorDiagnostic.Source`. The host (`EditorHost.Diagnostics.cs`) gives each item the id "source(id)"
+  ("eslint(no-unused-vars)"): an open document's lists live in `DocumentDiagnostics` (Craft.Editor, per document, shared by
+  its editors, moved through every edit; a list published for an older text is moved through the edits since, 512 kept,
+  else placed by line and column), a closed file's are kept by line and column (`ClosedProblemFiles`,
+  `PublishedDiagnosticsChanged`) and go onto the text when it opens and back when it closes; a plug-in's diagnostics leave
+  every file when it is deactivated. `EditorModel` joins the language's own with the published ones (both sorted, one
+  merge, only once the published ones are in the current text's positions), so squiggles, the hover's problem text, the
+  line-end message ("Missing semicolon.  eslint(semi)", cut per line and kept: a warm frame makes no string), the
+  lightbulb, the counts and Problems take them, also for a file with no semantic session (a .ts today). `ProblemSource`
+  takes a closed file (`ForClosedFile(path, lines)`: no snapshot, no text read); its rows open the file at their line and
+  column, and Fix on such a row opens it first.
+- (7) `ILinter : IKind` (`Title`, `Languages`, `Extensions`, `Unavailable`, `DetectAsync(path, root)` off the UI thread,
+  `LintAsync(LintRequest)`), `LinterProject` (folder, config, version, problem, note, variables, program), `LintRequest`
+  (the project, the files, the sandbox and limits its driver chose, a scratch folder), `LintResult`, `LintFileResult`,
+  `LintFix` (UTF-16 range, title, its diagnostic, `Suggestion`), and the registry `Linters` (`ForFile` by extension).
+- (8) `IDocumentFormatter : IKind` (`Formats`, `Cached`, `FitAsync`, `FormatAsync` returning the whole text; FormatException
+  for a text it cannot format), `DocumentFormatterFit`, `DocumentFormatRequest` (tab size, spaces, `Automatic`), and
+  `DocumentFormatters` (`Handles`, `ChooseAsync`, `Describe`). `EditorModel.FormatDocumentAsync` asks them first, turns the
+  text into one edit per changed run of lines (`LineEdits.Between`) as one undo step, then falls back to the language's
+  own; `CanFormat`, `FormatterDescription`; format on save passes `automatic: true`; the status bar's language tooltip
+  says "Formatter: Prettier 3.8.1, the project's (.prettierrc)" (`ShellText.FormatterTooltip`).
+
+**The lint plug-in** (`plugins/Craft.Plugins.Lint`, pre-installed and removable, package `Craft.Plugins.Lint` with the
+plug-ins "lint" and "prettier", contract 1.1, capabilities files and sandbox; it carries a copy of the npm plug-in's
+assembly for Node: `CRAFT_PLUGIN_NPM_NODE` honoured when the npm plug-in is there, else Node on PATH):
+- **ESLint** ("eslint"): the nearest `eslint.config.{js,mjs,cjs,ts,mts,cts}` from the file up to the workspace's root
+  first; only without one an `.eslintrc*` or package.json's `eslintConfig`, run on ESLint 9 with
+  `ESLINT_USE_FLAT_CONFIG=false` (said once, with `npx @eslint/migrate-config`), refused on ESLint 10 (said, with the
+  migration), as is on ESLint 8; the project's own `node_modules/eslint/bin/eslint.js` (hoisted folders up to the root),
+  a global one beside Node only with `CRAFT_PLUGIN_LINT_ALLOWGLOBAL` (machine-only); its version read from its
+  package.json as bytes. Run as `node eslint.js --format json --output-file <data folder>/lint/tmp/eslint-<id>.json
+  [--no-warn-ignored] FILES` (or `.`) in the configuration's folder; exit 0 and 1 are results, 2 a failure said with its
+  first lines; the report read as bytes (`LintJson.ReadEslint`, `Utf8JsonReader`: messages, `fix.range`, suggestions,
+  fatal parse errors; `source` and the deprecated rules skipped unread) and deleted.
+- **TSLint** ("tslint"): only `tslint.json`/`tslint.yaml` where ESLint found no configuration (registered after ESLint,
+  the first that detects a project wins), `node tslint --format json --out REPORT --project tsconfig.json FILES`, exit 0
+  and 2 are results; said deprecated once per workspace (with `npx tslint-to-eslint-config`).
+- **Runs**: `linter` = auto|eslint|tslint|off, `runOn` = save|manual; saves of linted files (by extension, inside the
+  workspace) within `delayMs` (500) are one run per project; a newer run cancels the older and takes its files; each run
+  an activity "ESLint: 2 files" with Cancel, its time `timeLimitSeconds` (120), telemetry `lint.run`. What a run found is
+  published per file (a clean file's empty list clears it; a requested file the report left out, and a whole project's
+  file it no longer lists, cleared); a failure is a status entry per linter with "Lint workspace". Commands: "Lint: Lint
+  this file", "Lint: Lint workspace" (every folder with a configuration, `ignore` never walked, each project linted whole:
+  Problems lists the closed files), "Lint: Fix ESLint problems in file", "Lint: Set up ESLint", "Lint: Forget this
+  workspace's approvals".
+- **Fixes**: the code action provider "lint": for a problem at the caret its fix ("Fix: Missing semicolon. (semi)") and
+  its suggestions ("Remove unused variable 'x'."), and "Fix ESLint problems in file" (every automatic fix in order, one
+  that overlaps an earlier one left out, as one ESLint pass does); each a diff the user accepts, one undo step, offered
+  only while the document's text is the one linted (a file linted while closed takes the text it opens with).
+- **The sandbox and the approval**: a run the user asked for goes through `sandbox` (approve-each, asking each time, as
+  "the lint plug-in"); a run on save asks once per workspace and program ("Let ESLint run on its own in this workspace?":
+  Allow in this workspace, Not now), the approval written to the user's settings in the data folder as
+  `CRAFT_PLUGIN_LINT_ALLOWED` = "folder|program;…" (machine-only: a workspace's file cannot allow itself), shown and
+  removable on the settings page (Editor › Lint), or taken back by "Lint: Forget this workspace's approvals"; once
+  allowed, that program's runs there go through `autoSandbox` (process). "Not now" holds for the window.
+- **Set up ESLint**: a saved JS/TS file of a workspace with a package.json and no configuration shows a status entry once
+  per workspace with "Set up ESLint", which runs `node npm-cli.js init @eslint/config@latest` in the workspace through the
+  asking sandbox's interactive start, in the program tab "Lint: set up ESLint" (no time limit: it asks questions), its
+  end said; the projects are read again after it.
+- **Prettier** ("prettier", `PrettierFormatter`): the project's own `node_modules/prettier` (a global one only with
+  `CRAFT_PLUGIN_PRETTIER_ALLOWGLOBAL`) and a Prettier configuration (`.prettierrc*`, `prettier.config.*`, or "prettier" in
+  package.json; `requireConfig`, on) make it the formatter of `.js .mjs .cjs .jsx .ts .mts .cts .tsx .css .scss .less .html
+  .htm .json .jsonc .json5 .md .markdown .yaml .yml` (`extensions`); found once per folder off the UI thread (when the
+  active file changes), forgotten when the workspace changes or a configuration or package.json is saved; Craft's built-in
+  formatters otherwise. A format writes the text to `<data folder>/lint/tmp` and runs Craft's runner script
+  (`craft-prettier.cjs`, written there once) with Node: Prettier's own `getFileInfo` (.prettierignore), `resolveConfig`
+  (with .editorconfig) and `format` for the file's path; through the same gate (Format Document asks through `sandbox`;
+  format on save asks once per workspace; declined, the file is saved as it is).
+- **Options** (each with its shape; Editor › Lint and Editor › Prettier): `CRAFT_PLUGIN_LINT_LINTER` (auto), `_RUNON`
+  (save), `_DELAYMS` (500), `_ALLOWGLOBAL` (false, machine-only), `_TIMELIMITSECONDS` (120), `_SANDBOX` (approve-each,
+  machine-only), `_AUTOSANDBOX` (process, machine-only), `_ALLOWED` (machine-only list), `_IGNORE`;
+  `CRAFT_PLUGIN_PRETTIER_ENABLED` (true), `_REQUIRECONFIG` (true), `_ALLOWGLOBAL` (false, machine-only),
+  `_TIMELIMITSECONDS` (30), `_EXTENSIONS`.
+- **Android and AOT**: the plug-in is C# on `Utf8JsonReader` with no reflection; Node does not run on Android, so the
+  linters and Prettier say Unavailable there (`LintNode.DeviceProblem`) and nothing runs.
+
+**Decisions on the recommendation (the owner away; one line each).**
+- Prettier lives inside the lint package as a second plug-in "prettier" (its own `CRAFT_PLUGIN_PRETTIER_*`), sharing the lint plug-in's sandboxes and approvals.
+- The lint plug-in carries a copy of the npm plug-in's assembly (as each web plug-in carries Craft.Web) for one Node finder; it reads npm's settings only when that plug-in is registered.
+- A published diagnostic's id is "source(id)" and it keeps `Source`, so every surface (Problems, hover, quick fix titles) shows it with no change of its own; the line-end message adds the id after the message.
+- `IEditorHost.ClearDiagnostics(source)` was added beside `PublishDiagnostics` (a linter turned off, a workspace switched, a plug-in deactivated).
+- Closed files' diagnostics are kept by line and column and placed only when the file opens: no file is read to list a problem.
+- A linter returns the fixes its tool gives in the linted text's positions; the driver offers them only while the document's version is the one linted (no stale offsets), never by text search.
+- "Fix … problems in file" applies one pass of non-overlapping automatic fixes from the report (no second `--fix` run); suggestions only one at a time.
+- The linter is chosen per file by the first registered linter whose configuration is found (ESLint before TSLint); the lint plug-in drives any registered linter, a third party's too.
+- ESLint runs in its configuration's folder with paths relative to it; `--no-warn-ignored` from ESLint 9 (a saved ignored file is not a warning).
+- `.eslintrc` on ESLint 10 is refused with the migration command rather than guessed; on ESLint 8 a flat configuration gets `ESLINT_USE_FLAT_CONFIG=true`.
+- The question's requester is "the lint plug-in" (a phrase, as W-npm's "the npm plug-in"), not the bare word "lint".
+- Manual runs go through `sandbox` (approve-each asks); runs on save need the once-per-workspace approval and then go through `autoSandbox` (process); an allowed program's manual runs take the allowed path too.
+- The approval is a machine-only plug-in setting (a list) written to the user's settings file in the data folder: shown and removable on the settings page, never the workspace's.
+- "Not now", and an approval that could not be written, are kept for the process, shared by both plug-ins' gates.
+- Lint reports and Prettier's text go through files in the data folder's `lint/tmp` (the sandboxes take no standard input), deleted after each run.
+- A formatter returns the whole formatted text; the editor makes the line edits (so the caret on unchanged lines stays) and the undo step.
+- Format on save with Prettier not allowed saves the file as it is (no built-in formatter in Prettier's place, which would fight the project's style).
+- Lint as you type waits for W-semantic (as planned); only saved text is linted.
+
+**Measured** (the 4-core Linux container, Release, the real test): the project's ESLint 10.1.0 linting a two-file project
+whole ("Lint workspace", through the process sandbox, report read and published): 338 ms; Prettier 3.8.1 formatting one
+file through Craft's runner: 176 ms (both cold: one Node start each).
+
+**Tests**: new group `WebLint` (10): ESLint's and TSLint's JSON reports from fixtures (BOM, suggestions, a fatal parse
+error, fixes of two replacements, severities, a cut report, package.json's version and keys); the detection matrix (flat
+nearest, flat over a nearer .eslintrc, ESLint 9's legacy mode said, ESLint 10 refusing it, ESLint 8, no install said, a
+global one only when allowed, TSLint deprecated and its command, the walk stopping at the root, the projects of Lint
+workspace, the registry); published diagnostics merged per source with the language's, moved and dropped by edits, a list
+for an older text moved, the line-end message's source, Problems for a closed file by line and column, onto the text when
+opened and back when closed, ClearDiagnostics; a plug-in's diagnostics on a file with no language, gone with the plug-in;
+a fix as one diff of two hunks and one undo step, the lightbulb's actions and suggestions, none on a changed text; two saves
+joined, a newer run cancelling the older and taking its files; the approval asked once, Not now, a manual run through the
+asking sandbox, remembered in the user's settings as folder|program, machine-only (a workspace's value passed over), not
+asked again, revoked and asked again; Set up ESLint offered and run as `npm init @eslint/config@latest` through the
+sandbox, TSLint said deprecated once; Prettier only with a configuration (package.json's key, .prettierrc, requireConfig,
+read once per folder), chosen by the registry, Format Document through it as one undo step, the tooltip, format on save
+declined; the plug-in from its own folder (its copy of the npm assembly, no shared contracts) and removed; real ESLint and
+Prettier (linked into the test project from the machine's install or `CRAFT_TEST_ESLINT`/`CRAFT_TEST_PRETTIER`; skipped
+with the reason without them; they ran here). First run of the filter
+`WebLint|WebNpm|WebPlugins|ProblemsPanel|InlineDiagnostics|Lightbulb|Settings|ApiGuard|Inventory` (68): 62 passed; the six
+were the API dumps and the inventory (regenerated), one wrong expectation of the detection test, one real bug (the lint and
+Prettier plug-ins' gates kept separate in-window approvals, so an approval given through one was unknown to the other: now
+shared), and `WebNpm.InstallIsAnActivityAndYarnPnpmAndBunAreSaid` (npm's own test, untouched here; it passed on its rerun:
+a timing race between its install's own rescan and the test's). The rerun of the failed: 12 of 12. API dumps of
+Craft.Abstractions and Craft.Editor, the new `api/Craft.Plugins.Lint.txt`, the contract list (1.1) and `plans/inventory.md`
+(Linters, DocumentFormatters) regenerated, lines added only.
+
+**Not run here** (the owner's): the squiggles, line-end messages, lightbulb and Problems rows of a linted file on WinUI; the
+status bar's formatter tooltip; the approval and approve-each dialogs; "Set up ESLint" answering npm's questions in the
+program tab and installing over the network; Windows' global ESLint layout beside node.exe.
+
+**Left, for later**: lint as you type (W-semantic); a Problems row's Fix on a closed file opens it rather than fixing it;
+ESLint's multi-pass `--fix` (one pass of the report's fixes is applied); a yarn or pnpm project's setup runs npm; the Run
+view's problem parser does not read ESLint's or Angular's output (W-npm's line).
+
+**The owner's commands:**
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebLint|WebNpm|WebPlugins|ProblemsPanel|InlineDiagnostics|Lightbulb|Settings|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$p="D:\Projects\Craft\test-output\LintTestPOC"; New-Item -ItemType Directory -Force $p | Out-Null; cd $p; npm init -y; npm i -D eslint prettier; Set-Content eslint.config.mjs 'export default [{ rules: { "no-unused-vars": "error", "semi": ["warn", "always"] } }];'; Set-Content .prettierrc '{ "semi": false, "singleQuote": true }'; Set-Content a.js "const x = 1`nconsole.log(`"hi`")"; cd D:\Projects\Craft
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\LintTestPOC
+```
+In the app: open a.js and save (Ctrl+S): the question "Let ESLint run on its own in this workspace?" (Allow in this
+workspace), then the squiggles, "'x' is assigned a value but never used.  eslint(no-unused-vars)" at the line's end, the
+lightbulb (its "Fix ESLint problems in file": a diff, Accept, then Ctrl+Z once); Ctrl+Shift+P "Lint: Lint workspace" with
+a.js closed fills Problems; hover the status bar's language item: "Formatter: Prettier …, the project's (.prettierrc)";
+Shift+Alt+F (approve-each asks for node; Allow once): quotes and semicolons by .prettierrc; Settings › Editor › Lint ›
+"Allowed to run on their own" lists the folder (remove it: the next save asks again). In `test-output\WebTestPOC` (W's
+Angular project, no ESLint): save a .ts, the status entry "Set up ESLint", run it and answer npm's questions in its tab.
 
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 

@@ -119,6 +119,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         Folding = new EditorFolding(this);
         document.Buffer.Changed += OnBufferChanged;
         AttachLineMarks();
+        AttachPublishedDiagnostics();
     }
 
     /// <summary>
@@ -597,6 +598,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         _document.Buffer.Changed -= OnBufferChanged;
         _lightbulb?.Dispose();
         DetachLineMarks();
+        DetachPublishedDiagnostics();
         Folding.Dispose();
         InlineCompletion.Dispose();
         DisposeSemantic();

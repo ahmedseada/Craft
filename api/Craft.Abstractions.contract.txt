@@ -501,6 +501,42 @@ Craft.Abstractions.DiffLineKind : System.IComparable
 Craft.Abstractions.DiffLineKind : System.IConvertible
 Craft.Abstractions.DiffLineKind : System.IFormattable
 Craft.Abstractions.DiffLineKind : System.ISpanFormattable
+Craft.Abstractions.DocumentFormatRequest
+Craft.Abstractions.DocumentFormatRequest  Craft.Abstractions.DocumentFormatRequest <Clone>$()
+Craft.Abstractions.DocumentFormatRequest  Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
+Craft.Abstractions.DocumentFormatRequest  System.Boolean Automatic { get; init; }
+Craft.Abstractions.DocumentFormatRequest  System.Boolean Equals(Craft.Abstractions.DocumentFormatRequest other)
+Craft.Abstractions.DocumentFormatRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.DocumentFormatRequest  System.Boolean InsertSpaces { get; init; }
+Craft.Abstractions.DocumentFormatRequest  System.Int32 GetHashCode()
+Craft.Abstractions.DocumentFormatRequest  System.Int32 TabSize { get; init; }
+Craft.Abstractions.DocumentFormatRequest  System.String FilePath { get; init; }
+Craft.Abstractions.DocumentFormatRequest  System.String ToString()
+Craft.Abstractions.DocumentFormatRequest  System.String WorkspaceRoot { get; init; }
+Craft.Abstractions.DocumentFormatRequest  System.Void Deconstruct(out System.String FilePath, out Craft.Abstractions.ITextSnapshot Snapshot, out System.String WorkspaceRoot)
+Craft.Abstractions.DocumentFormatRequest  ctor(System.String FilePath, Craft.Abstractions.ITextSnapshot Snapshot, System.String WorkspaceRoot)
+Craft.Abstractions.DocumentFormatRequest : System.IEquatable<Craft.Abstractions.DocumentFormatRequest>
+Craft.Abstractions.DocumentFormatterFit
+Craft.Abstractions.DocumentFormatterFit  Craft.Abstractions.DocumentFormatterFit <Clone>$()
+Craft.Abstractions.DocumentFormatterFit  System.Boolean Applies { get; init; }
+Craft.Abstractions.DocumentFormatterFit  System.Boolean Equals(Craft.Abstractions.DocumentFormatterFit other)
+Craft.Abstractions.DocumentFormatterFit  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.DocumentFormatterFit  System.Int32 GetHashCode()
+Craft.Abstractions.DocumentFormatterFit  System.String Description { get; init; }
+Craft.Abstractions.DocumentFormatterFit  System.String ToString()
+Craft.Abstractions.DocumentFormatterFit  System.Void Deconstruct(out System.Boolean Applies, out System.String Description)
+Craft.Abstractions.DocumentFormatterFit  ctor(System.Boolean Applies, System.String Description)
+Craft.Abstractions.DocumentFormatterFit : System.IEquatable<Craft.Abstractions.DocumentFormatterFit>
+Craft.Abstractions.DocumentFormatters
+Craft.Abstractions.DocumentFormatters  static Craft.Abstractions.DocumentFormatterFit Describe(System.String filePath, System.String languageName)
+Craft.Abstractions.DocumentFormatters  static Craft.Abstractions.IDocumentFormatter Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.DocumentFormatters  static Craft.Abstractions.IDocumentFormatter Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.DocumentFormatters  static System.Boolean Handles(System.String filePath, System.String languageName)
+Craft.Abstractions.DocumentFormatters  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.DocumentFormatters  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IDocumentFormatter> All { get; }
+Craft.Abstractions.DocumentFormatters  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.DocumentFormatters  static System.Threading.Tasks.Task<System.ValueTuple<Craft.Abstractions.IDocumentFormatter, System.String>> ChooseAsync(System.String filePath, System.String languageName, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.DocumentFormatters  static System.Void Register(Craft.Abstractions.IDocumentFormatter formatter)
 Craft.Abstractions.DocumentSymbol
 Craft.Abstractions.DocumentSymbol  Craft.Abstractions.DocumentSymbol <Clone>$()
 Craft.Abstractions.DocumentSymbol  Craft.Abstractions.ScopeKind Kind { get; init; }
@@ -636,6 +672,7 @@ Craft.Abstractions.EditorDiagnostic  System.Int32 Length { get; init; }
 Craft.Abstractions.EditorDiagnostic  System.Int32 Start { get; init; }
 Craft.Abstractions.EditorDiagnostic  System.String Id { get; init; }
 Craft.Abstractions.EditorDiagnostic  System.String Message { get; init; }
+Craft.Abstractions.EditorDiagnostic  System.String Source { get; init; }
 Craft.Abstractions.EditorDiagnostic  System.String ToString()
 Craft.Abstractions.EditorDiagnostic  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out Craft.Abstractions.DiagnosticSeverity Severity, out System.String Id, out System.String Message)
 Craft.Abstractions.EditorDiagnostic  ctor(System.Int32 Start, System.Int32 Length, Craft.Abstractions.DiagnosticSeverity Severity, System.String Id, System.String Message)
@@ -883,6 +920,25 @@ Craft.Abstractions.EditorToolSets  static System.Collections.Generic.IReadOnlyLi
 Craft.Abstractions.EditorToolSets  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.EditorToolSets  static System.String Origin(System.String name)
 Craft.Abstractions.EditorToolSets  static System.Void Register(Craft.Abstractions.IEditorToolSet set)
+Craft.Abstractions.FileDiagnostic
+Craft.Abstractions.FileDiagnostic  Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
+Craft.Abstractions.FileDiagnostic  Craft.Abstractions.EditorDiagnostic In(Craft.Abstractions.ITextSnapshot snapshot, System.String source = null, System.String id = null)
+Craft.Abstractions.FileDiagnostic  System.Boolean Equals(Craft.Abstractions.FileDiagnostic other)
+Craft.Abstractions.FileDiagnostic  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.FileDiagnostic  System.Int32 Column { get; init; }
+Craft.Abstractions.FileDiagnostic  System.Int32 EndColumn { get; init; }
+Craft.Abstractions.FileDiagnostic  System.Int32 EndLine { get; init; }
+Craft.Abstractions.FileDiagnostic  System.Int32 GetHashCode()
+Craft.Abstractions.FileDiagnostic  System.Int32 Line { get; init; }
+Craft.Abstractions.FileDiagnostic  System.String Id { get; init; }
+Craft.Abstractions.FileDiagnostic  System.String Message { get; init; }
+Craft.Abstractions.FileDiagnostic  System.String ToString()
+Craft.Abstractions.FileDiagnostic  System.Void Deconstruct(out System.Int32 Line, out System.Int32 Column, out System.Int32 EndLine, out System.Int32 EndColumn, out Craft.Abstractions.DiagnosticSeverity Severity, out System.String Id, out System.String Message)
+Craft.Abstractions.FileDiagnostic  ctor(System.Int32 Line, System.Int32 Column, System.Int32 EndLine, System.Int32 EndColumn, Craft.Abstractions.DiagnosticSeverity Severity, System.String Id, System.String Message)
+Craft.Abstractions.FileDiagnostic  static Craft.Abstractions.FileDiagnostic At(System.Int32 line, System.Int32 column, Craft.Abstractions.DiagnosticSeverity severity, System.String id, System.String message)
+Craft.Abstractions.FileDiagnostic  static Craft.Abstractions.FileDiagnostic Of(Craft.Abstractions.ITextSnapshot snapshot, Craft.Abstractions.EditorDiagnostic diagnostic)
+Craft.Abstractions.FileDiagnostic  static System.Int32 PositionIn(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 line, System.Int32 column)
+Craft.Abstractions.FileDiagnostic : System.IEquatable<Craft.Abstractions.FileDiagnostic>
 Craft.Abstractions.FileIcon
 Craft.Abstractions.FileIcon  Craft.Abstractions.FileIcon <Clone>$()
 Craft.Abstractions.FileIcon  Craft.Abstractions.FileIconShape OpenShape { get; init; }
@@ -1190,6 +1246,14 @@ Craft.Abstractions.IConversationPanel  System.Void DeleteFrom(System.Int32 index
 Craft.Abstractions.IConversationPanel  System.Void RemoveChip(System.String id)
 Craft.Abstractions.IConversationPanel  event System.EventHandler<Craft.Abstractions.ConversationChangedEventArgs> ConversationChanged
 Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPanel
+Craft.Abstractions.IDocumentFormatter
+Craft.Abstractions.IDocumentFormatter  Craft.Abstractions.DocumentFormatterFit Cached(System.String filePath)
+Craft.Abstractions.IDocumentFormatter  System.Boolean Formats(System.String filePath, System.String languageName)
+Craft.Abstractions.IDocumentFormatter  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+Craft.Abstractions.IDocumentFormatter  System.String Title { get; }
+Craft.Abstractions.IDocumentFormatter  System.Threading.Tasks.Task<Craft.Abstractions.DocumentFormatterFit> FitAsync(System.String filePath, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IDocumentFormatter  System.Threading.Tasks.Task<System.String> FormatAsync(Craft.Abstractions.DocumentFormatRequest request, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IDocumentFormatter : Idrak.Abstraction.IKind
 Craft.Abstractions.IEditorActivities
 Craft.Abstractions.IEditorActivities  Craft.Abstractions.IActivity Start(System.String title, System.String kind = "general", System.Boolean cancellable = false, System.Threading.CancellationToken cancellationToken = null, System.Boolean keep = true)
 Craft.Abstractions.IEditorActivities  System.Boolean Cancel(System.Int64 id)
@@ -1224,6 +1288,7 @@ Craft.Abstractions.IEditorHost  Craft.Abstractions.IEditorProgress StartProgress
 Craft.Abstractions.IEditorHost  Craft.Abstractions.IEditorTerminals Terminals { get; }
 Craft.Abstractions.IEditorHost  Craft.Abstractions.IPluginSettings Settings { get; }
 Craft.Abstractions.IEditorHost  Craft.Abstractions.SelectionState Selection { get; }
+Craft.Abstractions.IEditorHost  System.Boolean PublishDiagnostics(System.String path, System.String source, Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileDiagnostic> items)
 Craft.Abstractions.IEditorHost  System.Boolean Select(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
 Craft.Abstractions.IEditorHost  System.Boolean SetLineMarks(Craft.Abstractions.IEditorDocument document, System.String source, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> marks)
 Craft.Abstractions.IEditorHost  System.Boolean ShowInlineCard(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.InlineCard card)
@@ -1248,6 +1313,7 @@ Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> Prop
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IEditorHost  System.Void ClearDiagnostics(System.String source)
 Craft.Abstractions.IEditorHost  System.Void Dispatch(System.Action action)
 Craft.Abstractions.IEditorHost  System.Void Dispatch(System.String label, System.Action action)
 Craft.Abstractions.IEditorHost  System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
@@ -1369,6 +1435,14 @@ Craft.Abstractions.ILanguageSession  System.Void Classify(Craft.Abstractions.ITe
 Craft.Abstractions.ILanguageSession  System.Void ClassifySyntactic(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.ILanguageSession  event System.EventHandler Reclassified
 Craft.Abstractions.ILanguageSession : System.IDisposable
+Craft.Abstractions.ILinter
+Craft.Abstractions.ILinter  System.Collections.Generic.IReadOnlyList<System.String> Extensions { get; }
+Craft.Abstractions.ILinter  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+Craft.Abstractions.ILinter  System.String Title { get; }
+Craft.Abstractions.ILinter  System.String Unavailable { get; }
+Craft.Abstractions.ILinter  System.Threading.Tasks.Task<Craft.Abstractions.LintResult> LintAsync(Craft.Abstractions.LintRequest request, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ILinter  System.Threading.Tasks.Task<Craft.Abstractions.LinterProject> DetectAsync(System.String path, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.ILinter : Idrak.Abstraction.IKind
 Craft.Abstractions.IMemoryPressureMonitor
 Craft.Abstractions.IMemoryPressureMonitor  System.IDisposable Watch(System.Action<Craft.Abstractions.MemoryPressureLevel> onPressure)
 Craft.Abstractions.IMemoryPressureMonitor : Idrak.Abstraction.IKind
@@ -1773,6 +1847,86 @@ Craft.Abstractions.LineTokenizer  System.UInt64 Initial { get; }
 Craft.Abstractions.LineTokenizer  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.LineTokenizer  protected ctor()
 Craft.Abstractions.LineTokenizer  protected static System.Void Add(Craft.Abstractions.TokenSpanBuffer into, System.Int32 start, System.Int32 length, System.String tokenClass)
+Craft.Abstractions.LintFileResult
+Craft.Abstractions.LintFileResult  Craft.Abstractions.LintFileResult <Clone>$()
+Craft.Abstractions.LintFileResult  System.Boolean Equals(Craft.Abstractions.LintFileResult other)
+Craft.Abstractions.LintFileResult  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LintFileResult  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileDiagnostic> Diagnostics { get; init; }
+Craft.Abstractions.LintFileResult  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFix> Fixes { get; init; }
+Craft.Abstractions.LintFileResult  System.Int32 GetHashCode()
+Craft.Abstractions.LintFileResult  System.String Path { get; init; }
+Craft.Abstractions.LintFileResult  System.String ToString()
+Craft.Abstractions.LintFileResult  System.Void Deconstruct(out System.String Path, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileDiagnostic> Diagnostics, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFix> Fixes)
+Craft.Abstractions.LintFileResult  ctor(System.String Path, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileDiagnostic> Diagnostics, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFix> Fixes)
+Craft.Abstractions.LintFileResult : System.IEquatable<Craft.Abstractions.LintFileResult>
+Craft.Abstractions.LintFix
+Craft.Abstractions.LintFix  Craft.Abstractions.LintFix <Clone>$()
+Craft.Abstractions.LintFix  System.Boolean Equals(Craft.Abstractions.LintFix other)
+Craft.Abstractions.LintFix  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LintFix  System.Boolean Suggestion { get; init; }
+Craft.Abstractions.LintFix  System.Int32 Diagnostic { get; init; }
+Craft.Abstractions.LintFix  System.Int32 End { get; }
+Craft.Abstractions.LintFix  System.Int32 GetHashCode()
+Craft.Abstractions.LintFix  System.Int32 Length { get; init; }
+Craft.Abstractions.LintFix  System.Int32 Start { get; init; }
+Craft.Abstractions.LintFix  System.String Text { get; init; }
+Craft.Abstractions.LintFix  System.String Title { get; init; }
+Craft.Abstractions.LintFix  System.String ToString()
+Craft.Abstractions.LintFix  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length, out System.String Text, out System.String Title, out System.Int32 Diagnostic)
+Craft.Abstractions.LintFix  ctor(System.Int32 Start, System.Int32 Length, System.String Text, System.String Title, System.Int32 Diagnostic)
+Craft.Abstractions.LintFix : System.IEquatable<Craft.Abstractions.LintFix>
+Craft.Abstractions.LintRequest
+Craft.Abstractions.LintRequest  Craft.Abstractions.LintRequest <Clone>$()
+Craft.Abstractions.LintRequest  Craft.Abstractions.LinterProject Project { get; init; }
+Craft.Abstractions.LintRequest  Idrak.Abstraction.CommandLimits Limits { get; init; }
+Craft.Abstractions.LintRequest  Idrak.Abstraction.ICommandSandbox Sandbox { get; init; }
+Craft.Abstractions.LintRequest  System.Boolean Equals(Craft.Abstractions.LintRequest other)
+Craft.Abstractions.LintRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LintRequest  System.Collections.Generic.IReadOnlyList<System.String> Files { get; init; }
+Craft.Abstractions.LintRequest  System.Int32 GetHashCode()
+Craft.Abstractions.LintRequest  System.String ScratchFolder { get; init; }
+Craft.Abstractions.LintRequest  System.String ToString()
+Craft.Abstractions.LintRequest  System.Void Deconstruct(out Craft.Abstractions.LinterProject Project, out System.Collections.Generic.IReadOnlyList<System.String> Files, out Idrak.Abstraction.ICommandSandbox Sandbox, out Idrak.Abstraction.CommandLimits Limits, out System.String ScratchFolder)
+Craft.Abstractions.LintRequest  ctor(Craft.Abstractions.LinterProject Project, System.Collections.Generic.IReadOnlyList<System.String> Files, Idrak.Abstraction.ICommandSandbox Sandbox, Idrak.Abstraction.CommandLimits Limits, System.String ScratchFolder)
+Craft.Abstractions.LintRequest : System.IEquatable<Craft.Abstractions.LintRequest>
+Craft.Abstractions.LintResult
+Craft.Abstractions.LintResult  Craft.Abstractions.LintResult <Clone>$()
+Craft.Abstractions.LintResult  System.Boolean Equals(Craft.Abstractions.LintResult other)
+Craft.Abstractions.LintResult  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LintResult  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> Files { get; init; }
+Craft.Abstractions.LintResult  System.Int32 GetHashCode()
+Craft.Abstractions.LintResult  System.String Problem { get; init; }
+Craft.Abstractions.LintResult  System.String ToString()
+Craft.Abstractions.LintResult  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> Files)
+Craft.Abstractions.LintResult  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LintFileResult> Files)
+Craft.Abstractions.LintResult  static Craft.Abstractions.LintResult Failed(System.String problem)
+Craft.Abstractions.LintResult : System.IEquatable<Craft.Abstractions.LintResult>
+Craft.Abstractions.LinterProject
+Craft.Abstractions.LinterProject  Craft.Abstractions.LinterProject <Clone>$()
+Craft.Abstractions.LinterProject  System.Boolean Equals(Craft.Abstractions.LinterProject other)
+Craft.Abstractions.LinterProject  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LinterProject  System.Boolean Ready { get; }
+Craft.Abstractions.LinterProject  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
+Craft.Abstractions.LinterProject  System.Int32 GetHashCode()
+Craft.Abstractions.LinterProject  System.String Config { get; init; }
+Craft.Abstractions.LinterProject  System.String Folder { get; init; }
+Craft.Abstractions.LinterProject  System.String Linter { get; init; }
+Craft.Abstractions.LinterProject  System.String Note { get; init; }
+Craft.Abstractions.LinterProject  System.String Problem { get; init; }
+Craft.Abstractions.LinterProject  System.String Program { get; init; }
+Craft.Abstractions.LinterProject  System.String ToString()
+Craft.Abstractions.LinterProject  System.String Version { get; init; }
+Craft.Abstractions.LinterProject  System.Void Deconstruct(out System.String Linter, out System.String Folder, out System.String Config, out System.String Version, out System.String Problem)
+Craft.Abstractions.LinterProject  ctor(System.String Linter, System.String Folder, System.String Config, System.String Version, System.String Problem)
+Craft.Abstractions.LinterProject : System.IEquatable<Craft.Abstractions.LinterProject>
+Craft.Abstractions.Linters
+Craft.Abstractions.Linters  static Craft.Abstractions.ILinter Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.Linters  static Craft.Abstractions.ILinter Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.Linters  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.Linters  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ILinter> All { get; }
+Craft.Abstractions.Linters  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ILinter> ForFile(System.String path)
+Craft.Abstractions.Linters  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.Linters  static System.Void Register(Craft.Abstractions.ILinter linter)
 Craft.Abstractions.ListPanel
 Craft.Abstractions.ListPanel  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
 Craft.Abstractions.ListPanel  System.String Id { get; }

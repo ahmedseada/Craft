@@ -23,6 +23,7 @@
     <Project Path="plugins/Craft.Plugins.Css/Craft.Plugins.Css.csproj" />
     <Project Path="plugins/Craft.Plugins.JavaScript/Craft.Plugins.JavaScript.csproj" />
     <Project Path="plugins/Craft.Plugins.TypeScript/Craft.Plugins.TypeScript.csproj" />
+    <Project Path="plugins/Craft.Plugins.Lint/Craft.Plugins.Lint.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Craft.Tests/Craft.Tests.csproj" />

@@ -384,6 +384,22 @@ public interface IEditorHost
     /// <paramref name="title"/>; completes when the user closed it. False when the host has no diff view (the default).
     /// </summary>
     Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <summary>
+    /// Publishes <paramref name="items"/> as <paramref name="source"/>'s diagnostics of the file <paramref name="path"/> (W,
+    /// contract 6: a linter's findings), in place of what that source published for it before; none takes them away. The
+    /// items are in the lines and columns of <paramref name="snapshot"/> (the open document's text they were found in; the
+    /// editor moves them through the edits made since) or, when it is null, of the file as it is on disk. An open document
+    /// shows them beside its language's own (squiggles, the line-end message, the lightbulb, its Problems rows), each id
+    /// read "source(id)" ("eslint(no-unused-vars)"); a closed file's are listed in Problems by line and column. False when
+    /// the host shows no published diagnostics (the default).
+    /// </summary>
+    bool PublishDiagnostics(string path, string source, ITextSnapshot? snapshot, IReadOnlyList<FileDiagnostic> items) => false;
+
+    /// <summary>Takes every diagnostic <paramref name="source"/> published away, from every file (a linter turned off, another folder opened). Nothing by default.</summary>
+    void ClearDiagnostics(string source)
+    {
+    }
 }
 
 /// <summary>How the workspace changed (<see cref="IEditorHost.WorkspaceChanged"/>).</summary>

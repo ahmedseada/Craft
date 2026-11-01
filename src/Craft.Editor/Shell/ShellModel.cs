@@ -1427,10 +1427,11 @@ public sealed partial class ShellModel : IDisposable
 
     private async Task<bool> WriteAsync(DocumentTab tab, string? path, CancellationToken cancellationToken)
     {
-        if (Options.FormatOnSave && EditorOf?.Invoke(tab) is { FormattingSession: not null } editor)
+        if (Options.FormatOnSave && EditorOf?.Invoke(tab) is { CanFormat: true } editor)
         {
             // Off the UI thread, applied on it as one undo step; a malformed file is saved as it is (the format says why).
-            await editor.FormatDocumentAsync(cancellationToken);
+            // W: the project's own formatter (Prettier) first when it applies, told the run is automatic.
+            await editor.FormatDocumentAsync(automatic: true, cancellationToken);
         }
 
         // X part 9: the trailing white space and the final newline (the file's .editorconfig over the options), a new file's charset.

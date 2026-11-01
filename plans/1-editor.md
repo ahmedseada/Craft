@@ -24,6 +24,7 @@ Windows run (2026-11-01)" at the end.
 | 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned; starts only on the owner's word |
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
+| 14 | The AI end to end on local models (the owner's AI testing task: MCP, the agent, auto apply or ask, Qwen Instruct and Coder 1.5B/7B, Llama 3.1 8B, deepseek-coder 6.7B) | Built 2026-11-02 (Craft ca00376, Idrak a81e5773): see "The AI on local models as built"; the bench rerun with every fix in is the last measurement; no new agent starts (the owner, 2026-11-02: "finish the current running agents and don't start new") |
 
 **X leftovers, split (the owner, 2026-11-01: "will work on phase x leftover only, split in phases and start the first";
 then "1 agent to run").** Only X's leftovers (row 10's X items; not W's "Left, for later" lines, not P batch 2), one
@@ -64,6 +65,31 @@ Open: the device switch crash (its report wanted), "Ambiguity between 'TestClass
   global settings (`.craft/settings.json` and the settings page). The load-time ones (weights, device, offload, context)
   need a model copy of their own or a reload of the shared one: the panel says which and its memory cost before it
   happens.
+
+**The AI on local models as built (2026-11-01 to 11-02).** The agent bench (`benches\Craft.Benches -- agent`; the
+task: a static Calculator in Calculator.cs, Program.cs printing `Calculator.Multiply(6, 7)`, the build passing; RTX 5070
+Ti 16 GB) drove each fix, all made in Idrak where they were Idrak's:
+- Craft (4473e1b): the chat and the agent take each model's own sampling (its generation_config.json) under the values
+  the user gave; `agentReadBeforeEdit` (Idrak's read before edit, on). Craft (ca00376): `cacheFormat`,
+  `agentCacheFormat`, `completionCacheFormat` (auto, float32, bfloat16, int8, or a registered layout; auto picks the
+  weights and cache pair that fits, the largest weights first, so a model that fits with float32 weights and cache
+  loads as before); a copy's cache capacity is the context the estimate counted (the role's `context`, else the
+  model's own up to `weightsAutoContext`, 8192: a long-window model with no context set now gets 8192); the
+  out-of-memory words name the role that failed and the next smaller of what its copy loaded with; the bench runs the
+  built program and checks for 42.
+- Idrak (8cc12afd, d87c04f9, f9998bfe, a81e5773): edit_file quotes a missed `old_text` and the file's first lines and
+  tolerates `N| ` prefixes and trailing spaces on a unique match, keeps a BOM; tools described in the prompt for a
+  template that renders none; special tokens left out of a reply; string booleans and numbers coerced to the schema;
+  one call per message for a template that takes one (probed, no family name); an edit only after its read was seen;
+  `write_file` offered for a short file; the reply-language line; reminders, each bounded and recorded: no tool at
+  all, code shown with no file changed, a malformed call named with its JSON error, a reply in another script.
+- Measured before the last fixes: Qwen2.5-7B-Instruct and Qwen2.5-Coder-7B 0/2 each before the edit fix, then 1/2 each;
+  Llama 3.1 8B 0/3 (string booleans, two calls at once), then 1/2 auto (the other run put the class above the new top
+  statement) and its ask run correct (`using static Calculator`); deepseek-coder 6.7B 0/2 (code blocks, no call), then
+  tools used and out of device memory (int4 weights with an 8192-token float32 cache of 32 KV heads), fixed by the
+  cache format. Auto apply applies a broken file when the model writes one, by design; ask mode shows the diff first.
+- Left, for later: the bench rerun with every fix in (running when the work stopped); Craft's `WeightsAuto` in place of
+  Idrak's `AutoWeights` if they agree; the chat's overhead; int8 against int4 speed.
 
 **The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
 before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a

@@ -25,6 +25,20 @@ Windows run (2026-11-01)" at the end.
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
 
+**X leftovers, split (the owner, 2026-11-01: "will work on phase x leftover only, split in phases and start the first";
+then "1 agent to run").** Only X's leftovers (row 10's X items; not W's "Left, for later" lines, not P batch 2), one
+agent at a time, each piece resumed in the agent that wrote its stopped work (its worktree already merged with `main` by
+the session), each pushed to its `slot/<piece>` branch and merged by the session:
+- **XL1, the stopped work finished:** 1 `slot/x-tools` (tools 18-22: Test explorer, Markdown and image preview, TODO
+  list, spell check); 2 `slot/x-ai` (item 23 inline chat, part 11 items 4-5: AI review, fix the build); 3 `slot/x-look`
+  (the recovery prompt, look 24-26: theme picker, Zen and full screen, status pickers); 4 `slot/x-language` (language
+  3-5, 10-12: snippets, inlay hints, code lens, linked tags, Outline, hierarchy, two C# session speed fixes; its merge
+  with word wrap finished by its agent).
+- **XL2, the rest of X:** 5 `slot/x-nextedit` (part 11 item 2); 6 `slot/x-repocompletion` (part 11 item 3); 7
+  `slot/x-timings` (1c, measured input-to-response times).
+- Decision (noted): the one agent takes the pieces in that order without a pause (XL2 follows XL1 as a slot frees);
+  nothing outside this list starts.
+
 **The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
 before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a
 leftover or a new enhancement while a W piece is ready. What a W slot leaves undone goes into one "Left, for later"

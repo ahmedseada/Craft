@@ -12,7 +12,7 @@ Windows run (2026-11-01)" at the end.
 |---|---|---|
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
-| 3 | B1-B8: hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
+| 3 | B1-B10: the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
 | 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus) | Parts 6 and 7 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
@@ -3196,6 +3196,51 @@ after a threshold and loses the drag when the pointer moves fast over the editor
   Windows-only (not compiled here): the cursor and the capture. The owner's check: drag each splitter fast across the
   editor, double-click to reset, the cursor shows.
 B8 goes first in the next free slot, before the X restart.
+
+**B9, the terminal: one shell only, and an ugly design (the owner, 2026-11-01, with screenshots).** Seen: the shell is
+`CRAFT_TERMINAL_SHELL` (a machine setting) else the host's default, which is Windows PowerShell; the tab shows the
+program's full path (`C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe`); the text starts at the panel's very
+edge; the empty state is a long sentence with a bare "+". Fix:
+- **Shell profiles**: a contract `ITerminalProfileSource : IKind` and `TerminalProfiles`; on Windows the found shells
+  (PowerShell 7 `pwsh`, Windows PowerShell, Command Prompt, Git Bash, each WSL distribution, Developer PowerShell and
+  Command Prompt for Visual Studio where installed), found off the UI thread and cached; a profile has a name, a program,
+  arguments, an icon, a start folder and environment. The user's own profiles in the settings
+  (`terminal.profiles`). `CRAFT_TERMINAL_DEFAULT_PROFILE` picks the default, on the settings page (Terminal section) as
+  a drop-down of the found profiles, and per workspace; `CRAFT_TERMINAL_SHELL` keeps working as a profile named by its
+  path.
+- **New terminal**: "+" opens the default; its chevron opens a menu of the profiles ("New PowerShell 7", "New Command
+  Prompt", "New Git Bash", ...) and "Set default profile…"; the palette has "Terminal: New (profile)" and "Terminal:
+  Select default profile".
+- **Design** (the design's tokens, like current editors): tabs show the profile's icon and a short name ("pwsh", "cmd",
+  the running program's name when it changes; rename by double-click), a close on hover, a busy dot while a command
+  runs; with three or more terminals, a list at the right of the panel instead of tabs (`CRAFT_TERMINAL_TABS` auto, tabs,
+  list); padding around the text (`CRAFT_TERMINAL_PADDING`, 8); the cursor style and blink as settings; a thin scroll bar
+  that shows on hover; the empty state as an empty-state card (icon, "No terminal open", a primary "New terminal" button
+  with its keys, the profiles under it); the terminal's context menu: Copy, Paste, Select all, Clear, Split, Rename,
+  Kill. Split terminals side by side in the panel.
+- Tests: `Terminal` (profiles found from a fake machine, the default chosen and kept, `CRAFT_TERMINAL_SHELL` as a
+  profile, the menu's rows, a terminal started per profile through the "pipe" host, rename, the list layout from three
+  terminals). Windows-only (not compiled here): the shell discovery's registry and path reads under `Platforms/Windows`.
+
+**B10, "Roslyn ready" belongs in the notification centre, and a global loader while a workspace loads (the owner,
+2026-11-01).** Seen: the status bar's text "Roslyn ready" (`ShellChrome.cs:92`) and the explorer's Roslyn card
+("Workspace Ready, 1 project, 6 MB") stay on screen. Fix:
+- When a language's workspace finishes loading, it posts one notification to the notification centre ("C# workspace
+  ready: 1 project, 6 MB, 2.3 s", from the language's own status; never a toast unless it failed); a failure is a
+  notification with its plain words and the action that fixes it. The status bar shows the language's state only while
+  it loads or when it failed; the explorer's Roslyn card goes (its facts move into the notification and the language
+  item's tooltip).
+- **The global loader**: a thin progress line under the title bar across the window (indeterminate, or determinate
+  when the work reports a fraction), with the work's name and percent in its tooltip and a click opening the
+  notification centre's activities; shown for any activity of a new kind `ActivityKinds.Workspace` (opening a folder,
+  reading the projects, a language building its workspace, indexing) and for any activity a plug-in marks
+  `Global = true` (an additive member). Shown only after `CRAFT_LOADER_DELAY_MS` (300), so quick work does not flash;
+  motion off with reduced motion. One loader whatever runs: it shows the most advanced of what runs and their count.
+- Tests: `Notifications` and `Activities` (the ready notification posted once per load with its facts, the failure
+  notification, the status text only while loading, the loader shown after the delay, hidden when all end, the count
+  and the fraction).
+
+B8, B9 and B10 go together in the next free slot (the shell and its panels), before the X restart.
 
 Also in the trail, for the slots: `WindowsShellPlatform.RouteKeys` threw "The window has no WinUI content yet" at start
 (hook the keys once the page appeared), a WinRT `InvalidOperationException` at start, and three 0.2-0.3 s "unlabelled UI

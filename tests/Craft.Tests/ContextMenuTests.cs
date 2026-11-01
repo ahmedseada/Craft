@@ -453,7 +453,7 @@ public static class ContextMenuTests
         }
     }
 
-    private static List<string> Titles(MenuModel menu) => [.. menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal)).Select(r => r.Title)];
+    private static List<string> Titles(MenuModel menu) => [.. menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal) && !r.CommandId.StartsWith("git.", StringComparison.Ordinal)).Select(r => r.Title)];
 
     private static MenuRow Row(MenuModel menu, string title) => menu.Rows.FirstOrDefault(r => r.Title == title)
         ?? throw new InvalidOperationException($"No row '{title}' ({string.Join(", ", menu.Rows.Select(r => r.Title))}).");

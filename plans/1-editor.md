@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"), X part 7 (rich context menus), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
 | 5 | X rest: minimap, completion at several carets, peek (built in piece 3a), measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -3264,6 +3264,123 @@ include and exclude), a click on a result, Replace all (one review of every file
 the rail's Run: CarftTestPOC's project, F5 (asked once, its output in "Run: CarftTestPOC"), a typo in Program.cs then
 Ctrl+Shift+B (the error in Problems as "Program.cs (build)", a click opens it), Shift+F5 on a long run, Add
 configuration with arguments, saved in `.craft\run.json`.
+
+### X part 7 as built (2026-11-01): rich context menus in the explorer and on the open tabs
+
+Slot s2. Craft only; Idrak unchanged (nothing in the library was needed).
+- **The menu** (`MenuModel`, `ShellMenus.Rows`, `Craft.Maui.MenuView`): every row has its icon (the design's stroke icons,
+  `MenuIcons`, 1.5-wide like the rail's; a file type's badge from `FileIcons` through "file:Name"; the folder's), its keys in
+  effect (`EditorHost.KeysOf`), a chevron for a submenu; groups with a line; a row that cannot run is faded and says why in
+  its tooltip (`IEditorCommand.DisabledReason`, a default member; `EditorCommand.Reason`); the raised card with the strong
+  border and a soft shadow, rows with no box of their own, the motion of the menus (`ShellMotion`). Submenus: the pointer
+  resting `CRAFT_MENU_SUBMENU_DELAY_MS` (200) on a row, Right, Enter or a click opens one beside it (`PopupLayer.ShowBeside`,
+  flipped left at the window's edge), Left or Escape closes it, its rows take the keys. Typing jumps: letters typed within
+  `CRAFT_MENU_TYPE_AHEAD_MS` (700) form a prefix, the same letter again goes to its next row.
+- **Contracts** (`Craft.Abstractions`, additions, contract 1.1): `MenuItem` gains `Icon`, `Submenu`, `When`, `Argument`;
+  `MenuWhen` (target kinds `MenuTargetKinds` File, Folder, Root; file endings; languages; project kinds; a plug-in's test)
+  with `Files`, `Folders`, `Root`, `Entries`, `AnyFolder`; `ContextMenuTarget` gains `IsRoot`, `Language`, `ProjectKinds`,
+  `Argument`, `Kind`; `MenuItemSource` and its registry `EditorMenuSources` (rows made as a menu opens, from memory);
+  `EditorContextMenus.OpenWith` and `.RunTargets` (the two submenus); `MenuIcons`. `ShellModel.DescribeMenuTarget` fills a
+  target in (the page sets it as `MenuModel.Describe`): the workspace's folder for the tree's empty space and its header,
+  the file's language, the run providers it belongs to (its own targets, else its nearest folder's; a folder's within it).
+- **The explorer's menus**. A file: Open, Open to the side (the next group, else a split right), Open with ▸ (each
+  registered language by its file icon, then plain text), Reveal in File Explorer (Shift+Alt+R), Open in terminal, Find in
+  folder… (the Search view, its files to include set to the folder), Run ▸ (its own run targets' Run, Build and Test through
+  the Run view: approved, sandboxed), Format file (opened first when not open, one undo step, left unsaved), the AI
+  plug-in's Add to chat context and Ask the agent about it, Cut, Copy, Paste, Duplicate, Select for compare, Compare with
+  selected, Copy name, Copy path (Shift+Alt+C), Copy relative path, Rename…, Delete. A folder: New file…, New folder…,
+  Reveal, Open in terminal, Find in folder…, Run ▸ (its runners), Collapse all inside, Cut, Copy, Paste, Duplicate, Copy
+  name, Copy path, Copy relative path, Rename…, Delete. The workspace (its header, the empty space under the rows): New
+  file…, New folder…, Reveal, Open in terminal, Find in folder…, Collapse all, Refresh (read off the UI thread now), Paste,
+  Copy path, Open folder….
+- **The tab's menu**: Close (Ctrl+W), Close others, Close to the right, Close saved, Close all, Reopen closed tab
+  (Ctrl+Shift+T), Pin or Unpin, Split right (Ctrl+\), Split down, Move to the other group (Ctrl+Alt+Right), Copy name, Copy
+  path, Copy relative path, Reveal in the explorer, Reveal in File Explorer, Open in terminal, Format file, Compare with
+  saved, Revert file, Run ▸ (when the file has a runner), Add to chat context. Pinned tabs (`DocumentTab.IsPinned`,
+  `DocumentTabs.SetPinned`, `PinnedCount`) stay at the left (a drag keeps a pinned tab among them and others after them), show
+  a pin where the close button is (a click unpins), and Close others, Close to the right and Close saved leave them.
+- **Undoable instead of asked**: Paste (copies get "Name copy.cs" on a name in use; a cut moves once, its clean tabs
+  following; a folder never into itself), Duplicate, Delete (the entry kept aside under the system's temporary folder up to
+  `CRAFT_DELETE_UNDO_MAX_MB` (64), then to the Recycle Bin, or for good where there is none; Undo copies it back and opens
+  its closed tabs again; a larger one is asked about first, as before), Rename ("Renamed A.cs to B.cs", Undo the old name),
+  Revert (the saved text as one undo step, the tab clean: `TextDocument.MarkUnchanged`; Undo, or Ctrl+Z), Compare with
+  selected (accepted hunks, Undo). Every disk access runs off the UI thread, the longer ones as activities ("Copying",
+  "Deleting", "Keeping X for Undo", "Restoring", "Reverting").
+- **Names typed in place** (`ShellModel.TreeEdit`, `TreeEditKind`, `BeginTreeEdit`, `TreeEditProblem`,
+  `CommitTreeEditAsync`, `CancelTreeEdit`; `FolderTree.BeginNew`/`EndNew`, `FolderTreeRow.IsNew`; the tree view's field):
+  New file and New folder add an empty row at the top of the folder, Rename edits the row's name (the stem selected); the
+  problem shows as it is typed (the error's colour, the reason in the tooltip: a name that cannot be, one the folder has),
+  Enter or leaving the field takes it, Escape ends it. The narrow layout keeps the dialog.
+- **Compare** (the existing diff view): Compare with saved shows the tab's changes since its save as hunks; a hunk accepted
+  goes back to the saved text (one undo step), all of them make the tab clean. Compare with selected is a review across files
+  (`ProposeFilesAsync`) of the selected file against the other's lines. `LineEdits.Between` makes one edit a changed run of
+  lines (proven on the result; a diff that does not map back gives one edit of the whole text).
+- **Reopen closed**: up to `CRAFT_TABS_REOPEN_LIMIT` (20) closed tabs, each with its group, place, selection and pin, the
+  disk asked off the UI thread.
+- **Options** (each with its `CRAFT_*` variable and shape on the settings page): `CRAFT_TABS_REOPEN_LIMIT` (20),
+  `CRAFT_DELETE_UNDO_MAX_MB` (64), `CRAFT_MENU_TYPE_AHEAD_MS` (700), `CRAFT_MENU_SUBMENU_DELAY_MS` (200).
+- **Found and fixed**: a move or paste into the workspace's own folder was refused ("must both be in the open folder"):
+  `Workspace.Contains` says no for the root itself, so a tree drag onto a root file's row never moved (piece 3a).
+
+**Decisions on the recommendation (the owner asleep; one line each).**
+- One menu per place (tree, tab) whose rows show by their `When`, not a menu per kind of target: a plug-in adds a row once and says where it shows.
+- A "when" is declarative (kinds, endings, languages, project kinds) with a plug-in's test as the escape hatch; tests run on the UI thread from memory only.
+- A project kind is a run provider's name ("dotnet", "scripts", W's "npm"), so it follows what the Run view finds; no second project model.
+- Rows made as a menu opens come from a registry of sources (`EditorMenuSources`), and a row's `Argument` reaches its command through the target: one command serves many rows.
+- A disabled row stays visible with its reason as its tooltip (a disabled control shows no tooltip on WinUI, so the row is faded, not disabled).
+- One level of submenu is drawn; the model counts deeper rows (a submenu with no row that can run is disabled with its reason).
+- Keys are shown only where a binding runs the command (Cut, Copy and Paste in the tree have no tree-focused key yet, so they show none).
+- Run ▸ on a file lists its own targets only (a .csproj, .sln, script); a source file's project kind still says its project, for a plug-in's "when".
+- Delete keeps a copy aside for Undo (VS Code's way) rather than restoring from the Recycle Bin: the same on every system, the Recycle Bin still gets the file.
+- Over `CRAFT_DELETE_UNDO_MAX_MB` the old question is asked (copying a large folder aside would be slow).
+- Cut, Copy and Paste of files are Craft's own (the paths are held in the shell; the system clipboard keeps its text).
+- A pasted name in use takes "Name copy.cs" (as Duplicate and a Ctrl+drag do); a cut's move refuses a name in use, as a drag's move does.
+- Close all closes pinned tabs too ("all"); Close others, Close to the right and Close saved spare them.
+- Pins are kept for the session only (not in the layout file yet).
+- Compare uses the existing review: Compare with saved's accepted hunks go back to the saved text; Compare with selected's take the other file's lines into the selected one (Reject or close leaves both).
+- Revert is done at once with Undo (no dialog) and makes the tab clean; Undo makes it unsaved again.
+- Format file from the explorer opens the file first and leaves it unsaved (the user sees the change and saves).
+- Names typed in place commit when the field loses the keyboard (VS Code's), keep the field on a name that cannot be, and end on an empty new name.
+- The AI plug-in registers Add to chat context and Ask the agent about it (plug-ins first), through `IConversationPanel.AcceptDropAsync`.
+- The git plug-in's items (X part 8) keep their group 60; they can take icons and a `When` the same way.
+
+**Tests**: `ContextMenus` (6: a file's, a folder's and the workspace's rows, their icons, groups, keys, disabled reasons,
+the described target, Open with and Run submenus by keys, typing to jump, a tab's rows; a plug-in's rich items by ending,
+language and project kind, its submenu rows from a source run with their argument, a throwing test or source hides only its
+own; paste twice with a free name and Undo, a folder into itself refused, cut and paste at the root and Undo, duplicate and
+Undo, delete of a file and a folder with Undo (text and tab back), over the limit asked; rename in place with its problems
+and Undo, new file and folder rows, Escape, Collapse all inside and all, the dialog without the field; pins, close others,
+close saved, reopen closed with its place, pin and selection, the reopen limit, close all; compare with saved by hunks,
+revert with Undo, compare with selected, `LineEdits` over CRLF, a lone CR, no last break and an empty text), with
+`Experience` (the tree's and tab's menus' expectations, delete with Undo) and `Inventory` (the four options). First run: 19
+of 22 passed; two wrong expectations of the tests (a source file belongs to its nearest folder's scripts; a test item took a
+plug-in row's name) and the root-move bug above; then all passed. The full filter after the rebase onto X parts 8, 10 and 11
+(`ContextMenus|Experience|Shell|EditorGroups|TreeMove|WorkspaceSearch|RunView|Inline|Keys|Settings|Ui|Layout|ApiGuard|Inventory`,
+138 tests): 137 passed; `Ui.TheUiSideHasNoSynchronousWait` fails on `src/Craft.Ai/CopyGate.cs:40` (`_door.Wait(0)`, X part
+11's non-blocking try, not this work; left to its slot). API dumps of Craft.Abstractions, Craft.Core, Craft.Editor, Craft.Ai,
+the contract list and the inventory regenerated (lines added only).
+
+**Not compiled here**: nothing under `Platforms/` changed; Craft.Maui compiled on its net10.0 target. **Not run here** (the
+owner's run): the menus on WinUI (the icons' look, the submenu card beside its row and its hover delay, tooltips of faded
+rows, typing), the tree's field (its focus, the stem selected, Enter, Escape, leaving it), the pin on a tab, the Recycle Bin.
+
+**Left**: tree-focused keys (F2, Delete, Ctrl+C/X/V in the explorer); several rows selected at once in the tree; pins kept in
+the layout file; cut rows drawn faded; files cut or copied to and from the system's file manager (CF_HDROP on Windows).
+
+**The owner's commands** (Craft only; Idrak unchanged by this work):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="ContextMenus|Experience|Shell|EditorGroups|TreeMove|WorkspaceSearch|RunView|Inline|Keys|Settings|Ui|Layout|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: right-click a file, a folder, the explorer's header and the space under the rows; rest on Open with and on Run
+(on the .csproj); type letters in an open menu; Right and Left; hover a faded row for its reason; New file (type a name,
+Enter), Rename (a name in use shows red), Escape; Copy then Paste on a folder twice; Cut and Paste; Duplicate; Delete then
+Undo at the window's bottom; right-click a tab: Pin, Close others, Close saved, Reopen closed (Ctrl+Shift+T) at its caret;
+edit Program.cs, then Compare with saved and Revert file (and Undo); Select for compare on one file, Compare with selected on
+another.
 
 ### X part 4
 - **Document symbols**: a default member `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by default) and

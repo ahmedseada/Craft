@@ -238,7 +238,7 @@ public static class ExperienceTests
         var src = folder.File("src");
 
         menu.Open(EditorContextMenus.Tree, new ContextMenuTarget(EditorContextMenus.Tree, src, IsFolder: true));
-        var titles = menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal)).Select(r => r.Title).ToList();
+        var titles = menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal) && !r.CommandId.StartsWith("git.", StringComparison.Ordinal)).Select(r => r.Title).ToList();
         Check.SequenceEqual(["New file…", "New folder…", "Reveal in Test Files", "Open in terminal", "Find in folder…", "Collapse all inside", "Cut", "Copy", "Paste", "Duplicate",
             "Copy name", "Copy path", "Copy relative path", "Rename…", "Delete"], titles, "the tree's menu on a folder (X part 7: a folder's rows only)");
         Check.True(!menu.Rows[Index(menu, ShellCommandIds.OpenInTerminal)].Enabled, "Open in terminal waits for a terminal host");
@@ -296,7 +296,7 @@ public static class ExperienceTests
         menu.Open(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, one.FilePath, false, one));
         Check.SequenceEqual(["Close", "Close others", "Close to the right", "Close saved", "Close all", "Reopen closed tab", "Pin", "Split right", "Split down", "Move to the other group",
             "Copy name", "Copy path", "Copy relative path", "Reveal in the explorer", "Reveal in Test Files", "Open in terminal", "Format file", "Compare with saved", "Revert file"],
-            menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal)).Select(r => r.Title).ToList(), "the tab's menu (X part 7)");
+            menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal) && !r.CommandId.StartsWith("git.", StringComparison.Ordinal)).Select(r => r.Title).ToList(), "the tab's menu (X part 7)");
         string? revealed = null;
         shell.RevealRequested += (_, path) => revealed = path;
         await menu.RunAsync(Index(menu, ShellCommandIds.RevealInTree));

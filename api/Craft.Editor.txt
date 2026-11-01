@@ -900,7 +900,9 @@ sealed class Craft.Editor.Search.WorkspaceSearchView : Craft.Abstractions.IEdito
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Search.SearchFileResult> Results { get; }
   System.Int32 MatchCount { get; }
+  System.String Exclude { get; }
   System.String Id { get; }
+  System.String Include { get; }
   System.String Query { get; }
   System.String Replacement { get; }
   System.String Title { get; }
@@ -1212,6 +1214,7 @@ sealed class Craft.Editor.Shell.DocumentTab
   Craft.Abstractions.ILanguage Language { get; }
   Craft.Abstractions.ITextDocument Document { get; }
   System.Boolean IsDirty { get; }
+  System.Boolean IsPinned { get; }
   System.Int32 UntitledNumber { get; }
   System.Object View { get; set; }
   System.String FilePath { get; }
@@ -1230,9 +1233,11 @@ sealed class Craft.Editor.Shell.DocumentTabs : System.IDisposable
   System.Boolean MoveOnto(Craft.Editor.Shell.DocumentTab dragged, Craft.Editor.Shell.DocumentTab target)
   System.Boolean Next()
   System.Boolean Previous()
+  System.Boolean SetPinned(Craft.Editor.Shell.DocumentTab tab, System.Boolean pinned)
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.DocumentTab> Tabs { get; }
   System.Int32 ActiveIndex { get; }
   System.Int32 IndexOf(Craft.Editor.Shell.DocumentTab tab)
+  System.Int32 PinnedCount { get; }
   System.Void Activate(Craft.Editor.Shell.DocumentTab tab)
   System.Void Dispose()
   System.Void Remove(Craft.Editor.Shell.DocumentTab tab)
@@ -1376,11 +1381,17 @@ sealed class Craft.Editor.Shell.FolderListing : System.IEquatable<Craft.Editor.S
 sealed class Craft.Editor.Shell.FolderTree
   Craft.Core.Workspaces.Workspace Workspace { get; }
   System.Boolean Apply(System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.FolderListing> listings)
+  System.Boolean BeginNew(System.String folder, System.Boolean isFolder)
+  System.Boolean Collapse(System.String folder = null)
+  System.Boolean IsExpanded(System.String folder)
   System.Boolean Reveal(System.String path)
   System.Boolean Toggle(System.Int32 index)
+  System.Collections.Generic.IReadOnlyList<Craft.Core.Workspaces.WorkspaceEntry> EntriesOf(System.String folder)
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.FolderTreeRow> Rows { get; }
   System.Collections.Generic.IReadOnlyList<System.String> ShownFolders()
   System.Int32 IndexOf(System.String path)
+  System.String NewRowPath { get; }
+  System.Void EndNew()
   System.Void Refresh()
   ctor(Craft.Core.Workspaces.Workspace workspace)
   event System.EventHandler Changed
@@ -1390,6 +1401,7 @@ sealed class Craft.Editor.Shell.FolderTreeRow : System.IEquatable<Craft.Editor.S
   System.Boolean Equals(Craft.Editor.Shell.FolderTreeRow other)
   System.Boolean Equals(System.Object obj)
   System.Boolean IsExpanded { get; init; }
+  System.Boolean IsNew { get; init; }
   System.Int32 Depth { get; init; }
   System.Int32 GetHashCode()
   System.String ToString()
@@ -1477,6 +1489,8 @@ sealed class Craft.Editor.Shell.KeyboardModel
   const System.String Variable = CRAFT_KEY_BINDINGS
   ctor(Craft.Editor.Shell.ShellModel shell)
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> KeyMaps { get; }
+static class Craft.Editor.Shell.LineEdits
+  static Craft.Abstractions.TextEdit[] Between(Craft.Abstractions.ITextSnapshot snapshot, System.String text, System.Int32 lineLimit)
 static class Craft.Editor.Shell.LogClasses
   const System.String Error = log - error
   const System.String Quiet = log - quiet
@@ -1504,19 +1518,29 @@ static class Craft.Editor.Shell.LogText
 sealed class Craft.Editor.Shell.MenuModel : Craft.Editor.Abstractions.IEditorKeyHandler
   Craft.Abstractions.ContextMenuTarget Target { get; }
   Craft.Editor.Abstractions.IEditorKeyHandler Before(Craft.Editor.Abstractions.IEditorKeyHandler inner)
+  Craft.Editor.Shell.MenuModel Parent { get; }
+  Craft.Editor.Shell.MenuModel Submenu { get; }
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, Craft.Abstractions.IEditorInputSink editor)
   System.Boolean IsOpen { get; }
   System.Boolean Open(System.String menu, Craft.Abstractions.ContextMenuTarget target = null, System.Boolean focusFirst = false)
+  System.Boolean OpenSubmenu(System.Int32 index, System.Boolean focusFirst = false)
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.MenuRow> Rows { get; }
+  System.Func<Craft.Abstractions.ContextMenuTarget, Craft.Abstractions.ContextMenuTarget> Describe { get; set; }
   System.Int32 Focused { get; }
   System.Int32 MoveFocus(System.Int32 step)
+  System.Int32 SubmenuRow { get; }
+  System.Int32 TypeAheadMilliseconds { get; set; }
   System.String Menu { get; }
+  System.String Typed { get; }
   System.Threading.Tasks.Task<System.Boolean> RunAsync(System.Int32 index)
+  System.TimeProvider Time { get; set; }
   System.Void Close()
+  System.Void CloseSubmenu()
   System.Void SetFocus(System.Int32 index)
   ctor(Craft.Editor.EditorHost host)
   event System.EventHandler Changed
   event System.EventHandler FocusMoved
+  event System.EventHandler SubmenuChanged
 sealed class Craft.Editor.Shell.MenuRow : System.IEquatable<Craft.Editor.Shell.MenuRow>
   Craft.Editor.Shell.MenuRow <Clone>$()
   System.Boolean Enabled { get; init; }
@@ -1524,8 +1548,12 @@ sealed class Craft.Editor.Shell.MenuRow : System.IEquatable<Craft.Editor.Shell.M
   System.Boolean Equals(System.Object obj)
   System.Boolean StartsGroup { get; init; }
   System.Int32 GetHashCode()
+  System.String Argument { get; init; }
   System.String Chord { get; init; }
   System.String CommandId { get; init; }
+  System.String Icon { get; init; }
+  System.String Reason { get; init; }
+  System.String Submenu { get; init; }
   System.String Title { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String Chord, out System.String CommandId, out System.Boolean StartsGroup, out System.Boolean Enabled)
@@ -1995,18 +2023,30 @@ static class Craft.Editor.Shell.ShellCommandIds
   const System.String About = craft.about
   const System.String Agent = craft.agent
   const System.String ClearNotifications = craft.clearNotifications
+  const System.String CloseAllTabs = craft.closeAllTabs
   const System.String CloseFolder = craft.closeFolder
   const System.String CloseGroup = craft.closeGroup
   const System.String CloseOtherTabs = craft.closeOtherTabs
+  const System.String CloseSavedTabs = craft.closeSavedTabs
   const System.String CloseTab = craft.closeTab
   const System.String CloseTabsToTheRight = craft.closeTabsToTheRight
+  const System.String CollapseAll = craft.explorer.collapseAll
+  const System.String CollapseFolder = craft.explorer.collapseFolder
   const System.String CommandPalette = craft.commandPalette
+  const System.String CompareWithSaved = craft.compareWithSaved
+  const System.String CompareWithSelected = craft.explorer.compareWithSelected
+  const System.String Copy = craft.explorer.copy
+  const System.String CopyName = craft.copyName
   const System.String CopyPath = craft.copyPath
   const System.String CopyRelativePath = craft.copyRelativePath
+  const System.String Cut = craft.explorer.cut
   const System.String Delete = craft.explorer.delete
+  const System.String Duplicate = craft.explorer.duplicate
+  const System.String FindInFolder = craft.explorer.findInFolder
   const System.String FindReferences = craft.findReferences
   const System.String FocusGroupPrefix = craft.focusGroup
   const System.String FocusNextGroup = craft.focusNextGroup
+  const System.String FormatFile = craft.formatFile
   const System.String GoToLine = craft.goToLine
   const System.String KeyboardShortcuts = craft.keyboardShortcuts
   const System.String Models = craft.models
@@ -2015,11 +2055,17 @@ static class Craft.Editor.Shell.ShellCommandIds
   const System.String NewFileInFolder = craft.explorer.newFile
   const System.String NewFolder = craft.explorer.newFolder
   const System.String NextTab = craft.nextTab
+  const System.String Open = craft.explorer.open
   const System.String OpenFile = craft.openFile
   const System.String OpenFolder = craft.openFolder
   const System.String OpenInTerminal = craft.openInTerminal
   const System.String OpenRecent = craft.openRecent
+  const System.String OpenToSide = craft.explorer.openToSide
+  const System.String OpenWith = craft.menu.openWith
+  const System.String OpenWithLanguage = craft.openWithLanguage
+  const System.String Paste = craft.explorer.paste
   const System.String PeekDefinition = craft.peekDefinition
+  const System.String PinTab = craft.pinTab
   const System.String PluginGuide = craft.pluginGuide
   const System.String Plugins = craft.plugins
   const System.String PreviousTab = craft.previousTab
@@ -2029,9 +2075,13 @@ static class Craft.Editor.Shell.ShellCommandIds
   const System.String ReopenClosedTab = craft.reopenClosedTab
   const System.String RevealInFileManager = craft.revealInFileManager
   const System.String RevealInTree = craft.revealInTree
+  const System.String RevertFile = craft.revertFile
+  const System.String RunMenu = craft.menu.run
+  const System.String RunTarget = craft.run.menuTarget
   const System.String Save = craft.save
   const System.String SaveAll = craft.saveAll
   const System.String SaveAs = craft.saveAs
+  const System.String SelectForCompare = craft.explorer.selectForCompare
   const System.String Settings = craft.settings
   const System.String ShowOutput = craft.showOutput
   const System.String ShowProblems = craft.showProblems
@@ -2043,6 +2093,7 @@ static class Craft.Editor.Shell.ShellCommandIds
   const System.String TogglePanel = craft.togglePanel
   const System.String ToggleTheme = craft.toggleTheme
   const System.String ToggleTree = craft.toggleTree
+  const System.String UnpinTab = craft.unpinTab
   const System.String Welcome = craft.welcome
   const System.String ZoomIn = craft.zoomIn
   const System.String ZoomOut = craft.zoomOut
@@ -2081,9 +2132,11 @@ enum Craft.Editor.Shell.ShellLayoutKind : System.IComparable, System.IConvertibl
   Wide = 0
 static class Craft.Editor.Shell.ShellMenus
   static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.MenuRow> Rows(System.String menu, Craft.Abstractions.IEditorHost host)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.MenuRow> Rows(System.String menu, Craft.Abstractions.IEditorHost host, Craft.Abstractions.ContextMenuTarget target)
   static System.String ChordOf(System.String commandId)
   static System.String MenuTitle(Craft.Abstractions.IEditorCommand command)
 sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
+  Craft.Abstractions.ContextMenuTarget DescribeMenuTarget(Craft.Abstractions.ContextMenuTarget target)
   Craft.Abstractions.ITheme Theme { get; }
   Craft.Abstractions.SourceControlFile FileState(System.String path)
   Craft.Abstractions.SourceControlStatus SourceControl { get; }
@@ -2109,9 +2162,12 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Editor.Shell.PageTabs Pages { get; }
   Craft.Editor.Shell.PanelLayout Panels { get; }
   Craft.Editor.Shell.ShellLayout Layout { get; }
+  Craft.Editor.Shell.TreeEdit TreeEdit { get; }
   Craft.Editor.Shell.UndoBar UndoBar { get; }
+  System.Boolean InlineTreeEdits { get; set; }
   System.Boolean RemoveRecent(System.String path)
   System.Boolean WelcomeAtStart { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunTarget> RunTargetsOf(System.String path, System.Boolean isFolder)
   System.Collections.Generic.IReadOnlyList<Craft.Core.Settings.SettingRow> SettingRows()
   System.Collections.Generic.IReadOnlyList<System.String> ClosedFiles { get; }
   System.Collections.Generic.IReadOnlyList<System.String> OptionsProblems { get; }
@@ -2122,10 +2178,16 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.String ApplySetting(Craft.Core.Settings.SettingLayer layer, System.String variable, System.String value)
   System.String Branch { get; }
   System.String BranchText { get; }
+  System.String CompareSelection { get; }
   System.String RailBadge(System.String id)
   System.String SettingsSection { get; }
+  System.String TreeEditProblem(System.String name)
+  System.Threading.Tasks.Task CompareWithSavedAsync(Craft.Editor.Shell.DocumentTab tab, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task CompareWithSelectedAsync(System.String file, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task LayoutSaved { get; }
   System.Threading.Tasks.Task OpenRecentAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task RefreshTreeAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task RevertAsync(Craft.Editor.Shell.DocumentTab tab, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task ShowSearch(System.Boolean replace = false)
   System.Threading.Tasks.Task<Craft.Editor.Shell.DocumentTab> OpenFileAsync(System.String path, System.Boolean fromTree = false, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Shell.DocumentTab> OpenInGroupAsync(Craft.Editor.Shell.EditorGroup group, System.String path, System.Boolean activate = true, System.Threading.CancellationToken cancellationToken = null)
@@ -2134,6 +2196,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Threading.Tasks.Task<Craft.Editor.Shell.PeekSession> PeekAsync(Craft.Editor.EditorModel source, Craft.Abstractions.DefinitionLocation location, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> CloseGroupAsync(Craft.Editor.Shell.EditorGroup group = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> CloseTabAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> CommitTreeEditAsync(System.String name, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ConfirmCloseAllAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> OpenFolderAsync(System.String path)
   System.Threading.Tasks.Task<System.Boolean> ReopenClosedTabAsync(System.Threading.CancellationToken cancellationToken = null)
@@ -2142,8 +2205,11 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Threading.Tasks.Task<System.Boolean> SaveAsAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> SaveAsync(Craft.Editor.Shell.DocumentTab tab = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> MoveEntryAsync(System.String source, System.String targetFolder, System.Boolean copy, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PasteAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> StoreSettingAsync(System.String variable, System.String value)
   System.Threading.Tasks.Task<System.String> ZoomAsync(System.Int32 steps)
+  System.ValueTuple<System.Collections.Generic.IReadOnlyList<System.String>, System.Boolean> FileClipboard { get; }
+  System.Void CancelTreeEdit()
   System.Void CloseFolder()
   System.Void Dispose()
   System.Void OnMemoryPressure(Craft.Abstractions.MemoryPressureLevel level)
@@ -2157,6 +2223,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   event System.EventHandler SettingsSectionChanged
   event System.EventHandler SourceControlChanged
   event System.EventHandler ThemeChanged
+  event System.EventHandler TreeEditChanged
   event System.EventHandler WorkspaceChanged
   event System.EventHandler<Craft.Abstractions.MemoryPressureLevel> MemoryPressure
   event System.EventHandler<System.String> RevealRequested
@@ -2340,6 +2407,24 @@ enum Craft.Editor.Shell.TranscriptLineKind : System.IComparable, System.IConvert
   Meta = 0
   Step = 7
   StepDetail = 8
+sealed class Craft.Editor.Shell.TreeEdit : System.IEquatable<Craft.Editor.Shell.TreeEdit>
+  Craft.Editor.Shell.TreeEdit <Clone>$()
+  Craft.Editor.Shell.TreeEditKind Kind { get; init; }
+  System.Boolean Equals(Craft.Editor.Shell.TreeEdit other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean IsFolder { get; init; }
+  System.Int32 GetHashCode()
+  System.String Folder { get; init; }
+  System.String Name { get; init; }
+  System.String Path { get; init; }
+  System.String RowPath { get; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Editor.Shell.TreeEditKind Kind, out System.String Folder, out System.String Path, out System.String Name)
+  ctor(Craft.Editor.Shell.TreeEditKind Kind, System.String Folder, System.String Path, System.String Name)
+enum Craft.Editor.Shell.TreeEditKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  NewFile = 0
+  NewFolder = 1
+  Rename = 2
 sealed class Craft.Editor.Shell.UndoBar : System.IDisposable
   Craft.Editor.Shell.UndoBarEntry Current { get; }
   Craft.Editor.Shell.UndoBarEntry Show(System.String text, System.Action undo, System.Action kept = null)

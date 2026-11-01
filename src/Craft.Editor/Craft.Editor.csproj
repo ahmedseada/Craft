@@ -14,4 +14,11 @@
     <ProjectReference Include="..\Craft.Core\Craft.Core.csproj" />
   </ItemGroup>
 
+  <!-- X part 9: the spell check's bundled word lists (plain text, no native library); SCOWL's licence beside them. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Spelling\Words\en.txt" LogicalName="Craft.Editor.Spelling.Words.en.txt" />
+    <EmbeddedResource Include="Spelling\Words\code.txt" LogicalName="Craft.Editor.Spelling.Words.code.txt" />
+    <None Include="Spelling\Words\scowl-license.txt" />
+  </ItemGroup>
+
 </Project>

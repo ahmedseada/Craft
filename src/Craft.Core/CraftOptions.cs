@@ -773,6 +773,44 @@ public sealed record CraftOptions
     /// </summary>
     public string RunInteractive { get; init; } = "auto";
 
+    // X part 9, the tools: the Test explorer, the Markdown and image previews, the TODO list and the spell check.
+
+    /// <summary>Whether the gutter shows a test's ▶ (a click runs it) and its last result's ✓ or ✗ (<c>CRAFT_TEST_GUTTER</c>).</summary>
+    public bool TestGutter { get; init; } = true;
+
+    /// <summary>Whether a test run's failures go to Problems, a group per file (<c>CRAFT_TEST_PROBLEMS</c>).</summary>
+    public bool TestProblems { get; init; } = true;
+
+    /// <summary>Milliseconds the Markdown preview waits after the last keystroke before it renders again, off the UI thread (<c>CRAFT_MARKDOWN_PREVIEW_DELAY_MS</c>).</summary>
+    public int MarkdownPreviewDelayMilliseconds { get; init; } = 300;
+
+    /// <summary>Whether the Markdown preview follows its source's scroll (<c>CRAFT_MARKDOWN_PREVIEW_FOLLOW</c>).</summary>
+    public bool MarkdownPreviewFollow { get; init; } = true;
+
+    /// <summary>The largest image, in megabytes, the image preview reads (<c>CRAFT_IMAGE_PREVIEW_MAX_MB</c>); a larger one is said, not read.</summary>
+    public int ImagePreviewMaxMegabytes { get; init; } = 64;
+
+    /// <summary>The words the TODO list finds in comments (<c>CRAFT_TODO_TAGS</c>, separated by ','), matched as whole words with their case.</summary>
+    public IReadOnlyList<string> TodoTags { get; init; } = DefaultTodoTags;
+
+    /// <summary>The TODO list's words when none are set.</summary>
+    public static IReadOnlyList<string> DefaultTodoTags { get; } = ["TODO", "FIXME", "HACK", "NOTE"];
+
+    /// <summary>The most entries the TODO list keeps; it stops there and says so (<c>CRAFT_TODO_MAX_RESULTS</c>).</summary>
+    public int TodoMaxResults { get; init; } = 5_000;
+
+    /// <summary>Whether comments and strings are spell checked (<c>CRAFT_SPELL_CHECK</c>): a faint squiggle under a word no dictionary knows.</summary>
+    public bool SpellCheck { get; init; } = true;
+
+    /// <summary>The spell check's dictionary, a language tag registered in SpellDictionaries (<c>CRAFT_SPELL_LANGUAGE</c>).</summary>
+    public string SpellLanguage { get; init; } = "en";
+
+    /// <summary>The suggestions a misspelled word's quick fix offers at most (<c>CRAFT_SPELL_SUGGESTIONS</c>).</summary>
+    public int SpellSuggestions { get; init; } = 5;
+
+    /// <summary>Words shorter than this are not spell checked (<c>CRAFT_SPELL_MIN_LENGTH</c>).</summary>
+    public int SpellMinLength { get; init; } = 4;
+
     // X part 9, navigation (13-17): bookmarks, preview tabs, the last session, local history, links in output.
 
     /// <summary>Whether Next and Previous bookmark go round from the last to the first (<c>CRAFT_BOOKMARKS_WRAP</c>).</summary>
@@ -1006,6 +1044,17 @@ public sealed record CraftOptions
         new("CRAFT_MENU_TYPE_AHEAD_MS", "700", "Milliseconds within which letters typed in an open menu add up to jump to the row they start.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Menu typing joins letters within", 100, 5000, "ms", "Menus", step: 50) },
         new("CRAFT_MENU_SUBMENU_DELAY_MS", "200", "Milliseconds the pointer rests on a menu's row before its submenu opens (or an open one closes).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Submenus open after", 0, 2000, "ms", "Menus", step: 50) },
         new("CRAFT_RUN_INTERACTIVE", "auto", "Whether a run takes the keyboard in its terminal tab (its program reads what you type): auto (when it reads input: a console program, a script), on (every run) or off (output only); a configuration's own interactive wins.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Runs take the keyboard", ["auto", "on", "off"], "Run") },
+        new("CRAFT_TEST_GUTTER", "true", "Whether the gutter shows a test's ▶ (a click runs it) and its last result's ✓ or ✗.") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Test marks in the gutter", "Tests") },
+        new("CRAFT_TEST_PROBLEMS", "true", "Whether a test run's failures go to Problems, a group per file (the place of the failure's first frame in the workspace).") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Failed tests in Problems", "Tests") },
+        new("CRAFT_MARKDOWN_PREVIEW_DELAY_MS", "300", "Milliseconds the Markdown preview waits after the last keystroke before it renders again (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.Editor, "Markdown preview renders after a pause of", 0, 10_000, "ms", "Markdown", step: 50) },
+        new("CRAFT_MARKDOWN_PREVIEW_FOLLOW", "true", "Whether the Markdown preview follows its source's scroll.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Markdown preview follows the scroll", "Markdown") },
+        new("CRAFT_IMAGE_PREVIEW_MAX_MB", "64", "The largest image the image preview reads; a larger one is said, not read.") { Shape = SettingShape.Whole(SettingSections.Files, "Preview images up to", 1, 2047, "MB", "Images") },
+        new("CRAFT_TODO_TAGS", "TODO,FIXME,HACK,NOTE", "The words the TODO list finds in comments (in plain text files on any line), as whole words with their case, separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Files, "TODO list words", "TODO list") },
+        new("CRAFT_TODO_MAX_RESULTS", "5000", "The most entries the TODO list keeps; it stops there and says so.") { Shape = SettingShape.Whole(SettingSections.Files, "TODO list keeps at most", 1, 1_000_000, "entries", "TODO list", step: 500) },
+        new("CRAFT_SPELL_CHECK", "true", "Whether comments and strings are spell checked (only the lines on screen): a faint squiggle under a word no dictionary knows, its quick fix (Ctrl+.) with suggestions, Add to dictionary and Ignore in workspace.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Spell check comments and strings", "Spelling") },
+        new("CRAFT_SPELL_LANGUAGE", "en", "The spell check's dictionary (a language registered in SpellDictionaries; en is bundled).") { Shape = SettingShape.Text(SettingSections.Editor, "Spelling dictionary", "Spelling") },
+        new("CRAFT_SPELL_SUGGESTIONS", "5", "The suggestions a misspelled word's quick fix offers at most.") { Shape = SettingShape.Whole(SettingSections.Editor, "Spelling suggestions", 1, 50, null, "Spelling") },
+        new("CRAFT_SPELL_MIN_LENGTH", "4", "Words shorter than this many letters are not spell checked.") { Shape = SettingShape.Whole(SettingSections.Editor, "Spell check words from", 1, 64, "letters", "Spelling") },
         new("CRAFT_BOOKMARKS_WRAP", "true", "Whether Next and Previous bookmark go round from the last bookmark to the first.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Bookmarks go round", "Bookmarks") },
         new("CRAFT_PREVIEW_TABS", "true", "Whether a single click on a file in the explorer opens it in an italic preview tab the next one replaces (an edit, a double-click or a pin keeps it).") { Shape = SettingShape.Toggle(SettingSections.Files, "Preview tabs", "Tabs") },
         new("CRAFT_RESTORE_SESSION", "true", "Whether opening a folder at start reopens its last session: groups, tabs, carets, scroll, folds and pins (a file with a recovery copy is left for its recovery).") { Shape = SettingShape.Toggle(SettingSections.Files, "Restore the last session", "Session") },
@@ -1962,6 +2011,63 @@ public sealed record CraftOptions
             options = options with { RunInteractive = OneOf(runInteractive, "CRAFT_RUN_INTERACTIVE", "auto", "on", "off") };
         }
 
+        if (Text(read, "CRAFT_TEST_GUTTER") is { } testGutter)
+        {
+            options = options with { TestGutter = Flag(testGutter, "CRAFT_TEST_GUTTER") };
+        }
+
+        if (Text(read, "CRAFT_TEST_PROBLEMS") is { } testProblems)
+        {
+            options = options with { TestProblems = Flag(testProblems, "CRAFT_TEST_PROBLEMS") };
+        }
+
+        if (Text(read, "CRAFT_MARKDOWN_PREVIEW_DELAY_MS") is { } previewDelay)
+        {
+            options = options with { MarkdownPreviewDelayMilliseconds = Whole(previewDelay, "CRAFT_MARKDOWN_PREVIEW_DELAY_MS", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_MARKDOWN_PREVIEW_FOLLOW") is { } previewFollow)
+        {
+            options = options with { MarkdownPreviewFollow = Flag(previewFollow, "CRAFT_MARKDOWN_PREVIEW_FOLLOW") };
+        }
+
+        if (Text(read, "CRAFT_IMAGE_PREVIEW_MAX_MB") is { } imageMax)
+        {
+            options = options with { ImagePreviewMaxMegabytes = Whole(imageMax, "CRAFT_IMAGE_PREVIEW_MAX_MB", 1, 2047) };
+        }
+
+        if (Text(read, "CRAFT_TODO_TAGS") is { } todoTags)
+        {
+            var tags = todoTags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            options = options with { TodoTags = tags.Length > 0 && Array.TrueForAll(tags, static t => t.AsSpan().IndexOfAnyExcept(TagCharacters) < 0) ? tags
+                : throw new ArgumentException($"CRAFT_TODO_TAGS is '{todoTags}': it takes words of letters, digits, '_' or '-', separated by ','.", "CRAFT_TODO_TAGS") };
+        }
+
+        if (Text(read, "CRAFT_TODO_MAX_RESULTS") is { } todoMax)
+        {
+            options = options with { TodoMaxResults = Whole(todoMax, "CRAFT_TODO_MAX_RESULTS", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_SPELL_CHECK") is { } spellCheck)
+        {
+            options = options with { SpellCheck = Flag(spellCheck, "CRAFT_SPELL_CHECK") };
+        }
+
+        if (Text(read, "CRAFT_SPELL_LANGUAGE") is { } spellLanguage)
+        {
+            options = options with { SpellLanguage = spellLanguage };
+        }
+
+        if (Text(read, "CRAFT_SPELL_SUGGESTIONS") is { } spellSuggestions)
+        {
+            options = options with { SpellSuggestions = Whole(spellSuggestions, "CRAFT_SPELL_SUGGESTIONS", 1, 50) };
+        }
+
+        if (Text(read, "CRAFT_SPELL_MIN_LENGTH") is { } spellMin)
+        {
+            options = options with { SpellMinLength = Whole(spellMin, "CRAFT_SPELL_MIN_LENGTH", 1, 64) };
+        }
+
         if (Text(read, "CRAFT_BOOKMARKS_WRAP") is { } bookmarksWrap)
         {
             options = options with { BookmarksWrap = Flag(bookmarksWrap, "CRAFT_BOOKMARKS_WRAP") };
@@ -2085,6 +2191,8 @@ public sealed record CraftOptions
 
         throw new ArgumentException($"{name} is '{value}': it takes {string.Join(", ", choices.ToArray())}.", name);
     }
+
+    private static readonly System.Buffers.SearchValues<char> TagCharacters = System.Buffers.SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-");
 
     private static string? Text(Func<string, string?> read, string name) => read(name) is { Length: > 0 } value ? value.Trim() : null;
 

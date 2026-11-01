@@ -105,6 +105,18 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
     /// <summary>The other places of the word at the caret (the current word's highlight).</summary>
     public uint WordHighlight { get; init; } = (Selection & 0x00FFFFFFu) | 0x70000000u;
 
+    private uint? _spelling;
+
+    /// <summary>
+    /// A word the spell check does not know (X part 9): its faint squiggle under a comment's or a string's word; by default the
+    /// info colour at 60% (a theme made before it draws it in its own info colour).
+    /// </summary>
+    public uint Spelling
+    {
+        get => _spelling ?? ((Info & 0x00FFFFFFu) | 0x99000000u);
+        init => _spelling = value;
+    }
+
     /// <summary>A fold's chevron in the gutter.</summary>
     public uint FoldChevron { get; init; } = GutterText;
 

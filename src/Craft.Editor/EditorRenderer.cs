@@ -218,6 +218,10 @@ public sealed class EditorRenderer : IDisposable
         var whitespace = WhitespaceModeOf(options.RenderWhitespace);
         int inline = InlineModeOf(options.InlineDiagnostics);
         SquiggleSegmentsDrawn = 0;
+        // X part 9: the spell check of the lines drawn (kept per line; a warm frame checks and allocates nothing).
+        var spellChecker = model.SpellCheckerForFrame;
+        var spelling = spellChecker is not null && model.Spelling.Begin(spellChecker, visible, options.PaintCacheLines) ? model.Spelling : null;
+        var spellScope = Spelling.SpellCheckLayer.ScopeOf(model.Language);
         GuidesDrawn = 0;
         WordHighlightsDrawn = 0;
         WhitespaceMarksDrawn = 0;
@@ -398,6 +402,8 @@ public sealed class EditorRenderer : IDisposable
                 {
                     DrawInlineDiagnostic(canvas, model, diagnostics, firstDiagnostic, index, line, inline, endX + (2 * cell), endTop, cell, textLeft, viewportWidth - model.OverviewRulerWidth, colors);
                 }
+
+                spelling?.DrawLine(canvas, spellChecker!, spellScope, index, line.Start, text, spans[spanIndex..], left, top, cell, height, tabSize, textLeft, viewportWidth, colors.Spelling);
             }
         }
         finally
@@ -656,11 +662,23 @@ public sealed class EditorRenderer : IDisposable
             LineMarkKind.Added => colors.Success,
             LineMarkKind.Changed => colors.Info,
             LineMarkKind.Deleted => colors.Error,
+            LineMarkKind.TestReady => colors.GutterText,
+            LineMarkKind.TestPassed => colors.Success,
+            LineMarkKind.TestFailed => colors.Error,
             LineMarkKind.Note => colors.Accent,
             LineMarkKind.Bookmark => colors.Accent,
             _ => colors.Warning,
         };
     }
+
+    /// <summary>The glyph a test's mark draws at the gutter's left (X part 9): ▶ to run, ✓ passed, ✗ failed, ○ skipped.</summary>
+    public static string LineMarkGlyph(LineMarkKind kind) => kind switch
+    {
+        LineMarkKind.TestPassed => "✓",
+        LineMarkKind.TestFailed => "✗",
+        LineMarkKind.TestSkipped => "○",
+        _ => "▶",
+    };
 
     // X part 8: the marks on the visible lines, a bar in the gutter's strip (a removed run a wedge between two lines); the
     // first is found by a binary search, so a frame reads only the marks it draws.
@@ -700,6 +718,19 @@ public sealed class EditorRenderer : IDisposable
         {
             var mark = marks[i];
             uint color = LineMarkColor(mark.Kind, colors);
+            if (mark.IsGlyph)
+            {
+                // X part 9: a test's glyph in the gutter's first cell (left of the line numbers).
+                if (mark.Line < visible.First || mark.Line > visible.Last || (hidden && map.IsHidden(mark.Line)))
+                {
+                    continue;
+                }
+
+                canvas.DrawText(LineMarkGlyph(mark.Kind), model.Metrics.CellWidth * 0.15f, (model.RowOfLine(mark.Line) * height) - scrollY, new TextStyle(color));
+                LineMarksDrawn++;
+                continue;
+            }
+
             if (mark.Kind == LineMarkKind.Bookmark)
             {
                 // X part 9: a bookmark is the accent's tag at the gutter's left edge (clear of the numbers and the change bar).

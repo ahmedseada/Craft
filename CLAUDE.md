@@ -97,7 +97,8 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   `slot/<piece>` (`git push origin HEAD:refs/heads/slot/<piece>`) and stops, reporting its commits and filter. The main
   session alone merges those branches into `main`, resolves conflicts, batches every branch that is ready into one
   merge, builds once for that batch, runs the union of their filters once and pushes `main`. The session never
-  deletes a `slot/*` branch; every command list it hands the owner names the `slot/*` branches merged into it.
+  deletes a `slot/*` branch; every command list it hands the owner names the `slot/*` branches merged into it, for the owner to delete,
+  and ends with that delete command (`git push origin --delete slot/<piece> …`), which only the owner runs.
   7. Hand the owner one targeted
   command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it

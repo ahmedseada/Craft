@@ -1,3 +1,101 @@
+enum Craft.Web.Script.ScriptDialect : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  AngularExpression = 4
+  JavaScript = 0
+  Jsx = 1
+  Tsx = 3
+  TypeScript = 2
+sealed class Craft.Web.Script.ScriptEditorPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor(System.String name, System.String summary, Craft.Web.Script.ScriptLanguage language, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> settings)
+sealed class Craft.Web.Script.ScriptFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
+  ctor(System.String name, System.Collections.Generic.IReadOnlyList<System.String> languages, System.Func<System.String, Craft.Web.Script.ScriptTokenizer> tokenizer)
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Web.Script.ScriptTokenizer tokenizer, Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Web.Script.ScriptFormatter : Craft.Abstractions.ITextFormatter
+  Craft.Web.Script.ScriptTokenizer Tokenizer { get; set; }
+  System.Int32 LineWidth { get; }
+  System.Void Format(System.ReadOnlySpan<System.Char> text, Craft.Abstractions.FormatStyle style, System.Collections.Generic.List<Craft.Abstractions.TextEdit> edits)
+  ctor(Craft.Web.Script.ScriptTokenizer tokenizer, System.Func<System.Int32> lineWidth = null)
+sealed class Craft.Web.Script.ScriptLanguage : Craft.Abstractions.LineStateLanguage, Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
+  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
+  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
+  Craft.Web.Script.ScriptDialect DialectFor(System.String path, Craft.Web.Script.ScriptProject project, Craft.Web.Script.ScriptSettings settings)
+  Craft.Web.Script.ScriptTokenizer TokenizerFor(System.String path, Craft.Web.Script.ScriptProject project, Craft.Web.Script.ScriptSettings settings)
+  Craft.Web.Script.ScriptVersion VersionFor(Craft.Web.Script.ScriptProject project, Craft.Web.Script.ScriptSettings settings)
+  System.Boolean IsTypeScript { get; }
+  System.Func<Craft.Web.Script.ScriptSettings> Settings { get; set; }
+  ctor(System.String name, System.String summary, System.Collections.Generic.IReadOnlyList<System.String> extensions, System.Boolean typeScript, System.Func<Craft.Web.Script.ScriptSettings> settings = null)
+  protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
+  static Craft.Abstractions.LanguageRules ScriptRules { get; }
+sealed class Craft.Web.Script.ScriptProject : System.IEquatable<Craft.Web.Script.ScriptProject>
+  Craft.Web.Script.ScriptProject <Clone>$()
+  System.Boolean Equals(Craft.Web.Script.ScriptProject other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean UsesJsx { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32? EcmaScript { get; init; }
+  System.Int32? TypeScript { get; init; }
+  System.String Folder { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Folder, out System.Int32? EcmaScript, out System.Int32? TypeScript, out System.Boolean UsesJsx)
+  ctor(System.String Folder, System.Int32? EcmaScript, System.Int32? TypeScript, System.Boolean UsesJsx)
+sealed class Craft.Web.Script.ScriptProjectSelector : Craft.Abstractions.ILanguageSelector, Idrak.Abstraction.IKind
+  Craft.Abstractions.ILanguage Select(System.String path, System.String workspaceRoot)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task PrepareAsync(System.String workspaceRoot, System.Threading.CancellationToken cancellationToken)
+  ctor(System.String name)
+static class Craft.Web.Script.ScriptProjects
+  const System.Int32 Capacity = 4096
+  static Craft.Web.Script.ScriptProject Find(System.String filePath)
+  static Craft.Web.Script.ScriptProject ReadFolder(System.String folder, System.String workspaceRoot)
+  static System.Int64 Reads { get; }
+  static System.Threading.Tasks.Task PrepareAsync(System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  static System.Threading.Tasks.Task<Craft.Web.Script.ScriptProject> ReadAsync(System.String filePath, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  static System.Void Forget()
+sealed class Craft.Web.Script.ScriptSettings : System.IEquatable<Craft.Web.Script.ScriptSettings>
+  Craft.Web.Script.ScriptSettings <Clone>$()
+  System.Boolean Equals(Craft.Web.Script.ScriptSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean ProjectVersion { get; init; }
+  System.Int32 FormatLineWidth { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 StateCapacity { get; init; }
+  System.Int32 StateDepth { get; init; }
+  System.String Jsx { get; init; }
+  System.String ToString()
+  System.String Version { get; init; }
+  ctor()
+  static Craft.Web.Script.ScriptSettings Read(System.Func<System.String, System.String> get)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared(System.Boolean javaScript, System.String group)
+sealed class Craft.Web.Script.ScriptTokenizer : Craft.Abstractions.LineTokenizer
+  Craft.Abstractions.LanguageRules RulesAt(System.ReadOnlySpan<System.Char> line, System.Int32 column, System.UInt64 state)
+  Craft.Abstractions.LineStates States { get; }
+  Craft.Web.Script.ScriptDialect Dialect { get; }
+  Craft.Web.Script.ScriptVersion Version { get; }
+  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
+  ctor(Craft.Web.Script.ScriptDialect dialect, Craft.Web.Script.ScriptVersion version, Craft.Abstractions.LineStates states = null)
+  static Craft.Abstractions.LanguageRules JsxRules { get; }
+  static Craft.Web.Script.ScriptTokenizer For(Craft.Web.Script.ScriptDialect dialect, Craft.Web.Script.ScriptVersion version, System.Int32 capacity = 4096, System.Int32 maxDepth = 64)
+struct Craft.Web.Script.ScriptVersion : System.IEquatable<Craft.Web.Script.ScriptVersion>
+  System.Boolean Equals(Craft.Web.Script.ScriptVersion other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 EcmaScript { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 TypeScript { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 EcmaScript, out System.Int32 TypeScript)
+  const System.Int32 Latest = 9999
+  ctor(System.Int32 EcmaScript, System.Int32 TypeScript)
+  static Craft.Web.Script.ScriptVersion Newest { get; }
+  static System.Int32? ParseEcmaScript(System.ReadOnlySpan<System.Char> text)
+  static System.Int32? ParseTypeScript(System.ReadOnlySpan<System.Char> text)
 enum Craft.Web.Style.StyleDialect : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Css = 0
   Less = 2

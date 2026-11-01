@@ -38,6 +38,8 @@
     <!-- Phase W's npm plug-in (group WebNpm): its API dump and its tests; also loaded from a copy of its output. -->
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Npm\Craft.Plugins.Npm.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Css\Craft.Plugins.Css.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.JavaScript\Craft.Plugins.JavaScript.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.TypeScript\Craft.Plugins.TypeScript.csproj" />
     <!-- Idrak's conformance suites (FillInMiddleFormatSuite, TokenSamplerSuite, TextMatcherSuite) for the plug-ins of phase P. -->
     <PackageReference Include="Idrak.Abstraction.Testing" Version="$(IdrakVersion)" />
     <!-- The sample plug-in (PluginKit group): built first, never referenced; the tests copy its output folder into a

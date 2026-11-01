@@ -135,6 +135,11 @@ public static class InventoryTests
             ["CRAFT_WORD_WRAP"] = "column", ["CRAFT_WORD_WRAP_COLUMN"] = "100", ["CRAFT_BRACKET_COLORS"] = "false", ["CRAFT_BRACKET_COLORS_SCAN_LINES"] = "5000",
             ["CRAFT_INLINE_DIAGNOSTICS"] = "all", ["CRAFT_LIGHTBULB"] = "false", ["CRAFT_LIGHTBULB_DELAY_MS"] = "100", ["CRAFT_RENDER_WHITESPACE"] = "boundary",
             ["CRAFT_RULERS"] = "120, 80", ["CRAFT_TRIM_TRAILING_WHITESPACE"] = "true", ["CRAFT_INSERT_FINAL_NEWLINE"] = "true", ["CRAFT_EDITORCONFIG"] = "false",
+            // X part 9, navigation: bookmarks, preview tabs, the last session, local history, links in output.
+            ["CRAFT_BOOKMARKS_WRAP"] = "false", ["CRAFT_PREVIEW_TABS"] = "false", ["CRAFT_RESTORE_SESSION"] = "false", ["CRAFT_LOCAL_HISTORY_MAX_MB"] = "64",
+            ["CRAFT_LOCAL_HISTORY_DAYS"] = "7", ["CRAFT_LOCAL_HISTORY_FILE_MB"] = "2", ["CRAFT_LINKS_UNDERLINE"] = "always",
+            // W-files: the icon theme, the skipped folders in the explorer.
+            ["CRAFT_ICON_THEME"] = "mono", ["CRAFT_WORKSPACE_SHOW_IGNORED"] = "false",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -182,6 +187,8 @@ public static class InventoryTests
             TabsReopenLimit = 7, DeleteUndoMaxMegabytes = 2, MenuTypeAheadMilliseconds = 400, MenuSubmenuDelayMilliseconds = 0,
             WordWrap = "column", WordWrapColumn = 100, BracketColors = false, BracketColorsScanLines = 5000, InlineDiagnostics = "all", Lightbulb = false,
             LightbulbDelayMilliseconds = 100, RenderWhitespace = "boundary", Rulers = "80,120", TrimTrailingWhitespace = true, InsertFinalNewline = true, EditorConfig = false,
+            BookmarksWrap = false, PreviewTabs = false, RestoreSession = false, LocalHistoryMaxMegabytes = 64, LocalHistoryDays = 7, LocalHistoryFileMegabytes = 2,
+            LinksUnderline = "always", IconTheme = "mono", WorkspaceShowIgnored = false,
         }, options, "options read from every variable");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");
         Check.True(Equals(new CraftOptions(), new CraftOptions()), "two default options compare equal (no list made per instance)");

@@ -4,10 +4,10 @@
 using System.Globalization;
 using Craft.Abstractions;
 
-namespace Craft.CSharp.Project;
+namespace Craft.Plugins.Json;
 
 /// <summary>
-/// JSON's Format document, as the files of a C# project need it: each member and element on its own line, indented by the
+/// JSON's Format document (package.json, tsconfig.json, appsettings.json, …): each member and element on its own line, indented by the
 /// editor's step; an empty <c>{}</c> or <c>[]</c> kept on one line; one space after ':'; comments kept where they were
 /// (after a value on its line, or on their own line), trailing commas kept, one empty line between members kept where
 /// there was one. Only the white space between tokens changes. A text that is not JSON (with comments and trailing
@@ -309,20 +309,5 @@ internal sealed class JsonFormatter : ITextFormatter
     }
 
     /// <summary>A malformed text's error: its line and column (from 1) and what is wrong.</summary>
-    internal static FormatException Malformed(ReadOnlySpan<char> text, int position, string what)
-    {
-        position = Math.Clamp(position, 0, text.Length);
-        int line = 1;
-        int lineStart = 0;
-        for (int i = 0; i < position; i++)
-        {
-            if (text[i] == '\n')
-            {
-                line++;
-                lineStart = i + 1;
-            }
-        }
-
-        return new FormatException(string.Create(CultureInfo.InvariantCulture, $"line {line}, column {position - lineStart + 1}: {what}"));
-    }
+    private static FormatException Malformed(ReadOnlySpan<char> text, int position, string what) => ITextFormatter.Malformed(text, position, what);
 }

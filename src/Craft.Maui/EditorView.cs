@@ -836,7 +836,8 @@ public sealed class EditorView : ContentView, IDisposable
         }
 
         var point = e.Touches[0];
-        _model.PointerHovered(point.X, point.Y);
+        // X part 9: the modifiers held, so a link shows under the pointer with Ctrl where it needs it.
+        _model.PointerHovered(point.X, point.Y, _inputConnection is IKeyModifierSource source ? source.CurrentModifiers : KeyModifiers.None);
     }
 
     private void OnEndHoverInteraction(object? sender, EventArgs e) => _model?.PointerExited();

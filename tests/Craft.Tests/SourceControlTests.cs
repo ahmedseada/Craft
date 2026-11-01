@@ -219,7 +219,7 @@ public static class SourceControlTests
 
         // The shell: the badge on the panel's rail item, the repository's branch and the tree's file states.
         using var folder = new TempFolder();
-        var settings = new CraftSettings(_ => null, SettingsFile.Load(folder.File("data/settings.json")));
+        var settings = new CraftSettings(folder.Isolated(), SettingsFile.Load(folder.File("data/settings.json")));
         using var host = new EditorHost();
         using var shell = new ShellModel(host, settings, RecentList.Load(folder.File("data/recent.json"), 10), new NoDialogs(), new SilentUi());
         Check.True(await shell.OpenFolderAsync(folder.Path), "the folder opens");

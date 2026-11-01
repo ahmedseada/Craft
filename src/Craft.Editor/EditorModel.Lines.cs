@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
 using System.Buffers;
+using System.Runtime.InteropServices;
 using Craft.Abstractions;
 
 namespace Craft.Editor;
@@ -25,15 +26,17 @@ public sealed partial class EditorModel
     private SelectionState? _expandedTo;
 
     /// <summary>
-    /// Comments the selected lines with the language's line comment (<see cref="LanguageRules.LineComment"/>, "//"), or
-    /// takes it off when every non-blank one has it (VS Code's Ctrl+/); false when the language has no line comment.
+    /// Comments the selected lines with the line comment of the language at the selection (<see cref="RulesAt"/>, "//"), or
+    /// takes it off when every non-blank one has it (VS Code's Ctrl+/). A language with no line comment but a block comment
+    /// (CSS, HTML) wraps each caret's lines in it instead (<c>/* … */</c>, <c>&lt;!-- … --&gt;</c>), or unwraps them when
+    /// every one is wrapped; false when the language has neither.
     /// </summary>
     public bool ToggleLineComment() => Comment(remove: null);
 
-    /// <summary>Comments the selected lines (Visual Studio's Ctrl+K Ctrl+C); false when the language has no line comment.</summary>
+    /// <summary>Comments the selected lines (Visual Studio's Ctrl+K Ctrl+C), with the block comment when there is no line comment; false when the language has neither.</summary>
     public bool CommentLines() => Comment(remove: false);
 
-    /// <summary>Takes the line comment off the selected lines that have one (Ctrl+K Ctrl+U); false when the language has no line comment.</summary>
+    /// <summary>Takes the comment off the selected lines that have one (Ctrl+K Ctrl+U), the block comment's when there is no line comment; false when the language has neither.</summary>
     public bool UncommentLines() => Comment(remove: true);
 
     /// <summary>Copies the selected lines above or below them (Shift+Alt+Up and Down; Visual Studio's Ctrl+D below); the selection goes with the copy below. Every caret's lines.</summary>
@@ -334,9 +337,10 @@ public sealed partial class EditorModel
     // null toggles: removed when every non-blank line has the comment. Every caret's lines, decided together.
     private bool Comment(bool? remove)
     {
-        if (Rules.LineComment is not { Length: > 0 } prefix)
+        var rules = RulesAt(CommentPosition());
+        if (rules.LineComment is not { Length: > 0 } prefix)
         {
-            return false;
+            return rules is { BlockCommentOpen: { Length: > 0 } open, BlockCommentClose: { Length: > 0 } close } && BlockComment(open, close, remove);
         }
 
         var snapshot = Snapshot;
@@ -414,6 +418,128 @@ public sealed partial class EditorModel
             static (selection, position) => position == selection.Start && !selection.IsEmpty);
         EnsureCaretVisible();
         return true;
+    }
+
+    // Where the comment's language is read: the first non-blank character of the first caret's first line.
+    private int CommentPosition()
+    {
+        var snapshot = Snapshot;
+        var line = snapshot.GetLine(SelectedLinesOf(Selections[0]).First);
+        char[]? buffer = null;
+        try
+        {
+            var text = TextReading.ReadLine(snapshot, line, ref buffer);
+            return line.Start + TextReading.IndentLength(text);
+        }
+        finally
+        {
+            TextReading.Return(buffer);
+        }
+    }
+
+    // The fallback of a language with no line comment (phase W: CSS, HTML): each caret's lines, from the first line's
+    // indent to the last line's last non-blank character, wrapped in `open` and `close` (with a space inside each), or
+    // unwrapped when every block is wrapped (null) or when asked (true). Blank blocks are left as they are. One undo step.
+    private bool BlockComment(string open, string close, bool? remove)
+    {
+        var snapshot = Snapshot;
+        var blocks = LineBlocks(out int count);
+        char[]? buffer = null;
+        var ranges = new List<(int Start, int End)>(count);
+        try
+        {
+            for (int b = 0; b < count; b++)
+            {
+                int start = -1;
+                for (int i = blocks[b].First; i <= blocks[b].Last && start < 0; i++)
+                {
+                    var line = snapshot.GetLine(i);
+                    var text = TextReading.ReadLine(snapshot, line, ref buffer);
+                    int lead = TextReading.IndentLength(text);
+                    if (lead < text.Length)
+                    {
+                        start = line.Start + lead;
+                    }
+                }
+
+                if (start < 0)
+                {
+                    continue;   // a blank block
+                }
+
+                int end = start;
+                for (int i = blocks[b].Last; i >= blocks[b].First; i--)
+                {
+                    var line = snapshot.GetLine(i);
+                    var text = TextReading.ReadLine(snapshot, line, ref buffer).TrimEnd(" \t");
+                    if (!text.IsEmpty)
+                    {
+                        end = line.Start + text.Length;
+                        break;
+                    }
+                }
+
+                ranges.Add((start, end));
+            }
+
+            if (ranges.Count == 0)
+            {
+                return true;
+            }
+
+            bool all = true;
+            foreach (var (start, end) in ranges)
+            {
+                var text = TextReading.Read(snapshot, start, end - start, ref buffer);
+                if (text.Length < open.Length + close.Length || !text.StartsWith(open, StringComparison.Ordinal) || !text.EndsWith(close, StringComparison.Ordinal))
+                {
+                    all = false;
+                    break;
+                }
+            }
+
+            bool removing = remove ?? all;
+            var edits = new List<TextEdit>(ranges.Count * 2);
+            var ends = new HashSet<int>();
+            foreach (var (start, end) in ranges)
+            {
+                var text = TextReading.Read(snapshot, start, end - start, ref buffer);
+                if (removing)
+                {
+                    if (text.Length < open.Length + close.Length || !text.StartsWith(open, StringComparison.Ordinal) || !text.EndsWith(close, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    int openLength = open.Length + (open.Length < text.Length - close.Length && text[open.Length] == ' ' ? 1 : 0);
+                    int closeLength = close.Length + (text.Length - close.Length - 1 >= openLength && text[text.Length - close.Length - 1] == ' ' ? 1 : 0);
+                    edits.Add(TextEdit.Delete(start, openLength));
+                    edits.Add(TextEdit.Delete(end - closeLength, closeLength));
+                }
+                else
+                {
+                    edits.Add(TextEdit.Insert(start, open + " "));
+                    edits.Add(TextEdit.Insert(end, " " + close));
+                    ends.Add(end);
+                }
+            }
+
+            if (edits.Count == 0)
+            {
+                return true;
+            }
+
+            // A caret at a block's end stays before the close; a selection starting at a block's start takes the open in.
+            ApplyMapped(CollectionsMarshal.AsSpan(edits), removing,
+                (selection, position) => ends.Contains(position) || (position == selection.Start && !selection.IsEmpty));
+            EnsureCaretVisible();
+            return true;
+        }
+        finally
+        {
+            TextReading.Return(buffer);
+            ReturnBlocks(blocks);
+        }
     }
 
     // Applies inserts (or deletes) at line starts as one Command step, every selection mapped through them; a position

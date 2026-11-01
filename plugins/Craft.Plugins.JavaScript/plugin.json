@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.JavaScript",
+  "version": "0.1.0",
+  "summary": "JavaScript (ES2025 and later) and JSX: colours of .js, .mjs, .cjs and .jsx (templates nested across lines, regular expressions, decorators, using), brackets, folding, Format document and Format Selection, icons; the version from jsconfig.json, JSX in .js for React and Preact projects [EditorLanguages \"javascript\", FoldingRangeProviders \"javascript\", LanguageSelectors \"javascript\"]",
+  "contractVersion": "1.1",
+  "capabilities": ["files"]
+}

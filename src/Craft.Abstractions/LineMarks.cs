@@ -18,6 +18,9 @@ public enum LineMarkKind
     /// <summary>A merge conflict's block (the warning colour).</summary>
     Conflict,
 
+    /// <summary>A bookmark on <see cref="LineMark.Line"/> (X part 9: the accent's tag at the gutter's left edge; not clickable).</summary>
+    Bookmark,
+
     /// <summary>A note on the line (X part 11: a code review's finding; the accent colour), its card shown on a click.</summary>
     Note,
 }

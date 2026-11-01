@@ -1,0 +1,14 @@
+sealed class Craft.Plugins.Html.HtmlPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  const System.String PackageName = Craft.Plugins.Html
+  ctor()
+static class Craft.Plugins.Html.HtmlParts
+  const System.String LanguageName = html
+  static Craft.Web.Markup.HtmlFolding Folding { get; }
+  static Craft.Web.Markup.HtmlLanguage Language { get; }
+  static Craft.Web.Markup.MarkupEditorPlugin Editor { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIcon> Icons { get; }
+sealed class Craft.Plugins.Html.HtmlPlugin : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()

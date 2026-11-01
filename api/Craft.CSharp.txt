@@ -89,14 +89,6 @@ sealed class Craft.CSharp.EditorConfigFolding : Craft.Abstractions.IFoldingRange
   const System.String ProviderName = editorconfig
   ctor()
   static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
-sealed class Craft.CSharp.JsonFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
-  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
-  System.String Name { get; }
-  System.String Summary { get; }
-  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
-  const System.String ProviderName = json
-  ctor()
-  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.CSharp.MarkupFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
   System.String Name { get; }
@@ -107,7 +99,6 @@ sealed class Craft.CSharp.MarkupFolding : Craft.Abstractions.IFoldingRangeProvid
   static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
 static class Craft.CSharp.ProjectLanguages
   const System.String EditorConfig = editorconfig
-  const System.String Json = json
   const System.String MsBuild = msbuild
   const System.String Razor = razor
   const System.String Solution = sln

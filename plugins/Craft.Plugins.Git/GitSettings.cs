@@ -64,7 +64,7 @@ public sealed record GitSettings
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
         Setting("path", "", "The git program (found on PATH when empty); this machine's only, never a workspace's",
-            SettingShape.PathTo(SettingSections.SourceControl, "Git program", "Git")),
+            SettingShape.PathTo(SettingSections.SourceControl, "Git program", "Git"), machineOnly: true),
         Setting("refreshMs", "500", "The pause after a change on disk or a save before the status is read again",
             SettingShape.Whole(SettingSections.SourceControl, "Refresh after", 50, 60_000, "ms", "Git", 50)),
         Setting("autofetchMinutes", "0", "Minutes between fetches in the background (0: never)",
@@ -124,7 +124,8 @@ public sealed record GitSettings
         return style is "conventional" or "plain" or "auto" ? style : fallback;
     }
 
-    private static PluginSetting Setting(string key, string value, string description, SettingShape shape) => new(key, value, description) { Shape = shape };
+    private static PluginSetting Setting(string key, string value, string description, SettingShape shape, bool machineOnly = false) =>
+        new(key, value, description) { Shape = shape, MachineOnly = machineOnly };
 
     private static int Whole(string text, int fallback, int least) =>
         int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) && value >= least ? value : fallback;

@@ -109,6 +109,9 @@ public sealed class ShellPalette
     /// <summary>The theme.</summary>
     public ITheme Theme { get; }
 
+    /// <summary>Whether the theme is dark (file icons take their dark colours).</summary>
+    public bool IsDark => Theme.IsDark;
+
     /// <summary>The options (fonts, sizes, touch target).</summary>
     public CraftOptions Options { get; }
 

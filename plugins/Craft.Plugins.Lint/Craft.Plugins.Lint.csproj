@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plan 1, phase W (W-tools): the lint plug-in, pre-installed and removable ("lint" and "prettier"; delete
+    plugins\Craft.Plugins.Lint\ or CRAFT_PLUGINS_DISABLED=Craft.Plugins.Lint). It registers the linters "eslint" (the
+    project's own ESLint, flat config first) and "tslint" (only with tslint.json and no ESLint configuration), drives them
+    on save (asked once per workspace and program, remembered in the user's settings, never the workspace's) and on
+    "Lint workspace", publishes what they find (IEditorHost.PublishDiagnostics: squiggles, the lightbulb, Problems, closed
+    files too), offers their fixes as one diff, sets ESLint up through the sandbox, and registers the document formatter
+    "prettier" (the project's own Prettier where it has a Prettier configuration).
+
+    Built on Craft.Abstractions (and Idrak.Abstraction through it) and a copy of the npm plug-in's assembly (Node found
+    the same way, CRAFT_PLUGIN_NPM_NODE honoured), as each web plug-in carries its copy of Craft.Web. JSON read as UTF-8
+    bytes with Utf8JsonReader; nothing native, no reflection (trim-safe). Android (phase M): Node does not run there; the
+    linters and Prettier say Unavailable.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Lint</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <!-- Copied: the lint plug-in carries its own copy of the npm plug-in's Node finder and run limits. -->
+    <ProjectReference Include="..\Craft.Plugins.Npm\Craft.Plugins.Npm.csproj" />
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

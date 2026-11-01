@@ -209,6 +209,11 @@ public sealed class OverviewRuler : IDisposable
         int lines = snapshot.LineCount;
         foreach (ref readonly var mark in model.LineMarks)
         {
+            if (mark.Kind == LineMarkKind.Bookmark)
+            {
+                continue;                                    // X part 9: the ruler's lanes are full; bookmarks show in the gutter and their view
+            }
+
             byte kind = mark.Kind switch
             {
                 LineMarkKind.Added => Added,

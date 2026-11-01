@@ -205,6 +205,9 @@ public sealed class SyntacticLanguageSession : ILanguageSession
     public IReadOnlyList<ScopeName> ScopeAt(ITextSnapshot snapshot, int position) => _inner.ScopeAt(snapshot, position);
 
     /// <inheritdoc />
+    public LanguageRules? RulesAt(ITextSnapshot snapshot, int position) => _inner.RulesAt(snapshot, position);
+
+    /// <inheritdoc />
     /// <remarks>The outline is syntactic (the declarations of the parse): the closed file's peek may list it.</remarks>
     public Task<IReadOnlyList<DocumentSymbol>> GetDocumentSymbolsAsync(ITextSnapshot snapshot, CancellationToken cancellationToken) =>
         _inner.GetDocumentSymbolsAsync(snapshot, cancellationToken);

@@ -84,6 +84,9 @@ public sealed class TerminalPanelView : ContentView, IDisposable
     /// </summary>
     public event EventHandler<(string Menu, ContextMenuTarget Target, TappedEventArgs Where)>? MenuRequested;
 
+    /// <summary>Raised when a file:line link was Ctrl+clicked in one of its terminals (X part 9).</summary>
+    public event EventHandler<TerminalLinkClick>? LinkActivated;
+
     /// <summary>Gives the active terminal the keyboard.</summary>
     public void FocusTerminal()
     {
@@ -344,6 +347,7 @@ public sealed class TerminalPanelView : ContentView, IDisposable
             view.Apply(_palette.Theme, _palette.Options);
             view.Activated += (_, terminal) => _manager.Activate(terminal);
             view.ContextRequested += (_, e) => MenuRequested?.Invoke(this, (EditorContextMenus.Terminal, Target(e.Terminal), e.Where));
+            view.LinkActivated += (_, link) => LinkActivated?.Invoke(this, link);         // X part 9: Ctrl+click on a file:line link
             _views.Add(view);
         }
 

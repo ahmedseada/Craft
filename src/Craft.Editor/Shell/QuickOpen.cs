@@ -213,7 +213,7 @@ public sealed record QuickOpenItem(string Text, string? Detail, string? Path, st
     /// <summary>A command's keys as they are bound now (the user's, the keymap's or the default), or null.</summary>
     public string? Shortcut { get; init; }
 
-    /// <summary>A file's icon by its language (<see cref="FileIcons"/>), or null for a command or a line.</summary>
+    /// <summary>A file's or a folder's icon (<see cref="FileIcons.For"/>, <see cref="FileIcons.ForFolder"/>: the tree's), or null for a command or a line.</summary>
     public FileIcon? Icon { get; init; }
 
     /// <summary>For '@': the symbol's kind (its badge), or null for a row that is not a symbol.</summary>
@@ -678,7 +678,7 @@ public sealed class QuickOpen
             {
                 TextHighlights = runs,
                 IsFolder = isFolder,
-                Icon = isFolder ? null : FileIcons.For(name),
+                Icon = isFolder ? FileIcons.ForFolder(name) : FileIcons.For(name),
             });
         }
 

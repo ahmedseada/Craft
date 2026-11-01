@@ -9,10 +9,22 @@ namespace Craft.Editor.Shell;
 /// <summary>A document's problems for the Problems list: its key (its path, or its title), its title, its text and its diagnostics, and what it belongs to.</summary>
 /// <param name="Key">What tells it from the others (its full path, or its title for a new document).</param>
 /// <param name="Title">Its name as the list shows it and the copy writes it ("Program.cs").</param>
-/// <param name="Snapshot">The text the diagnostics are in.</param>
+/// <param name="Snapshot">The text the diagnostics are in, or null for a closed file's (<see cref="Lines"/>).</param>
 /// <param name="Diagnostics">Its diagnostics (the hidden ones are left out).</param>
 /// <param name="Owner">What the page finds it by (its tab), or null.</param>
-public sealed record ProblemSource(string Key, string Title, ITextSnapshot Snapshot, IReadOnlyList<EditorDiagnostic> Diagnostics, object? Owner = null);
+public sealed record ProblemSource(string Key, string Title, ITextSnapshot? Snapshot, IReadOnlyList<EditorDiagnostic> Diagnostics, object? Owner = null)
+{
+    /// <summary>A closed file's problems by line and column (W, contract 6: no text read), used when <see cref="Snapshot"/> is null.</summary>
+    public IReadOnlyList<FileDiagnostic> Lines { get; init; } = [];
+
+    /// <summary>The problems of the closed file <paramref name="path"/>, by line and column, its title its name.</summary>
+    public static ProblemSource ForClosedFile(string path, IReadOnlyList<FileDiagnostic> lines, object? owner = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(lines);
+        return new ProblemSource(path, Path.GetFileName(path), null, [], owner) { Lines = lines };
+    }
+}
 
 /// <summary>A file's header in the Problems list: its title, its count, whether it is folded.</summary>
 public sealed class ProblemGroup
@@ -22,6 +34,7 @@ public sealed class ProblemGroup
         Key = key;
         Title = title;
         Owner = owner;
+        Icon = FileIcons.For(key);
     }
 
     /// <summary>Its source's key.</summary>
@@ -29,6 +42,9 @@ public sealed class ProblemGroup
 
     /// <summary>Its title.</summary>
     public string Title { get; }
+
+    /// <summary>Its file's icon (W: the tree's, by the file's name), drawn before the header.</summary>
+    public FileIcon Icon { get; }
 
     /// <summary>Its source's owner.</summary>
     public object? Owner { get; internal set; }
@@ -149,6 +165,12 @@ public sealed class ProblemsList : PanelList
         int left = Math.Max(0, limit);
         foreach (var source in sources)
         {
+            if (source.Snapshot is null)
+            {
+                ListClosed(source, groups, ref count, ref errors, ref left);
+                continue;
+            }
+
             var shown = new List<EditorDiagnostic>();
             foreach (var diagnostic in source.Diagnostics)
             {
@@ -230,6 +252,45 @@ public sealed class ProblemsList : PanelList
 
         RaiseChanged();
         return true;
+    }
+
+    // A closed file's problems (W, contract 6): by line and column as published, no position in a text.
+    private void ListClosed(ProblemSource source, List<ProblemGroup> groups, ref int count, ref int errors, ref int left)
+    {
+        var shown = new List<FileDiagnostic>();
+        foreach (var item in source.Lines)
+        {
+            if (item.Severity != DiagnosticSeverity.Hidden)
+            {
+                shown.Add(item);
+            }
+        }
+
+        if (shown.Count == 0)
+        {
+            return;
+        }
+
+        shown.Sort(static (a, b) => a.Severity != b.Severity ? b.Severity.CompareTo(a.Severity) : a.Line != b.Line ? a.Line.CompareTo(b.Line) : a.Column.CompareTo(b.Column));
+        count += shown.Count;
+        var group = new ProblemGroup(source.Key, source.Title, source.Owner)
+        {
+            Collapsed = _collapsed.Contains(source.Key),
+            Header = string.Create(CultureInfo.InvariantCulture, $"{source.Title}  {shown.Count}"),
+        };
+        foreach (var item in shown)
+        {
+            errors += item.Severity == DiagnosticSeverity.Error ? 1 : 0;
+            if (left == 0)
+            {
+                continue;
+            }
+
+            group.Items.Add(new ProblemItem(group, new EditorDiagnostic(0, 0, item.Severity, item.Id, item.Message), Math.Max(1, item.Line), Math.Max(1, item.Column), -1));
+            left--;
+        }
+
+        groups.Add(group);
     }
 
     /// <summary>Folds or unfolds <paramref name="group"/>'s rows (kept across updates by its file).</summary>
@@ -337,6 +398,8 @@ public sealed class ProblemsList : PanelList
         var text = new TextStyle(colors.Text);
         var quiet = new TextStyle(colors.SecondaryText);
         canvas.FillRect(0, 0, width, height, colors.Surface);
+        bool dark = ColorContrast.Luminance(colors.Surface) < 0.18;
+        float icon = MathF.Min(metrics.LineHeight, 16);
         var (first, last) = Visible(metrics, scrollY, height);
         for (int index = first; index <= last; index++)
         {
@@ -347,7 +410,8 @@ public sealed class ProblemsList : PanelList
                 case ProblemGroup group:
                     canvas.FillRect(0, top, width, rowHeight, RowFill(colors, index == Hover, false));
                     canvas.DrawText(group.Collapsed ? "▸" : "▾", cell, y, quiet);
-                    canvas.DrawText(group.Header, 3 * cell, y, text);
+                    FileIconDrawing.Draw(canvas, group.Icon, 3 * cell, top + ((rowHeight - icon) / 2), icon, false, dark);
+                    canvas.DrawText(group.Header, (4 * cell) + icon, y, text);
                     break;
                 case ProblemItem item:
                     bool picked = Selection.Contains(item);

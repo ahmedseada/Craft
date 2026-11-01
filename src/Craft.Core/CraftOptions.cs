@@ -88,6 +88,15 @@ public sealed record CraftOptions
 
     /// <summary>The folder names a workspace skips by default.</summary>
     public static IReadOnlyList<string> DefaultWorkspaceIgnore { get; } = ["bin", "obj", ".git", ".vs", "node_modules", "test-output"];
+
+    /// <summary>
+    /// Whether the folder tree shows the folders the workspace skips (<see cref="WorkspaceIgnore"/>: node_modules, bin, obj,
+    /// .git), dimmed and closed, which are still never indexed or searched (W; <c>CRAFT_WORKSPACE_SHOW_IGNORED</c>).
+    /// </summary>
+    public bool WorkspaceShowIgnored { get; init; } = true;
+
+    /// <summary>The file and folder icons' theme (W; <c>CRAFT_ICON_THEME</c>): "craft", Craft's own, or one a plug-in registered.</summary>
+    public string IconTheme { get; init; } = "craft";
     /// <summary>Milliseconds between the caret's blinks; 0 shows it solid (<c>CRAFT_CARET_BLINK_MS</c>).</summary>
     public int CaretBlinkMilliseconds { get; init; } = 530;
 
@@ -764,6 +773,39 @@ public sealed record CraftOptions
     /// </summary>
     public string RunInteractive { get; init; } = "auto";
 
+    // X part 9, navigation (13-17): bookmarks, preview tabs, the last session, local history, links in output.
+
+    /// <summary>Whether Next and Previous bookmark go round from the last to the first (<c>CRAFT_BOOKMARKS_WRAP</c>).</summary>
+    public bool BookmarksWrap { get; init; } = true;
+
+    /// <summary>
+    /// Whether a single click on a file in the explorer opens it in a preview tab (italic) that the next one replaces until
+    /// it is edited, double-clicked or pinned (<c>CRAFT_PREVIEW_TABS</c>).
+    /// </summary>
+    public bool PreviewTabs { get; init; } = true;
+
+    /// <summary>
+    /// Whether opening a folder at start reopens its last session: the editor groups, tabs, active tabs, carets, scroll,
+    /// folds and pins (<c>CRAFT_RESTORE_SESSION</c>).
+    /// </summary>
+    public bool RestoreSession { get; init; } = true;
+
+    /// <summary>The megabytes the local history keeps in all, its oldest snapshots dropped past it (<c>CRAFT_LOCAL_HISTORY_MAX_MB</c>); 0 turns it off.</summary>
+    public int LocalHistoryMaxMegabytes { get; init; } = 256;
+
+    /// <summary>The days a local history snapshot is kept (<c>CRAFT_LOCAL_HISTORY_DAYS</c>).</summary>
+    public int LocalHistoryDays { get; init; } = 30;
+
+    /// <summary>A file larger than this many megabytes gets no local history snapshot when saved (<c>CRAFT_LOCAL_HISTORY_FILE_MB</c>).</summary>
+    public int LocalHistoryFileMegabytes { get; init; } = 16;
+
+    /// <summary>
+    /// How links (<c>file(line,col)</c>, <c>file:line</c>) in the terminal and Output show (<c>CRAFT_LINKS_UNDERLINE</c>):
+    /// "hover" (the link under the pointer, in the terminal while Ctrl is held), "always" (every link on screen), "off"
+    /// (no links).
+    /// </summary>
+    public string LinksUnderline { get; init; } = "hover";
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -781,6 +823,7 @@ public sealed record CraftOptions
         new("CRAFT_TAB_SIZE", "4", "The columns a tab spans.") { Shape = SettingShape.Whole(SettingSections.Editor, "Tab size", 1, 32, "columns", "Typing") },
         new("CRAFT_INSERT_SPACES", "true", "Whether Tab inserts spaces rather than a tab character.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Insert spaces for Tab", "Typing") },
         new("CRAFT_THEME", "dark", "The theme's name (dark, light, or a registered one).") { Shape = SettingShape.From(SettingSections.Appearance, "Theme", SettingChoiceSources.Themes, null, false, "Theme") },
+        new("CRAFT_ICON_THEME", "craft", "The file and folder icons' theme: craft (Craft's own), or one a plug-in registered.") { Shape = SettingShape.From(SettingSections.Appearance, "File icon theme", SettingChoiceSources.IconThemes, null, false, "Theme") },
         new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off.") { Shape = SettingShape.Whole(SettingSections.Files, "Autosave a recovery copy every", 0, 86_400, "s", "Recovery") },
         new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step.") { Shape = SettingShape.Whole(SettingSections.Editor, "Undo groups typing paused less than", 0, 60_000, "ms", "Typing", step: 100) },
         new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept.") { Shape = SettingShape.PathTo(SettingSections.Files, "Recovery folder", "Recovery") },
@@ -790,6 +833,7 @@ public sealed record CraftOptions
         new("CRAFT_PLUGIN_FOLDERS", "(none)", "Folders of user plug-ins (a Name/Name.dll folder each), loaded after the app's own; separated by ';'.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Plug-in folders", "Loading") },
         new("CRAFT_PLUGINS_DISABLED", "(none)", "Plug-ins not loaded, by folder name (Craft.CSharp), the pre-installed ones included; separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Disabled plug-ins", "Loading") },
         new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','.") { Shape = SettingShape.ListOf(SettingSections.Files, "Folders the workspace skips", "Workspace") },
+        new("CRAFT_WORKSPACE_SHOW_IGNORED", "true", "Whether the explorer shows the folders the workspace skips (node_modules, bin, obj), dimmed and closed; they are never indexed or searched.") { Shape = SettingShape.Toggle(SettingSections.Files, "Show skipped folders in the explorer, dimmed", "Workspace") },
         new("CRAFT_CARET_BLINK_MS", "530", "Milliseconds between the caret's blinks; 0 shows it solid.") { Shape = SettingShape.Whole(SettingSections.Editor, "Caret blink", 0, 10_000, "ms", "Caret", step: 10) },
         new("CRAFT_CARET_WIDTH", "2", "The caret bar's width, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Editor, "Caret width", 0.5, 50, 0.5, "units", "Caret") },
         new("CRAFT_DOUBLE_CLICK_MS", "500", "Clicks closer in time than this count as a double or triple click.") { Shape = SettingShape.Whole(SettingSections.Editor, "Double-click time", 0, 10_000, "ms", "Mouse", step: 10) },
@@ -962,6 +1006,13 @@ public sealed record CraftOptions
         new("CRAFT_MENU_TYPE_AHEAD_MS", "700", "Milliseconds within which letters typed in an open menu add up to jump to the row they start.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Menu typing joins letters within", 100, 5000, "ms", "Menus", step: 50) },
         new("CRAFT_MENU_SUBMENU_DELAY_MS", "200", "Milliseconds the pointer rests on a menu's row before its submenu opens (or an open one closes).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Submenus open after", 0, 2000, "ms", "Menus", step: 50) },
         new("CRAFT_RUN_INTERACTIVE", "auto", "Whether a run takes the keyboard in its terminal tab (its program reads what you type): auto (when it reads input: a console program, a script), on (every run) or off (output only); a configuration's own interactive wins.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Runs take the keyboard", ["auto", "on", "off"], "Run") },
+        new("CRAFT_BOOKMARKS_WRAP", "true", "Whether Next and Previous bookmark go round from the last bookmark to the first.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Bookmarks go round", "Bookmarks") },
+        new("CRAFT_PREVIEW_TABS", "true", "Whether a single click on a file in the explorer opens it in an italic preview tab the next one replaces (an edit, a double-click or a pin keeps it).") { Shape = SettingShape.Toggle(SettingSections.Files, "Preview tabs", "Tabs") },
+        new("CRAFT_RESTORE_SESSION", "true", "Whether opening a folder at start reopens its last session: groups, tabs, carets, scroll, folds and pins (a file with a recovery copy is left for its recovery).") { Shape = SettingShape.Toggle(SettingSections.Files, "Restore the last session", "Session") },
+        new("CRAFT_LOCAL_HISTORY_MAX_MB", "256", "The megabytes the local history keeps in all (a snapshot per save, in the data folder); its oldest go past it; 0 turns it off.") { Shape = SettingShape.Whole(SettingSections.Files, "Local history keeps up to", 0, 65_536, "MB", "Local history") },
+        new("CRAFT_LOCAL_HISTORY_DAYS", "30", "The days a local history snapshot is kept.") { Shape = SettingShape.Whole(SettingSections.Files, "Keep local history for", 1, 3650, "days", "Local history") },
+        new("CRAFT_LOCAL_HISTORY_FILE_MB", "16", "A file larger than this gets no local history snapshot when saved.") { Shape = SettingShape.Whole(SettingSections.Files, "Local history skips files over", 1, 4096, "MB", "Local history") },
+        new("CRAFT_LINKS_UNDERLINE", "hover", "How file:line links show in the terminal and Output: hover (the link under the pointer; in the terminal while Ctrl is held), always (every link on screen), off (no links).") { Shape = SettingShape.Choice(SettingSections.Terminal, "Links in output", ["hover", "always", "off"], "Links") },
     ];
 
     /// <summary>
@@ -999,6 +1050,16 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_INSERT_SPACES") is { } spaces)
         {
             options = options with { InsertSpaces = Flag(spaces, "CRAFT_INSERT_SPACES") };
+        }
+
+        if (Text(read, "CRAFT_ICON_THEME") is { } iconTheme)
+        {
+            options = options with { IconTheme = iconTheme };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_SHOW_IGNORED") is { } showIgnored)
+        {
+            options = options with { WorkspaceShowIgnored = Flag(showIgnored, "CRAFT_WORKSPACE_SHOW_IGNORED") };
         }
 
         if (Text(read, "CRAFT_THEME") is { } theme)
@@ -1899,6 +1960,41 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_RUN_INTERACTIVE") is { } runInteractive)
         {
             options = options with { RunInteractive = OneOf(runInteractive, "CRAFT_RUN_INTERACTIVE", "auto", "on", "off") };
+        }
+
+        if (Text(read, "CRAFT_BOOKMARKS_WRAP") is { } bookmarksWrap)
+        {
+            options = options with { BookmarksWrap = Flag(bookmarksWrap, "CRAFT_BOOKMARKS_WRAP") };
+        }
+
+        if (Text(read, "CRAFT_PREVIEW_TABS") is { } previewTabs)
+        {
+            options = options with { PreviewTabs = Flag(previewTabs, "CRAFT_PREVIEW_TABS") };
+        }
+
+        if (Text(read, "CRAFT_RESTORE_SESSION") is { } restoreSession)
+        {
+            options = options with { RestoreSession = Flag(restoreSession, "CRAFT_RESTORE_SESSION") };
+        }
+
+        if (Text(read, "CRAFT_LOCAL_HISTORY_MAX_MB") is { } historyMax)
+        {
+            options = options with { LocalHistoryMaxMegabytes = Whole(historyMax, "CRAFT_LOCAL_HISTORY_MAX_MB", 0, 65_536) };
+        }
+
+        if (Text(read, "CRAFT_LOCAL_HISTORY_DAYS") is { } historyDays)
+        {
+            options = options with { LocalHistoryDays = Whole(historyDays, "CRAFT_LOCAL_HISTORY_DAYS", 1, 3650) };
+        }
+
+        if (Text(read, "CRAFT_LOCAL_HISTORY_FILE_MB") is { } historyFile)
+        {
+            options = options with { LocalHistoryFileMegabytes = Whole(historyFile, "CRAFT_LOCAL_HISTORY_FILE_MB", 1, 4096) };
+        }
+
+        if (Text(read, "CRAFT_LINKS_UNDERLINE") is { } linksUnderline)
+        {
+            options = options with { LinksUnderline = OneOf(linksUnderline, "CRAFT_LINKS_UNDERLINE", "hover", "always", "off") };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

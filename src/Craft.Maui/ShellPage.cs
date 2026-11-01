@@ -191,6 +191,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         _conversations.CloseRequested += (_, _) => CloseChat();
         _conversations.ModelChip.Tapped += (_, _) => _ = PickModelAsync();
         _conversations.ShownChanged += (_, _) => UpdateModel();                    // the chip shows the shown panel's role (note 25)
+        _conversations.DroppedPaths = e => _startup.Platform.DroppedPathsAsync(e);  // X part 5: files dropped on the chat
+        _conversations.Notice += (_, text) => _status!.Notice.Text = text;
         _host.PanelShowRequested += OnPanelShowRequested;
         _host.PanelsChanged += OnHostPanelsChanged;
         _host.PendingChordChanged += OnPendingChordChanged;
@@ -1201,6 +1203,11 @@ public sealed class ShellPage : ContentPage, IDisposable
     {
         try
         {
+            if (_conversations.Holds(e))
+            {
+                return;     // dropped on the chat column: its panel takes the files (ConversationsView)
+            }
+
             IReadOnlyList<string> paths = e.Data.Properties.TryGetValue(FolderTreeView.DragPathKey, out var dragged) && dragged is string path
                 ? [path]
                 : await _startup.Platform.DroppedPathsAsync(e);

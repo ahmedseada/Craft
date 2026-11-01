@@ -59,6 +59,9 @@ public static class ProjectLanguages
 
         FoldingRangeProviders.Register(new MarkupFolding());
         FoldingRangeProviders.Register(new JsonFolding());
+        FoldingRangeProviders.Register(new RazorFolding());
+        FoldingRangeProviders.Register(new SolutionFolding());
+        FoldingRangeProviders.Register(new EditorConfigFolding());
     }
 
     /// <summary>Removes every one.</summary>
@@ -71,6 +74,9 @@ public static class ProjectLanguages
 
         FoldingRangeProviders.Unregister(MarkupFolding.ProviderName);
         FoldingRangeProviders.Unregister(JsonFolding.ProviderName);
+        FoldingRangeProviders.Unregister(RazorFolding.ProviderName);
+        FoldingRangeProviders.Unregister(SolutionFolding.ProviderName);
+        FoldingRangeProviders.Unregister(EditorConfigFolding.ProviderName);
     }
 
     private static ILanguage[] Make()

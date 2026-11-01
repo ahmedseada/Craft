@@ -110,6 +110,9 @@ public abstract class ConversationPanel : IConversationPanel
     /// <inheritdoc />
     public abstract Task SubmitAsync(string text, CancellationToken cancellationToken = default);
 
+    /// <inheritdoc />
+    public virtual Task<int> AcceptDropAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) => Task.FromResult(0);
+
     /// <summary>Adds <paramref name="entry"/> at the end; its index.</summary>
     protected int Add(ConversationEntry entry)
     {

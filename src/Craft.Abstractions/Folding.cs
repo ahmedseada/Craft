@@ -67,15 +67,32 @@ public static class FoldingRangeProviders
         "add it with FoldingRangeProviders.Register", comparer: StringComparer.OrdinalIgnoreCase,
         unguarded: "each provider folds its own languages; the editor joins what every provider of a language gives");
 
-    /// <summary>Registers <paramref name="provider"/> under its name.</summary>
+    /// <summary>Registers <paramref name="provider"/> under its name; <see cref="Changed"/> is raised after it.</summary>
     public static void Register(IFoldingRangeProvider provider)
     {
         ArgumentNullException.ThrowIfNull(provider);
         Table.Register(provider, System.Reflection.Assembly.GetCallingAssembly());
+        Changed?.Invoke(null, EventArgs.Empty);
     }
 
-    /// <summary>Removes the provider of that name; false when none was registered.</summary>
-    public static bool Unregister(string name) => Table.Unregister(name);
+    /// <summary>Removes the provider of that name; false when none was registered. <see cref="Changed"/> is raised when one was.</summary>
+    public static bool Unregister(string name)
+    {
+        bool removed = Table.Unregister(name);
+        if (removed)
+        {
+            Changed?.Invoke(null, EventArgs.Empty);
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Raised after a provider was registered or removed, on the thread that did it (a plug-in loaded or unloaded while
+    /// documents are open): an editor asks its language's providers again at once, so a provider registered after a
+    /// document opened folds it without reopening, and one removed takes its ranges away.
+    /// </summary>
+    public static event EventHandler? Changed;
 
     /// <summary>The registered names, in order.</summary>
     public static IReadOnlyList<string> Names => Table.Names;

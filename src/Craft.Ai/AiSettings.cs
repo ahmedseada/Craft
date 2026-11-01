@@ -232,6 +232,22 @@ public sealed record AiSettings
     /// </summary>
     public bool AgentSaveOnAccept { get; init; } = true;
 
+    /// <summary>
+    /// Corrections in a row the agent sends when a reply holds tool calls it could not read (note 27: calls written as text
+    /// in a shape the template's format does not read), each telling the model how its template writes a call
+    /// (<c>agentNudges</c>, 0-20; Idrak's <c>AgentOptions.Nudges</c>); 0 sends none.
+    /// </summary>
+    public int AgentNudges { get; init; } = 2;
+
+    /// <summary>
+    /// Whether tool calls the model writes as text (markdown fences, JSON in its prose) naming an offered tool are read and
+    /// run (<c>agentCallsInText</c>, on; Idrak's <c>AgentOptions.CallsInText</c>); off: only calls in the template's format.
+    /// </summary>
+    public bool AgentCallsInText { get; init; } = true;
+
+    /// <summary>The largest image a chat may carry, MB (<c>chatImageMaxMb</c>); a larger one dropped on the chat is not added, said so.</summary>
+    public int ChatImageMaxMegabytes { get; init; } = 20;
+
     /// <summary>The chat's model settings, resolved (note 25).</summary>
     public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens);
 
@@ -318,6 +334,7 @@ public sealed record AiSettings
         new("chatFile", Path.Combine(".craft", "chat.json"), "Where the chat is kept, relative to the workspace."),
         new("chatHistory", "40", "The most chat messages kept and sent back to the model."),
         new("chatFileLines", "2000", "The most lines of a file a chat context chip sends to the model."),
+        new("chatImageMaxMb", "20", "The largest image a chat may carry, MB; a larger one dropped on the chat is not added."),
         new("placement", "semi-global", "The Idrak text matcher that places a model's snippet in a document."),
         new("placementMaxError", "0.35", "The largest share of a snippet's characters its placed span may differ in; more: it goes at the selection or caret."),
         new("agentEnabled", "true", "Whether the agent runs; off: it loads no model."),
@@ -336,6 +353,8 @@ public sealed record AiSettings
         new("agentCopyIgnore", "bin;.git;.vs;node_modules;test-output", "Folder names the agent's working copy leaves out (';' or ',' between them)."),
         new("agentChangesIgnore", "bin;obj;.git;.vs;node_modules;test-output", "Folder names whose files written by the agent's commands are not listed as changes (build output)."),
         new("agentSaveOnAccept", "true", "Save an existing file's accepted agent change to the workspace at once (never over your own unsaved edits)."),
+        new("agentNudges", "2", "Corrections in a row the agent sends when the model writes tool calls it cannot read (0-20); 0: none, the run ends."),
+        new("agentCallsInText", "true", "Read tool calls the model writes as text (markdown fences, JSON) naming an offered tool; off: only its template's format."),
     ];
 
     /// <summary>The settings from the environment (a process outside the app).</summary>
@@ -444,6 +463,7 @@ public sealed record AiSettings
             ChatFile = Text("chatFile") ?? defaults.ChatFile,
             ChatHistory = Whole("chatHistory", defaults.ChatHistory, 2, 100_000),
             ChatFileLines = Whole("chatFileLines", defaults.ChatFileLines, 1, 1_000_000),
+            ChatImageMaxMegabytes = Whole("chatImageMaxMb", defaults.ChatImageMaxMegabytes, 1, 4096),
             Placement = Text("placement") ?? defaults.Placement,
             PlacementMaxError = Real("placementMaxError", defaults.PlacementMaxError, 0, 1),
             AgentSandbox = Text("agentSandbox") ?? defaults.AgentSandbox,
@@ -455,6 +475,8 @@ public sealed record AiSettings
             AgentCopyIgnore = List("agentCopyIgnore", defaults.AgentCopyIgnore),
             AgentChangesIgnore = List("agentChangesIgnore", defaults.AgentChangesIgnore),
             AgentSaveOnAccept = Flag("agentSaveOnAccept", defaults.AgentSaveOnAccept),
+            AgentNudges = Whole("agentNudges", defaults.AgentNudges, 0, 20),
+            AgentCallsInText = Flag("agentCallsInText", defaults.AgentCallsInText),
         };
     }
 }

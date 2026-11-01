@@ -261,6 +261,7 @@ sealed class Craft.Editor.EditorFolding : System.IDisposable
   System.Threading.Tasks.Task RefreshAsync()
   System.Void Dispose()
   System.Void SetRanges(System.Collections.Generic.IEnumerable<Craft.Abstractions.FoldingRange> ranges)
+  event System.EventHandler ProvidersChanged
   event System.EventHandler RangesChanged
 sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Editor.Abstractions.IEditorKeyHandler, System.IDisposable
   Craft.Abstractions.IEditorActivities Activities { get; }
@@ -723,6 +724,9 @@ sealed class Craft.Editor.Shell.ComposerInput : Craft.Abstractions.IEditorInputS
   System.Void Send()
   ctor(System.Action send, System.Action newLine, System.Action leave)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
+static class Craft.Editor.Shell.ConversationDrops
+  static System.String Said(System.String title, System.Int32 taken, System.Int32 offered)
+  static System.Threading.Tasks.Task<System.String> DropAsync(Craft.Abstractions.IConversationPanel panel, System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.Editor.Shell.DialogAction : System.IEquatable<Craft.Editor.Shell.DialogAction>
   Craft.Editor.Shell.DialogAction <Clone>$()
   Craft.Editor.Shell.DialogActionRole Role { get; init; }
@@ -1093,6 +1097,30 @@ sealed class Craft.Editor.Shell.ModelPickWrite : System.IEquatable<Craft.Editor.
   System.String Variable { get; init; }
   System.Void Deconstruct(out System.String Variable, out System.String Value, out System.String LoadCommand)
   ctor(System.String Variable, System.String Value, System.String LoadCommand)
+sealed class Craft.Editor.Shell.ModelRoleCard : System.IEquatable<Craft.Editor.Shell.ModelRoleCard>
+  Craft.Abstractions.ModelRole Role { get; init; }
+  Craft.Editor.Shell.ModelRoleCard <Clone>$()
+  System.Boolean CanInherit { get; }
+  System.Boolean CanToggle { get; }
+  System.Boolean Enabled { get; }
+  System.Boolean Equals(Craft.Editor.Shell.ModelRoleCard other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean SameAsOther { get; }
+  System.Int32 GetHashCode()
+  System.String DeviceText { get; init; }
+  System.String ModelText { get; init; }
+  System.String SameAsLabel { get; }
+  System.String Title { get; }
+  System.String ToString()
+  System.Void Deconstruct(out Craft.Abstractions.ModelRole Role, out System.String ModelText, out System.String DeviceText)
+  ctor(Craft.Abstractions.ModelRole Role, System.String ModelText, System.String DeviceText)
+static class Craft.Editor.Shell.ModelRoleCards
+  static Craft.Editor.Shell.ModelPickWrite Device(Craft.Abstractions.ModelRole role, System.String device)
+  static Craft.Editor.Shell.ModelPickWrite Enable(Craft.Abstractions.ModelRole role, System.Boolean on)
+  static Craft.Editor.Shell.ModelPickWrite Model(Craft.Abstractions.ModelRole role, System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ModelPickWrite> SameAsOther(Craft.Abstractions.ModelRole role)
+  static System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.ModelRoleCard> Of(Craft.Abstractions.ModelProviderStatus status)
+  static System.String Apply(System.Collections.Generic.IEnumerable<Craft.Editor.Shell.ModelPickWrite> writes, System.Func<System.String, System.String, System.String> apply)
 sealed class Craft.Editor.Shell.OverlaySelection
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Int32 Count { get; }

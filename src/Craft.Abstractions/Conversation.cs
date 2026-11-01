@@ -64,7 +64,14 @@ public sealed record ConversationEntry(ConversationRole Role, string Text)
 /// <summary>Context given with the next message (the active file, the selection, the problems): a chip the user may remove.</summary>
 /// <param name="Id">Its id within the panel ("file", "selection", "problems", or a path).</param>
 /// <param name="Text">What the chip shows ("EditorTools.cs", "Lines 18–23", "1 warning").</param>
-public sealed record ContextChip(string Id, string Text);
+public sealed record ContextChip(string Id, string Text)
+{
+    /// <summary>
+    /// Why the chip cannot go with the next message (an image for a model that takes none), or null when it can: the host
+    /// draws it greyed with this reason, and the panel sends nothing while it is there (the user removes it first).
+    /// </summary>
+    public string? Problem { get; init; }
+}
 
 /// <summary>What changed in a conversation panel.</summary>
 public enum ConversationChange
@@ -137,6 +144,13 @@ public interface IConversationPanel : IEditorPanel
 
     /// <summary>Sends what the user typed (a message, a steering note while busy); completes when it was taken, not when the reply ends.</summary>
     Task SubmitAsync(string text, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes files dropped on the panel (full paths: from the explorer's tree, or the system's file manager), as context of
+    /// the next message (a chip each, a mention, whatever the panel does with a file); what it reads, it reads off the UI
+    /// thread. Completes with how many it took; 0 by default, and the host then says the panel takes no files.
+    /// </summary>
+    Task<int> AcceptDropAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) => Task.FromResult(0);
 
     /// <summary>Raised on the UI thread when an entry, the chips, the status, the header or the busy state changed.</summary>
     event EventHandler<ConversationChangedEventArgs>? ConversationChanged;

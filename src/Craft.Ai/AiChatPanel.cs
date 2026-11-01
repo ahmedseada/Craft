@@ -37,6 +37,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     private readonly List<ChatMessage> _history = [];
     private readonly HashSet<string> _removed = new(StringComparer.Ordinal);
     private readonly List<ContextChip> _extra = [];
+    private readonly Dictionary<string, ChatImage> _images = new(StringComparer.Ordinal);   // an image chip's id → its bytes, read off the UI thread at the drop
     private readonly Dictionary<ToolCall, int> _toolRows = new(ReferenceEqualityComparer.Instance);
     private readonly StringBuilder _segment = new();
     private readonly StringBuilder _reply = new();
@@ -54,6 +55,8 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     private string _lastPrompt = "";
     private bool _disposed;
     private int _keptGeneration;
+    private IReadOnlySet<string>? _partKinds;       // what the chat's model took at its last reply (its part kinds), and which model it was
+    private string _partKindsModel = "";
 
     /// <summary>A chat panel in <paramref name="host"/>.</summary>
     public AiChatPanel(IEditorHost host, Func<AiSettings> settings, AiModels models)
@@ -97,8 +100,172 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
     {
         _removed.Add(id);
         _extra.RemoveAll(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+        _images.Remove(id);
         RefreshChips();
     }
+
+    /// <summary>
+    /// Files dropped on the chat (the tree's, or the system's file manager's): a text file becomes a <c>path:</c> chip (its
+    /// text read when the message goes, off the UI thread), an image an <c>image:</c> chip (its bytes read now, off the UI
+    /// thread, up to <see cref="AiSettings.ChatImageMaxMegabytes"/>), greyed with the reason when the chat's model takes no
+    /// images; a folder, a missing file, another binary file or a larger image is not taken, said in the panel.
+    /// </summary>
+    public override async Task<int> AcceptDropAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+        {
+            return 0;
+        }
+
+        var settings = _settings();
+        long most = settings.ChatImageMaxMegabytes * 1024L * 1024L;
+        var read = await Task.Run(() => ReadDropped(paths, most, cancellationToken), cancellationToken).ConfigureAwait(false);
+        var taken = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Post(() => taken.TrySetResult(TakeDropped(read, settings)));
+        return await taken.Task.ConfigureAwait(false);
+    }
+
+    /// <summary>A test's look at each file the chat reads (its path), called on the thread that reads it, before it reads.</summary>
+    internal static Action<string>? Reading { get; set; }
+
+    // The kinds of files a drop carries, read on the thread pool.
+    private enum DroppedKind
+    {
+        Text,
+        Image,
+        Folder,
+        Missing,
+        Binary,
+        TooLarge,
+        Unreadable,
+    }
+
+    private sealed record Dropped(string Path, DroppedKind Kind, ChatImage? Image = null, long Length = 0);
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff" };
+
+    // On the thread pool: what each dropped path is; an image's bytes are read here, a text file's only its first block (to
+    // tell text from binary: a NUL byte), its text when the message goes.
+    private static List<Dropped> ReadDropped(IReadOnlyList<string> paths, long most, CancellationToken cancellationToken)
+    {
+        var found = new List<Dropped>(paths.Count);
+        foreach (var given in paths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string path = Path.GetFullPath(given);
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    found.Add(new Dropped(path, DroppedKind.Folder));
+                    continue;
+                }
+
+                var info = new FileInfo(path);
+                if (!info.Exists)
+                {
+                    found.Add(new Dropped(path, DroppedKind.Missing));
+                    continue;
+                }
+
+                if (ImageExtensions.Contains(Path.GetExtension(path)))
+                {
+                    if (info.Length > most || info.Length == 0)
+                    {
+                        found.Add(new Dropped(path, DroppedKind.TooLarge, Length: info.Length));
+                        continue;
+                    }
+
+                    Reading?.Invoke(path);
+                    found.Add(new Dropped(path, DroppedKind.Image, ChatImage.FromFile(path), info.Length));
+                    continue;
+                }
+
+                Reading?.Invoke(path);
+                found.Add(new Dropped(path, LooksBinary(path) ? DroppedKind.Binary : DroppedKind.Text, Length: info.Length));
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                found.Add(new Dropped(path, DroppedKind.Unreadable));
+            }
+        }
+
+        return found;
+    }
+
+    // A NUL byte in the file's first block: not text.
+    private static bool LooksBinary(string path)
+    {
+        Span<byte> head = stackalloc byte[512];
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
+        int read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+        return head[..read].Contains((byte)0);
+    }
+
+    // On the UI thread: the chips of what was read; what was not taken said in one note. The count taken.
+    private int TakeDropped(List<Dropped> dropped, AiSettings settings)
+    {
+        int taken = 0;
+        var refused = new List<string>();
+        foreach (var item in dropped)
+        {
+            string name = Path.GetFileName(item.Path);
+            switch (item.Kind)
+            {
+                case DroppedKind.Text:
+                    string id = "path:" + item.Path;
+                    if (!_extra.Any(c => c.Id == id))
+                    {
+                        _extra.Add(new ContextChip(id, Shown(item.Path)));
+                    }
+
+                    taken++;
+                    break;
+                case DroppedKind.Image:
+                    string imageId = "image:" + item.Path;
+                    _extra.RemoveAll(c => c.Id == imageId);
+                    _extra.Add(new ContextChip(imageId, "image: " + name) { Problem = ImageProblem(settings) });
+                    _images[imageId] = item.Image!;
+                    taken++;
+                    break;
+                case DroppedKind.TooLarge:
+                    refused.Add(string.Create(CultureInfo.InvariantCulture, $"{name} is {item.Length / (1024.0 * 1024.0):0.#} MB, over chatImageMaxMb ({settings.ChatImageMaxMegabytes} MB)"));
+                    break;
+                case DroppedKind.Folder:
+                    refused.Add($"{name} is a folder (drop its files)");
+                    break;
+                case DroppedKind.Binary:
+                    refused.Add($"{name} is neither a text file nor an image");
+                    break;
+                case DroppedKind.Missing:
+                    refused.Add($"{name} is not there");
+                    break;
+                default:
+                    refused.Add($"{name} could not be read");
+                    break;
+            }
+        }
+
+        if (refused.Count > 0)
+        {
+            Add(new ConversationEntry(ConversationRole.Note, "Not added: " + string.Join("; ", refused) + "."));
+        }
+
+        RefreshChips();
+        return taken;
+    }
+
+    // Why an image chip cannot go now: the chat's model, as its last reply found it, takes no images (else null: it is
+    // checked again when the message goes, once the model is loaded).
+    private string? ImageProblem(AiSettings settings) =>
+        _partKinds is { } kinds && !kinds.Contains(ChatParts.Image) && string.Equals(_partKindsModel, settings.ChatRole.Model, StringComparison.Ordinal)
+            ? $"{_partKindsModel} takes no images: remove this chip to send."
+            : null;
+
+    private string Shown(string path) => Host.WorkspaceFolder is { } root && path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+        ? Path.GetRelativePath(root, path)
+        : Path.GetFileName(path);
 
     /// <inheritdoc />
     public override async Task SubmitAsync(string text, CancellationToken cancellationToken = default)
@@ -151,16 +318,24 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
             Stop();
         }
 
+        if (Chips.FirstOrDefault(c => c.Problem is not null) is { } greyed)
+        {
+            // A chip that cannot go (an image for a model that takes none): nothing is sent until it is removed.
+            Add(new ConversationEntry(ConversationRole.Error, $"Not sent: {greyed.Text}: {greyed.Problem}"));
+            return Task.CompletedTask;
+        }
+
         var settings = _settings();
-        string withContext = BuildContext(settings) + (context is null ? "" : context + "\n\n") + message;
+        // The context is gathered here (the active document's text, the open files' snapshots, the images read at the
+        // drop) and the files that are not open are read on the thread pool when the message goes, never on the UI thread.
+        var gathered = BuildContext();
         Add(new ConversationEntry(ConversationRole.User, message));
         var messages = new List<ChatMessage>(_history.Count + 2) { new("system", SystemPrompt) };
         messages.AddRange(_history);
-        var user = new ChatMessage("user", withContext);
-        _lastPrompt = withContext;
-        messages.Add(user);
+        var asked = new Asked(message, context, gathered);
         _removed.Clear();
         _extra.Clear();
+        _images.Clear();
         RefreshChips();
         var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _running = source;
@@ -174,7 +349,7 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         // Phase U: the reply shows in the status bar (tokens, tok/s) with Cancel, which stops it as Stop does.
         var activity = Host.Activities.Start("Chat: " + Cut(message, 48), ActivityKinds.Generation, cancellable: true, source.Token);
-        _ = Task.Run(() => StreamAsync(messages, user, settings, generation, activity, done), CancellationToken.None);
+        _ = Task.Run(() => StreamAsync(messages, asked, settings, generation, activity, done), CancellationToken.None);
         LastReply = done.Task;
         return done.Task;
     }
@@ -293,13 +468,21 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         ? new AiVerdict(answer.Id, AiVerdicts.Accepted) { Document = document, Start = edit.Start, Length = edit.Text.Length }
         : new AiVerdict(answer.Id, AiVerdicts.Rejected) { Document = document, Kept = answer.Before is { Length: > 0 } before ? before : null };
 
-    private async Task StreamAsync(List<ChatMessage> messages, ChatMessage user, AiSettings settings, int generation, IActivity activity, TaskCompletionSource done)
+    private async Task StreamAsync(List<ChatMessage> messages, Asked asked, AiSettings settings, int generation, IActivity activity, TaskCompletionSource done)
     {
         int tokens = 0;
         var watch = new Stopwatch();
         var token = activity.CancellationToken;
+        var user = new ChatMessage("user", asked.Message);
         try
         {
+            // On the thread pool: the files the chips name are read now (the fix found in X part 5: they were read on the UI thread).
+            string withContext = asked.Context.Compose(settings, token) + (asked.Extra is null ? "" : asked.Extra + "\n\n") + asked.Message;
+            user = asked.Context.Images.Count == 0
+                ? new ChatMessage("user", withContext)
+                : new ChatMessage("user", [.. asked.Context.Images.Select(i => i.Image), new ChatText(withContext)]);
+            messages.Add(user);
+            Post(() => _lastPrompt = withContext);
             activity.Report(null, "waiting for the model");
             if (!_models.IsChatLoaded)
             {
@@ -316,11 +499,33 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
                 }
             });
             var chat = lease.Chat ?? throw new NotSupportedException($"The model {lease.Model} has no chat template, so it cannot chat.");
+            var kinds = chat.PartKinds;
             Post(() =>
             {
                 _modelName = lease.Model;
                 Subtitle = $"{lease.Model} · {settings.ModelProvider}";
+                _partKinds = kinds;
+                _partKindsModel = settings.ChatRole.Model;
             });
+            if (asked.Context.Images.Count > 0 && !kinds.Contains(ChatParts.Image))
+            {
+                // The model takes no images: the image chips come back greyed with the reason, and nothing is sent.
+                string why = $"{settings.ChatRole.Model} takes no images: remove this chip to send.";
+                Post(() =>
+                {
+                    foreach (var image in asked.Context.Images)
+                    {
+                        _extra.Add(image.Chip with { Problem = why });
+                        _images[image.Chip.Id] = image.Image;
+                    }
+
+                    RefreshChips();
+                    Finish(generation, user, null, $"Not sent: {lease.Model} takes no images. Remove the greyed image chip, then send again.");
+                });
+                activity.Complete("not sent: the model takes no images");
+                return;
+            }
+
             var observed = new ObservedTools(_tools, call => Post(() => ToolStarted(generation, call)), result => Post(() => ToolEnded(generation, result)));
             var model = chat.WithTools(observed, settings.ChatToolRounds);
             var options = new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength, Stop = settings.ChatStops, Temperature = settings.ChatTemperature };
@@ -525,15 +730,97 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
         Save();
     }
 
-    private string BuildContext(AiSettings settings)
+    // A message as asked, and its context gathered on the UI thread (the files not open read later, off it).
+    private sealed record Asked(string Message, string? Extra, ChatContext Context);
+
+    private sealed record ContextImage(ContextChip Chip, ChatImage Image);
+
+    // A chip's file: the open document's snapshot (immutable, read on any thread) or its path (read off the UI thread).
+    private sealed record ContextFile(string Shown, string Path, ITextSnapshot? Open);
+
+    private sealed record ChatContext(string Head, IReadOnlyList<ContextFile> Files, IReadOnlyList<ContextImage> Images)
+    {
+        // On the thread pool: the head, then each file's first chatFileLines lines (a file not open read from the disk).
+        public string Compose(AiSettings settings, CancellationToken cancellationToken)
+        {
+            var text = new StringBuilder(Head);
+            foreach (var file in Files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string? content = file.Open is { } open ? Lines(open, settings.ChatFileLines) : Read(file.Path, settings.ChatFileLines);
+                if (content is not null)
+                {
+                    text.Append(CultureInfo.InvariantCulture, $"The file {file.Shown}:\n```\n").Append(content).Append("\n```\n");
+                }
+            }
+
+            return text.Length == 0 ? "" : text.Append('\n').ToString();
+        }
+
+        private static string Lines(ITextSnapshot snapshot, int most)
+        {
+            int last = Math.Min(snapshot.LineCount, most) - 1;
+            if (last < 0)
+            {
+                return "";
+            }
+
+            int end = snapshot.GetLine(last).End;
+            return snapshot.GetText(0, end);
+        }
+
+        private static string? Read(string path, int most)
+        {
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    return null;
+                }
+
+                Reading?.Invoke(path);
+                return string.Join('\n', File.ReadLines(path).Take(most));      // only the lines sent are read
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+    }
+
+    private ChatContext BuildContext()
     {
         var text = new StringBuilder();
         var chips = Chips;
-        if (chips.Count == 0 || Host.ActiveDocument is not { } document)
+        if (chips.Count > 0 && Host.ActiveDocument is { } document)
         {
-            return ExtraFiles(text, settings);
+            ActiveContext(text, chips, document);
         }
 
+        var files = new List<ContextFile>();
+        var images = new List<ContextImage>();
+        foreach (var chip in _extra)
+        {
+            if (chip.Id.StartsWith("image:", StringComparison.Ordinal))
+            {
+                if (_images.TryGetValue(chip.Id, out var image))
+                {
+                    images.Add(new ContextImage(chip, image));
+                }
+
+                continue;
+            }
+
+            string path = chip.Id["path:".Length..];
+            var open = Host.Documents.FirstOrDefault(d => d.FilePath is { } p && string.Equals(Path.GetFullPath(p), path, StringComparison.OrdinalIgnoreCase));
+            files.Add(new ContextFile(chip.Text, path, open?.Document.Buffer.Current));
+        }
+
+        return new ChatContext(text.ToString(), files, images);
+    }
+
+    private void ActiveContext(StringBuilder text, IReadOnlyList<ContextChip> chips, IEditorDocument document)
+    {
         var snapshot = document.Document.Buffer.Current;
         string name = DisplayName(document);
         if (chips.Any(c => c.Id == "file"))
@@ -574,26 +861,6 @@ public sealed class AiChatPanel : ConversationPanel, IDisposable
                 text.Append(CultureInfo.InvariantCulture, $"{name}:{line}: {item.Severity.ToString().ToLowerInvariant()} {item.Id}: {item.Message}\n");
             }
         }
-
-        return ExtraFiles(text, settings);
-    }
-
-    private string ExtraFiles(StringBuilder text, AiSettings settings)
-    {
-        foreach (var chip in _extra)
-        {
-            string path = chip.Id["path:".Length..];
-            string? content = Host.Documents.FirstOrDefault(d => d.FilePath is { } p && string.Equals(Path.GetFullPath(p), path, StringComparison.OrdinalIgnoreCase)) is { } open
-                ? open.Document.Buffer.Current.GetText(0, open.Document.Buffer.Current.Length)
-                : File.Exists(path) ? File.ReadAllText(path) : null;
-            if (content is not null)
-            {
-                var lines = content.Split('\n');
-                text.Append(CultureInfo.InvariantCulture, $"The file {chip.Text}:\n```\n").AppendJoin('\n', lines.Take(settings.ChatFileLines)).Append("\n```\n");
-            }
-        }
-
-        return text.Length == 0 ? "" : text.Append('\n').ToString();
     }
 
     private void AddContext(string what)

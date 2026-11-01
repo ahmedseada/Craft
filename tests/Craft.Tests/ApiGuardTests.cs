@@ -94,8 +94,8 @@ public static class ApiGuardTests
         var problems = PublicApi.ContractProblems(listed, current, version, running);
         if (update && problems.Count == 0)
         {
-            // Additions join the list under the same version; a major step starts the list again from the surface as it is.
-            PublicApi.WriteContract(path, running.Major > version.Major ? running : version, running.Major > version.Major ? current : [.. listed.Union(current)]);
+            // Additions join the list (a minor step names the running version); a major step starts the list again from the surface as it is.
+            PublicApi.WriteContract(path, running > version ? running : version, running.Major > version.Major ? current : [.. listed.Union(current)]);
             return;
         }
 

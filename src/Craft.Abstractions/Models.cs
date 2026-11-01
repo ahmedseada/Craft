@@ -80,6 +80,13 @@ public sealed class ModelLease : IDisposable
     /// </summary>
     public IPretrainedTokenizer? Tokenizer { get; init; }
 
+    /// <summary>
+    /// The chat template <see cref="Chat"/> renders its prompts with, or null when the provider does not give it (a remote
+    /// model): a plug-in that wraps <see cref="Chat"/> passes it on where Idrak needs it (the coding agent's
+    /// <c>AgentOptions.Template</c>, which reads calls written as text and words a correction in the template's own format).
+    /// </summary>
+    public IChatTemplate? ChatTemplate { get; init; }
+
     /// <summary>Its context window in tokens.</summary>
     public int ContextLength { get; }
 
@@ -164,6 +171,9 @@ public sealed record ModelRole(string Role, string? Model, string State, bool Is
 
     /// <summary>The setting of the role's device (the chip writes it), or null.</summary>
     public ModelSettingField? DeviceSetting { get; init; }
+
+    /// <summary>The setting that turns the role on or off ("true" or "false"; the Models page's switch writes it), or null when it has none.</summary>
+    public ModelSettingField? EnabledSetting { get; init; }
 
     /// <summary>The command that loads the role's model (the chip runs it after a pick), or null.</summary>
     public string? LoadCommand { get; init; }

@@ -78,6 +78,14 @@ static class Craft.CSharp.CSharpTokenClasses
   const System.String EventName = event name
   const System.String ExtensionMethodName = extension method name
   const System.String LabelName = label name
+sealed class Craft.CSharp.EditorConfigFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
+  const System.String ProviderName = editorconfig
+  ctor()
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.CSharp.JsonFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
   System.String Name { get; }
@@ -105,6 +113,14 @@ static class Craft.CSharp.ProjectLanguages
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register()
   static System.Void Unregister()
+sealed class Craft.CSharp.RazorFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
+  const System.String ProviderName = razor
+  ctor()
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.SourceText
   Craft.Abstractions.ITextSnapshot Snapshot { get; }
   System.Char Item[System.Int32] { get; }
@@ -117,6 +133,14 @@ sealed class Craft.CSharp.SnapshotSourceText : Microsoft.CodeAnalysis.Text.Sourc
   static Craft.CSharp.SnapshotSourceText Since(Craft.Abstractions.ITextSnapshot after, System.Int32 previousVersion, Microsoft.CodeAnalysis.Text.TextChangeRange change)
   static Microsoft.CodeAnalysis.Text.TextChangeRange? Collapse(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits)
   static Microsoft.CodeAnalysis.Text.TextChangeRange? Compose(Microsoft.CodeAnalysis.Text.TextChangeRange? first, Microsoft.CodeAnalysis.Text.TextChangeRange? second)
+sealed class Craft.CSharp.SolutionFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
+  const System.String ProviderName = sln
+  ctor()
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
 sealed class Craft.CSharp.Workspaces.CsprojWorkspaceReader : Craft.Abstractions.IWorkspaceReader, Idrak.Abstraction.IKind
   Craft.Abstractions.WorkspaceModel Read(Craft.Abstractions.WorkspaceReadRequest request, System.Threading.CancellationToken cancellationToken)
   System.String Name { get; }

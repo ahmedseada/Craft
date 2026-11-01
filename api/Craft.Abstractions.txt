@@ -240,6 +240,7 @@ sealed class Craft.Abstractions.ContextChip : System.IEquatable<Craft.Abstractio
   System.Boolean Equals(System.Object obj)
   System.Int32 GetHashCode()
   System.String Id { get; init; }
+  System.String Problem { get; init; }
   System.String Text { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String Id, out System.String Text)
@@ -702,6 +703,7 @@ enum Craft.Abstractions.FoldingRangeKind : System.IComparable, System.IConvertib
   Marked = 3
   Region = 0
 static class Craft.Abstractions.FoldingRangeProviders
+  event System.EventHandler Changed
   static Craft.Abstractions.IFoldingRangeProvider Find(System.ReadOnlySpan<System.Char> name)
   static Craft.Abstractions.IFoldingRangeProvider Get(System.ReadOnlySpan<System.Char> name)
   static System.Boolean Unregister(System.String name)
@@ -768,6 +770,7 @@ interface Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPane
   System.String Status { get; }
   System.String Subtitle { get; }
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
   System.Void RemoveChip(System.String id)
   event System.EventHandler<Craft.Abstractions.ConversationChangedEventArgs> ConversationChanged
 interface Craft.Abstractions.IEditorActivities
@@ -1180,6 +1183,7 @@ static class Craft.Abstractions.ModelErrors
   static System.Boolean IsOutOfMemory(System.Exception error)
 sealed class Craft.Abstractions.ModelLease : System.IDisposable
   Idrak.Abstraction.Generation.IChatModel Chat { get; }
+  Idrak.Abstraction.Generation.IChatTemplate ChatTemplate { get; init; }
   Idrak.Abstraction.Generation.IPretrainedTokenizer Tokenizer { get; init; }
   Idrak.Abstraction.Generation.ITextModel Text { get; }
   System.Boolean Loaded { get; }
@@ -1252,6 +1256,7 @@ sealed class Craft.Abstractions.ModelRequest : System.IEquatable<Craft.Abstracti
 sealed class Craft.Abstractions.ModelRole : System.IEquatable<Craft.Abstractions.ModelRole>
   Craft.Abstractions.ModelRole <Clone>$()
   Craft.Abstractions.ModelSettingField DeviceSetting { get; init; }
+  Craft.Abstractions.ModelSettingField EnabledSetting { get; init; }
   Craft.Abstractions.ModelSettingField ModelSetting { get; init; }
   System.Boolean Enabled { get; init; }
   System.Boolean Equals(Craft.Abstractions.ModelRole other)

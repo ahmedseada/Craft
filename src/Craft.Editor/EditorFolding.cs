@@ -15,7 +15,7 @@ namespace Craft.Editor;
 public sealed class EditorFolding : IDisposable
 {
     private readonly EditorModel _model;
-    private readonly IReadOnlyList<IFoldingRangeProvider> _providers;
+    private IReadOnlyList<IFoldingRangeProvider> _providers;
     private FoldingRange[] _ranges = [];
     private CancellationTokenSource? _request;
     private EditorModel.DebounceTimer? _timer;
@@ -31,6 +31,58 @@ public sealed class EditorFolding : IDisposable
         {
             Schedule();
         }
+
+        _providersChanged = (_, _) => _model.Post(OnProvidersChanged);
+        FoldingRangeProviders.Changed += _providersChanged;
+    }
+
+    private readonly EventHandler _providersChanged;
+
+    /// <summary>Raised on the UI thread when the providers of the document's language changed (one registered or removed since it opened).</summary>
+    public event EventHandler? ProvidersChanged;
+
+    // On the UI thread: a provider was registered or removed. The document's language's providers are taken again; when
+    // they differ, the ranges are asked for at once (not after the typing delay), or, with none left, the ranges and the
+    // folds go (every hidden line shown again).
+    private void OnProvidersChanged()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var now = _model.Options.Folding ? FoldingRangeProviders.For(_model.Language?.Name) : [];
+        if (now.Count == _providers.Count && now.Select((p, i) => ReferenceEquals(p, _providers[i])).All(static same => same))
+        {
+            return;
+        }
+
+        _providers = now;
+        CancelRequest();
+        _timer?.Cancel();
+        RangesVersion = -1;
+        if (now.Count == 0)
+        {
+            bool folded = Map.Folded.Count > 0;
+            _ranges = [];
+            Map.Reconcile(_ranges);
+            if (folded)
+            {
+                _model.OnFoldsChanged();
+            }
+            else
+            {
+                _model.Invalidate();
+            }
+
+            RangesChanged?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            _ = RefreshAsync();
+        }
+
+        ProvidersChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Whether this document folds: the option is on and a provider folds its language.</summary>
@@ -228,6 +280,7 @@ public sealed class EditorFolding : IDisposable
         }
 
         _disposed = true;
+        FoldingRangeProviders.Changed -= _providersChanged;
         _timer?.Dispose();
         CancelRequest();
     }

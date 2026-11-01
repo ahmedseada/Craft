@@ -30,6 +30,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
     private readonly AiModels _models;
     private readonly List<ConversationEntry> _log = [];
     private readonly Dictionary<string, AgentChange> _changes = new(StringComparer.Ordinal);
+    private readonly List<ContextChip> _files = [];   // files dropped on the panel, sent with the next task as @path
     private AiAnswer? _answer;                       // the run's answer for the AI events (raised at its first review), or null
     private bool _judged;
     private readonly Stopwatch _elapsed = new();
@@ -90,6 +91,69 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         ? [new PanelAction("Stop", _ => { Stop(); return Task.CompletedTask; })]
         : _log.Count > 0 ? [new PanelAction("Clear", _ => { Clear(); return Task.CompletedTask; })] : [];
 
+    /// <summary>
+    /// Files and folders dropped on the panel: those of the open folder become <c>@path</c> chips (their path in the
+    /// folder), sent with the next task or note so the agent reads them in its copy; one outside the folder is not taken
+    /// (the agent works on a copy of the folder only), said in the panel. What exists is checked off the UI thread.
+    /// </summary>
+    public override async Task<int> AcceptDropAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+        {
+            return 0;
+        }
+
+        string? root = Host.WorkspaceFolder;
+        var found = await Task.Run(() => paths.Select(p => Path.GetFullPath(p)).Select(p => (Path: p, Exists: File.Exists(p) || Directory.Exists(p))).ToList(), cancellationToken).ConfigureAwait(false);
+        var taken = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Post(() =>
+        {
+            int count = 0;
+            var refused = new List<string>();
+            string? folder = root is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+            foreach (var (path, exists) in found)
+            {
+                string name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+                if (!exists)
+                {
+                    refused.Add($"{name} is not there");
+                    continue;
+                }
+
+                if (folder is null || !path.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+                {
+                    refused.Add(folder is null ? $"{name}: open a folder first" : $"{name} is outside the open folder (the agent works on a copy of the folder)");
+                    continue;
+                }
+
+                string id = "path:" + path;
+                if (!_files.Any(c => c.Id == id))
+                {
+                    _files.Add(new ContextChip(id, "@" + Path.GetRelativePath(root!, path).Replace('\\', '/')));
+                }
+
+                count++;
+            }
+
+            if (refused.Count > 0)
+            {
+                Log(new ConversationEntry(ConversationRole.Note, "Not added: " + string.Join("; ", refused) + "."));
+            }
+
+            SetChips([.. _files]);
+            taken.TrySetResult(count);
+        });
+        return await taken.Task.ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public override void RemoveChip(string id)
+    {
+        _files.RemoveAll(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+        SetChips([.. _files]);
+    }
+
     /// <inheritdoc />
     public override Task SubmitAsync(string text, CancellationToken cancellationToken = default)
     {
@@ -98,6 +162,14 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         if (message.Length == 0)
         {
             return Task.CompletedTask;
+        }
+
+        if (_files.Count > 0)
+        {
+            // The dropped files go with the message as @path (their paths in the folder, read by the agent's tools in its copy).
+            message += "\n\nThe files this is about (paths in the folder): " + string.Join(", ", _files.Select(c => c.Text)) + ".";
+            _files.Clear();
+            SetChips([]);
         }
 
         if (IsBusy && _agent is { } agent)
@@ -486,6 +558,12 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             TimeLimit = TimeSpan.FromMinutes(settings.AgentMinutes),
             Sampling = new GenerationOptions { NumPredict = settings.AgentMaxTokens, NumCtx = lease.ContextLength, Stop = settings.AgentStops, Temperature = settings.AgentRole.Temperature },
             Tools = new CodingToolOptions { Sandbox = inner.Name },
+            // Note 27: calls the model writes as text (fenced JSON) are read, a reply of calls that cannot be read is
+            // corrected agentNudges times in a row, and the correction is worded in the model's own template: the lease
+            // gives it, since the model is wrapped here (CountingChatModel) and Idrak cannot find it on the wrapper.
+            CallsInText = settings.AgentCallsInText,
+            Nudges = settings.AgentNudges,
+            Template = lease.ChatTemplate ?? (chat as ChatGenerator)?.Template,
         };
         var tools = new CodingTools(copy.Copy, options.Tools, sandbox);
         var observed = new CountingChatModel(chat, () => Post(TurnStarted), (tokens, seconds) => Post(() => Counted(tokens, seconds)));
@@ -502,15 +580,31 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         // B6: what the run wrote by any way (a tool, a command), listed at its end, so nothing it made stays in the copy unseen.
         var written = Written(copy, settings.AgentChangesIgnore);
         Post(() => Listed(written));
-        string end = run.End switch
+        return (EndNote(run, written.Count, settings, lease.ContextLength), run);
+    }
+
+    /// <summary>
+    /// What the panel says when a run ends (note 27: the model's own claim never stands alone): a run that called no tool
+    /// and changed nothing says so, whatever the model wrote; a run whose calls could not be read says how many corrections
+    /// it was given; the corrections sent are counted.
+    /// </summary>
+    internal static string EndNote(CodingAgentRun run, int written, AiSettings settings, int contextLength)
+    {
+        bool nothing = run.ToolCalls == 0 && written == 0;
+        string nudged = run.Nudges == 0 ? ""
+            : string.Create(CultureInfo.InvariantCulture, $" The model was corrected {run.Nudges} {(run.Nudges == 1 ? "time" : "times")} for tool calls it wrote as text.");
+        return run.End switch
         {
-            CodingAgentEnd.Answered => string.Create(CultureInfo.InvariantCulture, $"Done in {run.Rounds} turns, {run.ToolCalls} tool calls."),
+            CodingAgentEnd.Answered when nothing => "The model wrote no tool calls; nothing was changed." + nudged,
+            CodingAgentEnd.Answered => string.Create(CultureInfo.InvariantCulture, $"Done in {run.Rounds} turns, {run.ToolCalls} tool calls.") + nudged,
+            CodingAgentEnd.CallsNotRead => string.Create(CultureInfo.InvariantCulture,
+                $"Stopped: the model kept writing tool calls that could not be read, after {run.Nudges} {(run.Nudges == 1 ? "correction" : "corrections")} (agentNudges {settings.AgentNudges}); nothing from its last reply was run.")
+                + (nothing ? " Nothing was changed." : ""),
             CodingAgentEnd.OutOfBudget when run.Note.Length == 0 => string.Create(CultureInfo.InvariantCulture,
-                $"Stopped: the reply reached its limit (agentMaxTokens {settings.AgentMaxTokens}, or the room the model's context of {lease.ContextLength} left)."),
-            CodingAgentEnd.OutOfBudget => $"Stopped: {run.Note}.",
-            _ => $"Ended: {run.End} {run.Note}".TrimEnd() + ".",
+                $"Stopped: the reply reached its limit (agentMaxTokens {settings.AgentMaxTokens}, or the room the model's context of {contextLength} left).") + (nothing ? " Nothing was changed." : ""),
+            CodingAgentEnd.OutOfBudget => $"Stopped: {run.Note}." + (nothing ? " Nothing was changed." : ""),
+            _ => $"Ended: {run.End} {run.Note}".TrimEnd() + "." + (nothing ? " Nothing was changed." : ""),
         };
-        return (end, run);
     }
 
     private void TurnStarted()

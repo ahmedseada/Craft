@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
 using Craft.Abstractions;
+using Craft.Core.Diagnostics;
 using Craft.Editor;
 using Craft.Editor.Shell;
 using Microsoft.Maui.Controls;
@@ -104,6 +105,21 @@ public sealed class ConversationsView : ContentView, IDisposable
         layout.Add(_scroll, 0, 2);
         layout.Add(_status, 0, 3);
         layout.Add(footer, 0, 4);
+        // X part 5: a file dragged from the tree, or files from the system's file manager, dropped on the column go to the
+        // shown panel (IConversationPanel.AcceptDropAsync); the composer shows the accent while a drag is over it.
+        var drop = new DropGestureRecognizer { AllowDrop = true };
+        drop.DragOver += (_, e) =>
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+            footer.BackgroundColor = _palette.Selection;
+        };
+        drop.DragLeave += (_, _) => footer.BackgroundColor = Colors.Transparent;
+        drop.Drop += async (_, e) =>
+        {
+            footer.BackgroundColor = Colors.Transparent;
+            await OnDropAsync(e);
+        };
+        layout.GestureRecognizers.Add(drop);
         Content = layout;
         host.PanelsChanged += OnPanelsChanged;
         OnPanelsChanged(this, EventArgs.Empty);
@@ -111,6 +127,51 @@ public sealed class ConversationsView : ContentView, IDisposable
 
     /// <summary>The composer's model chip (the shell sets its text and handles its tap).</summary>
     public ModelChip ModelChip { get; }
+
+    /// <summary>Reads the paths a drop from outside the app carries (the shell sets it: <c>IShellPlatform.DroppedPathsAsync</c>), or null for none.</summary>
+    public Func<DropEventArgs, Task<IReadOnlyList<string>>>? DroppedPaths { get; set; }
+
+    /// <summary>Raised with what the host says after a drop on the column (a panel that takes no files), for the status bar.</summary>
+    public event EventHandler<string>? Notice;
+
+    /// <summary>Whether <paramref name="drop"/> landed on the column while it shows (the window's own drop leaves it to the column).</summary>
+    public bool Holds(DropEventArgs drop)
+    {
+        ArgumentNullException.ThrowIfNull(drop);
+        return IsVisible && Width > 0 && drop.GetPosition(this) is { } at && at.X >= 0 && at.Y >= 0 && at.X < Width && at.Y < Height;
+    }
+
+    // A drop on the column: the tree's file (its path in the drag's properties), else what the system's file manager dropped.
+    private async Task OnDropAsync(DropEventArgs e)
+    {
+        try
+        {
+            if (_shown is not { } panel)
+            {
+                return;
+            }
+
+            IReadOnlyList<string> paths = e.Data.Properties.TryGetValue(FolderTreeView.DragPathKey, out var dragged) && dragged is string path
+                ? [path]
+                : DroppedPaths is { } read ? await read(e) : [];
+            if (paths.Count == 0)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            if (await ConversationDrops.DropAsync(panel, paths) is { } said)
+            {
+                Notice?.Invoke(this, said);
+            }
+        }
+#pragma warning disable CA1031 // An async drop handler: nothing may leave it (the owner's note 20).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            CallbackGuard.Report("the chat column: a drop", error);
+        }
+    }
 
     /// <summary>Takes <paramref name="palette"/>'s colours and fonts for the composer (its input and its model chip).</summary>
     public void ApplyPalette(ShellPalette palette)
@@ -357,11 +418,15 @@ public sealed class ConversationsView : ContentView, IDisposable
 
         foreach (var chip in panel.Chips)
         {
+            // A chip that cannot go (an image for a model that takes none) is greyed and struck through, its reason in
+            // the tooltip: the panel sends nothing until it is removed.
+            bool greyed = chip.Problem is not null;
             var label = new Label
             {
                 Text = chip.Text + "  ×",
                 FontSize = 12,
-                TextColor = C(_colors.Foreground),
+                TextColor = C(greyed ? _colors.SecondaryText : _colors.Foreground),
+                TextDecorations = greyed ? TextDecorations.Strikethrough : TextDecorations.None,
                 VerticalTextAlignment = TextAlignment.Center,
             };
             var border = new Border
@@ -369,11 +434,13 @@ public sealed class ConversationsView : ContentView, IDisposable
                 Content = label,
                 Padding = new Thickness(8, 3),
                 Margin = new Thickness(0, 0, 6, 6),
-                BackgroundColor = C(_colors.PopupBackground),
+                BackgroundColor = greyed ? Colors.Transparent : C(_colors.PopupBackground),
                 Stroke = C(_colors.Border),
                 StrokeShape = new RoundRectangle { CornerRadius = 10 },
+                Opacity = greyed ? 0.7 : 1,
             };
-            SemanticProperties.SetDescription(border, $"Context: {chip.Text}. Tap to remove.");
+            ToolTipProperties.SetText(border, chip.Problem ?? "Remove from the context");
+            SemanticProperties.SetDescription(border, greyed ? $"Context: {chip.Text}. Not sent: {chip.Problem} Tap to remove." : $"Context: {chip.Text}. Tap to remove.");
             var tap = new TapGestureRecognizer();
             string id = chip.Id;
             tap.Tapped += (_, _) => panel.RemoveChip(id);
@@ -549,6 +616,14 @@ public sealed class ConversationsView : ContentView, IDisposable
     {
         if (_shown is not { } panel || string.IsNullOrWhiteSpace(_input.Text))
         {
+            return;
+        }
+
+        if (panel.Chips.FirstOrDefault(c => c.Problem is not null) is { } greyed)
+        {
+            // Nothing is sent while a chip cannot go: the text stays in the box, the reason under the entries.
+            _status.Text = $"Not sent: {greyed.Text}: {greyed.Problem}";
+            _status.IsVisible = true;
             return;
         }
 

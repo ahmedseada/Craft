@@ -152,6 +152,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             DeviceChoice = role.Device,
             ModelSetting = new ModelSettingField(Variable("model"), "Chat model"),
             DeviceSetting = new ModelSettingField(Variable("device"), "Chat runs on", "auto (the fastest found)"),
+            EnabledSetting = new ModelSettingField(Variable("chatEnabled"), "Chat on", "true"),
             LoadCommand = AiPlugin.LoadModelCommand,
             SettingsCommand = SettingSections.CommandOf(SettingSections.Chat),
             IsLoading = _loading && device is null && model is not null,
@@ -172,6 +173,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             DeviceChoice = role.Device,
             ModelSetting = new ModelSettingField(Variable("agentModel"), "Agent model (empty: the chat's)"),
             DeviceSetting = new ModelSettingField(Variable("agentDevice"), "Agent runs on", "the chat's device"),
+            EnabledSetting = new ModelSettingField(Variable("agentEnabled"), "Agent on", "true"),
             LoadCommand = AiPlugin.LoadAgentModelCommand,
             SettingsCommand = SettingSections.CommandOf(SettingSections.Agent),
             Inherits = "Chat",
@@ -192,6 +194,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             DeviceChoice = role.Device,
             ModelSetting = new ModelSettingField(Variable("completionModel"), "Completion model"),
             DeviceSetting = new ModelSettingField(Variable("completionDevice"), "Completion runs on", "auto (the fastest found)"),
+            EnabledSetting = new ModelSettingField(Variable("completion"), "Inline completion on", "true"),
             SettingsCommand = SettingSections.CommandOf(SettingSections.Completion),
         };
         if (!role.Enabled)
@@ -371,6 +374,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         return new ModelLease(key.Model, model.Chat, model.Text, model.ContextLength, lease.LoadDuration, lease)
         {
             Tokenizer = model.Tokenizer,
+            ChatTemplate = model.Pretrained.ChatTemplate,                   // the agent reads calls written as text and corrects in its format (note 27)
             Underlying = model.Pretrained,                                  // the one copy, for a plug-in that trains it (B7)
             Exclusive = model.Gate.ExclusiveAsync,
         };

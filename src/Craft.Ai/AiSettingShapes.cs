@@ -66,6 +66,10 @@ public static class AiSettingShapes
         "agentKeepAliveMinutes" => KeepAlive(SettingSections.Agent),
         "agentTemperature" => Temperature(SettingSections.Agent),
         "agentMaxTokens" => MaxTokens(SettingSections.Agent, "Most tokens per turn"),
+        "agentNudges" => SettingShape.Whole(SettingSections.Agent, "Corrections for unreadable tool calls", 0, 20, null, "Tool calls"),
+        "agentCallsInText" => SettingShape.Toggle(SettingSections.Agent, "Read tool calls written as text", "Tool calls"),
+
+        "chatImageMaxMb" => SettingShape.Whole(SettingSections.Chat, "Largest image", 1, 4096, "MB", "Context"),
 
         "placementMaxError" => SettingShape.Number(SettingSections.Models, "Placement's largest difference", 0, 1, 0.05),
         _ => null,

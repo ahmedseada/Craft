@@ -457,25 +457,15 @@ public sealed class ModelsPage : ContentView, IDisposable
             _main.Children.Add(none);
         }
 
+        // X part 5: a card per role (chat, agent, completion), each editing its own settings: on or off, the model, the
+        // device, "Same as chat" for a role that inherits, its state and a link to its section of the settings.
         var roles = new FlexLayout { Wrap = FlexWrap.Wrap };
-        foreach (var role in status?.Roles ?? [])
+        foreach (var card in ModelRoleCards.Of(status))
         {
-            var card = p.Box(new VerticalStackLayout
-            {
-                Spacing = 8,
-                Children =
-                {
-                    p.Label(role.Role, p.Secondary, p.SmallSize),
-                    Mono(role.Model ?? "none set", p.Text),
-                    Wrapped(role.State, role.IsProblem ? p.Error : p.Secondary, p.SmallSize),
-                },
-            }, 10, new Thickness(14));
-            card.WidthRequest = 220;
-            card.Margin = new Thickness(0, 0, 12, 12);
-            roles.Children.Add(card);
+            roles.Children.Add(RoleCard(card, status!));
         }
 
-        if (status is { Roles.Count: > 0 })
+        if (roles.Children.Count > 0)
         {
             _main.Children.Add(Section("Models by role", roles));
         }
@@ -558,6 +548,105 @@ public sealed class ModelsPage : ContentView, IDisposable
         foreach (var limit in status?.Limits ?? [])
         {
             _side.Children.Add(SettingField(limit));
+        }
+    }
+
+    // One role's card: its title and switch, its model (Enter or Use writes the role's own setting and loads it), its
+    // device (a choice of the measured devices), "Same as chat" when it inherits, its state, and its settings link. The
+    // card is the one box; its rows are plain (no box inside a box), the buttons carry the palette's hover and focus states.
+    private Border RoleCard(ModelRoleCard card, ModelProviderStatus status)
+    {
+        var p = _palette;
+        var role = card.Role;
+        var title = p.Label(card.Title, p.Text, p.FontSize, FontWeight.SemiBold);
+        var head = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 8 };
+        head.Add(title, 0, 0);
+        if (card.CanToggle)
+        {
+            var toggle = new Switch { IsToggled = card.Enabled, OnColor = p.Accent, ThumbColor = p.Text, VerticalOptions = LayoutOptions.Center };
+            ToolTipProperties.SetText(toggle, $"{(card.Enabled ? "Turn off" : "Turn on")} ({role.EnabledSetting!.Variable})");
+            SemanticProperties.SetDescription(toggle, $"{card.Title} on");
+            toggle.Toggled += (_, e) => Write([ModelRoleCards.Enable(role, e.Value)]);
+            head.Add(toggle, 1, 0);
+        }
+
+        var rows = new VerticalStackLayout { Spacing = 10, Children = { head } };
+        if (role.ModelSetting is { } modelSetting)
+        {
+            var name = p.Input(card.CanInherit ? "empty: the chat's model" : "owner/coder-model", 32, code: true);
+            name.Text = _shell.Settings.Read(modelSetting.Variable) ?? "";
+            name.HorizontalOptions = LayoutOptions.Fill;
+            name.Completed += async (_, _) => await UseRoleModelAsync(role, name.Text);
+            ToolTipProperties.SetText(name, modelSetting.Variable);
+            var use = p.SecondaryButton(role.LoadCommand is null || !card.Enabled ? "Use" : "Use and load", 32);
+            use.Clicked += async (_, _) => await UseRoleModelAsync(role, name.Text);
+            var line = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)], ColumnSpacing = 8 };
+            line.Add(p.Field(name), 0, 0);
+            line.Add(use, 1, 0);
+            rows.Children.Add(p.Label("Model", p.Secondary, p.SmallSize));
+            rows.Children.Add(Mono(card.ModelText, card.SameAsOther ? p.Secondary : p.Text));
+            rows.Children.Add(line);
+        }
+
+        if (role.DeviceSetting is not null)
+        {
+            string choice = role.InheritsDevice ? "" : role.DeviceChoice ?? "auto";
+            var devices = new List<(string Text, bool Active, bool Enabled, Action Chosen)>();
+            foreach (var device in status.Devices.Count > 0 ? status.Devices : ["auto", "cpu"])
+            {
+                string value = device;
+                devices.Add((device, device.Equals(choice, StringComparison.OrdinalIgnoreCase), true, () => Write([ModelRoleCards.Device(role, value)])));
+            }
+
+            rows.Children.Add(p.Label("Runs on", p.Secondary, p.SmallSize));
+            rows.Children.Add(Mono(card.DeviceText, p.Text));
+            rows.Children.Add(PageParts.Segmented(p, devices));
+        }
+
+        if (card.CanInherit)
+        {
+            var same = p.Flat((card.SameAsOther ? "✓ " : "") + card.SameAsLabel, card.SameAsOther ? p.Accent : p.Text, 30);
+            same.HorizontalOptions = LayoutOptions.Start;
+            ToolTipProperties.SetText(same, $"Clear {role.ModelSetting?.Variable} and {role.DeviceSetting?.Variable}: the {card.Title.ToLowerInvariant()} takes the {role.Inherits!.ToLowerInvariant()}'s model and device, one copy shared");
+            same.Clicked += (_, _) => Write(ModelRoleCards.SameAsOther(role));
+            rows.Children.Add(same);
+        }
+
+        rows.Children.Add(Wrapped(role.IsLoading ? "loading…" : role.State, role.IsProblem ? p.Error : p.Secondary, p.SmallSize));
+        if (role.SettingsCommand is { } command)
+        {
+            var link = p.Flat("Open its settings", p.Accent, 28, p.SmallSize);
+            link.HorizontalOptions = LayoutOptions.Start;
+            link.Clicked += async (_, _) => await _shell.Host.ExecuteCommandAsync(command);
+            rows.Children.Add(link);
+        }
+
+        var box = p.Box(rows, 10, new Thickness(14));
+        box.WidthRequest = 300;
+        box.Margin = new Thickness(0, 0, 12, 12);
+        box.Opacity = card.Enabled ? 1 : 0.75;
+        return box;
+    }
+
+    // A card's writes, each the role's own setting through the shell (the chip and the status bar follow); a problem said.
+    private void Write(IEnumerable<ModelPickWrite?> writes)
+    {
+        string? problem = ModelRoleCards.Apply(writes, (variable, value) => _shell.ApplySetting(SettingLayer.User, variable, value));
+        _notice.Text = problem ?? "";
+        _notice.TextColor = _palette.Error;
+        if (problem is null)
+        {
+            Dispatcher.DispatchLabelled("models page: refresh", Refresh);
+        }
+    }
+
+    private async Task UseRoleModelAsync(ModelRole role, string? name)
+    {
+        var write = ModelRoleCards.Model(role, name);
+        Write([write]);
+        if (write?.LoadCommand is { } load && _notice.Text.Length == 0)
+        {
+            await _shell.Host.ExecuteCommandAsync(load);
         }
     }
 

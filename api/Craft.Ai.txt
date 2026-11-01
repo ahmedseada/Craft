@@ -40,8 +40,10 @@ sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstracti
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ReviewAsync(Craft.Ai.AgentChange change, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ReviewAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
   System.Void DiscardAll()
   System.Void Dispose()
+  System.Void RemoveChip(System.String id)
   System.Void Stop()
   const System.String PanelId = ai.agent
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
@@ -60,6 +62,7 @@ sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractio
   System.Threading.Tasks.Task LastReply { get; }
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ApplyAsync(System.String code, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispose()
   System.Void NewChat()
   System.Void RemoveChip(System.String id)
@@ -194,6 +197,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   Craft.Ai.AiRoleSettings CompletionRole { get; }
   Craft.Ai.AiRoleSettings RoleOf(System.String key)
   Craft.Ai.AiSettings <Clone>$()
+  System.Boolean AgentCallsInText { get; init; }
   System.Boolean AgentEnabled { get; init; }
   System.Boolean AgentSaveOnAccept { get; init; }
   System.Boolean ChatEnabled { get; init; }
@@ -213,8 +217,10 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Int32 AgentMaxTokens { get; init; }
   System.Int32 AgentMaxTurns { get; init; }
   System.Int32 AgentMinutes { get; init; }
+  System.Int32 AgentNudges { get; init; }
   System.Int32 ChatFileLines { get; init; }
   System.Int32 ChatHistory { get; init; }
+  System.Int32 ChatImageMaxMegabytes { get; init; }
   System.Int32 ChatMaxTokens { get; init; }
   System.Int32 ChatToolRounds { get; init; }
   System.Int32 CompletionChunk { get; init; }
@@ -288,6 +294,7 @@ abstract class Craft.Ai.ConversationPanel : Craft.Abstractions.IConversationPane
   System.String Subtitle { get; set; }
   System.String Title { get; set; }
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
   System.Void RemoveChip(System.String id)
   event System.EventHandler Changed
   event System.EventHandler<Craft.Abstractions.ConversationChangedEventArgs> ConversationChanged

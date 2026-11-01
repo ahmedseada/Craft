@@ -1,4 +1,4 @@
-contract 1.0
+contract 1.1
 Craft.Abstractions.AccentColors
 Craft.Abstractions.AccentColors  const System.UInt32 Amber = 4293240139
 Craft.Abstractions.AccentColors  const System.UInt32 Blue = 4286753535
@@ -263,6 +263,7 @@ Craft.Abstractions.ContextChip  System.Boolean Equals(Craft.Abstractions.Context
 Craft.Abstractions.ContextChip  System.Boolean Equals(System.Object obj)
 Craft.Abstractions.ContextChip  System.Int32 GetHashCode()
 Craft.Abstractions.ContextChip  System.String Id { get; init; }
+Craft.Abstractions.ContextChip  System.String Problem { get; init; }
 Craft.Abstractions.ContextChip  System.String Text { get; init; }
 Craft.Abstractions.ContextChip  System.String ToString()
 Craft.Abstractions.ContextChip  System.Void Deconstruct(out System.String Id, out System.String Text)
@@ -790,6 +791,7 @@ Craft.Abstractions.FoldingRangeKind : System.IConvertible
 Craft.Abstractions.FoldingRangeKind : System.IFormattable
 Craft.Abstractions.FoldingRangeKind : System.ISpanFormattable
 Craft.Abstractions.FoldingRangeProviders
+Craft.Abstractions.FoldingRangeProviders  event System.EventHandler Changed
 Craft.Abstractions.FoldingRangeProviders  static Craft.Abstractions.IFoldingRangeProvider Find(System.ReadOnlySpan<System.Char> name)
 Craft.Abstractions.FoldingRangeProviders  static Craft.Abstractions.IFoldingRangeProvider Get(System.ReadOnlySpan<System.Char> name)
 Craft.Abstractions.FoldingRangeProviders  static System.Boolean Unregister(System.String name)
@@ -862,6 +864,7 @@ Craft.Abstractions.IConversationPanel  System.String Placeholder { get; }
 Craft.Abstractions.IConversationPanel  System.String Status { get; }
 Craft.Abstractions.IConversationPanel  System.String Subtitle { get; }
 Craft.Abstractions.IConversationPanel  System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IConversationPanel  System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IConversationPanel  System.Void RemoveChip(System.String id)
 Craft.Abstractions.IConversationPanel  event System.EventHandler<Craft.Abstractions.ConversationChangedEventArgs> ConversationChanged
 Craft.Abstractions.IConversationPanel : Craft.Abstractions.IEditorPanel
@@ -1332,6 +1335,7 @@ Craft.Abstractions.ModelErrors
 Craft.Abstractions.ModelErrors  static System.Boolean IsOutOfMemory(System.Exception error)
 Craft.Abstractions.ModelLease
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IChatModel Chat { get; }
+Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IChatTemplate ChatTemplate { get; init; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.IPretrainedTokenizer Tokenizer { get; init; }
 Craft.Abstractions.ModelLease  Idrak.Abstraction.Generation.ITextModel Text { get; }
 Craft.Abstractions.ModelLease  System.Boolean Loaded { get; }
@@ -1408,6 +1412,7 @@ Craft.Abstractions.ModelRequest : System.IEquatable<Craft.Abstractions.ModelRequ
 Craft.Abstractions.ModelRole
 Craft.Abstractions.ModelRole  Craft.Abstractions.ModelRole <Clone>$()
 Craft.Abstractions.ModelRole  Craft.Abstractions.ModelSettingField DeviceSetting { get; init; }
+Craft.Abstractions.ModelRole  Craft.Abstractions.ModelSettingField EnabledSetting { get; init; }
 Craft.Abstractions.ModelRole  Craft.Abstractions.ModelSettingField ModelSetting { get; init; }
 Craft.Abstractions.ModelRole  System.Boolean Enabled { get; init; }
 Craft.Abstractions.ModelRole  System.Boolean Equals(Craft.Abstractions.ModelRole other)

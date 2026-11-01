@@ -12,7 +12,7 @@ Windows run (2026-11-01)" at the end.
 |---|---|---|
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
-| 3 | B1-B10: the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
+| 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
 | 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control) | Parts 6-8 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
@@ -3284,6 +3284,38 @@ edge; the empty state is a long sentence with a bare "+". Fix:
 - Tests: `Notifications` and `Activities` (the ready notification posted once per load with its facts, the failure
   notification, the status text only while loading, the loader shown after the delay, hidden when all end, the count
   and the fraction).
+
+**B11, the Learning view is a bare list that explains nothing (the owner, 2026-11-01, with a screenshot: "not
+informative nor illustrative for what it does; it should help the users").** Seen: rows of text ("Learn on this
+machine: off", "Share: off", "Folder", "Episodes: 0 (0 B of 64 MiB)", "Export the episodes", "Delete the episodes",
+"Train now · preference · no model set", "Make tasks from the failing tests", "Mark the test at the caret", "Adapter:
+none") with no controls, no state, no explanation. Redesign (the design's tokens, modern, no box inside a box):
+- **What it is, first**: a header card that says in two plain sentences what learning does ("Craft can learn from how
+  you accept, edit or reject the AI's suggestions, and train a small adapter so the model writes code more like you.
+  Everything stays on this machine unless you choose to share."), with a three-step illustration (Record → Train →
+  Better suggestions), each step drawn with its icon and showing where you are.
+- **Guided start when off**: the empty state is a short checklist (1 turn on recording, 2 code with the AI and accept,
+  edit or reject, 3 train when there are enough episodes: `CRAFT_PLUGIN_LEARNING_MINEPISODES`), each with its action
+  button; "What is recorded?" opens a sample episode so the user sees exactly what is kept.
+- **Controls, not text rows**: Record on this machine as a switch with its consent text under it; Share as a switch
+  that asks for the destination inline; the folder with Open and Change; storage as a bar (used of the limit) with
+  Export and Delete (Delete with Undo).
+- **Training card**: the model it trains (a picker of the loaded models with their settings, B7's lease rule), the
+  method (preference, with a one-line explanation of each), Train now as the primary button with its state (idle,
+  waiting for enough episodes with the count, training with progress, time left and Cancel), "also when idle N min" as
+  a switch with the minutes; after a round: the loss and the preference margin as small charts over the rounds, and
+  whether the new adapter was better (promoted) or kept back, with Roll back.
+- **Adapter card**: which adapter answers now (none: the base model), its age, how much better it scored, Use base
+  model / Use adapter, Roll back.
+- **Tasks from tests**: explained in one line ("turn failing tests into practice tasks the model is rewarded for
+  solving"), a count of failing tests found, Make tasks (through the sandbox, said), and "Mark the test at the caret"
+  shown only when the caret is in a test.
+- Every row has a tooltip and the variable shown small (as the settings page); errors in plain words with the fix
+  (B7's stage names).
+- Tests in `Learning`: the view model's states (off, recording with too few episodes, ready, training, after a round
+  promoted and not), the checklist's actions, Delete with Undo, the picker lists the loaded models.
+- Slot: the next free slot after s2 merges (s2 changes the learning plug-in's training now), with B8-B10 if that slot
+  is the same.
 
 B8, B9 and B10 go together in the next free slot (the shell and its panels), before the X restart.
 

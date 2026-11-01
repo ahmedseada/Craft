@@ -13,8 +13,8 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
-| 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
+| 5 | X rest: minimap, completion at several carets, peek (built in piece 3a), measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
 | 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
@@ -2914,6 +2914,101 @@ bullets). Craft only; nothing was needed in Idrak (its note 27 part, `4f394d5`, 
   for the 7B coder, which takes no images; the message is not sent until it is removed); drop a file on the Agent tab (an
   `@Program.cs` chip); Settings › Models and devices: turn the agent off and on, set its model, "Same as chat", each
   card's "Open its settings"; open a `.razor`, a `.sln` and the `.editorconfig` and fold them.
+
+### X restart piece 3a as built (2026-11-01)
+
+Slot s1: the split editor (the owner asked for it directly), moving files by drag in the tree, peek definition. Craft
+only; nothing was needed in Idrak.
+- **Split editor** (`Craft.Editor/Shell/EditorGroups.cs`): `EditorGroups` holds the groups, each its own `DocumentTabs` and
+  active tab, one focused, laid out as a tree of rows and columns (`EditorGroupNode`, each child's share in `Weights`).
+  `ShellModel.Tabs` is the focused group's tabs, so every command, quick open, Ctrl+O, find, the breadcrumb, the status
+  bar and the title follow the focus; only the focused group's active tab is the host's active document (the agent's and
+  the plug-ins'). A document in two groups is one `ITextDocument` and one host document in two tabs: closed in the host
+  and disposed with the last tab (`DocumentTabs.SharedElsewhere`), its unsaved changes asked about only then; untitled
+  numbers are counted across the groups. Its views share one language session: `LanguageSessionPool` (`Craft.Editor`,
+  `ShellModel.Sessions`) gives every view of a document in one language and settings the same session, counted, disposed
+  with the last view; `EditorModel` has a new constructor taking a session it does not own (`OwnsLanguageSession`,
+  `EditorModel.OpenContext`), so carets, scroll and folds stay per view. Commands (palette, both keymaps, the View menu):
+  Split right Ctrl+\ (`EditorKey.Backslash`, new), Split down Ctrl+K Ctrl+\, Move the editor to the next group
+  Ctrl+Alt+Right, Close the editor group, Focus the next group, Focus group 1-3 Ctrl+1/2/3. A tab (or a file from the tree)
+  dragged over a group's editor shows its drop zone (the centre, the right or the bottom half: the accent's tint in a
+  rounded line, fading in) and goes there (`EditorGroups.Drop`, `ZoneAt`); a tab dropped on another group's tab lands at
+  its place. Only the focused view's caret blinks (`EditorView.IsFocusedView`); an unfocused group's active tab keeps a
+  strong-border line instead of the accent; a press or a key in a view focuses its group. Each view lays out only its own
+  visible lines (B1's cache per view). Options: `CRAFT_EDITOR_GROUPS_MAX` (4, 1-16), `CRAFT_EDITOR_GROUPS_CLOSE_EMPTY` (on).
+  The layout (groups, their files, active files, shares, focus) is written per workspace to `.craft/editor-layout.json`
+  (`EditorLayoutFile`, on the thread pool, latest wins) and read back by `ShellModel.RestoreEditorLayoutAsync`.
+- **Tree move by drag** (`ShellModel.Move.cs`, `FolderTreeView`): folders' rows can be dragged too; every folder's row takes
+  a dropped row (the row under the drag shows the accent's tint); the move (`ShellModel.MoveEntryAsync`) checks and moves
+  off the UI thread as an activity ("Moving X"), the moved file's clean tabs open again under the new path in every group
+  at their places (`FollowMovedAsync`, which rename now uses too), and the undo bar says "Moved X to Y" with Undo (the move
+  back). Ctrl at the drop copies (`IShellPlatform.DropCopies`; "Copied X to Y", Undo deletes the copy; a copy onto its own
+  folder is "X copy"). Refused and said in the status bar: a folder to another drive (`SameVolumeOf`), a folder into
+  itself, a name the folder has already, a file with unsaved changes. `CRAFT_TREE_DRAG_MOVE` (on).
+- **Peek definition** (Alt+F12, `ShellModel.Peek.cs`, `Craft.Maui.PeekView`): `EditorModel.PeekDefinition` asks the
+  language off the UI thread and raises `PeekRequested` (a metadata symbol shows its description instead);
+  `ShellModel.PeekAsync` resolves it: the source document, or an open tab's document (shared: the same text, its views'
+  session through the pool), or a closed file read off the UI thread with its language's syntactic colours only
+  (`SyntacticLanguageSession`: opened with no workspace, semantics deferred and semantic colours off, wrapped so nothing
+  semantic is reachable). The overlay is a raised card under the caret's line: a header (the file and line, "colours only"
+  for a closed file, Open, ×) and a read-only editor of `CRAFT_PEEK_LINES` (12) lines with the name selected. Escape closes
+  it (from the source editor too), Enter, a double click or Open opens the definition in the focused group with its name
+  selected (`OpenPeekAsync`). `CRAFT_PEEK_MAX_MB` (16): a larger closed file is not read, said.
+- **Decisions on the recommendation (one line each)**:
+  - Groups nest as rows and columns (split right then down gives a column inside the row), VS Code's grid, not one row.
+  - The pages (settings, Models, Plug-ins, Welcome) stay in the first group's strip and area.
+  - A file opened anywhere opens in the focused group, sharing the document when another group shows it.
+  - Closing one of two tabs of an edited document asks nothing (the other keeps the changes); the last tab asks.
+  - A group left without tabs closes while another is open (VS Code's default), switchable.
+  - Ctrl+N one past the last group makes a group to the right showing the focused tab (VS Code's); past that, said.
+  - Move to the next group from the last group splits right, unless it is the group's only tab (said).
+  - Split down is Ctrl+K Ctrl+\, Move to the next group Ctrl+Alt+Right (VS Code's); Close group has no key (VS Code has none).
+  - The layout file is written only once the area was split (a single group never adds a file to the user's folder).
+  - Reopening the kept layout at start waits for session restore (later): `RestoreEditorLayoutAsync` is its call, tested.
+  - The splitter between groups: s3's `SplitterModel` and `IPointerCursor` (B8, merged before this slot rebased) in a
+    `GroupSplitter` of the groups' own (no snapping closed: a group closes with its tabs; a double-click shares in halves).
+  - `EditorKey.Backslash` joins the restart's contract 1.1 step, which piece 1b took first.
+  - A file's row takes a drop for its folder, so the workspace's root is reachable without an empty-space target.
+  - A move of a file with unsaved changes is refused, as rename refuses (its text would be read again from the disk).
+  - A name the target folder has is refused, never overwritten.
+  - The move back by Undo is not itself offered for undo; Undo of a copy deletes the copy for good (Craft made it).
+  - The peek floats over the lines under the caret's (an overlay), not pushing them down.
+  - An open document's peek shares its views' session; a closed file's peek gets a syntactic session of its own.
+  - The peek closes when its editor stops being shown (another tab, the group closed).
+  - The Paint tests paint a fixed copy of `EditorModel.cs` (`tests/Craft.Tests/Editor/Samples/EditorModel.cs.txt`, the text
+    B1 measured): this slot's constructor put more documentation comments on screen, whose structured trivia Roslyn keeps
+    only weakly (10,448 B on the first frame after a forced collection, against the test's 4 KB), so the measure must
+    not move with edits to the source file (diagnosed by rule 90: 0 B a frame with the old text, the same failure with
+    `DOTNET_TieredCompilation=0`).
+- **Measured** (headless, Linux container, Release, the tests' fixed metrics; `EditorGroups.TwoGroupsShowingA100000Line...`,
+  written to `test-output/benches/split-editor.txt`): one 100,000-line document (11 MB of text) in two groups: the split
+  allocated 5.4 KB, the second view 8.4 KB more (14.6 KB on every thread), the heap grew 52 KB (in the filter's run; 19 KB
+  alone): one copy of the text and one language session. A warm frame per group (600 × 800, each at its own place, lines
+  1,000 and 80,000): median 5.6 and 5.7 µs, p99 10.2 and 16.5 µs, 41 lines drawn each (alone: 5.2 µs). The test's language
+  colours nothing, so these are the frame's own costs; a C# file's warm frame is B1's (113-144 µs here). The Windows
+  numbers are the owner's (below).
+- **Windows-only lines** (compiled here: Craft.Maui's Windows target with a local, uncommitted `TargetFrameworks` change and
+  `EnableWindowsTargeting`, no error; only `MakePri.exe` cannot run on Linux): `WindowsTextInputAdapter.Map` maps VK_OEM_5
+  to `EditorKey.Backslash`; `WindowsShellPlatform.DropCopies` reads `DragDropModifiers.Control` at the drop. **Not run
+  here**: the window (the panes, drop zones, the splitters' drag with WinUI's pointer, the peek card, the tree's drags).
+- **Tests**: groups `EditorGroups` (6), `TreeMove` (3), `PeekDefinition` (3); `Inventory` (the five options); the API dumps
+  of Craft.Abstractions, Craft.Core and Craft.Editor and B3's contract list (lines added only). The full filter
+  (`EditorGroups|TreeMove|PeekDefinition|Shell|Inline|Editor|Surface|Paint|Keys|Settings|Layout|Ui|Experience|ApiGuard|Inventory`,
+  160 tests) after the rebase onto B8-B11 and piece 1b: 159 passed, `Paint.AWarmFrame...` failed (the decision above);
+  after the fix the Paint group: 11 passed.
+- **Left**: the kept layout is not reopened at start yet (session restore); dragging a tab out of the window; the groups'
+  splitters take no keys yet (s3's arrows on its panels' splitters); the peek cannot be edited in place.
+- **The owner's commands** (the app on the test project: Ctrl+\ on `Program.cs`, type in one group and see the other; Ctrl+K
+  Ctrl+\; Ctrl+1/2/3; drag a tab onto another group's right half and centre; drag the splitter between groups; Ctrl+Alt+Right;
+  View › Close the editor group with an edited file; drag a file onto a folder in the explorer, then Undo; Ctrl+drag to
+  copy; Alt+F12 on a type (Escape, Enter, a double click in the peek); only the focused editor's caret blinks):
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="EditorGroups|TreeMove|PeekDefinition|Shell|Inline|Editor|Surface|Paint|Keys|Settings|Layout|Ui|Experience|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
 
 ### X part 4
 - **Document symbols**: a default member `ILanguageSession.GetDocumentSymbolsAsync(snapshot, ct)` (none by default) and

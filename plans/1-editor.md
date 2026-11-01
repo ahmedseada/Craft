@@ -3610,9 +3610,9 @@ headless in `Craft.Editor.Shell`, the MAUI view only draws it.
   approved inline through a sandbox that asks, write_file) with a step opened and closed; the composer's chips, history,
   slash commands and mentions; expand and restore keep the rail, the side view and the widths; past conversations with
   Undo, read back; only visible lines laid out and 0 B a warm frame. Updated: `AiPlugins` (New chat keeps the old
-  conversation), `Inventory.OptionsReadEveryVariable` (the five options). After the rebase onto 2a and 3a, the filter
+  conversation), `Inventory.OptionsReadEveryVariable` (the five options). After the rebase onto 2a, 3a and X part 6, the filter
   `Conversation|AiPlugins|Ai.|ChatDrop|ModelsPage|ModelLoading|Settings|Keys|Layout|Shell|Ui|Experience|LookAndFeel|Paint|ApiGuard|Inventory|TheUiSideHasNoSynchronousWait`:
-  157 of 158 passed; the one left, `Paint.AWarmFrame…` (88 B in a few frames), fails only in a long run after the
+  159 of 160 passed; the one left, `Paint.AWarmFrame…` (88 B in a few frames), fails only in a long run after the
   `Shell|Ui|Experience` groups, also without this slot's group, and passes with `DOTNET_TieredCompilation=0` (rule 90
   step 3: unoptimized code's boxing, B1's earlier symptom; not this change's, left for the paint slot to trace). API
   dumps (`Craft.Abstractions`, its contract list, `Craft.Ai`, `Craft.Core`, `Craft.Editor`) regenerated, lines added only.

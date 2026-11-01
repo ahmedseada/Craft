@@ -3099,8 +3099,10 @@ Slot s3. Craft only: nothing was missing in Idrak (the outline, the index and th
   breadcrumb's folding and clicks, the '@' preview).
 - **Left**: renaming the file with its type (Roslyn's `RenameFile`), in comments and strings (off); the breadcrumb takes no
   keyboard focus yet (VS Code's Ctrl+Shift+.); other languages give no outline until they implement the member.
-- **The owner's commands** (Craft only; Idrak is unchanged):
+- **The owner's commands** (nothing of this piece is in Idrak, but Craft's `main` now builds against Idrak's interactive
+  sandbox start, 9e63a92, so Idrak is pulled first):
   ```powershell
+  cd D:\Projects\Idrak; git checkout main; git pull origin main
   cd D:\Projects\Craft; git checkout main; git pull origin main
   dotnet build -c Release tests\Craft.Tests
   $env:CRAFT_FILTER="DocSymbols|Inline|Breadcrumb|SymbolRename|Conversation|Semantic|CSharp|EditorGroups|Shell|Keys|Settings|Ui|Experience|ApiGuard|Inventory|PhaseP"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER

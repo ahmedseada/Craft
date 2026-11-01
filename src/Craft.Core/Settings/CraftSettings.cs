@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using Craft.Abstractions;
+
 namespace Craft.Core.Settings;
 
 /// <summary>Where a setting's value comes from, lowest first.</summary>
@@ -47,7 +49,8 @@ public sealed record SettingRow(CraftVariable Variable, string? Value, SettingSo
 /// neither <c>CRAFT_PLUGIN_FOLDERS</c> (code to load) nor <c>CRAFT_PLUGINS_DISABLED</c>, nor what the terminal runs
 /// (<c>CRAFT_TERMINAL_SHELL</c>, <c>CRAFT_TERMINAL_ARGS</c>, <c>CRAFT_TERMINAL_ENV</c>, <c>CRAFT_TERMINAL_HOST</c>,
 /// <c>CRAFT_TERMINAL_PROFILES</c>), nor where and how the Run view's commands run (<c>CRAFT_RUN_SANDBOX</c>,
-/// <c>CRAFT_RUN_APPROVAL</c>). <see cref="Read"/> is what
+/// <c>CRAFT_RUN_APPROVAL</c>), nor a plug-in's setting declared <see cref="PluginSetting.MachineOnly"/> (W: the npm
+/// plug-in's Node, the git program). <see cref="Read"/> is what
 /// <see cref="CraftOptions.FromVariables"/> and the plug-ins' settings read through. Used on the UI thread.
 /// </summary>
 public sealed class CraftSettings
@@ -102,8 +105,11 @@ public sealed class CraftSettings
     public static bool Allows(SettingLayer layer, string variable)
     {
         ArgumentNullException.ThrowIfNull(variable);
-        return layer == SettingLayer.User ? !EnvironmentOnly.Contains(variable) : !NotFromWorkspace.Contains(variable);
+        return layer == SettingLayer.User ? !EnvironmentOnly.Contains(variable) : !RefusedFromWorkspace(variable);
     }
+
+    /// <summary>Whether a workspace's file may not set <paramref name="variable"/>: Craft's own list, or a registered plug-in's machine-only setting.</summary>
+    private static bool RefusedFromWorkspace(string variable) => NotFromWorkspace.Contains(variable) || EditorPlugins.IsMachineOnly(variable);
 
     /// <summary><paramref name="variable"/>'s value in effect (the environment's, the workspace's, the user's), or null for its default.</summary>
     public string? Read(string variable) => Resolve(variable).Value;
@@ -247,6 +253,11 @@ public sealed class CraftSettings
             {
                 note = "A workspace cannot set it; the user's settings can.";
             }
+            else if (EditorPlugins.IsMachineOnly(variable.Name))
+            {
+                note = "This machine's only: the environment or the user's settings set it, a workspace's file cannot"
+                       + (Workspace?.Get(variable.Name) is not null ? " (its value there is passed over)." : ".");
+            }
 
             if (value is not null && Validate(variable.Name, value) is { } error)
             {
@@ -276,7 +287,7 @@ public sealed class CraftSettings
             return (set.Trim(), SettingSource.Environment);
         }
 
-        if (Workspace?.Get(variable) is { } workspace && !NotFromWorkspace.Contains(variable))
+        if (Workspace?.Get(variable) is { } workspace && !RefusedFromWorkspace(variable))
         {
             return (workspace, SettingSource.Workspace);
         }

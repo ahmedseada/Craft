@@ -122,7 +122,7 @@ public sealed partial class ShellModel
             }
             else
             {
-                tab = group.Tabs.Add(document, EditorLanguages.ForFile(full), activate: false);
+                tab = group.Tabs.Add(document, LanguageFor(full), activate: false);
             }
         }
 

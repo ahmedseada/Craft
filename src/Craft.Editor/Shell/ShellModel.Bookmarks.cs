@@ -281,6 +281,7 @@ public sealed partial class ShellModel
                 Badge = rows.Count.ToString(CultureInfo.InvariantCulture),
                 Glyph = icon.Badge,
                 GlyphArgb = icon.Argb,
+                FileIcon = icon,
                 Tooltip = path,
             });
         }

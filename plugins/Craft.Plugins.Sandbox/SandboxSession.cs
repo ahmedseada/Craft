@@ -133,15 +133,20 @@ internal sealed class SandboxSession : IDisposable
         }
 
         var (inner, line, remembered) = (approved.Inner!, approved.Line, approved.Remembered);
-        Append($"$ {line}{(remembered ? "    (allowed for this run)" : "")}");
+        bool agent = ForAgent(limits);
+        Append($"$ {line}{(remembered ? "    (allowed for this run)" : "")}{(agent ? "" : $"    (for {limits.Requester}; its output is in its own tab)")}");
         var clock = Stopwatch.StartNew();
         // Phase U: the command shows in the status bar with its last line and Cancel (which stops it as the agent's stop does).
-        using var activity = _host.Activities.Start("Sandbox: " + (line.Length <= 60 ? line : string.Concat(line.AsSpan(0, 59), "…")), ActivityKinds.Command, cancellable: true, cancellationToken);
-        var watched = limits with { Output = WithLive(limits.Output, activity) };
+        // W: a plug-in's command (another requester) is the plug-in's to show, its activity and its output tab its own, so
+        // the sandbox adds no second activity and keeps only the command and its end in its tab.
+        using var activity = agent
+            ? _host.Activities.Start("Sandbox: " + (line.Length <= 60 ? line : string.Concat(line.AsSpan(0, 59), "…")), ActivityKinds.Command, cancellable: true, cancellationToken)
+            : null;
+        var watched = activity is null ? limits : limits with { Output = WithLive(limits.Output, activity) };
         _status.Update("$ " + line + " · running");
         try
         {
-            var result = await inner.RunAsync(command, directory, watched, activity.CancellationToken).ConfigureAwait(false);
+            var result = await inner.RunAsync(command, directory, watched, activity?.CancellationToken ?? cancellationToken).ConfigureAwait(false);
             string outcome = result switch
             {
                 { Refused: true } => $"  refused by the {inner.Name} sandbox: {result.Output}",
@@ -151,7 +156,7 @@ internal sealed class SandboxSession : IDisposable
             };
             Append(outcome);
             _status.Update("$ " + line + " ·" + outcome, result.Succeeded ? NotificationSeverity.Success : NotificationSeverity.Warning);
-            activity.Complete(outcome.Trim());      // a non-zero exit is the agent's to read, not a failure that toasts
+            activity?.Complete(outcome.Trim());     // a non-zero exit is the agent's to read, not a failure that toasts
 
             return result;
         }
@@ -176,7 +181,7 @@ internal sealed class SandboxSession : IDisposable
         }
 
         string line = approved.Line;
-        Append($"$ {line}{(approved.Remembered ? "    (allowed for this run)" : "")}    (interactive: its input and output go to the caller)");
+        Append($"$ {line}{(approved.Remembered ? "    (allowed for this run)" : "")}    (interactive: its input and output go to {(ForAgent(limits) ? "the caller" : limits.Requester)})");
         var start = await approved.Inner!.StartAsync(command, directory, limits, cancellationToken).ConfigureAwait(false);
         if (start.Refusal is { } refused)
         {
@@ -264,7 +269,7 @@ internal sealed class SandboxSession : IDisposable
         if (answer == CommandApproval.Deny)
         {
             Append($"$ {line}");
-            Append("  denied by you; the agent was told.");
+            Append($"  denied by you; {limits.Requester} was told.");
             return (inner, line, remembered, $"The user denied this command ({line}). Do not run it again; ask the user, or do the task another way.");
         }
 
@@ -298,11 +303,15 @@ internal sealed class SandboxSession : IDisposable
             ? "the workspace"
             : Path.GetRelativePath(root, directory).Replace('\\', '/');
         string allowedPrograms = limits.Programs is { Count: > 0 } programs ? $" (allowed: {string.Join(", ", programs)})" : "";
-        var question = new EditorQuestion("The agent wants to run a command", line,
-            ["Allow once", $"Allow {program} for this run", "Deny and tell the agent"])
+        bool agent = ForAgent(limits);
+        // W (Idrak's CommandLimits.Requester and Purpose): the question names who asks and, when the command line does not
+        // say it plainly (an npm script run as node's command), what it runs.
+        var question = new EditorQuestion(Sentence(limits.Requester) + " wants to run a command", line,
+            ["Allow once", $"Allow {program} for this run", agent ? "Deny and tell the agent" : "Deny"])
         {
             Details =
             [
+                .. limits.Purpose is { Length: > 0 } purpose ? (string[])[$"Runs: {purpose}"] : [],
                 $"Program: {program}{allowedPrograms}",
                 $"Time limit: {ApproveEachSandbox.Seconds(limits.Time)}",
                 $"Network: {(limits.Network ? "on" : "off")}",
@@ -310,7 +319,8 @@ internal sealed class SandboxSession : IDisposable
                 $"Runs in: the {Settings.Inner} sandbox",
             ],
             Dismissed = 2,
-            Kind = EditorQuestionKinds.Command,   // X part 10: the agent's timeline shows it inline with Approve and Deny
+            // X part 10: the agent's timeline shows its command inline with Approve and Deny; another requester's is a dialog.
+            Kind = agent ? EditorQuestionKinds.Command : null,
         };
         var asked = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         _host.Dispatch(() =>
@@ -420,6 +430,18 @@ internal sealed class SandboxSession : IDisposable
         }
 
         _output.Append(text);
+    }
+
+    /// <summary>Whether the command is the agent's (Idrak's default <see cref="CommandLimits.Requester"/>), not a plug-in's.</summary>
+    internal static bool ForAgent(CommandLimits limits) => string.Equals(limits.Requester.Trim(), AgentRequester, StringComparison.OrdinalIgnoreCase);
+
+    private static readonly string AgentRequester = new CommandLimits().Requester;
+
+    /// <summary>The requester's words at a sentence's start ("the npm plug-in" → "The npm plug-in").</summary>
+    internal static string Sentence(string requester)
+    {
+        string words = requester.Trim();
+        return words.Length == 0 ? "A plug-in" : string.Concat(char.ToUpperInvariant(words[0]).ToString(), words.AsSpan(1));
     }
 
     // The command as a line the user reads: each word quoted when it holds a space or a quote.

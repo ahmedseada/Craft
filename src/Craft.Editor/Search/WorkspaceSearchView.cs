@@ -861,6 +861,7 @@ public sealed class WorkspaceSearchView : IEditorViewPanel, IDisposable
                 Badge = file.Hits.Count.ToString(Culture),
                 Glyph = icon.Badge,
                 GlyphArgb = icon.Argb,
+                FileIcon = icon,
                 Collapsed = collapsed,
                 ToggleActionId = ToggleAction,
                 Tooltip = file.Relative + (file.FromOpenDocument ? " (the open document's text)" : ""),

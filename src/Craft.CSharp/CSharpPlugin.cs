@@ -21,7 +21,7 @@ namespace Craft.CSharp;
 public sealed class CSharpPlugin() : IdrakPlugin("csharp")
 {
     /// <summary>What it brings.</summary>
-    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig, .json; the Run view's projects, solutions and launch profiles (run, build, test, publish with the .NET SDK)";
+    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig (JSON is its own plug-in since phase W); the Run view's projects, solutions and launch profiles (run, build, test, publish with the .NET SDK)";
 
     /// <inheritdoc />
     protected override void RegisterParts()
@@ -36,10 +36,9 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
             Part(() => EditorLanguages.Register(language), () => EditorLanguages.Unregister(language.Name));
         }
 
-        // Folding (phase X): C#'s from its syntax tree, the project languages' from their elements, objects and arrays.
+        // Folding (phase X): C#'s from its syntax tree, the project languages' from their elements and blocks.
         Part(() => FoldingRangeProviders.Register(new CSharpFolding()), () => FoldingRangeProviders.Unregister(CSharpFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new MarkupFolding()), () => FoldingRangeProviders.Unregister(MarkupFolding.ProviderName));
-        Part(() => FoldingRangeProviders.Register(new JsonFolding()), () => FoldingRangeProviders.Unregister(JsonFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new RazorFolding()), () => FoldingRangeProviders.Unregister(RazorFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new SolutionFolding()), () => FoldingRangeProviders.Unregister(SolutionFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new EditorConfigFolding()), () => FoldingRangeProviders.Unregister(EditorConfigFolding.ProviderName));

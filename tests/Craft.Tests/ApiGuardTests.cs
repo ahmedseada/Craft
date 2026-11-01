@@ -32,6 +32,15 @@ public static class ApiGuardTests
         Assembly.Load(new AssemblyName("Craft.Voice")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Learning")),
         Assembly.Load(new AssemblyName("Craft.Plugins.Git")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Json")),
+        Assembly.Load(new AssemblyName("Craft.Web")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Npm")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Css")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.JavaScript")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.TypeScript")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Html")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Angular")),
+        Assembly.Load(new AssemblyName("Craft.Plugins.Lint")),
     ];
 
     [Test]

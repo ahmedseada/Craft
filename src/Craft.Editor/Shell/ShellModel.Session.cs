@@ -101,7 +101,7 @@ public sealed partial class ShellModel
             }
             else
             {
-                tab = Tabs.AddPreview(document, EditorLanguages.ForFile(full));
+                tab = Tabs.AddPreview(document, LanguageFor(full));
             }
         }
 

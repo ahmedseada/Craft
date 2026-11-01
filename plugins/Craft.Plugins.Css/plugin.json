@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Css",
+  "version": "0.1.0",
+  "summary": "CSS, SCSS and LESS: colours of the latest syntax (nesting, @layer, @container, @scope, :has(), color-mix(), oklch(), anchor positioning), brackets, folding, Format document and selection, icons of .css, .scss, .sass and .less; .sass lexed as SCSS-like [EditorLanguages \"css\" \"scss\" \"less\", FoldingRangeProviders \"css\", EditorPlugins \"css\"]",
+  "contractVersion": "1.1",
+  "capabilities": []
+}

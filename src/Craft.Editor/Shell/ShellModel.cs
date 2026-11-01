@@ -358,6 +358,7 @@ public sealed partial class ShellModel : IDisposable
         _optionsSignature = Signature();
         Recent.Limit = Options.RecentLimit;
         Theme = ThemeOf(Options);
+        UseIconTheme(Options.IconTheme);
         Groups = new EditorGroups(host, Options.EditorGroupsMax) { CloseEmpty = Options.EditorGroupsCloseEmpty };
         Layout = new ShellLayout(Options);
         Pages = new PageTabs();
@@ -780,7 +781,50 @@ public sealed partial class ShellModel : IDisposable
         Layout.HasFolder = true;
         Branch = branch;
         WorkspaceChanged?.Invoke(this, EventArgs.Empty);
+        _ = PrepareLanguageSelectorsAsync(Workspace.Root);
         return true;
+    }
+
+    /// <summary>
+    /// The language of <paramref name="path"/> in the open workspace (W, contract 4): a language selector's answer for the
+    /// workspace first, else by its name (<see cref="EditorLanguages.ForFile(string, string?)"/>).
+    /// </summary>
+    public ILanguage? LanguageFor(string path) => EditorLanguages.ForFile(path, Workspace?.Root);
+
+    /// <summary>
+    /// Gives every open tab the language its file has now (<see cref="LanguageFor"/>): after the language selectors learned
+    /// the workspace, or a plug-in registered a language. Only a tab whose language changed is touched.
+    /// </summary>
+    public void RepickLanguages()
+    {
+        foreach (var tab in Groups.AllTabs.ToArray())
+        {
+            if (tab.FilePath is { } path && LanguageFor(path) is var language && !ReferenceEquals(language, tab.Language))
+            {
+                Groups.SetLanguage(tab, language);
+            }
+        }
+    }
+
+    // The language selectors read what they need of the folder off the UI thread (W, contract 4); the open tabs take
+    // their languages again when they did, if the folder is still the one open.
+    private async Task PrepareLanguageSelectorsAsync(string root)
+    {
+        if (LanguageSelectors.All.Count == 0)
+        {
+            return;
+        }
+
+        var problems = await Task.Run(() => LanguageSelectors.PrepareAsync(root)).ConfigureAwait(true);
+        foreach (var problem in problems)
+        {
+            Host.Log(EditorLogLevel.Warning, $"A language selector could not read the folder: {problem}.");
+        }
+
+        if (Workspace is { } open && PathKeys.Comparer.Equals(open.Root, root))
+        {
+            RepickLanguages();
+        }
     }
 
     /// <summary>Closes the workspace folder (its settings no longer apply; the tabs stay open).</summary>
@@ -846,7 +890,7 @@ public sealed partial class ShellModel : IDisposable
             }
             else
             {
-                tab = Tabs.Add(document, EditorLanguages.ForFile(full), activate: false);
+                tab = Tabs.Add(document, LanguageFor(full), activate: false);
             }
         }
 
@@ -870,7 +914,7 @@ public sealed partial class ShellModel : IDisposable
     public DocumentTab NewFile(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return Tabs.AddFor(TextDocument.Create("", Options), path, EditorLanguages.ForFile(path));
+        return Tabs.AddFor(TextDocument.Create("", Options), path, LanguageFor(path));
     }
 
     /// <summary>
@@ -926,7 +970,7 @@ public sealed partial class ShellModel : IDisposable
             return false;
         }
 
-        var language = EditorLanguages.ForFile(path);
+        var language = LanguageFor(path);
         if (!ReferenceEquals(language, tab.Language))
         {
             Groups.SetLanguage(tab, language);
@@ -1141,6 +1185,7 @@ public sealed partial class ShellModel : IDisposable
         _optionsSignature = signature;
         bool themeChanged = !string.Equals(options.Theme, Options.Theme, StringComparison.OrdinalIgnoreCase) || options.Accent != Options.Accent;
         bool monitorChanged = !string.Equals(options.MemoryMonitor, Options.MemoryMonitor, StringComparison.OrdinalIgnoreCase);
+        bool iconsChanged = UseIconTheme(options.IconTheme);
         Options = options;
         if (monitorChanged)
         {
@@ -1159,6 +1204,25 @@ public sealed partial class ShellModel : IDisposable
         {
             SetTheme(ThemeOf(options));
         }
+        else if (iconsChanged)
+        {
+            ThemeChanged?.Invoke(this, EventArgs.Empty);      // every view draws its icons again
+        }
+    }
+
+    // W: CRAFT_ICON_THEME picks the icon theme in use; a name no plug-in registered keeps Craft's own, said in the log.
+    // True when the theme in use changed.
+    private bool UseIconTheme(string name)
+    {
+        var before = FileIconThemes.Current;
+        if (FileIconThemes.Find(name) is null)
+        {
+            Host.Log(EditorLogLevel.Warning, $"CRAFT_ICON_THEME: the icon theme '{name}' is not registered (registered: {string.Join(", ", FileIconThemes.Names)}); Craft's own is used.");
+            name = FileIconThemes.Craft;
+        }
+
+        FileIconThemes.Use(name);
+        return !string.Equals(before, FileIconThemes.Current, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Switches between the light and the dark theme for this run.</summary>
@@ -1274,7 +1338,7 @@ public sealed partial class ShellModel : IDisposable
             FileSettingsChanged?.Invoke(this, new FileSettingsChangedEventArgs(path));
         }
 
-        if (Groups.AllTabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && EditorLanguages.ForFile(path) is var language && !ReferenceEquals(language, tab.Language))
+        if (Groups.AllTabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && LanguageFor(path) is var language && !ReferenceEquals(language, tab.Language))
         {
             Groups.SetLanguage(tab, language);
         }
@@ -1363,10 +1427,11 @@ public sealed partial class ShellModel : IDisposable
 
     private async Task<bool> WriteAsync(DocumentTab tab, string? path, CancellationToken cancellationToken)
     {
-        if (Options.FormatOnSave && EditorOf?.Invoke(tab) is { FormattingSession: not null } editor)
+        if (Options.FormatOnSave && EditorOf?.Invoke(tab) is { CanFormat: true } editor)
         {
             // Off the UI thread, applied on it as one undo step; a malformed file is saved as it is (the format says why).
-            await editor.FormatDocumentAsync(cancellationToken);
+            // W: the project's own formatter (Prettier) first when it applies, told the run is automatic.
+            await editor.FormatDocumentAsync(automatic: true, cancellationToken);
         }
 
         // X part 9: the trailing white space and the final newline (the file's .editorconfig over the options), a new file's charset.

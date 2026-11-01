@@ -715,11 +715,7 @@ public sealed partial class PanelBlocksView : ContentView
             MinimumHeightRequest = 26,
         };
         // The file's type icon, as the tree and quick open show it (FileIcons: a plug-in's types too).
-        var icon = FileIcons.For(row.Name);
-        var badge = p.Label(icon.Badge, ThemeColors.Of(icon.Argb), p.CaptionSize, FontWeight.SemiBold);
-        badge.HorizontalTextAlignment = TextAlignment.Center;
-        badge.VerticalTextAlignment = TextAlignment.Center;
-        grid.Add(badge, 0, 0);
+        grid.Add(FileIconView.Of(FileIcons.For(row.Name), p, 16), 0, 0);
         var tone = ToneColor(row.Tone, p.Text);
         var names = new HorizontalStackLayout { Spacing = 6, VerticalOptions = LayoutOptions.Center };
         var name = p.Label(row.Name, tone, p.SmallSize);

@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\src\Craft.Core\Craft.Core.csproj" />
     <ProjectReference Include="..\..\src\Craft.Editor\Craft.Editor.csproj" />
     <ProjectReference Include="..\..\src\Craft.CSharp\Craft.CSharp.csproj" />
+    <ProjectReference Include="..\..\src\Craft.Web\Craft.Web.csproj" />
     <ProjectReference Include="..\..\src\Craft.Ai\Craft.Ai.csproj" />
     <!-- Built, not referenced: the one test build also compiles the MAUI views (net10.0), so a change or a merge that breaks
          them fails here, not first on the owner's app build. -->
@@ -33,6 +34,16 @@
     <!-- Phase R's learning plug-in (group Learning): referenced for its API dump and its tests; also loaded from a copy of its output. -->
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Learning\Craft.Plugins.Learning.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Git\Craft.Plugins.Git.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Json\Craft.Plugins.Json.csproj" />
+    <!-- Phase W's npm plug-in (group WebNpm): its API dump and its tests; also loaded from a copy of its output. -->
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Npm\Craft.Plugins.Npm.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Css\Craft.Plugins.Css.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.JavaScript\Craft.Plugins.JavaScript.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.TypeScript\Craft.Plugins.TypeScript.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Html\Craft.Plugins.Html.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Angular\Craft.Plugins.Angular.csproj" />
+    <!-- Phase W's lint plug-in (group WebLint): its API dump and its tests; also loaded from a copy of its output. -->
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Lint\Craft.Plugins.Lint.csproj" />
     <!-- Idrak's conformance suites (FillInMiddleFormatSuite, TokenSamplerSuite, TextMatcherSuite) for the plug-ins of phase P. -->
     <PackageReference Include="Idrak.Abstraction.Testing" Version="$(IdrakVersion)" />
     <!-- The sample plug-in (PluginKit group): built first, never referenced; the tests copy its output folder into a

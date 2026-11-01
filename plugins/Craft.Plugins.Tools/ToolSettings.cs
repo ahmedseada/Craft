@@ -38,6 +38,12 @@ public sealed record ToolSettings
     /// <summary>The folder the folder backing serves (<c>toolsFolder</c>); empty for the current folder.</summary>
     public string ToolsFolder { get; init; } = "";
 
+    /// <summary>
+    /// Whether a change the user accepted through <c>propose_edit</c> is saved to the workspace at once (<c>saveOnAccept</c>,
+    /// on): a new file is created, an existing one saved unless it held unsaved edits of the user's before the diff (B6).
+    /// </summary>
+    public bool SaveOnAccept { get; init; } = true;
+
     /// <summary>The settings the plug-in declares, with their defaults and meanings (the settings page lists them).</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
@@ -48,6 +54,7 @@ public sealed record ToolSettings
         new("ignore", "bin;obj;.git;.vs;node_modules;test-output", "Folder names the editor's tools skip (';' or ',' between them)."),
         new("patchFolder", Path.Combine(".craft", "patches"), "Where the folder backing (outside the app) writes a proposed edit as a patch, relative to its folder."),
         new("toolsFolder", "", "The folder the editor's tools serve outside the app (idrak tools test, idrak mcp serve); empty: the current folder."),
+        new("saveOnAccept", "true", "Save a change you accepted through propose_edit to the workspace at once (a new file is created; never over your own unsaved edits)."),
     ];
 
     /// <summary>The settings from the environment (a process outside the app).</summary>
@@ -88,6 +95,10 @@ public sealed record ToolSettings
         return new ToolSettings
         {
             ReadLines = Whole("readLines", defaults.ReadLines, 1, 1_000_000),
+            SaveOnAccept = Text("saveOnAccept") is not { } save ? defaults.SaveOnAccept
+                : save.ToLowerInvariant() is "true" or "on" or "1" or "yes" ? true
+                : save.ToLowerInvariant() is "false" or "off" or "0" or "no" ? false
+                : throw new ArgumentException($"{PluginSetting.VariableName(PluginName, "saveOnAccept")} is '{save}': it takes true or false.", "saveOnAccept"),
             SearchResults = Whole("searchResults", defaults.SearchResults, 1, 1_000_000),
             SymbolResults = Whole("symbolResults", defaults.SymbolResults, 1, 100_000),
             SearchFileKilobytes = Whole("searchFileKb", defaults.SearchFileKilobytes, 1, 1_048_576),

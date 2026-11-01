@@ -55,7 +55,10 @@ public enum KeyModifiers
     Alt = 4,
 }
 
-/// <summary>The keys the editor handles as commands; text itself arrives through <see cref="IEditorInputSink.OnText"/>.</summary>
+/// <summary>
+/// The keys the editor handles as commands; text itself arrives through <see cref="IEditorInputSink.OnText"/>. Each
+/// value is part of the plug-in contract (a plug-in's compiled binding holds the number): a new key is added at the end.
+/// </summary>
 public enum EditorKey
 {
     /// <summary>A key the editor does not handle.</summary>
@@ -105,9 +108,6 @@ public enum EditorKey
 
     /// <summary>F3 (find next).</summary>
     F3,
-
-    /// <summary>Space, as a key only with a modifier (Ctrl+Space asks for completion); typed, it arrives as text.</summary>
-    Space,
 
     /// <summary>A (select all with Control).</summary>
     A,
@@ -257,6 +257,13 @@ public enum EditorKey
 
     /// <summary>The comma key of the main keyboard.</summary>
     Comma,
+
+    // B3 (2026-11-01): Space was added before A, which moved every letter, digit and function key one up, so a plug-in
+    // built against contract 1.0 bound other keys (the sample's Ctrl+Shift+W read as Ctrl+Shift+U). A key's value is part
+    // of the contract: the 1.0 values are back, and a new key goes only at the end (the API guard's contract check).
+
+    /// <summary>Space, as a key only with a modifier (Ctrl+Space asks for completion); typed, it arrives as text.</summary>
+    Space,
 
     // Phase T: the backquote, for the terminal's Ctrl+` and Ctrl+Shift+` (added at the end, so the values above keep theirs).
 

@@ -148,6 +148,46 @@ public static class AiTests
         Check.True(open.Document == document, "the same document");
     }
 
+    /// <summary>
+    /// B6 over MCP: propose_edit could change only an open document, so an agent over the app's MCP tools made no file.
+    /// Now a file of the open folder is opened for the diff, a path with no file yet (an empty old_text) is a new document
+    /// there, and an accepted change is saved: the new file created, the existing one written (a folder path with spaces).
+    /// A path outside the folder is refused.
+    /// </summary>
+    [Test]
+    public static async Task ProposeEditOverMcpCreatesANewFileAndSavesAFolderFileOnAccept()
+    {
+        string root = TestRunner.RepositoryPath("test-output", "tmp", "b6 mcp " + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(Path.Combine(root, "src"));
+        await File.WriteAllTextAsync(Path.Combine(root, "src", "Old.cs"), "class Old\n{\n}\n");
+        try
+        {
+            var presenter = new DiffPresenter();
+            using var host = new EditorHost(presenter: presenter) { WorkspaceFolder = root };
+            host.OpenFile = async (path, token) => File.Exists(path) ? host.Open(await TextDocument.OpenAsync(path, cancellationToken: token), null) : host.Open(TextDocument.Create(""), null);
+            var tools = ToolRegistry.Create().Add(EditorTools.Live(host, new ToolSettings())).Build();
+            var model = FakeChatModel.Script(
+                FakeChatModel.ToolCall(EditorToolNames.ProposeEdit, new JsonObject { ["path"] = "src/House Model.cs", ["old_text"] = "", ["new_text"] = "class House { }\n", ["title"] = "Add House" }),
+                FakeChatModel.ToolCall(EditorToolNames.ProposeEdit, new JsonObject { ["path"] = "src/Old.cs", ["old_text"] = "{\n}", ["new_text"] = "{\n    int x;\n}" }),
+                FakeChatModel.ToolCall(EditorToolNames.ProposeEdit, new JsonObject { ["path"] = "../outside.cs", ["old_text"] = "", ["new_text"] = "x" }),
+                FakeChatModel.Answer("Done."));
+            var reply = await model.WithTools(tools, 6).ChatAsync(new ChatRequest([new ChatMessage("user", "Add a House class and a field to Old.")]));
+
+            Check.Equal("Done.", reply.Message!.Content, "the model answered after its tool calls");
+            Check.Equal("class House { }\n", await File.ReadAllTextAsync(Path.Combine(root, "src", "House Model.cs")), "the new file is created in the workspace on accept");
+            Check.Equal("class Old\n{\n    int x;\n}\n", await File.ReadAllTextAsync(Path.Combine(root, "src", "Old.cs")), "the folder's file, not open before, is opened, changed and saved");
+            Check.True(model.Requests[1].Messages[^1].Content.Contains("is created in the workspace", StringComparison.Ordinal), $"the model is told the file was created ({model.Requests[1].Messages[^1].Content})");
+            Check.True(model.Requests[2].Messages[^1].Content.Contains("and saved", StringComparison.Ordinal), $"the model is told the file was saved ({model.Requests[2].Messages[^1].Content})");
+            Check.True(model.Requests[3].Messages[^1].Content.Contains("inside the open folder", StringComparison.Ordinal) && !File.Exists(Path.Combine(root, "..", "outside.cs")),
+                $"a path outside the folder is refused ({model.Requests[3].Messages[^1].Content})");
+            Check.True(presenter.Proposals.Count == 2, "each change went through the diff the user accepts (no silent edit)");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Test]
     public static async Task TheUserAcceptsSomeHunksOnly()
     {
@@ -313,6 +353,8 @@ public static class AiTests
             ["chatEnabled"] = "false", ["chatTemperature"] = "0.3", ["completionDevice"] = "cpu", ["completionWeights"] = "int4", ["completionContext"] = "1024",
             ["completionKeepAliveMinutes"] = "2", ["agentEnabled"] = "false", ["agentModel"] = "store:agent", ["agentDevice"] = "vulkan:0", ["agentWeights"] = "bfloat16",
             ["agentContext"] = "8192", ["agentKeepAliveMinutes"] = "3", ["agentTemperature"] = "0.1",
+            // B6: the agent's written files left out, and an accepted change saved.
+            ["agentChangesIgnore"] = "obj;out", ["agentSaveOnAccept"] = "false",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -325,7 +367,7 @@ public static class AiTests
             CompletionSuffixCharacters: 128, CompletionPrefixCharacters: 4000, CompletionChunk: 2, ChatMaxTokens: 300, ChatToolRounds: 2, ChatKeep: false,
             ChatFile: "c.json", ChatHistory: 10, ChatFileLines: 50, Placement: "csharp-tokens", PlacementMaxError: 0.1, AgentSandbox: "container", AgentMaxTurns: 5, AgentMinutes: 3,
             AgentMaxTokens: 500, AgentFolder: "/copies", CompletionLoad: false, LoadOnStart: true,
-        } && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && settings.ChatStops.SequenceEqual(["END", "<x;y>"]) && settings.AgentStops.SequenceEqual(["DONE"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
+        } && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && settings.AgentChangesIgnore.SequenceEqual(["obj", "out"]) && !settings.AgentSaveOnAccept && settings.ChatStops.SequenceEqual(["END", "<x;y>"]) && settings.AgentStops.SequenceEqual(["DONE"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
             "each value is read");
         Check.True(settings is
         {

@@ -31,6 +31,8 @@ public sealed class AgentWorkspace : IDisposable
 {
     private readonly Dictionary<string, string> _base = new(StringComparer.Ordinal);
     private readonly HashSet<string> _settled = new(StringComparer.Ordinal);
+    // Each copied file's length and time as the copy was made (relative to the copy): a file a command wrote is found by them.
+    private readonly Dictionary<string, (long Length, DateTime Written)> _stamps = new(StringComparer.Ordinal);
 
     private AgentWorkspace(string workspace, string copy, int files)
     {
@@ -64,6 +66,7 @@ public sealed class AgentWorkspace : IDisposable
         string copy = System.IO.Path.Combine(root, string.Concat(name, "-", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture), "-",
             Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8]));
         var skip = new HashSet<string>(ignore, StringComparer.OrdinalIgnoreCase);
+        var stamps = new Dictionary<string, (long Length, DateTime Written)>(StringComparer.Ordinal);
         int files = 0;
         var pending = new Stack<string>();
         pending.Push(workspace);
@@ -75,7 +78,10 @@ public sealed class AgentWorkspace : IDisposable
             Directory.CreateDirectory(to);
             foreach (var file in Directory.EnumerateFiles(from))
             {
-                File.Copy(file, System.IO.Path.Combine(to, System.IO.Path.GetFileName(file)));
+                string target = System.IO.Path.Combine(to, System.IO.Path.GetFileName(file));
+                File.Copy(file, target);
+                var info = new FileInfo(target);
+                stamps[System.IO.Path.GetRelativePath(copy, target)] = (info.Length, info.LastWriteTimeUtc);
                 if (++files % 200 == 0)
                 {
                     copied?.Invoke(files);
@@ -94,6 +100,11 @@ public sealed class AgentWorkspace : IDisposable
         }
 
         var created = new AgentWorkspace(workspace, copy, files);
+        foreach (var (relative, stamp) in stamps)
+        {
+            created._stamps[relative] = stamp;
+        }
+
         foreach (var (path, text) in unsaved)
         {
             if (created.CopyOf(path) is { } target)
@@ -101,6 +112,8 @@ public sealed class AgentWorkspace : IDisposable
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
                 File.WriteAllText(target, text);
                 created._base[System.IO.Path.GetFullPath(path)] = text;
+                var info = new FileInfo(target);
+                created._stamps[System.IO.Path.GetRelativePath(copy, target)] = (info.Length, info.LastWriteTimeUtc);
             }
         }
 
@@ -113,6 +126,72 @@ public sealed class AgentWorkspace : IDisposable
         string full = System.IO.Path.GetFullPath(path);
         string relative = System.IO.Path.GetRelativePath(Workspace, full);
         return relative.StartsWith("..", StringComparison.Ordinal) || System.IO.Path.IsPathRooted(relative) ? null : System.IO.Path.Combine(Copy, relative);
+    }
+
+    /// <summary>
+    /// The path a tool of the agent named (<paramref name="path"/>, as the model wrote it: relative to the copy, with "./",
+    /// either slash, spaces around it, or the copy's own full path), relative to the copy, or null when it is outside
+    /// the copy. Read as Idrak's <c>CodingTools</c> reads it (B6: an absolute or padded path was mapped to no file, so the
+    /// file the tool wrote was never listed, never reviewed and never reached the workspace).
+    /// </summary>
+    public string? ToolRelative(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string full;
+        try
+        {
+            full = System.IO.Path.GetFullPath(System.IO.Path.Combine(Copy, path.Trim()));
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+
+        string relative = System.IO.Path.GetRelativePath(Copy, full);
+        return relative == "." || relative.StartsWith("..", StringComparison.Ordinal) || System.IO.Path.IsPathRooted(relative) ? null : relative;
+    }
+
+    /// <summary>
+    /// The files of the copy written since it was made (new, or another length or time), relative to it, outside the
+    /// folders named in <paramref name="ignore"/> (build output: bin, obj): what a command wrote (a <c>dotnet new</c>, a
+    /// formatter) as well as the tools (B6: a file a command made was never listed). Reads only the folder's entries.
+    /// </summary>
+    public IReadOnlyList<string> WrittenFiles(IReadOnlyList<string> ignore)
+    {
+        ArgumentNullException.ThrowIfNull(ignore);
+        var skip = new HashSet<string>(ignore, StringComparer.OrdinalIgnoreCase);
+        var written = new List<string>();
+        if (!Directory.Exists(Copy))
+        {
+            return written;
+        }
+
+        var pending = new Stack<string>();
+        pending.Push(Copy);
+        while (pending.Count > 0)
+        {
+            string folder = pending.Pop();
+            foreach (var file in Directory.EnumerateFiles(folder))
+            {
+                string relative = System.IO.Path.GetRelativePath(Copy, file);
+                var info = new FileInfo(file);
+                if (!_stamps.TryGetValue(relative, out var stamp) || stamp.Length != info.Length || stamp.Written != info.LastWriteTimeUtc)
+                {
+                    written.Add(relative);
+                }
+            }
+
+            foreach (var directory in Directory.EnumerateDirectories(folder))
+            {
+                if (!skip.Contains(System.IO.Path.GetFileName(directory)) && (File.GetAttributes(directory) & FileAttributes.ReparsePoint) == 0)
+                {
+                    pending.Push(directory);
+                }
+            }
+        }
+
+        written.Sort(StringComparer.Ordinal);
+        return written;
     }
 
     /// <summary>The workspace file of the copy's <paramref name="relative"/> path (as the agent's tools name it).</summary>

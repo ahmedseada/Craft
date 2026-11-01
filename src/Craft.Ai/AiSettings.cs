@@ -220,6 +220,18 @@ public sealed record AiSettings
     /// <summary>The folder names the agent's working copy leaves out (<c>agentCopyIgnore</c>; obj stays, so a restore is not needed).</summary>
     public IReadOnlyList<string> AgentCopyIgnore { get; init; } = ["bin", ".git", ".vs", "node_modules", "test-output"];
 
+    /// <summary>
+    /// The folder names whose files the agent's changes leave out when they are found by the files written (<c>agentChangesIgnore</c>:
+    /// build output a command wrote, never a change to review).
+    /// </summary>
+    public IReadOnlyList<string> AgentChangesIgnore { get; init; } = ["bin", "obj", ".git", ".vs", "node_modules", "test-output"];
+
+    /// <summary>
+    /// Whether an existing file's accepted agent change is saved to the workspace at once (<c>agentSaveOnAccept</c>, on);
+    /// never when the editor held unsaved edits of the user's before the diff. A new file accepted whole is always created.
+    /// </summary>
+    public bool AgentSaveOnAccept { get; init; } = true;
+
     /// <summary>The chat's model settings, resolved (note 25).</summary>
     public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens);
 
@@ -322,6 +334,8 @@ public sealed record AiSettings
         new("agentStops", "", "Texts that end an agent turn beside the template's own end of turn ('|' between them); empty: none."),
         new("agentFolder", "", "Where the agent's working copies go; empty: the temporary folder."),
         new("agentCopyIgnore", "bin;.git;.vs;node_modules;test-output", "Folder names the agent's working copy leaves out (';' or ',' between them)."),
+        new("agentChangesIgnore", "bin;obj;.git;.vs;node_modules;test-output", "Folder names whose files written by the agent's commands are not listed as changes (build output)."),
+        new("agentSaveOnAccept", "true", "Save an existing file's accepted agent change to the workspace at once (never over your own unsaved edits)."),
     ];
 
     /// <summary>The settings from the environment (a process outside the app).</summary>
@@ -439,6 +453,8 @@ public sealed record AiSettings
             AgentStops = Stops("agentStops"),
             AgentFolder = Text("agentFolder") ?? "",
             AgentCopyIgnore = List("agentCopyIgnore", defaults.AgentCopyIgnore),
+            AgentChangesIgnore = List("agentChangesIgnore", defaults.AgentChangesIgnore),
+            AgentSaveOnAccept = Flag("agentSaveOnAccept", defaults.AgentSaveOnAccept),
         };
     }
 }

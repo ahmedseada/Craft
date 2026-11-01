@@ -67,7 +67,7 @@ public static class EditorTools
 
     private static readonly JsonNode ProposeArguments = Schema("""
         {"type":"object","properties":{
-          "path":{"type":"string","description":"The document to change: its path, or 'untitled-N'."},
+          "path":{"type":"string","description":"The document to change: its path (relative to the folder, or full; a path with no file yet creates it), or 'untitled-N'."},
           "old_text":{"type":"string","description":"The exact text to replace; it must occur once. Empty inserts new_text at the start of 'line' (or at the end)."},
           "new_text":{"type":"string","description":"The text that takes its place."},
           "line":{"type":"integer","description":"For an insertion (empty old_text): the line it goes before, from 1."},
@@ -106,7 +106,7 @@ public static class EditorTools
             Tool.Create(EditorToolNames.SearchWorkspace, "Lines holding a text, in the open documents and the open folder's files: path:line: text.", SearchArguments, live.SearchAsync),
             Tool.Create(EditorToolNames.FindSymbol, "Where types and members are declared, by name: path:line:column: kind name — signature. The open documents' unsaved text included.",
                 SymbolArguments, live.FindSymbolAsync),
-            Tool.Create(EditorToolNames.ProposeEdit, "Proposes a change to an open document. The user sees it as a diff and accepts or rejects it; nothing changes without them. Answers whether it was applied.",
+            Tool.Create(EditorToolNames.ProposeEdit, "Proposes a change to a document: an open one, a file of the open folder (opened for it), or a new file (an empty old_text and its whole text). The user sees it as a diff and accepts or rejects it; nothing changes without them, and an accepted change is saved. Answers whether it was applied.",
                 ProposeArguments, live.ProposeAsync),
         ];
     }

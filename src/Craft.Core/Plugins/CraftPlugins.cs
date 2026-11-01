@@ -293,10 +293,50 @@ public static class CraftPlugins
         }
     }
 
-    private static PluginLoadResult Failed(string name, string folder, Exception error)
+    private static PluginLoadResult Failed(string name, string folder, Exception error) => new(name, folder, false, Describe(error));
+
+    /// <summary>
+    /// A plug-in's load failure as the Plug-ins page says it: the cause under the wrappers (a reflection call's, a type
+    /// initializer's, a single-error aggregate's), its type and message, where it was thrown when a type initializer
+    /// wrapped it, and, for a member or type the plug-in calls that this Craft lacks, that it was built against another
+    /// contract (B3: the page said only "TypeInitializationException: The type initializer for … threw an exception").
+    /// </summary>
+    public static string Describe(Exception error)
     {
-        var inner = error is TargetInvocationException { InnerException: { } cause } ? cause : error;
-        return new PluginLoadResult(name, folder, false, $"{inner.GetType().Name}: {inner.Message}");
+        ArgumentNullException.ThrowIfNull(error);
+        string? initializer = null;
+        var cause = error;
+        while (true)
+        {
+            switch (cause)
+            {
+                case TargetInvocationException { InnerException: { } inner }:
+                    cause = inner;
+                    continue;
+                case TypeInitializationException { InnerException: { } inner } wrapper:
+                    initializer ??= wrapper.TypeName;
+                    cause = inner;
+                    continue;
+                case AggregateException { InnerExceptions.Count: 1 } aggregate:
+                    cause = aggregate.InnerExceptions[0];
+                    continue;
+            }
+
+            break;
+        }
+
+        string text = $"{cause.GetType().Name}: {cause.Message}";
+        if (initializer is not null)
+        {
+            text += $" (in the type initializer of {initializer})";
+        }
+
+        if (cause is MissingMemberException or TypeLoadException)
+        {
+            text += $"; the plug-in calls something this Craft (contract {CraftContracts.Version.ToString(2)}) does not have: rebuild it against this Craft's Craft.Abstractions";
+        }
+
+        return text;
     }
 
     /// <summary>

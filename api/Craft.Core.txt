@@ -339,6 +339,7 @@ static class Craft.Core.Plugins.CraftPlugins
   static System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> SharedIdrakLibraries { get; }
   static System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> Installed { get; }
   static System.Collections.Generic.IReadOnlyList<Craft.Core.Plugins.PluginLoadResult> LoadInstalled(Craft.Core.CraftOptions options)
+  static System.String Describe(System.Exception error)
   static System.String InstalledFolder { get; }
 sealed class Craft.Core.Plugins.PluginLoadResult : System.IEquatable<Craft.Core.Plugins.PluginLoadResult>
   Craft.Core.Plugins.PluginLoadResult <Clone>$()

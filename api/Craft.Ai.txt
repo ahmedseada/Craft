@@ -14,11 +14,13 @@ sealed class Craft.Ai.AgentChange : System.IEquatable<Craft.Ai.AgentChange>
   ctor(System.String Path, System.String Relative, System.Boolean IsNew, System.Int32 Added, System.Int32 Removed)
 sealed class Craft.Ai.AgentWorkspace : System.IDisposable
   Craft.Ai.AgentChange ChangeOf(System.String relative)
+  System.Collections.Generic.IReadOnlyList<System.String> WrittenFiles(System.Collections.Generic.IReadOnlyList<System.String> ignore)
   System.Int32 Files { get; }
   System.String BaseText(System.String path)
   System.String Copy { get; }
   System.String CopyOf(System.String path)
   System.String NewText(System.String path)
+  System.String ToolRelative(System.String path)
   System.String Workspace { get; }
   System.String WorkspacePath(System.String relative)
   System.Void Discard()
@@ -43,6 +45,7 @@ sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstracti
   System.Void Stop()
   const System.String PanelId = ai.agent
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
+  static System.Threading.Tasks.Task DiscardsDone()
 sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, System.IDisposable
   Craft.Abstractions.ConversationEntry CodeEntry(System.String code, System.String language)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelAction> HeaderActions { get; }
@@ -192,6 +195,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   Craft.Ai.AiRoleSettings RoleOf(System.String key)
   Craft.Ai.AiSettings <Clone>$()
   System.Boolean AgentEnabled { get; init; }
+  System.Boolean AgentSaveOnAccept { get; init; }
   System.Boolean ChatEnabled { get; init; }
   System.Boolean ChatKeep { get; init; }
   System.Boolean Completion { get; init; }
@@ -200,6 +204,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Boolean Equals(System.Object obj)
   System.Boolean LoadOnStart { get; init; }
   System.Boolean McpOnStart { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> AgentChangesIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentCopyIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentStops { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> ChatStops { get; init; }

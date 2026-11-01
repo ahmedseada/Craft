@@ -105,7 +105,8 @@ internal static class PluginProbe
     /// <summary>The probe's lines for the plug-ins under <paramref name="root"/> (<see cref="RunInstalled"/>), from a fresh run of this test program.</summary>
     public static IReadOnlyList<string> RunInstalledInFreshProcess(string root) => RunInFreshProcess("--probe-installed", root);
 
-    private static List<string> RunInFreshProcess(string mode, string folder)
+    /// <summary>The lines of a fresh run of this test program with <paramref name="mode"/> and <paramref name="arguments"/> (a probe of its own).</summary>
+    public static List<string> RunInFreshProcess(string mode, params string[] arguments)
     {
         var program = Environment.ProcessPath!;
         var start = new ProcessStartInfo(program) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
@@ -115,7 +116,11 @@ internal static class PluginProbe
         }
 
         start.ArgumentList.Add(mode);
-        start.ArgumentList.Add(folder);
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
         using var process = Process.Start(start)!;
         var error = process.StandardError.ReadToEndAsync();
         var output = process.StandardOutput.ReadToEnd();

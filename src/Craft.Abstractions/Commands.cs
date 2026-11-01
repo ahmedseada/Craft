@@ -342,8 +342,31 @@ public enum KeyContext
 /// <param name="When">Where it answers (<see cref="KeyContext.Anywhere"/> by default).</param>
 public sealed record KeyBinding(KeyChord Chord, string CommandId, bool OverridesEditor = false, KeyChord? Then = null, KeyContext When = KeyContext.Anywhere) : IKind
 {
+    /// <summary>
+    /// A one-key binding anywhere, as contract 1.0 made it (kept beside the record's own constructor, so a plug-in built
+    /// against 1.0 still loads: B3, the sample's binding failed with a missing constructor).
+    /// </summary>
+    /// <param name="Chord">The chord.</param>
+    /// <param name="CommandId">The command it runs.</param>
+    /// <param name="OverridesEditor">Whether it runs before the editor's own handling of the chord.</param>
+    public KeyBinding(KeyChord Chord, string CommandId, bool OverridesEditor)
+        : this(Chord, CommandId, OverridesEditor, null, KeyContext.Anywhere)
+    {
+    }
+
     /// <summary>The longest text a binding's keys are written as.</summary>
     public const int MaxKeysLength = (KeyChord.MaxLength * 2) + 1;
+
+    /// <summary>The chord, the command and whether it overrides the editor, as contract 1.0 deconstructed a binding.</summary>
+    /// <param name="Chord">The chord.</param>
+    /// <param name="CommandId">The command it runs.</param>
+    /// <param name="OverridesEditor">Whether it runs before the editor's own handling of the chord.</param>
+    public void Deconstruct(out KeyChord Chord, out string CommandId, out bool OverridesEditor)
+    {
+        Chord = this.Chord;
+        CommandId = this.CommandId;
+        OverridesEditor = this.OverridesEditor;
+    }
 
     /// <summary>The keys' text: the chord's, and the second chord's after a space.</summary>
     public string Name { get; } = Then is { } then ? string.Concat(Chord.ToString(), " ", then.ToString()) : Chord.ToString();

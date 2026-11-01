@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Runtime.Loader;
+using Craft.Abstractions;
 using Idrak.Abstraction.Plugins;
 using Idrak.Reinforcement.Plugins.CSharp;
 
@@ -68,6 +69,21 @@ internal static class LearningLibraries
                 s_registeredCSharp = true;
             }
         }
+    }
+
+    /// <summary>
+    /// Registers the model families' Idrak plug-in packages (<paramref name="packages"/>: the AI plug-in's
+    /// <c>idrakPlugins</c>, Idrak.Text.Plugins by default) before the trainer loads a model, through the path Craft.Ai's
+    /// own load takes (<see cref="IdrakInPlugins.IncludePackages"/>), once a process (rule 75; a package already registered
+    /// by Craft.Ai is not registered again). B4: since nothing loads at start-up (note 23), a training round before any
+    /// chat found no "Qwen2ForCausalLM": this plug-in registered its libraries and the C# environment, never a family.
+    /// </summary>
+    /// <exception cref="FileNotFoundException">A named package is not beside the plug-in.</exception>
+    public static void EnsureFamilies(IReadOnlyList<string> packages)
+    {
+        ArgumentNullException.ThrowIfNull(packages);
+        EnsureIncluded();
+        IdrakInPlugins.IncludePackages(typeof(LearningLibraries).Assembly, packages);
     }
 
     public static void Release()

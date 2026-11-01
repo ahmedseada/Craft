@@ -500,13 +500,7 @@ public sealed class AiModels : IDisposable
 public static class AiErrors
 {
     /// <summary>Whether <paramref name="error"/> is a device or system running out of memory.</summary>
-    public static bool IsOutOfMemory(Exception? error) => error switch
-    {
-        null => false,
-        ResourceLimitExceededException or OutOfMemoryException or InsufficientMemoryException => true,
-        AggregateException aggregate => aggregate.InnerExceptions.Any(IsOutOfMemory),
-        _ => error.Message.Contains("out of memory", StringComparison.OrdinalIgnoreCase) || IsOutOfMemory(error.InnerException),
-    };
+    public static bool IsOutOfMemory(Exception? error) => ModelErrors.IsOutOfMemory(error);
 
     /// <summary>
     /// <paramref name="error"/>'s message, and for an out-of-memory one what the user can do: pick a smaller model at the

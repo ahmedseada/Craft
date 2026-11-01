@@ -447,6 +447,244 @@ public static class LearningTests
         }
     }
 
+    // ---- B4 and B7 (the owner's third Windows run) ----
+
+    /// <summary>
+    /// B4: a training round in a fresh process with no chat load (nothing loads at start since note 23) found no
+    /// "Qwen2ForCausalLM": the plug-in registered its libraries and the C# environment, never a family. The child process
+    /// (this program with --probe-learning) has no family registered, records 24 verdicts and trains a tiny Qwen2.
+    /// </summary>
+    [Test]
+    public static void ATrainingRoundInAFreshProcessWithNoChatFindsTheModelFamily()
+    {
+        using var temp = new TempFolder();
+        string model = TinyChatModel(temp, QwenPlugin.Qwen2ForCausalLM);
+        var lines = PluginProbe.RunInFreshProcess("--probe-learning", model, temp.File("child"));
+        string all = string.Join("\n", lines);
+        Check.True(lines.Contains("Qwen2ForCausalLM registered before: False"), $"the child starts with no family registered:\n{all}");
+        Check.True(lines.Any(l => l.StartsWith("trained: v1:", StringComparison.Ordinal)) && !all.Contains("not registered", StringComparison.Ordinal),
+            $"the round loads the Qwen2 model and writes an adapter:\n{all}");
+        Check.True(lines.Contains("Qwen2ForCausalLM registered after: True"), $"the family is registered by the round:\n{all}");
+    }
+
+    /// <summary>The child of <see cref="ATrainingRoundInAFreshProcessWithNoChatFindsTheModelFamily"/>: one round, its outcome as lines.</summary>
+    internal static int ProbeTraining(string model, string folder)
+    {
+        Console.WriteLine("Qwen2ForCausalLM registered before: " + Idrak.Models.Abstractions.PretrainedArchitectures.Names.Contains("Qwen2ForCausalLM"));
+        var vars = new Dictionary<string, string>
+        {
+            ["CRAFT_PLUGIN_LEARNING_MODEL"] = model, ["CRAFT_PLUGIN_LEARNING_DEVICE"] = "cpu", ["CRAFT_PLUGIN_LEARNING_STEPS"] = "2",
+            ["CRAFT_PLUGIN_LEARNING_RANK"] = "4", ["CRAFT_PLUGIN_LEARNING_LEARNINGRATE"] = "0.01", ["CRAFT_PLUGIN_LEARNING_HELDOUTSHARE"] = "0",
+            ["CRAFT_PLUGIN_LEARNING_SCHEDULE"] = "demand",
+        };
+        using var world = new World(folder, vars);
+        world.Presenter.Answers.Enqueue(0);
+        if (!world.Session.AskLearnAsync(again: true).GetAwaiter().GetResult())
+        {
+            Console.WriteLine("consent: not given");
+            return 1;
+        }
+
+        RecordRejections(world, 24).GetAwaiter().GetResult();
+        world.Session.TrainAsync(manual: true).GetAwaiter().GetResult();
+        Console.WriteLine(world.Session.LastTraining is { } result ? "trained: " + result.Message : $"failed at {world.Session.LastFailureStage}: {world.Session.Status}");
+        Console.WriteLine("Qwen2ForCausalLM registered after: " + Idrak.Models.Abstractions.PretrainedArchitectures.Names.Contains("Qwen2ForCausalLM"));
+        return 0;
+    }
+
+    /// <summary>
+    /// B7: rounds on the AI plug-in's copy of the model (its "local" provider holds it for the chat): the trainer takes that
+    /// copy alone while it trains and never loads a second; the copy comes back as found (the chat's answer the same, rule
+    /// 71) and the device memory in use does not grow over three rounds (rule 77).
+    /// </summary>
+    [Test]
+    public static async Task RoundsTrainTheAIPluginsCopyInPlaceAndGiveItBackAsFound()
+    {
+        using var temp = new TempFolder();
+        string model = TinyChatModel(temp);
+        var previous = ModelProviders.Find(ModelProviders.Local);
+        if (previous is not null)
+        {
+            ModelProviders.Unregister(ModelProviders.Local);
+        }
+
+        using var provider = new Craft.Ai.LocalModelProvider { Settings = new Craft.Ai.AiSettings { Device = "cpu" } };
+        ModelProviders.Register(provider);
+        try
+        {
+            // The chat's lease, as the AI plug-in holds it, and its greedy answer before any round.
+            var chat = await provider.AcquireAsync(new ModelRequest(model));
+            var greedy = new GenerationOptions { NumPredict = 8, Temperature = 0 };
+            string before = (await chat.Text!.GenerateAsync("<|im_start|>user\nQ<|im_end|>\n", greedy)).Text;
+            var vars = new Dictionary<string, string>
+            {
+                ["CRAFT_PLUGIN_LEARNING_MODEL"] = model, ["CRAFT_PLUGIN_LEARNING_STEPS"] = "3", ["CRAFT_PLUGIN_LEARNING_RANK"] = "4",
+                ["CRAFT_PLUGIN_LEARNING_LEARNINGRATE"] = "0.01", ["CRAFT_PLUGIN_LEARNING_HELDOUTSHARE"] = "0.25", ["CRAFT_PLUGIN_LEARNING_SCHEDULE"] = "demand",
+                ["CRAFT_PLUGIN_LEARNING_PROMOTIONMARGIN"] = "1000000",       // nothing promoted: the chat's copy keeps its key
+            };
+            using var world = new World(temp, vars);
+            world.Presenter.Answers.Enqueue(0);
+            Check.True(await world.Session.AskLearnAsync(again: true), "yes");
+            await RecordRejections(world, 24);
+
+            var device = Idrak.Abstraction.Device.Cpu.Backend;
+            long start = device.GetMemoryUsage().InUse;
+            var after = new List<long>();
+            for (int round = 1; round <= 3; round++)
+            {
+                await world.Session.TrainAsync(manual: true);
+                var result = world.Session.LastTraining;
+                Check.True(result?.Version is not null, $"round {round} wrote an adapter ({result?.Message ?? world.Session.Status})");
+                Check.True(provider.Loaded.Count == 1, $"round {round}: one copy loaded, the chat's ({provider.Loaded.Count})");
+                after.Add(device.GetMemoryUsage().InUse);
+            }
+
+            Check.True(world.Presenter.Messages.Any(m => m.Contains("tokens a batch", StringComparison.Ordinal)), "the batch the round ran is said");
+            Check.True(after[0] <= start + (1L << 20) && after[1] == after[0] && after[2] == after[0],
+                $"device memory in use does not grow over the rounds: {start:N0} before, {string.Join(", ", after.Select(a => a.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)))} after each");
+            string now = (await chat.Text!.GenerateAsync("<|im_start|>user\nQ<|im_end|>\n", greedy)).Text;
+            Check.Equal(before, now, "the chat's copy answers as before: the round's adapters are gone, its own were put back");
+            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"  measured: device memory in use {start:N0} B before, {after[0]:N0}, {after[1]:N0}, {after[2]:N0} B after three rounds on the shared copy"));
+            chat.Dispose();
+        }
+        finally
+        {
+            ModelProviders.Unregister(ModelProviders.Local);
+            if (previous is not null)
+            {
+                ModelProviders.Register(previous);
+            }
+        }
+    }
+
+    /// <summary>B7: the copy's gate: a hold waits for a running reply, and a reply asked for during the hold waits for its end.</summary>
+    [Test]
+    public static async Task TheCopysGateGivesATrainingRoundTheModelAlone()
+    {
+        var gate = new Craft.Ai.CopyGate();
+        var reply = await gate.EnterAsync(CancellationToken.None);
+        var hold = gate.ExclusiveAsync(CancellationToken.None);
+        await Task.Delay(50);
+        Check.True(!hold.IsCompleted, "the hold waits for the running reply");
+        reply.Dispose();
+        var held = await hold.WaitAsync(TimeSpan.FromSeconds(5));
+        var next = gate.EnterAsync(CancellationToken.None);
+        await Task.Delay(50);
+        Check.True(!next.IsCompleted, "a reply asked for during the hold waits");
+        held.Dispose();
+        (await next.WaitAsync(TimeSpan.FromSeconds(5))).Dispose();
+        var both = await Task.WhenAll(gate.EnterAsync(CancellationToken.None), gate.EnterAsync(CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(5));
+        Check.True(both.Length == 2, "replies still run side by side");
+        foreach (var pass in both)
+        {
+            pass.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// B7: out of memory, a step halves the batch and runs again, said in the progress, before the round fails naming its
+    /// stage and what to change; an automatic batch is fitted to the room the device reports; a model that does not load
+    /// fails at the load stage.
+    /// </summary>
+    [Test]
+    public static async Task OutOfMemoryStepsTheBatchDownAndAFailureNamesItsStage()
+    {
+        using var temp = new TempFolder();
+        string model = TinyChatModel(temp);
+        var vars = new Dictionary<string, string>
+        {
+            ["CRAFT_PLUGIN_LEARNING_MODEL"] = model, ["CRAFT_PLUGIN_LEARNING_DEVICE"] = "cpu", ["CRAFT_PLUGIN_LEARNING_STEPS"] = "1",
+            ["CRAFT_PLUGIN_LEARNING_RANK"] = "4", ["CRAFT_PLUGIN_LEARNING_HELDOUTSHARE"] = "0", ["CRAFT_PLUGIN_LEARNING_SCHEDULE"] = "demand",
+            ["CRAFT_PLUGIN_LEARNING_BATCHTOKENS"] = "4096",
+        };
+        using var world = new World(temp, vars);
+        world.Presenter.Answers.Enqueue(0);
+        Check.True(await world.Session.AskLearnAsync(again: true), "yes");
+        await RecordRejections(world, 24);
+        var episodes = world.Session.Store.All();
+        var settings = world.Session.Settings();
+        using var loaded = LearningTrainer.LoadModel(settings, model);
+        var cpu = Idrak.Abstraction.Device.Cpu;
+        var failures = new List<LearningStageException>();
+        (TrainingResult Result, List<string> Notes)? first = null;
+        long limit = 0;
+        try
+        {
+            for (long extra = 32 << 10; extra <= 256L << 20 && first is null; extra *= 2)
+            {
+                var notes = new List<string>();
+                using var versions = new TempFolder();
+                limit = cpu.Backend.GetMemoryUsage().InUse + extra;
+                Idrak.Abstraction.ComputeResources.CpuMemoryLimit = limit;
+                try
+                {
+                    var result = LearningTrainer.TrainPreferences(loaded, model, episodes, new AdapterVersions(versions.Path), settings,
+                        new Progress(p => { if (p.Note is { } note) { lock (notes) { notes.Add(note); } } }));
+                    first = (result, notes);
+                }
+                catch (LearningStageException error)
+                {
+                    failures.Add(error);
+                }
+            }
+
+            Check.True(first is { Result.Version: not null }, $"a limit the round fits in ({limit:N0} B)");
+            Check.True(first!.Value.Notes.Any(n => n.StartsWith("out of memory at", StringComparison.Ordinal)),
+                $"at the first limit that fits, the batch stepped down to fit, said in the progress ({string.Join("; ", first.Value.Notes)})");
+            var stepFailure = failures.LastOrDefault(f => f.Stage == LearningStages.Step);
+            Check.True(stepFailure is not null && stepFailure.Message.StartsWith("Training failed at its step stage: the device ran out of memory", StringComparison.Ordinal)
+                       && stepFailure.Message.Contains("CRAFT_PLUGIN_LEARNING_BATCHTOKENS", StringComparison.Ordinal),
+                $"below it the round fails at its step stage, in words, naming what to change ({string.Join(" | ", failures.Select(f => f.Stage + ": " + f.Message))})");
+
+            // Automatic: fitted to the room the device reports, at twice that limit.
+            Idrak.Abstraction.ComputeResources.CpuMemoryLimit = cpu.Backend.GetMemoryUsage().InUse + (2 * (limit - cpu.Backend.GetMemoryUsage().InUse));
+            using var autoVersions = new TempFolder();
+            var auto = LearningTrainer.TrainPreferences(loaded, model, episodes, new AdapterVersions(autoVersions.Path), settings with { BatchTokens = 0 });
+            var batch = System.Text.RegularExpressions.Regex.Match(auto.Message, "at (\\d+) tokens a batch");
+            Check.True(auto.Version is not null && batch.Success && int.Parse(batch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) < 4096,
+                $"an automatic batch is fitted to the free memory ({auto.Message})");
+        }
+        finally
+        {
+            Idrak.Abstraction.ComputeResources.CpuMemoryLimit = null;
+        }
+
+        // A model that does not load: the load stage, in words.
+        var missing = new World(temp.File("missing"), new Dictionary<string, string>(vars) { ["CRAFT_PLUGIN_LEARNING_MODEL"] = temp.File("no-such-model") });
+        try
+        {
+            missing.Presenter.Answers.Enqueue(0);
+            Check.True(await missing.Session.AskLearnAsync(again: true), "yes");
+            await missing.Session.TrainAsync(manual: true);
+            Check.True(missing.Session.LastFailureStage == LearningStages.Load && missing.Presenter.Messages.Any(m => m.Contains("Training failed at its load stage", StringComparison.Ordinal)),
+                $"a model that does not load fails at the load stage ({missing.Session.LastFailureStage}: {string.Join(" | ", missing.Presenter.Messages)})");
+        }
+        finally
+        {
+            missing.Dispose();
+        }
+    }
+
+    // `count` completions answered "no", each typed over with "yes": rejected, the typed text kept.
+    private static async Task RecordRejections(World world, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            int at = world.Type("\n");
+            world.AnswerNow(at, "no", prompt: "Q");
+            world.Type("yes", at);
+            world.Session.SettleAll();
+        }
+
+        await world.Idle();
+    }
+
+    private sealed class Progress(Action<TrainingProgress> report) : IProgress<TrainingProgress>
+    {
+        public void Report(TrainingProgress value) => report(value);
+    }
+
     // ---- loaded from its folder ----
 
     [Test]
@@ -496,8 +734,8 @@ public static class LearningTests
 
     private static string Show(EpisodeInfo? info) => info is null ? "no info" : string.Join(", ", info.Entries.Select(e => e.Key + "=" + e.Value));
 
-    /// <summary>A tiny random-weight Qwen3 chat model (ChatML, a byte tokenizer) in a folder.</summary>
-    private static string TinyChatModel(TempFolder temp)
+    /// <summary>A tiny random-weight Qwen3 (or Qwen2) chat model (ChatML, a byte tokenizer) in a folder.</summary>
+    private static string TinyChatModel(TempFolder temp, string architecture = QwenPlugin.Qwen3ForCausalLM)
     {
         QwenPlugin.Register();
         var tokenizerFolder = temp.File("tokenizer");
@@ -506,15 +744,16 @@ public static class LearningTests
         var spec = new DecoderSpec
         {
             Vocabulary = 260, Dim = 32, Layers = 2, Heads = 2, KvHeads = 1, HeadDim = 16, FfDim = 64, MaxPositions = 256,
-            Rope = new RopeSettings(10000f), NormEpsilon = 1e-6f, QkNorm = true, TieEmbeddings = true,
+            Rope = new RopeSettings(10000f), NormEpsilon = 1e-6f, QkNorm = architecture == QwenPlugin.Qwen3ForCausalLM, TieEmbeddings = true,
+            QkvBias = architecture == QwenPlugin.Qwen2ForCausalLM,
         };
         var files = new ModelFiles
         {
             Tokenizer = PretrainedTokenizers.Load(tokenizerFolder), EosToken = "<|im_end|>",
             ChatTemplate = "{%- for m in messages %}{{ '<|im_start|>' + m.role + '\\n' + m.content + '<|im_end|>\\n' }}{%- endfor %}{%- if add_generation_prompt %}{{ '<|im_start|>assistant\\n' }}{%- endif %}",
         };
-        var folder = temp.File("model");
-        using (PretrainedModel.Create(folder, spec, QwenPlugin.Qwen3ForCausalLM, files, new CreateOptions { Device = Idrak.Abstraction.Device.Cpu, Seed = 91, Overwrite = true }))
+        var folder = temp.File("model-" + architecture);
+        using (PretrainedModel.Create(folder, spec, architecture, files, new CreateOptions { Device = Idrak.Abstraction.Device.Cpu, Seed = 91, Overwrite = true }))
         {
         }
 
@@ -639,8 +878,13 @@ public static class LearningTests
         private readonly LearningPackage _package = new();
 
         public World(TempFolder temp, Dictionary<string, string> vars)
+            : this(temp.Path, vars)
         {
-            Workspace = Path.Combine(temp.Path, "workspace");
+        }
+
+        public World(string folder, Dictionary<string, string> vars)
+        {
+            Workspace = Path.Combine(folder, "workspace");
             Directory.CreateDirectory(Path.Combine(Workspace, "src"));
             File.WriteAllText(Path.Combine(Workspace, "src", "A.cs"), "");
             vars.TryAdd("CRAFT_PLUGIN_LEARNING_SETTLESECONDS", "3600");
@@ -648,7 +892,7 @@ public static class LearningTests
             ShareDestinations.Register(Destination);
             IdrakPlugins.RegisterAll(_package);
             // The host's UI thread is the test's: what the session posts waits in a queue the test pumps.
-            Host = new EditorHost(new CraftOptions { DataFolder = Path.Combine(temp.Path, "data") }, _queue.Enqueue, Presenter, name => vars.TryGetValue(name, out var v) ? v : null)
+            Host = new EditorHost(new CraftOptions { DataFolder = Path.Combine(folder, "data") }, _queue.Enqueue, Presenter, name => vars.TryGetValue(name, out var v) ? v : null)
             {
                 WorkspaceFolder = Workspace,
             };

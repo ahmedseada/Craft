@@ -201,9 +201,35 @@ internal sealed class LiveBacking(IEditorHost host, ToolSettings settings)
         int? line = EditorTools.Whole(arguments, "line");
         string title = EditorTools.OptionalText(arguments, "title") is { Length: > 0 } given ? given : "Edit from a model";
         var state = await TakeAsync(cancellationToken).ConfigureAwait(false);
+        bool isNew = false;
         if (Find(state, path) is not { } document)
         {
-            return NotFound(state, path) + " Only an open document can be changed; ask the user to open it.";
+            // B6: a file of the open folder that is not open is opened for the diff, and a path with no file yet (old_text
+            // empty) becomes a new document there, which accepting creates; before, only an open document could be changed,
+            // so an agent over MCP could make no file at all.
+            if (WorkspaceFile(state, path) is not { } full)
+            {
+                return NotFound(state, path) + " Only an open document, or a file inside the open folder, can be changed.";
+            }
+
+            isNew = !File.Exists(full);
+            if (isNew && oldText.Length > 0)
+            {
+                return $"Not proposed: {path} does not exist yet; to create it, give an empty old_text and its whole text as new_text.";
+            }
+
+            if (await OnUiAsync(() => host.OpenDocumentAsync(full, cancellationToken), cancellationToken).Unwrap().ConfigureAwait(false) is not { } opened)
+            {
+                return $"Not proposed: the editor could not open {path}.";
+            }
+
+            state = await TakeAsync(cancellationToken).ConfigureAwait(false);
+            if (Array.Find(state.Documents, d => ReferenceEquals(d.Document, opened)) is not { } view)
+            {
+                return $"Not proposed: the editor could not open {path}.";
+            }
+
+            document = view with { Name = isNew ? ToolText.Display(state.Root, full) : view.Name, Path = view.Path ?? full };
         }
 
         var text = document.Snapshot.GetText(0, document.Snapshot.Length);
@@ -218,9 +244,28 @@ internal sealed class LiveBacking(IEditorHost host, ToolSettings settings)
             Origin = "a model, through the editor's tools",
         };
         bool applied = await OnUiAsync(() => host.ProposeAsync(document.Document, proposal, cancellationToken), cancellationToken).Unwrap().ConfigureAwait(false);
-        return applied
-            ? $"Accepted by the user and applied to {document.Name} (one undo step)."
-            : $"Not applied to {document.Name}: the user rejected it, or the document changed while they were asked.";
+        if (!applied)
+        {
+            return $"Not applied to {document.Name}: the user rejected it, or the document changed while they were asked.";
+        }
+
+        // Accepted: written to the workspace (saveOnAccept), never over the user's own unsaved edits.
+        if (settings.SaveOnAccept && document.Path is { } file && (isNew || !document.Dirty))
+        {
+            try
+            {
+                await OnUiAsync(() => host.SaveAsync(document.Document, isNew ? file : null, cancellationToken), cancellationToken).Unwrap().ConfigureAwait(false);
+                return isNew
+                    ? $"Accepted by the user: {document.Name} is created in the workspace (one undo step)."
+                    : $"Accepted by the user, applied to {document.Name} and saved (one undo step).";
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                return $"Accepted by the user and applied to {document.Name} in the editor, but it could not be saved: {error.Message}";
+            }
+        }
+
+        return $"Accepted by the user and applied to {document.Name} (one undo step){(document.Dirty ? "; the document held unsaved edits, so it is left unsaved" : "")}.";
     }
 
     private Task<State> TakeAsync(CancellationToken cancellationToken) => OnUiAsync(() =>
@@ -300,6 +345,26 @@ internal sealed class LiveBacking(IEditorHost host, ToolSettings settings)
         }
 
         return ignoringCase;
+    }
+
+    // The full path of `path` inside the open folder (relative to it, or full), or null when it is outside or no folder is open.
+    private static string? WorkspaceFile(State state, string path)
+    {
+        if (state.Root is not { } root || path.Trim().Length == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            string full = System.IO.Path.GetFullPath(System.IO.Path.Combine(root, path.Trim()));
+            string relative = System.IO.Path.GetRelativePath(root, full);
+            return relative == "." || relative.StartsWith("..", StringComparison.Ordinal) || System.IO.Path.IsPathRooted(relative) || Directory.Exists(full) ? null : full;
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
     }
 
     private static string NotFound(State state, string path) =>

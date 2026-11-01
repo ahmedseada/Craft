@@ -190,6 +190,7 @@ sealed class Craft.Plugins.Learning.LearningSession : System.IDisposable
   System.Int32 PendingCount { get; }
   System.String AdapterFor(System.String model)
   System.String Folder { get; }
+  System.String LastFailureStage { get; }
   System.String Status { get; }
   System.Threading.Tasks.Task Background { get; }
   System.Threading.Tasks.Task DeleteEpisodesAsync()
@@ -219,18 +220,22 @@ sealed class Craft.Plugins.Learning.LearningSettings : System.IEquatable<Craft.P
   System.Boolean Equals(Craft.Plugins.Learning.LearningSettings other)
   System.Boolean Equals(System.Object obj)
   System.Boolean SharingOff { get; init; }
+  System.Boolean StepDown { get; init; }
   System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> LossOptions { get; init; }
   System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> VerdictWeights { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> IdrakPlugins { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> Record { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> SecretPatterns { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> ShareWhat { get; init; }
   System.Double HeldOutShare { get; init; }
   System.Double PromotionMargin { get; init; }
   System.Int32 BatchTokens { get; init; }
+  System.Int32 BatchTokensMax { get; init; }
   System.Int32 CapMegabytes { get; init; }
   System.Int32 GetHashCode()
   System.Int32 IdleMinutes { get; init; }
   System.Int32 KeepDays { get; init; }
+  System.Int32 MaxLength { get; init; }
   System.Int32 MinEpisodes { get; init; }
   System.Int32 Rank { get; init; }
   System.Int32 SettleSeconds { get; init; }
@@ -253,12 +258,26 @@ sealed class Craft.Plugins.Learning.LearningSettings : System.IEquatable<Craft.P
   System.String TaskReward { get; init; }
   System.String ToString()
   System.String Trainer { get; init; }
+  System.String Weights { get; init; }
   const System.String PluginName = learning
   ctor()
   static Craft.Plugins.Learning.LearningSettings From(Craft.Abstractions.IPluginSettings settings)
   static Craft.Plugins.Learning.LearningSettings From(System.Func<System.String, System.String> read)
   static System.Collections.Generic.Dictionary<System.String, System.String> ParsePairs(System.String text, System.String variable)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+sealed class Craft.Plugins.Learning.LearningStageException : System.Exception, System.Runtime.Serialization.ISerializable
+  System.String Stage { get; }
+  ctor()
+  ctor(System.String message)
+  ctor(System.String message, System.Exception inner)
+  ctor(System.String stage, System.String message, System.Exception inner = null)
+static class Craft.Plugins.Learning.LearningStages
+  const System.String Episodes = episodes
+  const System.String Evaluate = evaluate
+  const System.String Load = load
+  const System.String Pairs = pairs
+  const System.String Promote = promote
+  const System.String Step = step
 static class Craft.Plugins.Learning.LearningTrainer
   const System.String TaskEnvironment = csharp
   static Craft.Plugins.Learning.TrainingResult TrainPreferences(Idrak.Models.PretrainedModel model, System.String baseModel, System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.EditorEpisode> episodes, Craft.Plugins.Learning.AdapterVersions versions, Craft.Plugins.Learning.LearningSettings settings, System.IProgress<Craft.Plugins.Learning.TrainingProgress> progress = null, System.Threading.CancellationToken cancellationToken = null)
@@ -270,8 +289,11 @@ static class Craft.Plugins.Learning.LearningTrainer
   static System.Collections.Generic.Dictionary<System.String, System.String> TaskOptions(System.String suite, Craft.Plugins.Learning.LearningSettings settings, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> extra = null)
   static System.Collections.Generic.List<Idrak.Abstraction.Reinforcement.Trajectory<Idrak.Abstraction.Generation.ChatObservation, Idrak.Abstraction.Generation.ChatMessage>> Trajectories(System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.EditorEpisode> episodes, Idrak.Models.PretrainedModel model, System.Collections.Generic.IReadOnlyList<System.Single> rewards)
   static System.Double Margin(Idrak.Text.FineTuningSession session, System.Collections.Generic.IReadOnlyList<Idrak.Text.PreferencePair> pairs, System.Boolean adapters)
+  static System.IDisposable Borrow(Idrak.Models.PretrainedModel model)
   static System.Single[] Rewards(System.Collections.Generic.IReadOnlyList<Craft.Plugins.Learning.EditorEpisode> episodes, Craft.Plugins.Learning.LearningSettings settings)
+  static System.String Describe(System.Exception error, System.String stage, System.String model, Craft.Plugins.Learning.LearningSettings settings, System.Int32 batchTokens = 0)
   static System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Reinforcement.Trajectory<Idrak.Abstraction.Generation.ChatObservation, Idrak.Abstraction.Generation.ChatMessage>>> PlayTasksAsync(Idrak.Abstraction.Reinforcement.IPolicy<Idrak.Abstraction.Generation.ChatObservation, Idrak.Abstraction.Generation.ChatMessage> policy, System.String suite, Craft.Plugins.Learning.LearningSettings settings, System.Int32 episodes, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> extra = null, System.Threading.CancellationToken cancellationToken = null)
+  static System.Void ApplyLimits(Craft.Plugins.Learning.LearningSettings settings)
 sealed class Craft.Plugins.Learning.ShareFilter
   System.String IgnoredBy(System.String relative)
   System.String Secret(System.String text)
@@ -307,6 +329,7 @@ sealed class Craft.Plugins.Learning.TrainingProgress : System.IEquatable<Craft.P
   System.Single Loss { get; init; }
   System.String Device { get; init; }
   System.String Line { get; }
+  System.String Note { get; init; }
   System.String Stage { get; init; }
   System.String ToString()
   System.TimeSpan Elapsed { get; init; }

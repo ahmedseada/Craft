@@ -23,6 +23,7 @@ sealed class Craft.Plugins.Tools.ToolSettings : System.IEquatable<Craft.Plugins.
   Craft.Plugins.Tools.ToolSettings <Clone>$()
   System.Boolean Equals(Craft.Plugins.Tools.ToolSettings other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean SaveOnAccept { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> Ignore { get; init; }
   System.Int32 GetHashCode()
   System.Int32 ReadLines { get; init; }

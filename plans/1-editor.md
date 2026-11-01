@@ -3436,3 +3436,157 @@ session.
 
 Every slot follows Craft's new build-and-test rule (`CLAUDE.md`): all the work, one build, all the tests, one run,
 fixes as a batch, the full filter once, then push.
+
+## B3, B4, B6 and B7 as built (2026-11-01)
+
+Slot s2. Idrak `main` first (three library changes, by Idrak's rules), then Craft. Each cause below was found in the code
+and reproduced headless where it can be on Linux; the owner's Windows run confirms the rest.
+
+**Idrak** (`IDRAK_DEVICES=cpu`, filter `fine-tuning: a model tuned in place|public API`; API dumps `Idrak.txt` and
+`Idrak.Text.txt` regenerated):
+- `PretrainedModel.LoadAdapter` freezes the base when the model had no adapter, as `AddAdapters` does. Cause found
+  (B7): loaded weights come with `requiresGrad: true` and `LoadAdapter` added adapters with the base unfrozen, so a
+  `FineTuningSession` over a loaded adapter (which adds none when the model has some) trained every weight of the model:
+  learning's second round (going on from the promoted adapter) held the whole model's gradients and optimizer state, an
+  out-of-memory on any real model.
+- `ModuleExtensions.RemoveAdapters` (new): removes every adapter and frees its tensors and gradients, so a model tuned in
+  place goes back to its base without keeping the adapters' memory (`DisableAdapters` only lifts them for a while).
+- `FineTuner.BatchTokensThatFit(model, options, longest)` (new): the options' batch, halved while the activation
+  estimate (the rung the options start from, the gradients still to make) is above what the device reports it can give
+  (free memory within a limit), never below one sequence; the options' own when the device reports neither.
+- Test `fine-tuning: a model tuned in place goes back as found …` (CPU): after `LoadAdapter` only the adapter's tensors
+  train (before, every weight), a session over it trains the adapter alone, `RemoveAdapters` frees the adapters and
+  gradients (bytes in use fall) and the model scores as a fresh base load (rule 71, 1e-5), the batch fits a room of the
+  1,024-token estimate at exactly 1,024 tokens, one sequence with no room, the options' 4,096 with room.
+
+**B3, the sample plug-in did not load.** Causes found: two binary breaks of contract 1.0 (K, `49fad59`), found by
+diffing every API dump since K: `KeyBinding`'s three-parameter constructor and `Deconstruct` (note 16 added `Then` and
+`When`), and `EditorKey`'s values (E5 put `Space` before `A`, moving every letter, digit and F-key one up, and `Comma` from
+63 to 64: the old sample's Ctrl+Shift+W would have bound Ctrl+Shift+U). Fixed: the 1.0 constructor and `Deconstruct`
+kept beside the record's own; `Space` moved after `Comma`, so every 1.0 value is back (`W` 41, `A` 16, `F12` 62, `Comma`
+63; the keys added since keep theirs; `Space` is 64). `ISemanticLanguageSession.FormatAsync` moved to its base interface
+in notes 17-18 (a caller built before would miss it; an implementer is unaffected); no plug-in outside Craft uses it, so
+it stays. The loader (`CraftPlugins.Describe`, public) reports the cause under every wrapper (a reflection call's, a type
+initializer's, a one-error aggregate's): "MissingMethodException: Method not found: … (in the type initializer of
+Old.OldRegistration); the plug-in calls something this Craft (contract 1.0) does not have: rebuild it against this
+Craft's Craft.Abstractions". The API guard keeps the contract's list (`api/Craft.Abstractions.contract.txt`, "contract
+1.0" then every type, base and member of Craft.Abstractions): a removed or changed entry fails unless
+`CraftContracts.Version`'s major stepped; additions join the list with `CRAFT_UPDATE=1` under the same version.
+- Decision (recommended): no contract step now, since every 1.0 member is back (checked: of the 564 entries of K's dump,
+  all are in the list; only the constructor's printed default `= false` differs, the same binary signature). The X
+  restart's minor step stays theirs.
+- Tests: `PluginKit.APluginBuiltAgainstContract10LoadsAndBindsTheKeysItMeant` (a plug-in compiled with Roslyn in the
+  test against a small Craft.Abstractions of the 1.0 shapes loads, and binds Ctrl+Shift+W), `PluginKit.ALoadFailureNamesItsCauseNotTheTypeInitializer`,
+  `ApiGuard.RemovedOrChangedMembersOfTheContractNeedAContractStep`, `ApiGuard.TheContractCheckNamesTheMembersARemovalBreaks`.
+
+**B4, "No architecture 'Qwen2ForCausalLM' is registered".** Cause as analysed: learning registered its Idrak libraries
+and the C# environment, never a family. Fixed: before its first load the trainer registers the families' packages
+(`LearningLibraries.EnsureFamilies`) through `IdrakInPlugins.IncludePackages`, the path Craft.Ai's own load now takes
+too (`LocalModelProvider.RegisterIdrakPlugins` moved onto it), once a process (rule 75). The list: learning's new
+`idrakPlugins` setting, empty by default meaning the AI plug-in's `idrakPlugins`, or Idrak.Text.Plugins when no AI
+plug-in is installed. `LearningTrainer.Rewards`' and `TrainTasks`' `GetAwaiter().GetResult()` run only inside the
+training's `Task.Run` (checked: no caller on the UI thread). Test `Learning.ATrainingRoundInAFreshProcessWithNoChatFindsTheModelFamily`:
+the test program run again with `--probe-learning` (a fresh process, no family registered, no chat load) records 24
+verdicts and trains a tiny random Qwen2; the round writes v1 and registers the family.
+
+**B7, a learning run always failed.** Causes found, beyond B4: the trainer loaded its own copy of the model, in float32
+(it never read the weights setting), beside the AI plug-in's copy (a 7B in float32 alone is about 28 GB); and a round
+going on from a promoted adapter trained every weight (Idrak's `LoadAdapter`, above). Fixed:
+- One copy (note 22): `ModelLease` lends the provider's loaded model (`Underlying`) and an exclusive hold (`Exclusive`).
+  The "local" provider gates each copy (`CopyGate`): replies pass side by side as before; a hold waits for the running
+  replies to end, and replies asked for meanwhile wait until it is given back. The trainer asks the AI plug-in's
+  provider for the model with the chat's own key (the device and weights empty mean the AI plug-in's, the adapter
+  `ModelAdapters.For`), so it gets the copy the chat holds (or loads the one copy, the provider letting idle copies go
+  first); only with no provider that lends its copy does it load one of its own, now with `weights`.
+- The copy comes back as found: the round lifts the copy's adapters off, trains its own, and at its end removes and frees
+  them (`RemoveAdapters`), puts the lifted ones back and returns the device's cached blocks.
+- Sized at run time (card-agnostic): `maxLength` auto is the longest pair (at most the model's positions); `batchTokens`
+  auto is the most of `batchTokensMax` (4,096) that `BatchTokensThatFit` says the free memory holds, measured with the
+  round's adapters on. Out of memory (after Idrak's own activation ladder), a stage halves the batch, rebuilds the session
+  and runs again, said in the activity ("out of memory at 1024 tokens a batch: 512 now"), down to one sequence
+  (`stepDown`, on); then the round fails.
+- Every failure names its stage (`LearningStages`: load, episodes, pairs, step, evaluate, promote) in words, an
+  out-of-memory one with what to change (`batchTokens`, `maxLength`, the rank, smaller `weights`, other GPU programs;
+  `IDRAK_OFFLOAD` named, never set): "Training failed at its step stage: the device ran out of memory for … at 512 tokens
+  a batch. Lower CRAFT_PLUGIN_LEARNING_BATCHTOKENS …". `ModelErrors.IsOutOfMemory` (Craft.Abstractions) is the one test
+  both plug-ins use.
+- New settings (plug-in "learning"): `weights`, `idrakPlugins`, `batchTokens` (now "auto" by default), `batchTokensMax`,
+  `maxLength`, `stepDown`.
+- Tests: `Learning.RoundsTrainTheAIPluginsCopyInPlaceAndGiveItBackAsFound` (three rounds on the "local" provider's copy
+  the chat holds: one copy loaded throughout, the chat's greedy answer the same after them; **measured** device memory in
+  use 203,140 B before and 203,140 B after each of the three rounds, rule 77),
+  `Learning.TheCopysGateGivesATrainingRoundTheModelAlone`, `Learning.OutOfMemoryStepsTheBatchDownAndAFailureNamesItsStage`
+  (CPU limits doubled from 32 KiB above what is in use: below the first that fits, the round fails at its step stage in
+  words; at it, the batch stepped down; an automatic batch is fitted below 4,096; a model that does not load fails at the
+  load stage).
+- Not done here: the tasks trainer (`trainer` tasks or both) keeps a fixed batch (its rollouts' lengths are not known
+  before they run); its stages are named. The owner's real-model numbers (the 7B's batch, seconds a step, memory before
+  and after a round) are to be written here.
+
+**B6, the agent made the file but never wrote it to the workspace.** Traced through the panel, the copy, the review and
+the app's MCP tools. Causes found:
+- The panel listed only what `edit_file` and `write_file` changed, and read their path itself without the tools' rule:
+  Idrak's `CodingTools` trims the path and takes a full path inside the copy, the panel did neither, so such a file was
+  written in the copy and never listed; and a file a command made (`dotnet new class`, a formatter) was never listed at
+  all. Unlisted, it was never reviewed, so never written to the workspace.
+- An accepted change to an existing file stayed in the editor unsaved, so the workspace's file did not change until the
+  user saved.
+- Over MCP, `propose_edit` changed only a document already open: an agent could create no file and change no file the
+  user had not opened.
+Fixed: the copy remembers each copied file's length and time; after every command and at the run's end the files written
+since are listed (build output left out: `agentChangesIgnore`, bin;obj;.git;.vs;node_modules;test-output); a tool's path
+is read as the tools read it (`AgentWorkspace.ToolRelative`). An existing file's accepted change is saved at once
+(`agentSaveOnAccept`, on), never when the editor held the user's own unsaved edits before the diff (said so); a new file
+accepted whole is created as before. `propose_edit` opens a file of the open folder that is not open, takes a path with
+no file yet (an empty `old_text`) as a new file there, and saves what is accepted (`saveOnAccept` of plug-in "tools", on;
+a path outside the folder is refused). Still a diff the user accepts, one undo step (no silent edit).
+- Tests: `AiPlugins.EveryFileTheAgentWritesReachesTheWorkspaceOnAccept` (a workspace path with spaces; a padded `./`
+  path with spaces, an edit, a command that writes a file and build output, a write by the copy's full path: four listed,
+  the build output not, nothing in the workspace before the review, all four there after it, the edited file saved),
+  `Ai.ProposeEditOverMcpCreatesANewFileAndSavesAFolderFileOnAccept`.
+- Not reproducible here: a Windows drive path (`C:\…`) and backslashes, which Linux reads as a file name; the code reads
+  paths with .NET's `Path`, which treats both on Windows. If the owner's run was the model writing its calls as text
+  (note 27, Qwen2.5-Coder writing fenced JSON), no file was ever written to the copy: that is the X restart's note 27,
+  not this fix; the owner's next run tells which (the agent's column then lists the files, or says it made no call).
+- **Found: the AI test that failed only on Windows ("the agent's working copy goes missing", the "Now" table's item 8).**
+  Since phase U the panel deletes a working copy on the thread pool, fire-and-forget (Clear, Discard all, a new run, the
+  panel's close); the agent tests then deleted the copies' folder in their `finally` at once, so two recursive deletes ran
+  over one tree and one met a file the other had removed (`DirectoryNotFoundException` on a path of the copy). Here it
+  showed in 2 of 3 runs of `AiPlugins` once a test with more files was added; on Windows, where a delete is slower, before.
+  Fixed: `AiAgentPanel.DiscardsDone()` is done when every copy being deleted is gone, and the tests wait for it before
+  removing the folders (3 of 3 runs pass). The app never deletes or reuses a copy's folder while its delete runs (each run's
+  copy has a name of its own), and `AgentWorkspace.Discard` already leaves a held file for the next start.
+
+**Tests, all at once, then the full filter once** (CPU, here): the 11 new tests passed on their first run;
+the full filter (`PluginKit`, `Plugins`, `PhaseP`, `Learning`, `ModelLoading`, `AiPlugins`, `Ai`, `ApiGuard`, `Inventory`,
+`Keys`, `Settings`, `Terminal`, `Voice`) found two: `Ai.TheSettingsReadEveryVariable` (the two new agent settings, its
+expectation updated) and the copy-delete race above; after the fixes, 109 passed. Idrak: the new test, `public API`, and
+every test that loads an adapter and trains (DoRA, PEFT checks, the vision tuning ones, the agent fine-tuning): 12 passed.
+API dumps regenerated: `Craft.Abstractions`, `Craft.Ai`, `Craft.Core`, `Craft.Plugins.Learning`, `Craft.Plugins.Tools`;
+the contract list `api/Craft.Abstractions.contract.txt` added.
+
+**Decisions (each the recommended option, the owner asleep):**
+- B3: the 1.0 members restored instead of a major contract step (no plug-in needs rebuilding).
+- B3: the guard refuses removals only; additions join the list under the same version (the X restart's minor step stays theirs).
+- B4: learning takes the AI plug-in's `idrakPlugins`, with a setting of its own to override it.
+- B7: the trainer trains the AI plug-in's copy in place under an exclusive hold, rather than unloading it for the round.
+- B7: `batchTokens` is automatic by default (fitted to the free memory), a number keeps it fixed; step-down on by default.
+- B7: the tasks trainer keeps a fixed batch for now (its rollouts' lengths are not known up front).
+- B6: an accepted agent change is saved at once (`agentSaveOnAccept`, `saveOnAccept`), never over the user's unsaved edits.
+- B6: `propose_edit` may open or create a file inside the open folder only; outside it is refused.
+
+**Commands for the owner** (Idrak changed, so its pull first; then Craft's):
+```powershell
+cd D:\Projects\Idrak; git checkout main; git pull origin main
+dotnet build -c Release tests\Idrak.Tests
+$env:IDRAK_FILTER="fine-tuning: a model tuned in place|public API"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:IDRAK_FILTER
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="PluginKit.|Plugins.|PhaseP.|Learning.|ModelLoading.|AiPlugins.|Ai.|ApiGuard.|Inventory.|Keys.|Settings.|Terminal.|Voice."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: the old sample DLL in `test-output\plugins` (not rebuilt) loads and Ctrl+Shift+W counts words (B3); Learning:
+Train now before any chat trains the 7B's adapter on the chat's copy, its line naming the batch, and the status bar's
+device memory is the same after the round as before (B4, B7: the numbers to write here); the agent asked to create a
+class shows the new file and any edited file under the changed files, and Review diff writes them into the folder (B6).

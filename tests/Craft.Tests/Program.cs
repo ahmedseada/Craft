@@ -15,6 +15,12 @@ if (args is ["--probe-installed", var root, ..])
     return Craft.Tests.PluginProbe.RunInstalled(root);
 }
 
+// A training round of the learning plug-in in this fresh process, with no model family registered (the Learning group's B4 check).
+if (args is ["--probe-learning", var model, var folder, ..])
+{
+    return Craft.Tests.LearningTests.ProbeTraining(model, folder);
+}
+
 // Flags (as Idrak's runner): --progress, --failures-only, --failures-file PATH, --filter TEXT (or CRAFT_FILTER), --list.
 var filters = new List<string>(TestRunner.SplitFilter(Environment.GetEnvironmentVariable("CRAFT_FILTER")));
 bool progress = false, failuresOnly = false, list = false;

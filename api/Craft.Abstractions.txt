@@ -454,78 +454,78 @@ sealed class Craft.Abstractions.EditorFont : System.IEquatable<Craft.Abstraction
   System.Void Deconstruct(out System.String Family, out System.Single Size)
   ctor(System.String Family, System.Single Size)
 enum Craft.Abstractions.EditorKey : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
-  A = 17
-  B = 26
+  A = 16
+  B = 25
   Backquote = 65
   Backspace = 9
   BracketLeft = 70
   BracketRight = 71
-  C = 18
-  Comma = 64
-  D = 27
-  D0 = 43
-  D1 = 44
-  D2 = 45
-  D3 = 46
-  D4 = 47
-  D5 = 48
-  D6 = 49
-  D7 = 50
-  D8 = 51
-  D9 = 52
+  C = 17
+  Comma = 63
+  D = 26
+  D0 = 42
+  D1 = 43
+  D2 = 44
+  D3 = 45
+  D4 = 46
+  D5 = 47
+  D6 = 48
+  D7 = 49
+  D8 = 50
+  D9 = 51
   Delete = 10
   Down = 4
-  E = 28
+  E = 27
   End = 6
   Enter = 11
   Escape = 13
-  F = 19
-  F1 = 53
-  F10 = 61
-  F11 = 62
-  F12 = 63
-  F2 = 54
+  F = 18
+  F1 = 52
+  F10 = 60
+  F11 = 61
+  F12 = 62
+  F2 = 53
   F3 = 15
-  F4 = 55
-  F5 = 56
-  F6 = 57
-  F7 = 58
-  F8 = 59
-  F9 = 60
-  G = 29
-  H = 20
+  F4 = 54
+  F5 = 55
+  F6 = 56
+  F7 = 57
+  F8 = 58
+  F9 = 59
+  G = 28
+  H = 19
   Home = 5
-  I = 30
+  I = 29
   Insert = 14
-  J = 31
-  K = 32
-  L = 33
+  J = 30
+  K = 31
+  L = 32
   Left = 1
-  M = 34
+  M = 33
   Minus = 68
-  N = 35
+  N = 34
   None = 0
-  O = 36
-  P = 37
+  O = 35
+  P = 36
   PageDown = 8
   PageUp = 7
   Period = 66
   Plus = 69
-  Q = 38
-  R = 39
+  Q = 37
+  R = 38
   Right = 2
-  S = 21
+  S = 20
   Slash = 67
-  Space = 16
-  T = 40
+  Space = 64
+  T = 39
   Tab = 12
-  U = 41
+  U = 40
   Up = 3
-  V = 22
-  W = 42
-  X = 23
-  Y = 24
-  Z = 25
+  V = 21
+  W = 41
+  X = 22
+  Y = 23
+  Z = 24
 static class Craft.Abstractions.EditorKeyBindings
   static Craft.Abstractions.KeyBinding Find(Craft.Abstractions.KeyChord chord)
   static Craft.Abstractions.KeyBinding Find(Craft.Abstractions.KeyChord chord, Craft.Abstractions.KeyChord then)
@@ -1023,9 +1023,11 @@ sealed class Craft.Abstractions.KeyBinding : Idrak.Abstraction.IKind, System.IEq
   System.String Name { get; }
   System.String Summary { get; }
   System.String ToString()
+  System.Void Deconstruct(out Craft.Abstractions.KeyChord Chord, out System.String CommandId, out System.Boolean OverridesEditor)
   System.Void Deconstruct(out Craft.Abstractions.KeyChord Chord, out System.String CommandId, out System.Boolean OverridesEditor, out Craft.Abstractions.KeyChord? Then, out Craft.Abstractions.KeyContext When)
   const System.Int32 MaxKeysLength = 65
   ctor(Craft.Abstractions.KeyChord Chord, System.String CommandId, System.Boolean OverridesEditor = false, Craft.Abstractions.KeyChord? Then = null, Craft.Abstractions.KeyContext When = Anywhere)
+  ctor(Craft.Abstractions.KeyChord Chord, System.String CommandId, System.Boolean OverridesEditor)
   static System.Boolean TryParseKeys(System.ReadOnlySpan<System.Char> text, out Craft.Abstractions.KeyChord chord, out Craft.Abstractions.KeyChord? then, out System.String error)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> ParseList(System.ReadOnlySpan<System.Char> text)
   static System.String FormatList(System.Collections.Generic.IEnumerable<Craft.Abstractions.KeyBinding> bindings)
@@ -1153,12 +1155,16 @@ static class Craft.Abstractions.ModelAdapters
   static System.String For(System.String model)
   static System.Void RaiseChanged()
   static System.Void Register(Craft.Abstractions.IModelAdapterSource source)
+static class Craft.Abstractions.ModelErrors
+  static System.Boolean IsOutOfMemory(System.Exception error)
 sealed class Craft.Abstractions.ModelLease : System.IDisposable
   Idrak.Abstraction.Generation.IChatModel Chat { get; }
   Idrak.Abstraction.Generation.IPretrainedTokenizer Tokenizer { get; init; }
   Idrak.Abstraction.Generation.ITextModel Text { get; }
   System.Boolean Loaded { get; }
+  System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<System.IDisposable>> Exclusive { get; init; }
   System.Int32 ContextLength { get; }
+  System.Object Underlying { get; init; }
   System.String Model { get; }
   System.TimeSpan LoadDuration { get; }
   System.Void Dispose()

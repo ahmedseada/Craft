@@ -188,6 +188,7 @@ public static class AiPluginTests
         }
         finally
         {
+            await AiAgentPanel.DiscardsDone();                // the panel's copy is deleted on the thread pool: never two deletes at once
             Directory.Delete(root, recursive: true);
         }
     }
@@ -276,6 +277,7 @@ public static class AiPluginTests
         }
         finally
         {
+            await AiAgentPanel.DiscardsDone();                // the panel's copy is deleted on the thread pool: never two deletes at once
             CommandSandboxes.Unregister(sandbox.Name);
             Directory.Delete(root, recursive: true);
             if (Directory.Exists(root + "-copies"))
@@ -321,6 +323,7 @@ public static class AiPluginTests
         }
         finally
         {
+            await AiAgentPanel.DiscardsDone();                // the panel's copy is deleted on the thread pool: never two deletes at once
             Directory.Delete(root, recursive: true);
         }
     }
@@ -366,6 +369,7 @@ public static class AiPluginTests
         }
         finally
         {
+            await AiAgentPanel.DiscardsDone();                // the panel's copy is deleted on the thread pool: never two deletes at once
             Directory.Delete(root, recursive: true);
             if (Directory.Exists(root + "-copies"))
             {
@@ -417,11 +421,70 @@ public static class AiPluginTests
         }
         finally
         {
+            await AiAgentPanel.DiscardsDone();                // the panel's copy is deleted on the thread pool: never two deletes at once
             Directory.Delete(root, recursive: true);
             if (Directory.Exists(root + "-copies"))
             {
                 Directory.Delete(root + "-copies", recursive: true);
             }
+        }
+    }
+
+    /// <summary>
+    /// B6 (the owner's third Windows run: the agent made the file, but it never reached the workspace): a scripted model
+    /// writes a new file by a padded relative path with spaces, edits an existing file, runs a command that writes a file
+    /// (and build output), and writes a file by the copy's full path, on a workspace whose path has spaces. Every one is
+    /// listed (the build output not), nothing touches the workspace before the review, and accepting each writes it there:
+    /// the new files created, the edited one saved.
+    /// </summary>
+    [Test]
+    public static async Task EveryFileTheAgentWritesReachesTheWorkspaceOnAccept()
+    {
+        string root = Path.Combine(Folder(), "my project");
+        Directory.CreateDirectory(Path.Combine(root, "src"));
+        await File.WriteAllTextAsync(Path.Combine(root, "src", "Program.cs"), "class Program\n{\n}\n");
+        var sandbox = new WritingSandbox("b6-writes");
+        CommandSandboxes.Register(sandbox);
+        try
+        {
+            var presenter = new AcceptingPresenter();
+            using var host = new EditorHost(dispatch: Serial(), presenter: presenter) { WorkspaceFolder = root };
+            host.OpenFile = async (path, token) => File.Exists(path) ? host.Open(await TextDocument.OpenAsync(path, cancellationToken: token), null) : host.Open(TextDocument.Create(""), null);
+            static ChatMessage Calls(ToolCall call) => new("assistant", ToolCalls: [call]);
+            var chat = new ComputedChatModel(turn => turn switch
+            {
+                0 => Calls(new ToolCall("write_file", new JsonObject { ["path"] = " ./src/House Model.cs ", ["content"] = "class House\n{\n    public float Price;\n}\n" })),
+                1 => Calls(new ToolCall("edit_file", new JsonObject { ["path"] = "src/Program.cs", ["old_text"] = "{\n}", ["new_text"] = "{\n    static void Main() { }\n}" })),
+                2 => Calls(new ToolCall("run_command", new JsonObject { ["command"] = "git status" })),
+                3 => Calls(new ToolCall("write_file", new JsonObject { ["path"] = Path.Combine(sandbox.Folder!, "Full Path.cs"), ["content"] = "class FullPath { }\n" })),
+                _ => new ChatMessage("assistant", "Done."),
+            });
+            using var fixture = new ChatFixture(chat, agentSandbox: sandbox.Name, agentFolder: root + " copies");
+            using var panel = new AiAgentPanel(host, () => fixture.Settings, fixture.Models);
+            await panel.SubmitAsync("Make a House class with a price");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
+            await Until(() => panel.Changes.Count == 4, $"the four files are listed ({string.Join(", ", panel.Changes.Select(c => c.Relative))})");
+            var listed = panel.Changes.Select(c => c.Relative).Order(StringComparer.Ordinal).ToList();
+            Check.True(listed.SequenceEqual(["Full Path.cs", "Made.cs", "src/House Model.cs", "src/Program.cs"]),
+                $"the padded path, the edit, the command's file and the full path are each listed; the build output is not ({string.Join(", ", listed)})");
+            Check.True(!File.Exists(Path.Combine(root, "src", "House Model.cs")) && !File.Exists(Path.Combine(root, "Made.cs"))
+                       && await File.ReadAllTextAsync(Path.Combine(root, "src", "Program.cs")) == "class Program\n{\n}\n",
+                "nothing reaches the workspace before the review");
+
+            Check.True(await panel.ReviewAsync(), "Review diff: every file's change accepted");
+            Check.Equal("class House\n{\n    public float Price;\n}\n", await File.ReadAllTextAsync(Path.Combine(root, "src", "House Model.cs")), "the new file by a padded path is created");
+            Check.Equal("// made by the command\nclass Made { }\n", await File.ReadAllTextAsync(Path.Combine(root, "Made.cs")), "the command's file is created");
+            Check.Equal("class FullPath { }\n", await File.ReadAllTextAsync(Path.Combine(root, "Full Path.cs")), "the file written by the copy's full path is created");
+            Check.Equal("class Program\n{\n    static void Main() { }\n}\n", await File.ReadAllTextAsync(Path.Combine(root, "src", "Program.cs")), "the edited file is saved (agentSaveOnAccept)");
+            Check.True(!File.Exists(Path.Combine(root, "obj", "project.assets.json")) && panel.Changes.Count == 0, "the build output stays in the copy; the list is empty");
+            Check.True(panel.Entries.Any(e => e.Role == ConversationRole.Note && e.Text.Contains("src/Program.cs: accepted into the editor (one undo step); saved to the workspace", StringComparison.Ordinal)),
+                "the agent's column says the edited file was saved");
+        }
+        finally
+        {
+            await AiAgentPanel.DiscardsDone();                // the panel's copy is deleted on the thread pool: never two deletes at once
+            CommandSandboxes.Unregister(sandbox.Name);
+            Directory.Delete(Path.GetDirectoryName(root)!, recursive: true);
         }
     }
 
@@ -446,6 +509,7 @@ public static class AiPluginTests
         }
         finally
         {
+            await AiAgentPanel.DiscardsDone();                // the panel's copy is deleted on the thread pool: never two deletes at once
             Directory.Delete(root, recursive: true);
             if (Directory.Exists(root + "-copies"))
             {
@@ -728,6 +792,46 @@ public static class AiPluginTests
             {
                 yield return text[start..];
             }
+        }
+    }
+
+    /// <summary>A chat model whose reply to each request is computed when it is asked (so a later reply can use what a tool did).</summary>
+    private sealed class ComputedChatModel(Func<int, ChatMessage> reply) : IChatModel
+    {
+        private int _next;
+
+        public async IAsyncEnumerable<ChatChunk> StreamAsync(ChatRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            var message = reply(_next++);
+            if (message.Content.Length > 0)
+            {
+                yield return new ChatChunk(new ChatDelta(message.Content, "", [])) { Generated = 1 };
+            }
+
+            yield return new ChatChunk(new ChatDelta("", "", message.ToolCalls ?? []), true, "stop", message,
+                new GenerationStats(10, TimeSpan.Zero, 1, TimeSpan.FromMilliseconds(1), TimeSpan.FromMilliseconds(1), 0)) { Generated = 1 };
+        }
+    }
+
+    /// <summary>A sandbox whose every command writes a file where it runs (as <c>dotnet new class</c> would) and build output under obj.</summary>
+    private sealed class WritingSandbox(string name) : ICommandSandbox
+    {
+        public string Name { get; } = name;
+
+        public string Summary => "the B6 test's sandbox: a command writes Made.cs";
+
+        public string? Folder { get; private set; }
+
+        public string? Check(CommandLimits limits) => null;
+
+        public async ValueTask<CommandResult> RunAsync(IReadOnlyList<string> command, string directory, CommandLimits limits, CancellationToken cancellationToken = default)
+        {
+            Folder = directory;
+            await File.WriteAllTextAsync(Path.Combine(directory, "Made.cs"), "// made by the command\nclass Made { }\n", cancellationToken);
+            Directory.CreateDirectory(Path.Combine(directory, "obj"));
+            await File.WriteAllTextAsync(Path.Combine(directory, "obj", "project.assets.json"), "{}", cancellationToken);
+            return new CommandResult(0, false, "The template \"Class\" was created successfully.", TimeSpan.FromMilliseconds(1), Refused: false);
         }
     }
 

@@ -3,8 +3,6 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
-using System.Runtime.Loader;
 using Craft.Abstractions;
 using Idrak.Abstraction.Generation;
 using Idrak.Abstraction.Plugins;
@@ -370,7 +368,12 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         Report(new ModelLoadStatus("ready", 1, lease.LoadDuration > TimeSpan.Zero
             ? string.Create(CultureInfo.InvariantCulture, $"{key.Model} loaded on {model.Device} in {lease.LoadDuration.TotalSeconds:F1} s, context {model.ContextLength}")
             : $"{key.Model} on {model.Device} (loaded already)"));
-        return new ModelLease(key.Model, model.Chat, model.Text, model.ContextLength, lease.LoadDuration, lease) { Tokenizer = model.Tokenizer };
+        return new ModelLease(key.Model, model.Chat, model.Text, model.ContextLength, lease.LoadDuration, lease)
+        {
+            Tokenizer = model.Tokenizer,
+            Underlying = model.Pretrained,                                  // the one copy, for a plug-in that trains it (B7)
+            Exclusive = model.Gate.ExclusiveAsync,
+        };
     }
 
     /// <summary>
@@ -438,7 +441,12 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             var layout = KeyValueLayouts.Get("float32");
             IChatModel? chat = model.ChatTemplate is null ? null : model.CreateChat(layout, context);
             ITextModel text = model.CreateGenerator(layout, context);
-            return new LocalModel(model, chat, text, context, device.ToString()) { Tokenizer = model.Tokenizer as IPretrainedTokenizer };
+            // Every generation passes the copy's gate, so a training round on the copy (ModelLease.Exclusive) has it alone.
+            var gate = new CopyGate();
+            return new LocalModel(model, chat is null ? null : new GatedChatModel(chat, gate), new GatedTextModel(text, gate), context, device.ToString(), gate)
+            {
+                Tokenizer = model.Tokenizer as IPretrainedTokenizer,
+            };
         }
         catch
         {
@@ -466,7 +474,9 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         }
     }
 
-    // The Idrak plug-in packages named in the settings, loaded in this plug-in's own load context (beside its Idrak), once.
+    // The Idrak plug-in packages named in the settings (the model families), loaded in this plug-in's own load context
+    // beside its Idrak, once: through IdrakInPlugins, the path the learning plug-in takes with the same setting (B4), so the
+    // families a process has do not depend on which plug-in loaded a model first.
     private static void RegisterIdrakPlugins(AiSettings settings)
     {
         lock (PluginsGate)
@@ -476,13 +486,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 return;
             }
 
-            var context = AssemblyLoadContext.GetLoadContext(typeof(LocalModelProvider).Assembly) ?? AssemblyLoadContext.Default;
-            foreach (var name in settings.IdrakPlugins)
-            {
-                // Once per assembly (IdrakPlugins.Load registers nothing twice).
-                IdrakPlugins.Load(context.LoadFromAssemblyName(new AssemblyName(name)));
-            }
-
+            IdrakInPlugins.IncludePackages(typeof(LocalModelProvider).Assembly, settings.IdrakPlugins);
             s_pluginsRegistered = true;
         }
     }
@@ -500,8 +504,12 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     }
 
     /// <summary>A loaded model: the weights and its chat and text generators.</summary>
-    private sealed class LocalModel(PretrainedModel model, IChatModel? chat, ITextModel text, int contextLength, string device) : IDisposable
+    private sealed class LocalModel(PretrainedModel model, IChatModel? chat, ITextModel text, int contextLength, string device, CopyGate gate) : IDisposable
     {
+        public PretrainedModel Pretrained { get; } = model;
+
+        public CopyGate Gate { get; } = gate;
+
         public IChatModel? Chat { get; } = chat;
 
         public ITextModel Text { get; } = text;
@@ -512,6 +520,6 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
         public IPretrainedTokenizer? Tokenizer { get; init; }
 
-        public void Dispose() => model.Dispose();
+        public void Dispose() => Pretrained.Dispose();
     }
 }

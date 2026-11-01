@@ -158,6 +158,7 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         }
 
         RaiseAnswered();
+        bool dirtyBefore = document.Document.IsDirty;
         var proposal = new ProposedEdits(edits, change.IsNew ? $"Agent: new file {change.Relative}" : $"Agent: {change.Relative}")
         {
             Placement = change.IsNew ? $"a new file: accepting it creates {change.Relative}" : "the agent's copy of the file against the editor's text, line by line",
@@ -200,7 +201,32 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
                 }
             }
 
-            Log(new ConversationEntry(ConversationRole.Note, $"{change.Relative}: accepted into the editor (one undo step){(created ? "; the file is created" : change.IsNew ? "; save it to create the file" : "")}."));
+            // B6: an existing file's accepted change is written to the workspace too (agentSaveOnAccept), unless the editor held
+            // unsaved edits of the user's before the diff: those are never saved for them; the change then waits in the editor.
+            bool saved = false;
+            string? unsaved = null;
+            if (!change.IsNew && _settings().AgentSaveOnAccept && document.Document.FilePath is not null)
+            {
+                if (dirtyBefore)
+                {
+                    unsaved = "; the file had unsaved edits of yours, so it is not saved: save it to write the change";
+                }
+                else
+                {
+                    try
+                    {
+                        await Host.SaveAsync(document, null, cancellationToken).ConfigureAwait(true);
+                        saved = true;
+                    }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+                    {
+                        unsaved = $"; it could not be saved ({error.Message}): save it from the editor";
+                    }
+                }
+            }
+
+            Log(new ConversationEntry(ConversationRole.Note, $"{change.Relative}: accepted into the editor (one undo step)"
+                + (created ? "; the file is created" : change.IsNew ? "; save it to create the file" : saved ? "; saved to the workspace" : unsaved ?? "") + "."));
         }
 
         ShowChanges();
@@ -272,12 +298,25 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         DiscardLater(_copy);
     }
 
+    // The working copies being deleted now, on the thread pool.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Task, byte> Discarding = new();
+
+    /// <summary>
+    /// Done when every working copy being deleted now (on the thread pool, after a Clear, a Discard all, a new run or a
+    /// panel's close) is gone: what removes or reuses the copies' folder waits for it first. Two recursive deletes of one
+    /// copy collided (a DirectoryNotFoundException on a file of the copy): the AI tests that failed on Windows only, where
+    /// a delete is slower, with "the agent's working copy goes missing".
+    /// </summary>
+    public static Task DiscardsDone() => Task.WhenAll(Discarding.Keys);
+
     // The working copy goes on the thread pool: a recursive delete of a folder's copy never runs on the UI thread.
     private static void DiscardLater(AgentWorkspace? copy)
     {
         if (copy is not null)
         {
-            _ = Task.Run(copy.Discard);
+            var task = Task.Run(copy.Discard);
+            Discarding.TryAdd(task, 0);
+            _ = task.ContinueWith(static done => Discarding.TryRemove(done, out _), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
     }
 
@@ -454,12 +493,15 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         {
             OnDelta = delta => { if (delta.Content.Length > 0) { Post(() => Said(delta.Content)); } },
             // A changed file's diff counts are read here, on the agent's thread, never on the UI's.
-            OnToolResult = result => { var change = ChangeAfter(copy, result); Post(() => ToolDone(result, change)); },
+            OnToolResult = result => { var change = ChangeAfter(copy, result, settings.AgentChangesIgnore); Post(() => ToolDone(result, change)); },
         };
         Post(() => _agent = agent);
         var run = earlier is null
             ? await agent.RunAsync(task, tools, token).ConfigureAwait(false)
             : await agent.ContinueAsync(earlier, task, tools, token).ConfigureAwait(false);
+        // B6: what the run wrote by any way (a tool, a command), listed at its end, so nothing it made stays in the copy unseen.
+        var written = Written(copy, settings.AgentChangesIgnore);
+        Post(() => Listed(written));
         string end = run.End switch
         {
             CodingAgentEnd.Answered => string.Create(CultureInfo.InvariantCulture, $"Done in {run.Rounds} turns, {run.ToolCalls} tool calls."),
@@ -508,18 +550,68 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
         }
     }
 
-    // The change an edit_file or write_file left (null: none, or not such a tool), and the relative path it touched.
-    private static (AgentChange? Change, string? Relative)? ChangeAfter(AgentWorkspace copy, ToolResult result)
+    // The changes a tool's call left, each with the relative path it touched (its change null: the same as the workspace's):
+    // edit_file's and write_file's file, read by the tools' own path rule (B6), and after run_command every file of the
+    // copy written since it was made; null for any other tool.
+    private static IReadOnlyList<(AgentChange? Change, string Relative)>? ChangeAfter(AgentWorkspace copy, ToolResult result, IReadOnlyList<string> ignore)
     {
-        if (result.Call.Name is not ("edit_file" or "write_file") || result.Call.Arguments["path"]?.ToString() is not { } path)
+        if (result.Call.Name == "run_command")
+        {
+            return Written(copy, ignore);
+        }
+
+        if (result.Call.Name is not ("edit_file" or "write_file") || result.Call.Arguments["path"]?.ToString() is not { } path || copy.ToolRelative(path) is not { } relative)
         {
             return null;
         }
 
-        return (copy.ChangeOf(path), System.IO.Path.GetRelativePath(copy.Workspace, copy.WorkspacePath(path)).Replace('\\', '/'));
+        return [(copy.ChangeOf(relative), Display(copy, relative))];
     }
 
-    private void ToolDone(ToolResult result, (AgentChange? Change, string? Relative)? edited)
+    // Every file of the copy written since it was made, with its change against the workspace (off the UI thread).
+    private static IReadOnlyList<(AgentChange? Change, string Relative)> Written(AgentWorkspace copy, IReadOnlyList<string> ignore)
+    {
+        try
+        {
+            return [.. copy.WrittenFiles(ignore).Select(relative => (copy.ChangeOf(relative), Display(copy, relative)))];
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return [];                                                      // a file held open by a command: its tool's change still lists it
+        }
+    }
+
+    private static string Display(AgentWorkspace copy, string relative) =>
+        System.IO.Path.GetRelativePath(copy.Workspace, copy.WorkspacePath(relative)).Replace('\\', '/');
+
+    // The run's written files at its end, listed as the tools' are.
+    private void Listed(IReadOnlyList<(AgentChange? Change, string Relative)> written)
+    {
+        if (_copy is null || written.Count == 0)
+        {
+            return;
+        }
+
+        Apply(written);
+        ShowChanges();
+    }
+
+    private void Apply(IReadOnlyList<(AgentChange? Change, string Relative)> edited)
+    {
+        foreach (var (change, relative) in edited)
+        {
+            if (change is not null)
+            {
+                _changes[change.Relative] = change;
+            }
+            else
+            {
+                _changes.Remove(relative);
+            }
+        }
+    }
+
+    private void ToolDone(ToolResult result, IReadOnlyList<(AgentChange? Change, string Relative)>? edited)
     {
         _assistant = -1;
         _text.Clear();
@@ -533,17 +625,9 @@ public sealed class AiAgentPanel : ConversationPanel, IDisposable
             });
         }
 
-        if (edited is { } after && _copy is not null)
+        if (edited is { Count: > 0 } after && _copy is not null)
         {
-            if (after.Change is { } change)
-            {
-                _changes[change.Relative] = change;
-            }
-            else if (after.Relative is { } relative)
-            {
-                _changes.Remove(relative);
-            }
-
+            Apply(after);
             ShowChanges();
         }
     }

@@ -4,6 +4,7 @@
 using System.Globalization;
 using Craft.Abstractions;
 using Craft.Plugins.Learning.Abstractions;
+using Idrak.Models;
 
 namespace Craft.Plugins.Learning;
 
@@ -785,16 +786,52 @@ public sealed class LearningSession : IDisposable
             progress.Report(p.Steps > 0 ? (double)p.Step / p.Steps : null, p.Line);
         }));
         _newEpisodes = 0;
-        var run = Task.Run(() =>
+        var families = Families(settings);
+        var provider = Provider();
+        string? adapter = ModelAdapters.For(model);                        // as the chat asks for it: the same copy
+        var run = Task.Run(async () =>
+        {
+            // B4: the model families first (the AI plug-in's idrakPlugins), so a round before any chat finds them. B7: the AI
+            // plug-in's copy of the model, trained in place while it holds it alone (never a second copy beside it); only
+            // without a provider that lends its copy does the trainer load one of its own.
+            reports.Report(new TrainingProgress($"loading {model}", 0, settings.Steps, float.NaN, TimeSpan.Zero, null, settings.Device, 0, 0));
+            var (lease, own) = await AcquireAsync(provider, model, adapter, families, settings, source.Token).ConfigureAwait(false);
+            IDisposable? hold = null;
+            try
+            {
+                if (lease?.Exclusive is { } exclusive)
+                {
+                    reports.Report(new TrainingProgress("waiting for the model's replies to end", 0, settings.Steps, float.NaN, TimeSpan.Zero, null, settings.Device, 0, 0));
+                    hold = await exclusive(source.Token).ConfigureAwait(false);
+                }
+
+                var loaded = own ?? (PretrainedModel)lease!.Underlying!;
+                reports.Report(new TrainingProgress(lease is null ? "loaded on" : "the AI plug-in's copy on", 0, settings.Steps, float.NaN, TimeSpan.Zero, null, loaded.Device.ToString(), 0, 0));
+                return Train(loaded);
+            }
+            finally
+            {
+                hold?.Dispose();
+                lease?.Dispose();
+                own?.Dispose();
+            }
+        }, source.Token);
+
+        TrainingResult Train(PretrainedModel loaded)
         {
             List<EditorEpisode> episodes;
-            lock (_io)
+            try
             {
-                episodes = store.All();
+                lock (_io)
+                {
+                    episodes = store.All();
+                }
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or FormatException)
+            {
+                throw new LearningStageException(LearningStages.Episodes, LearningTrainer.Describe(error, LearningStages.Episodes, model, settings), error);
             }
 
-            using var loaded = LearningTrainer.LoadModel(settings, model);
-            reports.Report(new TrainingProgress("loaded on", 0, settings.Steps, float.NaN, TimeSpan.Zero, null, loaded.Device.ToString(), 0, 0));
             if (settings.Trainer == "preference" || workspace is null)
             {
                 return LearningTrainer.TrainPreferences(loaded, model, episodes, versions, settings, reports, source.Token);
@@ -814,7 +851,8 @@ public sealed class LearningSession : IDisposable
             }
 
             return result;
-        }, source.Token);
+        }
+
         Training = run;
         Refresh();
         TrainingResult? outcome = null;
@@ -828,11 +866,19 @@ public sealed class LearningSession : IDisposable
         {
             message = "Training stopped: no adapter written, the current one stays.";
         }
+        catch (LearningStageException error)
+        {
+            // B7: every failure names its stage (load, episodes, pairs, step, evaluate, promote) and says what to change.
+            message = error.Message;
+            LastFailureStage = error.Stage;
+            _host.Log(EditorLogLevel.Error, message, error.InnerException ?? error);
+        }
 #pragma warning disable CA1031 // A training's failure is shown to the user; the editor goes on.
         catch (Exception error)
 #pragma warning restore CA1031
         {
-            message = $"Training failed: {error.Message}";
+            message = LearningTrainer.Describe(error, LearningStages.Load, model, settings);
+            LastFailureStage = LearningStages.Load;
             _host.Log(EditorLogLevel.Error, message, error);
         }
         finally
@@ -845,6 +891,11 @@ public sealed class LearningSession : IDisposable
         }
 
         LastTraining = outcome;
+        if (outcome is not null)
+        {
+            LastFailureStage = null;
+        }
+
         _status = message;
         if (outcome?.Promoted == true)
         {
@@ -857,6 +908,80 @@ public sealed class LearningSession : IDisposable
         {
             await _host.ShowMessageAsync("Learning: training", message).ConfigureAwait(true);
         }
+    }
+
+    /// <summary>The stage the last training failed in (<see cref="LearningStages"/>), or null when it did not fail.</summary>
+    public string? LastFailureStage { get; private set; }
+
+    /// <summary>
+    /// The model to train, loaded: the provider's copy (a lease of the AI plug-in's "local" provider, with the same name,
+    /// device, weights and adapter the chat asks for, so the one it holds) when it lends one, else one of its own (no AI
+    /// plug-in, or a provider that lends none). The families' packages are registered first, once a process (B4).
+    /// </summary>
+    private static async Task<(ModelLease? Lease, PretrainedModel? Own)> AcquireAsync(IModelProvider? provider, string model, string? adapter, IReadOnlyList<string> families,
+        LearningSettings settings, CancellationToken cancellationToken)
+    {
+        try
+        {
+            LearningLibraries.EnsureFamilies(families);
+            LearningTrainer.ApplyLimits(settings);
+            if (provider is not null)
+            {
+                var lease = await provider.AcquireAsync(new ModelRequest(model)
+                {
+                    Device = settings.Device.Equals("auto", StringComparison.OrdinalIgnoreCase) ? null : settings.Device,
+                    Weights = settings.Weights.Length > 0 ? settings.Weights : null,
+                    Adapter = adapter,
+                }, null, cancellationToken).ConfigureAwait(false);
+                if (lease.Underlying is PretrainedModel && lease.Exclusive is not null)
+                {
+                    return (lease, null);
+                }
+
+                lease.Dispose();                                           // a provider that lends no copy: one of our own
+            }
+
+            return (null, LearningTrainer.LoadModel(settings, model));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            throw new LearningStageException(LearningStages.Load, LearningTrainer.Describe(error, LearningStages.Load, model, settings), error);
+        }
+    }
+
+    // The model families' packages: the setting, else the AI plug-in's idrakPlugins, else Idrak.Text.Plugins (the AI
+    // plug-in's own default) when no AI plug-in is installed.
+    private IReadOnlyList<string> Families(LearningSettings settings)
+    {
+        if (settings.IdrakPlugins.Count > 0)
+        {
+            return settings.IdrakPlugins;
+        }
+
+        try
+        {
+            return _host.Settings.Get("ai", "idrakPlugins").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+        catch (Exception error) when (error is NotRegisteredException or ArgumentException)
+        {
+            return ["Idrak.Text.Plugins"];
+        }
+    }
+
+    // The AI plug-in's model provider ("local" by default), or null when none is registered.
+    private IModelProvider? Provider()
+    {
+        string name;
+        try
+        {
+            name = _host.Settings.Get("ai", "modelProvider").Trim();
+        }
+        catch (Exception error) when (error is NotRegisteredException or ArgumentException)
+        {
+            name = ModelProviders.Local;
+        }
+
+        return ModelProviders.Find(name.Length > 0 ? name : ModelProviders.Local);
     }
 
     /// <summary>Stops the running training at its next step.</summary>

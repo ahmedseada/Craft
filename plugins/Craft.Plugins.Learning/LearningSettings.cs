@@ -61,8 +61,23 @@ public sealed record LearningSettings
     /// <summary>The model trained (<c>model</c>, a name Idrak's model sources resolve); empty: the AI plug-in's model.</summary>
     public string Model { get; init; } = "";
 
-    /// <summary>The device training runs on (<c>device</c>: auto, cpu, cuda:0, vulkan:0).</summary>
+    /// <summary>
+    /// The device training runs on (<c>device</c>: auto, cpu, cuda:0, vulkan:0); auto takes the AI plug-in's copy of the
+    /// model where it is (one copy shared, note 22), else the library's choice.
+    /// </summary>
     public string Device { get; init; } = "auto";
+
+    /// <summary>
+    /// The weights the model is trained over (<c>weights</c>: int8, int4, bf16, float32); empty: the AI plug-in's, so the
+    /// copy it has loaded is the one trained (B7: the trainer loaded a float32 second copy beside it).
+    /// </summary>
+    public string Weights { get; init; } = "";
+
+    /// <summary>
+    /// The Idrak plug-in packages registered before the model loads (<c>idrakPlugins</c>, the model families); empty: the AI
+    /// plug-in's <c>idrakPlugins</c>, or Idrak.Text.Plugins without it (B4).
+    /// </summary>
+    public IReadOnlyList<string> IdrakPlugins { get; init; } = [];
 
     /// <summary>CPU threads (<c>threads</c>, Idrak's ComputeResources; 0: all cores).</summary>
     public int Threads { get; init; }
@@ -100,8 +115,20 @@ public sealed record LearningSettings
     /// <summary>The learning rate (<c>learningRate</c>).</summary>
     public float LearningRate { get; init; } = 1e-4f;
 
-    /// <summary>Tokens a step's batch holds (<c>batchTokens</c>).</summary>
-    public int BatchTokens { get; init; } = 4096;
+    /// <summary>
+    /// Tokens a step's batch holds (<c>batchTokens</c>); 0 (auto, the default): the most of <see cref="BatchTokensMax"/>,
+    /// halved, that the device's free memory fits, measured when the training starts (card-agnostic).
+    /// </summary>
+    public int BatchTokens { get; init; }
+
+    /// <summary>The batch an automatic <see cref="BatchTokens"/> starts from before it is fitted to the free memory (<c>batchTokensMax</c>).</summary>
+    public int BatchTokensMax { get; init; } = 4096;
+
+    /// <summary>The longest sequence trained, in tokens (<c>maxLength</c>); 0 (auto): the longest pair's, at most the model's positions.</summary>
+    public int MaxLength { get; init; }
+
+    /// <summary>Whether a step that runs out of memory halves the batch and tries again before the training fails (<c>stepDown</c>).</summary>
+    public bool StepDown { get; init; } = true;
 
     /// <summary>The share of episodes and tasks held out to measure an adapter on (<c>heldOutShare</c>).</summary>
     public double HeldOutShare { get; init; } = 0.2;
@@ -136,7 +163,9 @@ public sealed record LearningSettings
         new("minEpisodes", "20", "New episodes since the last training before an idle training starts."),
         new("trainer", "preference", "What training does: preference (your verdicts), tasks (the workspace's failing tests), both."),
         new("model", "", "The model trained as an adapter (empty: the AI plug-in's model). Its base weights never change."),
-        new("device", "auto", "The device training runs on: auto, cpu, cuda:0, vulkan:0."),
+        new("device", "auto", "The device training runs on: auto (the AI plug-in's copy where it is), cpu, cuda:0, vulkan:0."),
+        new("weights", "", "The weights trained over: int8, int4, bf16, float32 (empty: the AI plug-in's, so its loaded copy is trained, never a second)."),
+        new("idrakPlugins", "", "Idrak plug-in packages (the model families) registered before the model loads (empty: the AI plug-in's idrakPlugins)."),
         new("threads", "0", "CPU threads for training (0: all cores)."),
         new("cpuMemoryMb", "0", "CPU memory cap for training, MiB (0: none)."),
         new("gpuMemoryMb", "0", "Device memory cap for training, MiB (0: none)."),
@@ -149,7 +178,10 @@ public sealed record LearningSettings
         new("steps", "40", "Optimizer steps of one training (iterations on the tasks)."),
         new("rank", "8", "The adapter's rank."),
         new("learningRate", "0.0001", "The learning rate."),
-        new("batchTokens", "4096", "Tokens one step's batch holds."),
+        new("batchTokens", "auto", "Tokens one step's batch holds: auto (fitted to the device's free memory when training starts) or a number."),
+        new("batchTokensMax", "4096", "The batch an automatic batchTokens starts from before it is fitted to the free memory."),
+        new("maxLength", "auto", "The longest sequence trained, in tokens: auto (the longest pair's, at most the model's positions) or a number."),
+        new("stepDown", "on", "On a step that runs out of memory, halve the batch and try again before failing: on or off."),
         new("heldOutShare", "0.2", "The share of episodes and tasks held out to measure an adapter on."),
         new("promotionMargin", "0", "How much better (held-out margin) a new adapter must score to replace the current one."),
         new("shareTo", "", "Where a share goes: folder:PATH, https://ADDRESS, or kind:target. No default: nothing is shared until you name one."),
@@ -251,6 +283,10 @@ public sealed record LearningSettings
             return kinds;
         }
 
+        // "auto" (or empty, or 0) as 0, else a whole number in its range.
+        int Auto(string key, int min, int max) =>
+            Text(key) is { Length: > 0 } text && !text.Equals("auto", StringComparison.OrdinalIgnoreCase) && text != "0" ? Whole(key, 0, min, max) : 0;
+
         string Named(string key, string fallback)
         {
             string text = Text(key);
@@ -275,6 +311,8 @@ public sealed record LearningSettings
             Trainer = Choice("trainer", defaults.Trainer, "preference", "tasks", "both"),
             Model = Text("model"),
             Device = Named("device", defaults.Device),
+            Weights = Choice("weights", "", "int8", "int4", "bf16", "bfloat16", "float32", "f32"),
+            IdrakPlugins = Text("idrakPlugins").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             Threads = Whole("threads", 0, 0, 4096),
             CpuMemoryMegabytes = Whole("cpuMemoryMb", 0, 0, int.MaxValue),
             GpuMemoryMegabytes = Whole("gpuMemoryMb", 0, 0, int.MaxValue),
@@ -287,7 +325,10 @@ public sealed record LearningSettings
             Steps = Whole("steps", defaults.Steps, 1, 1_000_000),
             Rank = Whole("rank", defaults.Rank, 1, 1024),
             LearningRate = (float)Number("learningRate", defaults.LearningRate, 1e-9, 1),
-            BatchTokens = Whole("batchTokens", defaults.BatchTokens, 16, 1 << 24),
+            BatchTokens = Auto("batchTokens", 16, 1 << 24),
+            BatchTokensMax = Whole("batchTokensMax", defaults.BatchTokensMax, 16, 1 << 24),
+            MaxLength = Auto("maxLength", 16, 1 << 24),
+            StepDown = Choice("stepDown", "on", "on", "off") == "on",
             HeldOutShare = Number("heldOutShare", defaults.HeldOutShare, 0, 0.9),
             PromotionMargin = Number("promotionMargin", defaults.PromotionMargin, -1e9, 1e9),
             ShareTo = Text("shareTo"),

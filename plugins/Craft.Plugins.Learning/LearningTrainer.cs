@@ -10,6 +10,7 @@ using Craft.Abstractions;
 using Idrak.Abstraction.Diagnostics;
 using Idrak.Abstraction.Generation;
 using Idrak.Abstraction.Reinforcement;
+using Idrak.Layers;
 using Idrak.Models;
 using Idrak.Reinforcement;
 using Idrak.Text;
@@ -223,11 +224,69 @@ public sealed class AdapterVersions
 /// <param name="ManagedBytes">The managed memory held.</param>
 public sealed record TrainingProgress(string Stage, int Step, int Steps, float Loss, TimeSpan Elapsed, TimeSpan? Left, string Device, long DeviceBytes, long ManagedBytes)
 {
+    /// <summary>What to know about the step (the batch it runs, an out-of-memory step down), or null.</summary>
+    public string? Note { get; init; }
+
     /// <summary>One line for the status bar ("Training 12/40 · loss 0.52 · cuda:0 · 0:41 left").</summary>
-    public string Line => Step == 0 || Steps == 0
+    public string Line => (Step == 0 || Steps == 0
         ? $"Learning: {Stage} · {Device}"
         : string.Create(CultureInfo.InvariantCulture,
-            $"Learning: {Stage} {Step}/{Steps}{(float.IsFinite(Loss) ? $" · loss {Loss:F3}" : "")} · {Device}{(Left is { } left ? $" · {left:m\\:ss} left" : "")}");
+            $"Learning: {Stage} {Step}/{Steps}{(float.IsFinite(Loss) ? $" · loss {Loss:F3}" : "")} · {Device}{(Left is { } left ? $" · {left:m\\:ss} left" : "")}"))
+        + (Note is { Length: > 0 } note ? " · " + note : "");
+}
+
+/// <summary>The stages a training round goes through, as its failures name them (B7).</summary>
+public static class LearningStages
+{
+    /// <summary>Loading the model (the AI plug-in's copy, or one of its own), its families and the current adapter.</summary>
+    public const string Load = "load";
+
+    /// <summary>Reading the recorded episodes and making them trajectories with their rewards.</summary>
+    public const string Episodes = "episodes";
+
+    /// <summary>Choosing the preference pairs.</summary>
+    public const string Pairs = "pairs";
+
+    /// <summary>An optimizer step.</summary>
+    public const string Step = "step";
+
+    /// <summary>Measuring on the held-out pairs (or tasks).</summary>
+    public const string Evaluate = "evaluate";
+
+    /// <summary>Writing the adapter and its record, and promoting it.</summary>
+    public const string Promote = "promote";
+}
+
+/// <summary>A training round that failed, with the stage it failed in (<see cref="LearningStages"/>) and what to do, in words.</summary>
+public sealed class LearningStageException : Exception
+{
+    /// <summary>A failure in <paramref name="stage"/>.</summary>
+    public LearningStageException(string stage, string message, Exception? inner = null)
+        : base(message, inner)
+    {
+        Stage = stage;
+    }
+
+    /// <summary>Not used: a failure names its stage.</summary>
+    public LearningStageException()
+        : this(LearningStages.Load, "The training failed.")
+    {
+    }
+
+    /// <summary>Not used: a failure names its stage.</summary>
+    public LearningStageException(string message)
+        : this(LearningStages.Load, message)
+    {
+    }
+
+    /// <summary>Not used: a failure names its stage.</summary>
+    public LearningStageException(string message, Exception inner)
+        : this(LearningStages.Load, message, inner)
+    {
+    }
+
+    /// <summary>The stage it failed in (<see cref="LearningStages"/>).</summary>
+    public string Stage { get; }
 }
 
 /// <summary>What a training did.</summary>
@@ -273,6 +332,23 @@ public static class LearningTrainer
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ApplyLimits(settings);
+        string folder = ModelSource.Resolve(name);
+        var device = settings.Device.Equals("auto", StringComparison.OrdinalIgnoreCase) ? Device.Default : Device.Parse(settings.Device);
+        string weights = settings.Weights;
+        return PretrainedModel.Load(folder, new PretrainedOptions
+        {
+            Device = device,
+            Int8 = weights == "int8",
+            Int4 = weights == "int4",
+            BFloat16 = weights is "bf16" or "bfloat16",
+        });
+    }
+
+    /// <summary>The settings' limits on Idrak's ComputeResources (process-wide, as the library has them); 0 leaves the library's own.</summary>
+    public static void ApplyLimits(LearningSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
         if (settings.Threads > 0)
         {
             ComputeResources.MaxCpuThreads = settings.Threads;
@@ -287,10 +363,41 @@ public static class LearningTrainer
         {
             ComputeResources.GpuMemoryLimit = settings.GpuMemoryMegabytes * 1024 * 1024;
         }
+    }
 
-        string folder = ModelSource.Resolve(name);
-        var device = settings.Device.Equals("auto", StringComparison.OrdinalIgnoreCase) ? Device.Default : Device.Parse(settings.Device);
-        return PretrainedModel.Load(folder, new PretrainedOptions { Device = device });
+    /// <summary>
+    /// Takes <paramref name="model"/> for a round: the adapters it carries (the AI plug-in's copy holds the promoted one) are
+    /// lifted off; disposing removes the round's own adapters and frees them (Idrak's <c>RemoveAdapters</c>), puts the lifted
+    /// ones back and gives the device's cached blocks back, so the copy is as it was found and the device memory does not
+    /// grow round after round (rule 77).
+    /// </summary>
+    public static IDisposable Borrow(PretrainedModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return new Borrowed(model, model.Network.DisableAdapters());
+    }
+
+    /// <summary>
+    /// <paramref name="error"/> in words, naming <paramref name="stage"/>; for an out-of-memory one what to change (as the AI
+    /// plug-in says it): a smaller batch or rank, smaller weights, other programs on the device closed; offloading to
+    /// system memory named as a choice, never set.
+    /// </summary>
+    public static string Describe(Exception error, string stage, string model, LearningSettings settings, int batchTokens = 0)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        ArgumentNullException.ThrowIfNull(settings);
+        string Variable(string key) => PluginSetting.VariableName(LearningSettings.PluginName, key);
+        if (!ModelErrors.IsOutOfMemory(error))
+        {
+            return $"Training failed at its {stage} stage: {error.Message}";
+        }
+
+        string batch = batchTokens > 0 ? string.Create(CultureInfo.InvariantCulture, $" at {batchTokens} tokens a batch") : "";
+        string weights = settings.Weights is "int4" ? "" : $", train it over smaller weights ({Variable("weights")} {(settings.Weights is "int8" ? "int4" : "int8")})";
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Training failed at its {stage} stage: the device ran out of memory for {model}{batch}. Lower {Variable("batchTokens")} or {Variable("maxLength")}, "
+            + $"or the rank ({Variable("rank")} {settings.Rank}){weights}, or close other programs that use the GPU, then try again. "
+            + $"(To keep what does not fit in system memory, slower, set IDRAK_OFFLOAD=1 yourself.) {error.Message}");
     }
 
     /// <summary>The editor-verdict reward of each episode (the setting's weights).</summary>
@@ -408,14 +515,23 @@ public static class LearningTrainer
         var deviceMemory = new List<long>();
         var managedMemory = new List<long>();
         var current = versions.Current is { } promoted && promoted.BaseModel == baseModel ? promoted : null;
-        if (current is not null)
+        // The copy as the round found it comes back at its end (B7: the AI plug-in's copy is trained in place, never a second).
+        using var borrowed = Borrow(model);
+        Stage(LearningStages.Load, baseModel, settings, () =>
         {
-            model.LoadAdapter(current.Folder);                             // go on from the current adapter
-        }
+            if (current is not null)
+            {
+                model.LoadAdapter(current.Folder);                         // go on from the current adapter (its base frozen: Idrak's LoadAdapter)
+            }
+        });
 
-        var encoder = Encoder(model);
-        var rewards = Rewards(episodes, settings);
-        var all = Trajectories(episodes, model, rewards);
+        ChatTranscriptEncoder encoder = null!;
+        List<Trajectory<ChatObservation, ChatMessage>> all = null!;
+        Stage(LearningStages.Episodes, baseModel, settings, () =>
+        {
+            encoder = Encoder(model);
+            all = Trajectories(episodes, model, Rewards(episodes, settings));
+        });
         var train = new List<Trajectory<ChatObservation, ChatMessage>>();
         var held = new List<Trajectory<ChatObservation, ChatMessage>>();
         for (int i = 0; i < all.Count; i++)
@@ -425,7 +541,20 @@ public static class LearningTrainer
 
         using var batch = new RolloutBatch<ChatObservation, ChatMessage>(Renumber(train));
         var choices = new List<PreferenceChoice>();
-        PreferencePairSources.Get(settings.Pairs).Choose(batch.Trajectories, choices);
+        List<PreferencePair> heldPairs = [];
+        int longest = 16;
+        Stage(LearningStages.Pairs, baseModel, settings, () =>
+        {
+            PreferencePairSources.Get(settings.Pairs).Choose(batch.Trajectories, choices);
+            if (choices.Count > 0)
+            {
+                heldPairs = held.Count == 0 ? [] : PreferencePairs.Build(Renumber(held), settings.Pairs, encoder);
+                foreach (var pair in PreferencePairs.Build(Renumber(train), settings.Pairs, encoder).Concat(heldPairs))
+                {
+                    longest = Math.Max(longest, Math.Max(pair.Chosen.Tokens.Length, pair.Rejected.Tokens.Length));
+                }
+            }
+        });
         if (choices.Count == 0)
         {
             return new TrainingResult(null, string.Create(CultureInfo.InvariantCulture,
@@ -433,50 +562,128 @@ public static class LearningTrainer
                 losses, deviceMemory, managedMemory);
         }
 
-        var heldPairs = held.Count == 0 ? [] : PreferencePairs.Build(Renumber(held), settings.Pairs, encoder);
-        var options = new FineTuningOptions
+        // The sequence and the batch, sized at run time (card-agnostic): the longest pair (at most the model's positions, or
+        // the setting), and the most of batchTokensMax that the device's free memory fits (Idrak's estimate), or the setting.
+        int sequence = Math.Max(16, settings.MaxLength > 0 ? settings.MaxLength : Math.Min(model.MaxPositions, longest));
+        int floor = Math.Min(sequence, longest);
+        int batchTokens = Math.Max(floor, settings.BatchTokens > 0 ? settings.BatchTokens : settings.BatchTokensMax);
+        int done = 0;
+        string? note = null;
+        LanguageModelPolicy NewPolicy(int tokens) => new(new FineTuningSession(model, new FineTuningOptions
         {
-            Rank = settings.Rank, Alpha = 2f * settings.Rank, LearningRate = settings.LearningRate, BatchTokens = settings.BatchTokens, Seed = 7,
-        };
-        using var policy = new LanguageModelPolicy(new FineTuningSession(model, options, totalSteps: settings.Steps), new LanguageModelPolicyOptions { MaxNewTokens = 64 });
-        var session = policy.Session;
-        double before = heldPairs.Count == 0 ? double.NaN : Margin(session, heldPairs, adapters: current is not null);
-        progress?.Report(new TrainingProgress("training", 0, settings.Steps, float.NaN, watch.Elapsed, null, device, 0, GC.GetTotalMemory(false)));
-        var lossOptions = settings.LossOptions.Count == 0 ? null : settings.LossOptions;
-        for (int step = 1; step <= settings.Steps; step++)
+            Rank = settings.Rank, Alpha = 2f * settings.Rank, LearningRate = settings.LearningRate, BatchTokens = tokens, MaxLength = sequence, Seed = 7,
+        }, totalSteps: Math.Max(1, settings.Steps - done)), new LanguageModelPolicyOptions { MaxNewTokens = 64 });
+
+        var policy = Stage(LearningStages.Load, baseModel, settings, () => NewPolicy(batchTokens));
+        try
         {
-            if (cancellationToken.IsCancellationRequested)
+            if (settings.BatchTokens == 0)
             {
-                return new TrainingResult(null, string.Create(CultureInfo.InvariantCulture, $"Stopped at step {step - 1} of {settings.Steps}: no adapter written, the current one stays."),
-                    losses, deviceMemory, managedMemory);
+                // Measured with the round's adapters on the model (their gradients counted, the base frozen).
+                int fits = FineTuner.BatchTokensThatFit(model, policy.Session.Options, floor);
+                if (fits < batchTokens)
+                {
+                    policy.Dispose();
+                    batchTokens = fits;
+                    policy = Stage(LearningStages.Load, baseModel, settings, () => NewPolicy(batchTokens));
+                }
             }
 
-            var stats = policy.UpdatePreferences(batch, choices, settings.Loss, lossOptions, settings.Reference);
-            losses.Add(stats.Loss);
-            long held1 = model.Device.Backend.GetMemoryUsage().InUse;
-            deviceMemory.Add(held1);
-            managedMemory.Add(GC.GetTotalMemory(forceFullCollection: true));   // a step takes far longer than a collection
-            var left = TimeSpan.FromTicks(watch.Elapsed.Ticks / step * (settings.Steps - step));
-            progress?.Report(new TrainingProgress("training", step, settings.Steps, stats.Loss, watch.Elapsed, left, device, held1, managedMemory[^1]));
-        }
+            note = string.Create(CultureInfo.InvariantCulture, $"batch {batchTokens} tokens");
 
-        progress?.Report(new TrainingProgress("measuring on the held-out set", settings.Steps, settings.Steps, losses[^1], watch.Elapsed, null, device, deviceMemory[^1], managedMemory[^1]));
-        double after = heldPairs.Count == 0 ? double.NaN : Margin(session, heldPairs, adapters: true);
-        var (number, folder) = versions.Next();
-        model.SaveAdapter(folder);
-        bool promote = heldPairs.Count > 0 && after > before + settings.PromotionMargin;
-        string note = heldPairs.Count == 0
-            ? "not promoted: no held-out pair to measure it on yet (more episodes with a kept text are needed)"
-            : promote
-                ? string.Create(CultureInfo.InvariantCulture, $"promoted: held-out margin {after:F3} against {before:F3} for {(current is null ? "the base model" : $"v{current.Number}")}")
-                : string.Create(CultureInfo.InvariantCulture, $"not promoted: held-out margin {after:F3} is not above {before:F3} (+{settings.PromotionMargin:F3}) for {(current is null ? "the base model" : $"v{current.Number}")}");
-        var version = new AdapterVersion(number, folder, DateTimeOffset.UtcNow, baseModel, train.Count, choices.Count, heldPairs.Count, settings.Steps, losses[0], losses[^1],
-            before, after, promote, note);
-        versions.Save(version);
-        return new TrainingResult(version, string.Create(CultureInfo.InvariantCulture,
-            $"v{number}: {choices.Count} pairs from {train.Count} episodes, {settings.Steps} {settings.Loss} steps on {device} (loss {losses[0]:F3} to {losses[^1]:F3}), {note}."),
-            losses, deviceMemory, managedMemory);
+            // A stage's work; out of memory, the batch steps down by half (to one sequence) and the work runs again, said in
+            // the activity, before the round fails naming the stage with what to change.
+            T Run<T>(string stage, Func<T> work)
+            {
+                while (true)
+                {
+                    try
+                    {
+                        return work();
+                    }
+                    catch (Exception error) when (settings.StepDown && ModelErrors.IsOutOfMemory(error) && batchTokens / 2 >= floor && error is not OperationCanceledException)
+                    {
+                        int was = batchTokens;
+                        batchTokens /= 2;
+                        policy.Dispose();
+                        ComputeResources.ReleaseCachedMemory(model.Device);
+                        policy = NewPolicy(batchTokens);
+                        note = string.Create(CultureInfo.InvariantCulture, $"out of memory at {was} tokens a batch: {batchTokens} now");
+                        progress?.Report(new TrainingProgress("training", done, settings.Steps, losses.Count > 0 ? losses[^1] : float.NaN, watch.Elapsed, null, device,
+                            model.Device.Backend.GetMemoryUsage().InUse, GC.GetTotalMemory(false)) { Note = note });
+                    }
+                    catch (Exception error) when (error is not OperationCanceledException and not LearningStageException)
+                    {
+                        throw new LearningStageException(stage, Describe(error, stage, baseModel, settings, batchTokens), error);
+                    }
+                }
+            }
+
+            double before = heldPairs.Count == 0 ? double.NaN : Run(LearningStages.Evaluate, () => Margin(policy.Session, heldPairs, adapters: current is not null));
+            progress?.Report(new TrainingProgress("training", 0, settings.Steps, float.NaN, watch.Elapsed, null, device, 0, GC.GetTotalMemory(false)) { Note = note });
+            var lossOptions = settings.LossOptions.Count == 0 ? null : settings.LossOptions;
+            for (int step = 1; step <= settings.Steps; step++)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return new TrainingResult(null, string.Create(CultureInfo.InvariantCulture, $"Stopped at step {step - 1} of {settings.Steps}: no adapter written, the current one stays."),
+                        losses, deviceMemory, managedMemory);
+                }
+
+                var stats = Run(LearningStages.Step, () => policy.UpdatePreferences(batch, choices, settings.Loss, lossOptions, settings.Reference));
+                done = step;
+                losses.Add(stats.Loss);
+                long held1 = model.Device.Backend.GetMemoryUsage().InUse;
+                deviceMemory.Add(held1);
+                managedMemory.Add(GC.GetTotalMemory(forceFullCollection: true));   // a step takes far longer than a collection
+                var left = TimeSpan.FromTicks(watch.Elapsed.Ticks / step * (settings.Steps - step));
+                progress?.Report(new TrainingProgress("training", step, settings.Steps, stats.Loss, watch.Elapsed, left, device, held1, managedMemory[^1]) { Note = note });
+            }
+
+            progress?.Report(new TrainingProgress("measuring on the held-out set", settings.Steps, settings.Steps, losses[^1], watch.Elapsed, null, device, deviceMemory[^1], managedMemory[^1]));
+            double after = heldPairs.Count == 0 ? double.NaN : Run(LearningStages.Evaluate, () => Margin(policy.Session, heldPairs, adapters: true));
+            return Run(LearningStages.Promote, () =>
+            {
+                var (number, folder) = versions.Next();
+                model.SaveAdapter(folder);
+                bool promote = heldPairs.Count > 0 && after > before + settings.PromotionMargin;
+                string why = heldPairs.Count == 0
+                    ? "not promoted: no held-out pair to measure it on yet (more episodes with a kept text are needed)"
+                    : promote
+                        ? string.Create(CultureInfo.InvariantCulture, $"promoted: held-out margin {after:F3} against {before:F3} for {(current is null ? "the base model" : $"v{current.Number}")}")
+                        : string.Create(CultureInfo.InvariantCulture, $"not promoted: held-out margin {after:F3} is not above {before:F3} (+{settings.PromotionMargin:F3}) for {(current is null ? "the base model" : $"v{current.Number}")}");
+                var version = new AdapterVersion(number, folder, DateTimeOffset.UtcNow, baseModel, train.Count, choices.Count, heldPairs.Count, settings.Steps, losses[0], losses[^1],
+                    before, after, promote, why);
+                versions.Save(version);
+                return new TrainingResult(version, string.Create(CultureInfo.InvariantCulture,
+                    $"v{number}: {choices.Count} pairs from {train.Count} episodes, {settings.Steps} {settings.Loss} steps on {device} at {batchTokens} tokens a batch (loss {losses[0]:F3} to {losses[^1]:F3}), {why}."),
+                    losses, deviceMemory, managedMemory);
+            });
+        }
+        finally
+        {
+            policy.Dispose();
+        }
     }
+
+    // A stage's work, its failure named with the stage and said in words.
+    private static T Stage<T>(string stage, string model, LearningSettings settings, Func<T> work)
+    {
+        try
+        {
+            return work();
+        }
+        catch (Exception error) when (error is not OperationCanceledException and not LearningStageException)
+        {
+            throw new LearningStageException(stage, Describe(error, stage, model, settings), error);
+        }
+    }
+
+    private static void Stage(string stage, string model, LearningSettings settings, Action work) => Stage(stage, model, settings, () =>
+    {
+        work();
+        return true;
+    });
 
     /// <summary>The C# environment's options for the tasks of <paramref name="suite"/> (the setting's sandbox and reward), with <paramref name="extra"/> over them.</summary>
     public static Dictionary<string, string> TaskOptions(string suite, LearningSettings settings, IReadOnlyDictionary<string, string>? extra = null)
@@ -528,20 +735,29 @@ public static class LearningTrainer
         var watch = Stopwatch.StartNew();
         string device = model.Device.ToString();
         var current = versions.Current is { } promoted && promoted.BaseModel == baseModel ? promoted : null;
+        using var borrowed = Borrow(model);                                 // the copy comes back as found (B7)
         if (current is not null)
         {
-            model.LoadAdapter(current.Folder);
+            Stage(LearningStages.Load, baseModel, settings, () => model.LoadAdapter(current.Folder));
         }
 
-        var options = new FineTuningOptions { Rank = settings.Rank, Alpha = 2f * settings.Rank, LearningRate = settings.LearningRate, BatchTokens = settings.BatchTokens, Seed = 7 };
-        using var policy = new LanguageModelPolicy(new FineTuningSession(model, options, totalSteps: Math.Max(1, settings.Steps * 2)), new LanguageModelPolicyOptions { MaxNewTokens = 512 });
+        int batchTokens = settings.BatchTokens > 0 ? settings.BatchTokens : settings.BatchTokensMax;
+        var options = new FineTuningOptions
+        {
+            Rank = settings.Rank, Alpha = 2f * settings.Rank, LearningRate = settings.LearningRate, BatchTokens = batchTokens, Seed = 7,
+            MaxLength = settings.MaxLength > 0 ? settings.MaxLength : new FineTuningOptions().MaxLength,
+        };
+        using var policy = Stage(LearningStages.Load, baseModel, settings,
+            () => new LanguageModelPolicy(new FineTuningSession(model, options, totalSteps: Math.Max(1, settings.Steps * 2)), new LanguageModelPolicyOptions { MaxNewTokens = 512 }));
+        // On the training's own thread (the session's Task.Run), never the UI thread's: the episodes run commands.
         double Score() => heldOutSuite is null ? double.NaN
-            : PlayTasksAsync(policy, heldOutSuite, settings, 2, null, cancellationToken).GetAwaiter().GetResult().Average(t => (double)t.Return);
+            : Stage(LearningStages.Evaluate, baseModel, settings,
+                () => PlayTasksAsync(policy, heldOutSuite, settings, 2, null, cancellationToken).GetAwaiter().GetResult().Average(t => (double)t.Return));
         double before = Score();
         using var reporter = new StepReporter(step => progress?.Report(new TrainingProgress("training on the tasks", (int)step, settings.Steps, float.NaN, watch.Elapsed,
             step > 0 ? TimeSpan.FromTicks(watch.Elapsed.Ticks / step * Math.Max(0, settings.Steps - step)) : null, device, model.Device.Backend.GetMemoryUsage().InUse,
             GC.GetTotalMemory(false))));
-        var run = ReinforcementTrainer.Train(TaskEnvironment, policy, new ReinforcementOptions
+        var run = Stage(LearningStages.Step, baseModel, settings, () => ReinforcementTrainer.Train(TaskEnvironment, policy, new ReinforcementOptions
         {
             Algorithm = settings.Algorithm,
             Estimator = settings.Estimator.Length == 0 ? null : settings.Estimator,
@@ -552,7 +768,7 @@ public static class LearningTrainer
             Pairs = settings.Trainer == "both" ? PreferencePairSources.Group : null,
             PreferenceLoss = settings.Loss,
             EnvironmentOptions = TaskOptions(suite, settings),
-        }, reporter, cancellationToken);
+        }, reporter, cancellationToken));
         var losses = run.History.Select(h => (float)h.Loss).ToList();
         if (run.Cancelled || losses.Count == 0)
         {
@@ -561,14 +777,14 @@ public static class LearningTrainer
 
         double after = Score();
         var (number, folder) = versions.Next();
-        model.SaveAdapter(folder);
+        Stage(LearningStages.Promote, baseModel, settings, () => model.SaveAdapter(folder));
         bool promote = heldOutSuite is not null && after > before + settings.PromotionMargin;
         string note = heldOutSuite is null ? "not promoted: no held-out task to measure it on"
             : promote ? string.Create(CultureInfo.InvariantCulture, $"promoted: held-out mean reward {after:F3} against {before:F3}")
             : string.Create(CultureInfo.InvariantCulture, $"not promoted: held-out mean reward {after:F3} is not above {before:F3} (+{settings.PromotionMargin:F3})");
         var version = new AdapterVersion(number, folder, DateTimeOffset.UtcNow, baseModel, run.History.Sum(h => h.Episodes), 0, heldOutSuite is null ? 0 : 2, run.Iterations,
             losses[0], losses[^1], before, after, promote, note);
-        versions.Save(version);
+        Stage(LearningStages.Promote, baseModel, settings, () => versions.Save(version));
         return new TrainingResult(version, $"v{number}: {run.Iterations} iterations of {settings.Algorithm} on the tasks on {device}, {note}.", losses, [], []);
     }
 
@@ -594,6 +810,24 @@ public static class LearningTrainer
         }
 
         return sum;
+    }
+
+    // A model taken for a round: its adapters lifted off; given back, the round's removed and freed, the lifted put back.
+    private sealed class Borrowed(PretrainedModel model, IDisposable lifted) : IDisposable
+    {
+        private int _done;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _done, 1) != 0)
+            {
+                return;
+            }
+
+            model.Network.RemoveAdapters();
+            lifted.Dispose();
+            ComputeResources.ReleaseCachedMemory(model.Device);
+        }
     }
 
     // The trainer's progress (iterations done) as the plug-in's.

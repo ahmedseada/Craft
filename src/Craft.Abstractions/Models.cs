@@ -83,6 +83,21 @@ public sealed class ModelLease : IDisposable
     /// <summary>Its context window in tokens.</summary>
     public int ContextLength { get; }
 
+    /// <summary>
+    /// The provider's loaded model itself (for "local": Idrak's <c>PretrainedModel</c>), the one copy every lease of the
+    /// same settings shares, for a plug-in that trains it in place instead of loading a second copy (the learning plug-in,
+    /// note 22's one copy); null when the provider lends none. Use it only inside <see cref="Exclusive"/>, and leave it as
+    /// it was found (its adapters, its weights).
+    /// </summary>
+    public object? Underlying { get; init; }
+
+    /// <summary>
+    /// Takes the copy for the caller alone until the result is disposed: it completes once every generation running on the
+    /// copy has ended, and a generation asked for meanwhile (a chat, the agent, completion) waits until it is disposed. Null
+    /// when the provider cannot.
+    /// </summary>
+    public Func<CancellationToken, Task<IDisposable>>? Exclusive { get; init; }
+
     /// <summary>The time this lease spent loading it: zero when it was loaded already.</summary>
     public TimeSpan LoadDuration { get; }
 
@@ -310,4 +325,21 @@ public static class ModelProviders
     /// <summary>The provider of that name.</summary>
     /// <exception cref="NotRegisteredException">None is registered under it (the message lists those that are).</exception>
     public static IModelProvider Get(ReadOnlySpan<char> name) => Table.Get(name);
+}
+
+/// <summary>What the plug-ins say about a model's failures, the same in each (the AI plug-in, learning).</summary>
+public static class ModelErrors
+{
+    /// <summary>
+    /// Whether <paramref name="error"/> (or an error inside it) is a device or the system running out of memory: Idrak's
+    /// limit (<c>ResourceLimitExceededException</c>), .NET's <see cref="OutOfMemoryException"/> or
+    /// <see cref="InsufficientMemoryException"/>, or a message that says "out of memory".
+    /// </summary>
+    public static bool IsOutOfMemory(Exception? error) => error switch
+    {
+        null => false,
+        Idrak.Abstraction.ResourceLimitExceededException or OutOfMemoryException or InsufficientMemoryException => true,
+        AggregateException aggregate => aggregate.InnerExceptions.Any(IsOutOfMemory),
+        _ => error.Message.Contains("out of memory", StringComparison.OrdinalIgnoreCase) || IsOutOfMemory(error.InnerException),
+    };
 }

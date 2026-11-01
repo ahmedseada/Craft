@@ -167,15 +167,21 @@ public sealed class AiModels : IDisposable
             name = completion.Model;
         }
 
-        if (name.Equals(role.Model, StringComparison.OrdinalIgnoreCase))
-        {
-            return DraftPlanned.None($"none: {name} is the {role.Key} model itself");
-        }
-
+        // Never the target itself: the same copy (one lease key), or the same model with the same weights (a second copy
+        // drafting exactly what the target computes, its cache beside the target's, for no gain).
         var on = name.Equals(completion.Model, StringComparison.OrdinalIgnoreCase) ? completion : role with { Model = name };
         var (key, request) = KeyOf(settings, on, name);
+        if (name.Equals(role.Model, StringComparison.OrdinalIgnoreCase) && string.Equals(on.Weights, role.Weights, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, KeyOf(settings, role, role.Model).Key, StringComparison.Ordinal))
+        {
+            return DraftPlanned.None(Itself(role.Key));
+        }
+
         return new DraftPlanned(name, key, request, role.DraftTokens, null);
     }
+
+    // Why a draft that is the role's model itself is not used, as the chip's and the status bar's tooltip say it.
+    private static string Itself(string role) => $"the draft would be the {role} model itself: no gain";
 
     // The role's lease with its draft: the lease itself when the provider lends no draft or none is planned; else one lease
     // per target and draft whose chat model passes the draft on with each request once the draft is ready (loaded after the
@@ -229,7 +235,13 @@ public sealed class AiModels : IDisposable
         try
         {
             var draft = await LeaseAsync(settings, plan.Key!, plan.Request!, CancellationToken.None).ConfigureAwait(false);
-            if (draft.Draft is not { } model)
+            var target = pair.Target;
+            if (ReferenceEquals(draft, target) || draft.Draft is { } same && ReferenceEquals(same, target.Draft)
+                || draft.Underlying is { } copy && ReferenceEquals(copy, target.Underlying))
+            {
+                pair.Off = Itself(role);                                     // the provider lent the target's own copy
+            }
+            else if (draft.Draft is not { } model)
             {
                 pair.Off = $"{plan.Name} drafts nothing (its provider lends no draft)";
             }

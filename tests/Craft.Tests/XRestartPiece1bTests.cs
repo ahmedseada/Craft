@@ -112,6 +112,7 @@ internal static class Piece1b
     public static AiSettings Settings(string copies, int nudges = 2, bool callsInText = true) => new()
     {
         ModelProvider = ProviderName, Model = "fake", AgentSandbox = "x1b-none", AgentFolder = copies, AgentMaxTurns = 8, AgentNudges = nudges, AgentCallsInText = callsInText,
+        AgentReadBeforeEdit = false,  // the scripted models edit without reading first
     };
 
     public static void Remove(string root)

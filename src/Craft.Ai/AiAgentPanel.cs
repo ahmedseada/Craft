@@ -890,8 +890,8 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         {
             MaxRounds = settings.AgentMaxTurns,
             TimeLimit = TimeSpan.FromMinutes(settings.AgentMinutes),
-            Sampling = _session.Sampling(lease.ContextLength, settings.AgentStops),                // the session's own sampling over the agent's
-            Tools = new CodingToolOptions { Sandbox = inner.Name },
+            Sampling = _session.Sampling(lease.ContextLength, settings.AgentStops, chat.RecommendedSampling),  // the session's own over the agent's, then the model's own
+            Tools = new CodingToolOptions { Sandbox = inner.Name, ReadBeforeEdit = settings.AgentReadBeforeEdit },
             // Note 27: calls the model writes as text (fenced JSON) are read, a reply of calls that cannot be read is
             // corrected agentNudges times in a row, and the correction is worded in the model's own template: the lease
             // gives it, since the model is wrapped here (CountingChatModel) and Idrak cannot find it on the wrapper.

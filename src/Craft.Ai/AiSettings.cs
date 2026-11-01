@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using System.Collections.Frozen;
 using System.Globalization;
 using Craft.Abstractions;
 using Idrak.Abstraction.Generation;
@@ -343,6 +344,12 @@ public sealed record AiSettings
     /// </summary>
     public bool AgentCallsInText { get; init; } = true;
 
+    /// <summary>
+    /// Whether the agent's edit_file refuses a file its task has not read (<c>agentReadBeforeEdit</c>, on; Idrak's
+    /// <c>CodingToolOptions.ReadBeforeEdit</c>): a model edits what it has seen, not text it guessed.
+    /// </summary>
+    public bool AgentReadBeforeEdit { get; init; } = true;
+
     /// <summary>The largest image a chat may carry, MB (<c>chatImageMaxMb</c>); a larger one dropped on the chat is not added, said so.</summary>
     public int ChatImageMaxMegabytes { get; init; } = 20;
 
@@ -373,9 +380,35 @@ public sealed record AiSettings
     /// <summary>The lines of code before and after each error the build fix sends (<c>buildFixContextLines</c>).</summary>
     public int BuildFixContextLines { get; init; } = 8;
 
+    /// <summary>The sampling settings' names (the chat's and the agent's).</summary>
+    public static IReadOnlyList<string> SamplingKeys { get; } =
+        ["chatTemperature", "chatTopK", "chatTopP", "chatMinP", "chatRepeatPenalty", "agentTemperature", "agentTopK", "agentTopP", "agentMinP", "agentRepeatPenalty"];
+
+    /// <summary>
+    /// The sampling settings the user gave (<see cref="SamplingKeys"/> set in the environment, the workspace's settings or
+    /// the settings page): those win over the model's own recommended sampling; the others take the model's when it has
+    /// one (its generation_config.json), else these settings' defaults (the library's).
+    /// </summary>
+    public IReadOnlySet<string> SamplingGiven { get; init; } = FrozenSet<string>.Empty;
+
+    // The values of the sampling settings the user gave: the agent's own, else the chat's (for the agent), else none.
+    private SamplingSettings GivenFor(bool agent)
+    {
+        bool Has(string key) => SamplingGiven.Contains(key);
+        return new SamplingSettings
+        {
+            Temperature = agent && Has("agentTemperature") ? AgentTemperature : Has("chatTemperature") ? ChatTemperature : null,
+            TopK = agent && Has("agentTopK") ? AgentTopK : Has("chatTopK") ? ChatTopK : null,
+            TopP = agent && Has("agentTopP") ? AgentTopP : Has("chatTopP") ? ChatTopP : null,
+            MinP = agent && Has("agentMinP") ? AgentMinP : Has("chatMinP") ? ChatMinP : null,
+            RepeatPenalty = agent && Has("agentRepeatPenalty") ? AgentRepeatPenalty : Has("chatRepeatPenalty") ? ChatRepeatPenalty : null,
+        };
+    }
+
     /// <summary>The chat's model settings, resolved (note 25).</summary>
     public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens)
     {
+        Given = GivenFor(agent: false),
         DraftModel = DraftModel.Trim(),
         DraftTokens = DraftTokens,
         Offload = Offload,
@@ -396,6 +429,7 @@ public sealed record AiSettings
         AgentTemperature ?? ChatTemperature,
         AgentMaxTokens)
     {
+        Given = GivenFor(agent: true),
         InheritsModel = AgentModel.Trim().Length == 0,
         InheritsDevice = AgentDevice.Trim().Length == 0,
         DraftModel = AgentDraftModel.Trim() is { Length: > 0 } draft ? draft : DraftModel.Trim(),
@@ -528,6 +562,7 @@ public sealed record AiSettings
         new("agentAutoApply", "false", "Apply the agent's changes to the workspace when its run ends, without asking (each file one undo step, named in the timeline); off: each change is a diff to accept."),
         new("agentNudges", "2", "Corrections in a row the agent sends when the model writes tool calls it cannot read (0-20); 0: none, the run ends."),
         new("agentCallsInText", "true", "Read tool calls the model writes as text (markdown fences, JSON) naming an offered tool; off: only its template's format."),
+        new("agentReadBeforeEdit", "true", "The agent's edit_file refuses a file its task has not read first (read_file); off: it edits any file."),
         new("inlineChat", "true", "Ctrl+I opens the inline chat in the editor: the chat's loaded model rewrites the lines, shown as a ghost diff to accept."),
         new("inlineChatContextLines", "40", "Lines of the file before and after the inline chat's lines its model is given."),
         new("inlineChatMaxTokens", "0", "The most tokens an inline chat's answer takes; 0: the chat's reply limit."),
@@ -600,6 +635,7 @@ public sealed record AiSettings
 
         return new AiSettings
         {
+            SamplingGiven = SamplingKeys.Where(key => Text(key) is not null).ToFrozenSet(StringComparer.Ordinal),
             McpAddress = Text("mcpAddress") ?? defaults.McpAddress,
             McpToken = Text("mcpToken") ?? "",
             McpOnStart = Flag("mcpOnStart", false),
@@ -680,6 +716,7 @@ public sealed record AiSettings
             AgentEditorTools = List("agentEditorTools", defaults.AgentEditorTools),
             AgentNudges = Whole("agentNudges", defaults.AgentNudges, 0, 20),
             AgentCallsInText = Flag("agentCallsInText", defaults.AgentCallsInText),
+            AgentReadBeforeEdit = Flag("agentReadBeforeEdit", defaults.AgentReadBeforeEdit),
             InlineChat = Flag("inlineChat", defaults.InlineChat),
             InlineChatContextLines = Whole("inlineChatContextLines", defaults.InlineChatContextLines, 0, 100_000),
             InlineChatMaxTokens = Whole("inlineChatMaxTokens", 0, 0, 1_000_000),
@@ -745,14 +782,23 @@ public sealed record AiRoleSettings(string Key, bool Enabled, string Model, stri
     public int? Seed { get; init; }
 
     /// <summary>
-    /// Its sampling for a request with <paramref name="session"/>'s own fields over its own (X: a session's model settings),
-    /// within <paramref name="context"/> tokens and ending at <paramref name="stop"/>.
+    /// The sampling settings the user gave for this role (each null when not given): they win over the model's own
+    /// recommended sampling. Null: none known (a role made in code), so this role's values stand as given.
     /// </summary>
-    public GenerationOptions Sampling(ModelSessionSettings? session, int context, IReadOnlyList<string> stop)
+    public SamplingSettings? Given { get; init; }
+
+    /// <summary>
+    /// Its sampling for a request with <paramref name="session"/>'s own fields over its own (X: a session's model settings),
+    /// within <paramref name="context"/> tokens and ending at <paramref name="stop"/>. With the model's
+    /// <paramref name="recommended"/> sampling (its generation_config.json, the owner's 2026-11-02 run: the library's generic
+    /// repeat penalty sent Qwen2.5-7B into Chinese and code as prose), a value the user gave or the session sets wins, the
+    /// model's comes next, this role's default last.
+    /// </summary>
+    public GenerationOptions Sampling(ModelSessionSettings? session, int context, IReadOnlyList<string> stop, SamplingSettings? recommended = null)
     {
         ArgumentNullException.ThrowIfNull(stop);
         var own = session ?? ModelSessionSettings.None;
-        return new GenerationOptions
+        var baseline = new GenerationOptions
         {
             NumPredict = own.MaxTokens ?? MaxTokens,
             NumCtx = context,
@@ -764,6 +810,20 @@ public sealed record AiRoleSettings(string Key, bool Enabled, string Model, stri
             RepeatPenalty = own.RepeatPenalty ?? RepeatPenalty,
             Seed = own.Seed ?? Seed,
         };
+        if (recommended is null || recommended.IsEmpty || Given is not { } given)
+        {
+            return baseline;
+        }
+
+        var stated = given with
+        {
+            Temperature = own.Temperature ?? given.Temperature,
+            TopK = own.TopK ?? given.TopK,
+            TopP = own.TopP ?? given.TopP,
+            MinP = own.MinP ?? given.MinP,
+            RepeatPenalty = own.RepeatPenalty ?? given.RepeatPenalty,
+        };
+        return SamplingSettings.Resolve(baseline, stated, recommended).Options;
     }
 
     /// <summary>

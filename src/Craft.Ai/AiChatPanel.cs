@@ -902,7 +902,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IMode
 
             var observed = new ObservedTools(_tools, call => Post(() => ToolStarted(generation, call)), result => Post(() => ToolEnded(generation, result)));
             var model = chat.WithTools(observed, settings.ChatToolRounds);
-            var options = _session.Sampling(lease.ContextLength, settings.ChatStops);                // the conversation's own sampling over the chat's
+            var options = _session.Sampling(lease.ContextLength, settings.ChatStops, chat.RecommendedSampling);   // the conversation's own over the chat's, then the model's own
             int lastGenerated = 0;
             string? reason = null;
             watch.Start();

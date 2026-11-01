@@ -136,6 +136,7 @@ public static class BuildFixTests
             {
                 ModelProvider = ProviderName, Model = "fake-7b", CompletionModel = "", Completion = false, ChatKeep = false,
                 AgentSandbox = "none-here", AgentFolder = root + "-copies", AgentMaxTurns = 8, BuildFixContextLines = 2,
+                AgentReadBeforeEdit = false,  // the scripted model edits without reading first
             };
             Models = new AiModels(() => Settings);
             var options = new CraftOptions { RunSandbox = Sandbox.Name, WorkspaceWatcher = FolderWatchers.None };

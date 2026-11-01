@@ -368,6 +368,7 @@ public static class AiTests
             ["agentTopK"] = "30", ["agentTopP"] = "0.7", ["agentMinP"] = "0.1", ["agentRepeatPenalty"] = "1.3", ["agentSeed"] = "11",
             // The owner, 2026-11-02: the agent's changes applied without asking, the editor's tools offered, completion's format.
             ["agentAutoApply"] = "true", ["agentEditorTools"] = "find_symbol", ["completionFormat"] = "prefix",
+            ["agentReadBeforeEdit"] = "false",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -380,8 +381,8 @@ public static class AiTests
             CompletionSuffixCharacters: 128, CompletionPrefixCharacters: 4000, CompletionChunk: 2, ChatMaxTokens: 300, ChatToolRounds: 2, ChatKeep: false,
             ChatFile: "c.json", ChatHistory: 10, ChatFileLines: 50, Placement: "csharp-tokens", PlacementMaxError: 0.1, AgentSandbox: "container", AgentMaxTurns: 5, AgentMinutes: 3,
             AgentMaxTokens: 500, AgentFolder: "/copies", CompletionLoad: false, LoadOnStart: true, AgentNudges: 5, AgentCallsInText: false, ChatImageMaxMegabytes: 7,
-            DraftModel: "store:small", DraftTokens: 6, AgentDraftModel: "off", AgentDraftTokens: 2, AgentAutoApply: true, CompletionFormat: "prefix",
-        } && settings.AgentEditorTools.SequenceEqual(["find_symbol"]) && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && settings.AgentChangesIgnore.SequenceEqual(["obj", "out"]) && !settings.AgentSaveOnAccept && settings.ChatStops.SequenceEqual(["END", "<x;y>"]) && settings.AgentStops.SequenceEqual(["DONE"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
+            DraftModel: "store:small", DraftTokens: 6, AgentDraftModel: "off", AgentDraftTokens: 2, AgentAutoApply: true, CompletionFormat: "prefix", AgentReadBeforeEdit: false,
+        } && new AiSettings().AgentReadBeforeEdit && settings.AgentEditorTools.SequenceEqual(["find_symbol"]) && settings.AgentCopyIgnore.SequenceEqual(["bin"]) && settings.AgentChangesIgnore.SequenceEqual(["obj", "out"]) && !settings.AgentSaveOnAccept && settings.ChatStops.SequenceEqual(["END", "<x;y>"]) && settings.AgentStops.SequenceEqual(["DONE"]) && Math.Abs(settings.CompletionTemperature - 0.2f) < 1e-6,
             "each value is read");
         Check.True(settings is
         {

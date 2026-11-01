@@ -901,7 +901,8 @@ public static class AiPluginTests
         {
             ModelProviders.Register(new FakeProvider(chat, null, null));
             EditorToolSets.Register(EditorToolSet.Instance);                     // the tools plug-in's set, which chat offers the model
-            Settings = new AiSettings { ModelProvider = ProviderName, Model = "fake", AgentModel = agentModel, AgentSandbox = agentSandbox, AgentFolder = agentFolder, AgentMaxTurns = 8 };
+            // The scripted models edit without reading first, so read-before-edit (on by default, Idrak's) is off here.
+            Settings = new AiSettings { ModelProvider = ProviderName, Model = "fake", AgentModel = agentModel, AgentSandbox = agentSandbox, AgentFolder = agentFolder, AgentMaxTurns = 8, AgentReadBeforeEdit = false };
             Models = new AiModels(() => Settings);
         }
 

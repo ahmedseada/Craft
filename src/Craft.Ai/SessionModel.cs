@@ -72,7 +72,8 @@ public sealed class SessionModel
         : _models.RoleAsync(Role, cancellationToken);
 
     /// <summary>Its sampling for a request: the role's settings with its own fields over them.</summary>
-    public GenerationOptions Sampling(int context, IReadOnlyList<string> stop) => _settings().RoleOf(Role).Sampling(Settings, context, stop);
+    public GenerationOptions Sampling(int context, IReadOnlyList<string> stop, SamplingSettings? recommended = null) =>
+        _settings().RoleOf(Role).Sampling(Settings, context, stop, recommended);
 
     /// <summary>Takes <paramref name="kept"/> as the session's own (a chat conversation opened again): the copy of the session left goes.</summary>
     public void Restore(ModelSessionSettings kept)

@@ -88,6 +88,40 @@ public static class ModelRolesTests
     }
 
     [Test]
+    public static void TheModelsOwnSamplingIsTakenUnderTheValuesTheUserGave()
+    {
+        // The owner's 2026-11-02 run: the library's generic repeat penalty sent Qwen2.5-7B into Chinese; the model's
+        // generation_config.json is taken for every value the user did not give.
+        var recommended = new Idrak.Abstraction.Generation.SamplingSettings { Temperature = 0.7f, TopK = 20, TopP = 0.8f, RepeatPenalty = 1.05f };
+        IReadOnlyList<string> stop = ["<stop>"];
+
+        var none = AiSettings.Read(_ => null);
+        Check.True(none.SamplingGiven.Count == 0, $"nothing given reads no sampling key ({string.Join(", ", none.SamplingGiven)})");
+        var model = none.ChatRole.Sampling(null, 4096, stop, recommended);
+        Check.True(Math.Abs(model.Temperature - 0.7f) < 1e-6 && model.TopK == 20 && Math.Abs(model.TopP - 0.8f) < 1e-6 && Math.Abs(model.RepeatPenalty - 1.05f) < 1e-6,
+            $"with nothing given the chat takes the model's sampling (temperature {model.Temperature}, top-k {model.TopK}, top-p {model.TopP}, repeat penalty {model.RepeatPenalty})");
+        Check.True(model.NumCtx == 4096 && ReferenceEquals(model.Stop, stop), "the context and stops are the request's");
+
+        var old = none.ChatRole.Sampling(null, 4096, stop);
+        Check.True(Math.Abs(old.Temperature - none.ChatRole.Temperature) < 1e-6 && old.TopK == none.ChatRole.TopK && Math.Abs(old.RepeatPenalty - none.ChatRole.RepeatPenalty) < 1e-6,
+            "with no recommendation the role's own settings are kept, as before");
+        var empty = none.ChatRole.Sampling(null, 4096, stop, new Idrak.Abstraction.Generation.SamplingSettings());
+        Check.True(empty.TopK == none.ChatRole.TopK && Math.Abs(empty.Temperature - none.ChatRole.Temperature) < 1e-6, "an empty recommendation keeps the role's own settings");
+
+        var given = AiSettings.Read(key => key switch { "chatTemperature" => "0.2", "agentTopK" => "5", _ => null });
+        Check.True(given.SamplingGiven.SetEquals(["chatTemperature", "agentTopK"]), $"the given keys are read ({string.Join(", ", given.SamplingGiven)})");
+        var chat = given.ChatRole.Sampling(null, 4096, stop, recommended);
+        Check.True(Math.Abs(chat.Temperature - 0.2f) < 1e-6 && chat.TopK == 20 && Math.Abs(chat.RepeatPenalty - 1.05f) < 1e-6,
+            $"the chat's given temperature wins, the model's top-k and repeat penalty come next (temperature {chat.Temperature}, top-k {chat.TopK})");
+        var agent = given.AgentRole.Sampling(null, 4096, stop, recommended);
+        Check.True(Math.Abs(agent.Temperature - 0.2f) < 1e-6 && agent.TopK == 5 && Math.Abs(agent.TopP - 0.8f) < 1e-6,
+            $"the agent takes its own given top-k, the chat's given temperature, the model's top-p (temperature {agent.Temperature}, top-k {agent.TopK}, top-p {agent.TopP})");
+
+        var session = new ModelSessionSettings { TopK = 3 };
+        Check.True(none.ChatRole.Sampling(session, 4096, stop, recommended).TopK == 3, "a session's own value wins over the model's");
+    }
+
+    [Test]
     public static async Task TheAgentSharesTheChatsCopyUntilItsOwnSettingsDiffer()
     {
         var provider = new CountingProvider();

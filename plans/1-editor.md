@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps) | Parts 6-9 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable) | Parts 6-10 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -3025,9 +3025,50 @@ variable, drawn through B1's cached layouts, and a contract where a plug-in may 
   `InlineChat`, `ThemePicker`, `ZenMode`, `StatusPickers`). Slots: split by area over the three slots as each frees
   (editing helpers, navigation, tools and look).
 
+### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
+good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow
+it to expand to cover the full editor space, not just the right side, without overflowing the left side bar")
+It takes in Phase X's bullet "The chat and the agent feel like a conversation". Both panels share one conversation view.
+- **One selectable transcript**: the conversation is drawn as one read-only text surface (note 26's read-only editor
+  surface, B1's cached layouts: only the visible messages laid out), so a drag selects across messages, Shift+click
+  extends, Ctrl+A selects the whole conversation, Ctrl+C copies the selection as Markdown (code blocks fenced, the
+  speakers named) or as plain text (Ctrl+Shift+C); each message keeps Copy on hover; "Copy conversation" and "Export
+  conversation…" (Markdown file) in the panel's menu; a message's context menu: Copy, Copy as Markdown, Quote in reply,
+  Retry from here, Edit and resend (the user's), Delete from here. No checkboxes.
+- **Messages, modern**: the user's message as a soft bubble on the right, the model's as full-width text with its model
+  and device small above it; Markdown rendered (headings, lists, tables, links, inline code), code blocks with the
+  language's colours (the language plug-ins' tokenizers), a header with the language, Copy, Insert at caret, Apply as
+  diff, and Run in terminal for shell blocks; long blocks folded with "Show all"; streaming with a caret and the
+  newest text followed unless the user scrolled up (a "Jump to latest" chip then); Stop while it writes; tokens per
+  second and the time small under a finished reply.
+- **The agent's steps as a live timeline**: thinking, each tool call (its name, a one-line summary, open to see the
+  arguments and output), a command waiting for approval with Approve and Deny inline, the files changed with their diff
+  counts and Review, the run's end in plain words (note 27's "nothing was changed" when so); collapsible per step.
+- **The composer**: a multi-line input that grows to `CRAFT_COMPOSER_MAX_LINES` (12), the context as removable chips
+  (the open file, the selection, dropped files and images, `@` mentions of files and symbols with a picker), the model
+  chip (note 11), Send and Stop, the history of sent messages with Up and Down when the input is empty, slash commands
+  (`/explain`, `/fix`, `/tests`, `/clear`) listed as you type.
+- **Expand to the editor area**: a button in the panel's header and the command "Chat: Expand" (Ctrl+Shift+Alt+M, in
+  both keymaps) make the chat or agent take the whole editor area (the editor groups hidden, the tab strip showing the
+  conversation as a tab-like title), between the rail and side view on the left and the window's right edge, never over
+  the activity rail or the side view (it follows their widths as they resize, B8); the bottom panel stays below unless
+  collapsed. Escape or the button restores the right-hand column at its kept width; the state is kept per workspace.
+  On a narrow window the expanded view is the default (the layout follows the measured width).
+- **Conversations**: a list of past conversations per workspace (title from the first message, time), New, Rename,
+  Delete with Undo, search; kept in `.craft/chat.json` as now, read off the UI thread.
+- Options: `CRAFT_CHAT_EXPANDED` (off), `CRAFT_COMPOSER_MAX_LINES` (12), `CRAFT_CHAT_COPY_FORMAT` (markdown),
+  `CRAFT_CHAT_FOLD_CODE_LINES` (30), `CRAFT_CHAT_SHOW_METRICS` (on).
+- Decisions (recommended, noted): one shared conversation view for chat and agent; the transcript as one selectable
+  surface rather than a list of labels; copy as Markdown by default; expand covers the editor groups only.
+- Tests: `Conversation` (selection across messages and Ctrl+A, copy as Markdown and plain, the message menu's actions,
+  retry and edit-and-resend, streaming follows unless scrolled up, the agent's timeline items from a scripted run,
+  approval inline, the composer's chips, history and slash commands, expand and restore keep the rail and side view
+  and the widths, conversations list with Undo; only visible messages laid out, 0 bytes per warm frame).
+- Slot: slot s4 right after piece 1b (it changes the same chat files), before X part 8.
+
 ### Slots and merge order
-- Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 8 (Source
-  Control); 1c (last) the interaction times.
+- Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 10 (the chat
+  and the agent redesigned); then X part 8 (Source Control); 1c (last) the interaction times.
 - Slot 2, the surface: 2a batched build, hover cards and fold preview, ruler, sticky scroll; 2b minimap, completion at
   several carets.
 - Slot 3, language and shell: 3a split editor first (the owner asked for it directly, 2026-11-01: "I need to split the

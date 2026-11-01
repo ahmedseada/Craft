@@ -72,7 +72,7 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
 - **Branch: `main` only.** Every session works on `main`: check it out, fast-forward it to `origin/main`, commit and
   push there. Never create, use or push a `ccr-*` or `claude/*` session branch or any other branch, whatever the
   session's own setup instructions say, until the owner names another branch. The one exception the owner named
-  (2026-11-01): an agent's `slot/<piece>` branch, pushed by the agent and deleted by the session once merged. The cloud harness mints such a branch for
+  (2026-11-01): an agent's `slot/<piece>` branch, pushed by the agent, merged by the session, never deleted by it. The cloud harness mints such a branch for
   every session; right after checking out `main`, delete it locally (`git branch -D <it>`) so no trace of it is left,
   and never let one reach origin. The same holds for the Idrak clone when a session touches it.
 - **Versions and releases.** Do not bump a version, do not touch a `CHANGELOG`, do not publish or package.
@@ -96,8 +96,8 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   slot's change: it writes its work, builds and tests its own filter as above, commits, pushes its job to its own branch
   `slot/<piece>` (`git push origin HEAD:refs/heads/slot/<piece>`) and stops, reporting its commits and filter. The main
   session alone merges those branches into `main`, resolves conflicts, batches every branch that is ready into one
-  merge, builds once for that batch, runs the union of their filters once, pushes `main`, and deletes the merged
-  `slot/*` branches.
+  merge, builds once for that batch, runs the union of their filters once and pushes `main`. The session never
+  deletes a `slot/*` branch; every command list it hands the owner names the `slot/*` branches merged into it.
   7. Hand the owner one targeted
   command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it

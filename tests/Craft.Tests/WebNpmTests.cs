@@ -394,7 +394,10 @@ public static class WebNpmTests
     [Test]
     public static void TheNpmPluginLoadsFromItsFolderAndCanBeRemoved()
     {
-        Check.True(EditorPlugins.Find(NpmSettings.PluginName) is null && FileIcons.Find(".npmrc") is null, "before it loads, \"npm\" and its icons are not registered");
+        Check.True(EditorPlugins.Find(NpmSettings.PluginName) is null, "before it loads, \"npm\" is not registered");
+        var icons = (string[])["package.json", "package-lock.json", ".npmrc", ".nvmrc"];
+        Check.True(icons.All(name => FileIcons.For(name) is { Shape: not null } icon && icon != FileIcons.Plain) && FileIcons.ForFolder("node_modules") != FileIcons.PlainFolder,
+            "npm's files and node_modules have the library's drawn icons (W-files), so the plug-in registers none to shadow them");
         using var temp = new TempFolder();
         var output = PhasePTests.PluginOutput(NpmPluginPackage.PackageName);
         var folder = Path.Combine(temp.Path, "plugins", NpmPluginPackage.PackageName);
@@ -412,7 +415,6 @@ public static class WebNpmTests
             Check.True(result is { Loaded: true, Manifest.ContractVersion: "1.1" }, $"it loads from its folder ({result.Error})");
             var plugin = EditorPlugins.Get(NpmSettings.PluginName);
             Check.True(AssemblyLoadContext.GetLoadContext(plugin.GetType().Assembly) != AssemblyLoadContext.Default, "\"npm\" comes from the plug-in's own load context");
-            Check.True(FileIcons.Find(".npmrc") is { Badge: "npm" } && FileIcons.Find(".nvmrc") is not null, "the .npmrc and .nvmrc icons");
             Check.True(plugin.Settings.All(s => s.Shape?.Section == SettingSections.Terminal) && plugin.Settings.Count(s => s.MachineOnly) == 3, "its settings under Terminal › npm, three machine-only");
         }
         finally
@@ -425,7 +427,7 @@ public static class WebNpmTests
             }
         }
 
-        Check.True(EditorPlugins.Find(NpmSettings.PluginName) is null && FileIcons.Find(".npmrc") is null, "removed: the plug-in and its icons are gone");
+        Check.True(EditorPlugins.Find(NpmSettings.PluginName) is null && icons.All(name => FileIcons.For(name) != FileIcons.Plain), "removed: the plug-in is gone, the icons stay the library's");
     }
 
     // ---- real Node (skipped without it) ----

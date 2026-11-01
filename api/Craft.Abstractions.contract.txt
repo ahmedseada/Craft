@@ -804,6 +804,7 @@ Craft.Abstractions.EditorMenus  static System.Void Register(Craft.Abstractions.M
 Craft.Abstractions.EditorPlugins
 Craft.Abstractions.EditorPlugins  static Craft.Abstractions.IEditorPlugin Find(System.ReadOnlySpan<System.Char> name)
 Craft.Abstractions.EditorPlugins  static Craft.Abstractions.IEditorPlugin Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.EditorPlugins  static System.Boolean IsMachineOnly(System.ReadOnlySpan<System.Char> variable)
 Craft.Abstractions.EditorPlugins  static System.Boolean Unregister(System.String name)
 Craft.Abstractions.EditorPlugins  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPlugin> All { get; }
 Craft.Abstractions.EditorPlugins  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
@@ -1261,6 +1262,7 @@ Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.Edi
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> SelectionChanged
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.EditorKeyEventArgs> KeyPressed
 Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.LineMarkEventArgs> LineMarkClicked
+Craft.Abstractions.IEditorHost  event System.EventHandler<Craft.Abstractions.WorkspaceChangedEventArgs> WorkspaceChanged
 Craft.Abstractions.IEditorInputSink
 Craft.Abstractions.IEditorInputSink  System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
 Craft.Abstractions.IEditorInputSink  System.Void OnText(System.String text)
@@ -2664,13 +2666,16 @@ Craft.Abstractions.PluginSetting  Craft.Abstractions.PluginSetting <Clone>$()
 Craft.Abstractions.PluginSetting  Craft.Abstractions.SettingShape Shape { get; init; }
 Craft.Abstractions.PluginSetting  System.Boolean Equals(Craft.Abstractions.PluginSetting other)
 Craft.Abstractions.PluginSetting  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PluginSetting  System.Boolean MachineOnly { get; init; }
 Craft.Abstractions.PluginSetting  System.Int32 GetHashCode()
 Craft.Abstractions.PluginSetting  System.String Default { get; init; }
 Craft.Abstractions.PluginSetting  System.String Description { get; init; }
 Craft.Abstractions.PluginSetting  System.String Key { get; init; }
 Craft.Abstractions.PluginSetting  System.String ToString()
 Craft.Abstractions.PluginSetting  System.Void Deconstruct(out System.String Key, out System.String Default, out System.String Description)
+Craft.Abstractions.PluginSetting  const System.String VariablePrefix = CRAFT_PLUGIN_
 Craft.Abstractions.PluginSetting  ctor(System.String Key, System.String Default, System.String Description)
+Craft.Abstractions.PluginSetting  static System.Boolean IsVariable(System.ReadOnlySpan<System.Char> variable, System.String plugin, System.String key)
 Craft.Abstractions.PluginSetting  static System.String VariableName(System.String plugin, System.String key)
 Craft.Abstractions.PluginSetting : System.IEquatable<Craft.Abstractions.PluginSetting>
 Craft.Abstractions.PluginSettingShapes
@@ -3486,6 +3491,22 @@ Craft.Abstractions.ViewPanel  ctor(System.String id, System.String title, System
 Craft.Abstractions.ViewPanel  event System.EventHandler Changed
 Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorPanel
 Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorViewPanel
+Craft.Abstractions.WorkspaceChangeKind
+Craft.Abstractions.WorkspaceChangeKind  Closed = 1
+Craft.Abstractions.WorkspaceChangeKind  Opened = 0
+Craft.Abstractions.WorkspaceChangeKind  Refreshed = 3
+Craft.Abstractions.WorkspaceChangeKind  Switched = 2
+Craft.Abstractions.WorkspaceChangeKind : System.IComparable
+Craft.Abstractions.WorkspaceChangeKind : System.IConvertible
+Craft.Abstractions.WorkspaceChangeKind : System.IFormattable
+Craft.Abstractions.WorkspaceChangeKind : System.ISpanFormattable
+Craft.Abstractions.WorkspaceChangedEventArgs
+Craft.Abstractions.WorkspaceChangedEventArgs  Craft.Abstractions.WorkspaceChangeKind Kind { get; }
+Craft.Abstractions.WorkspaceChangedEventArgs  System.String Current { get; }
+Craft.Abstractions.WorkspaceChangedEventArgs  System.String Previous { get; }
+Craft.Abstractions.WorkspaceChangedEventArgs  ctor(System.String previous, System.String current, Craft.Abstractions.WorkspaceChangeKind kind)
+Craft.Abstractions.WorkspaceChangedEventArgs  static Craft.Abstractions.WorkspaceChangedEventArgs Between(System.String previous, System.String current)
+Craft.Abstractions.WorkspaceChangedEventArgs : System.EventArgs
 Craft.Abstractions.WorkspaceEdit
 Craft.Abstractions.WorkspaceEdit  Craft.Abstractions.WorkspaceEdit <Clone>$()
 Craft.Abstractions.WorkspaceEdit  System.Boolean Equals(Craft.Abstractions.WorkspaceEdit other)

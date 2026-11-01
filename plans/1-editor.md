@@ -4939,6 +4939,125 @@ page's and Problems' icons; the light theme (Settings › Appearance › Theme) 
 Appearance › File icon theme lists "craft"; Settings › Files › "Show skipped folders in the explorer, dimmed" off hides them.
 With W's web project (`test-output\WebTestPOC`), node_modules dimmed, package.json, angular.json, the component parts.
 
+### W-npm as built (2026-11-01)
+
+Slot w3. Idrak first (its gap fixed in Idrak, on `main`), then Craft.
+
+**Idrak** (`Idrak.Abstraction/CommandSandboxes.cs`, additive; commits 27e7560, e3d656c): `CommandLimits.Requester` (who asks
+for a command, as the words of a sentence; default "the agent", which the coding tools keep) and `CommandLimits.Purpose`
+(what the command is for when its command line does not say it plainly, null by default); neither changes how a command
+runs; the container sandbox carries both to the run of its program. Test `command sandboxes: requester` (defaults, copies,
+equality, the same run whoever asks); the public API dump (two lines added). The filter `command sandboxes|public API|abstraction inventory`:
+10 of 10 on the CPU, both times.
+
+**Craft contracts** (`Craft.Abstractions`, additive, contract 1.1):
+- (9) `PluginSetting.MachineOnly`, `EditorPlugins.IsMachineOnly(variable)` (compared in place, nothing allocated),
+  `PluginSetting.VariablePrefix` and `IsVariable`. `CraftSettings` passes a workspace's value over (the user's or the
+  default is read), refuses to write it into the workspace's file, and the settings page's row says "This machine's only …
+  (its value there is passed over)". Git's `path` and approve-each's `inner` are machine-only now too.
+- (10) `IEditorHost.WorkspaceChanged` with `WorkspaceChangedEventArgs` (`Previous`, `Current`, `Kind`: `Opened`, `Closed`,
+  `Switched`, `Refreshed`); the host raises it with `WorkspaceFolderChanged`, and `EditorHost.RefreshWorkspace()` (the
+  explorer's Refresh) raises `Refreshed`.
+- **approve-each** words its question through `Requester` ("The npm plug-in wants to run a command") and shows `Purpose`
+  ("Runs: the script build of package.json: ng build"); a plug-in's command is a dialog (the agent's stays inline in its
+  timeline), says plain "Deny", gets no second activity and no copy of its output in "Agent sandbox" (its command and end
+  only); a run with no time limit says "Time limit: none (it runs until stopped)" (it said "-0 s").
+
+**The npm plug-in** (`plugins/Craft.Plugins.Npm`, pre-installed and removable, contract 1.1, capabilities files and sandbox):
+- Node: `CRAFT_PLUGIN_NPM_NODE` (machine-only; a path or a name on PATH), else `node` on PATH; npm as `node npm-cli.js`
+  (never npm.cmd): `CRAFT_PLUGIN_NPM_NPM` (machine-only; the file or npm's package folder), else beside Node in each layout
+  (Windows' installer `node_modules\npm\bin`, Unix `../lib/node_modules/npm/bin`, Debian `../share/nodejs/npm/bin`), through
+  Node's link (Homebrew, nvm), else npm on PATH followed to its npm-cli.js. Found off the UI thread with file checks only;
+  the version read once (`node --version` through Idrak's "process" sandbox, 10 s) into the status item "Node 22.23.4"
+  (its click opens the Run view). No Node, or Android: a status entry in the notification centre says why with "Look for
+  Node again", and nothing else is added.
+- Scripts: every package.json of the workspace (`node_modules` never walked; the folders of `ignore` and each `.gitignore`
+  passed over), read as UTF-8 bytes with `Utf8JsonReader` (rule 74: BOM passed over, comments and trailing commas taken,
+  odd names and escapes kept, a duplicate name keeps its last text in its first place as `JSON.parse`, non-string values
+  skipped unread, a broken file logged once per problem). Each script is a palette command ("npm: run build (src/app)",
+  "npm: run build in a terminal (src/app)"), each package an "npm: install (src/app)"; the tree's and the tab's menu on
+  package.json get "Run npm script ▸", "Run npm script in a terminal ▸" (rows made as the menu opens, `EditorMenuSources`)
+  and "npm install", with icons and a `When` on package.json; the Run view's provider "npm" gives a target per script
+  (build also builds, test also tests: F5 and Ctrl+Shift+B), run as `node npm-cli.js run SCRIPT -- arguments` in the
+  package's folder. All follow the file: the folder watcher (a package.json or lock file made, removed, renamed, a folder
+  holding one removed; a burst gathered for `scanDelayMs`), the editor's saves, and `WorkspaceChanged` (open, close,
+  switch, Refresh).
+- Runs: through the sandbox `CRAFT_PLUGIN_NPM_SANDBOX` (machine-only, default "approve-each"; "not registered" said,
+  nothing runs) with `Requester` "the npm plug-in" and `Purpose` the script's text; output streamed to the terminal tab
+  "npm: build" (the folder and the command first, colours kept: `FORCE_COLOR=1`, `npm_config_color=always`; one append
+  per UI turn), the end in green or red with the time; an activity "npm: build" whose Cancel (and "npm: Stop every npm
+  run") stops the process tree, its text the elapsed time and the last line; long-running scripts (`longRunning`,
+  "start;serve;watch;dev", and their ":" variants) have no time limit, the rest `timeLimitMinutes` (30). "In a terminal"
+  is X part 6b's interactive start: asked once, then a program tab that takes the keyboard (Ctrl+C stops it).
+  Install: `install` (or `ci`; without npm's lock file install runs, said in the tab) as the same kind of run. Every run
+  gets `npm_config_fund=false`, `npm_config_audit=false`, `npm_config_update_notifier=false`, `NG_CLI_ANALYTICS=false`.
+  `.npmrc` is never read, so never logged.
+- yarn, pnpm and bun: found by `packageManager` or a lock file in the package's folder or above it within the workspace;
+  said once per workspace ("npm: pnpm is not supported yet"); their scripts still run with npm, install is refused, said.
+- Options (`CRAFT_PLUGIN_NPM_*`, Settings › Terminal › npm): `NODE`, `NPM`, `SANDBOX` (machine-only), `INSTALL`,
+  `LONGRUNNING`, `TIMELIMITMINUTES`, `COLOR`, `IGNORE`, `SCANDELAYMS`.
+
+**Decisions on the recommendation (the owner away; one line each).**
+- `Requester` is a phrase in a sentence ("the agent", "the npm plug-in"), not a bare name, so any sandbox words its question without a lookup.
+- The question also needed the script's text, which the command line (`node …/npm-cli.js run build`) does not show: a second additive Idrak field, `CommandLimits.Purpose`, rather than a Craft side channel.
+- approve-each treats any requester but "the agent" as a plug-in: a dialog, a plain Deny, no activity or output of its own (the plug-in shows them), only the command and its end in its tab.
+- `WorkspaceChanged` is added beside X part 8's `WorkspaceFolderChanged` (kept, B3), with the folders and the kind, and a `Refreshed` kind from the explorer's Refresh so a plug-in re-reads what the watcher (names only) cannot see.
+- `MachineOnly` is enforced where Craft's own list is (`CraftSettings`), asking the registered plug-ins; Git's path and approve-each's inner sandbox take it too.
+- Node's version is read through the plain "process" sandbox without a question: a fixed argument to a program only this machine's settings can name.
+- The provider, commands and menus are registered only once Node is found, so a machine without Node gets none of them.
+- Each script gets two palette commands (in its tab, in a terminal) rather than a guess at which scripts read input; the Run view's npm targets do not take the keyboard by default (its Interactive setting turns it on).
+- The palette and menus run through the npm sandbox setting (approve-each); F5 through the Run view's own approval and `CRAFT_RUN_SANDBOX`, as every Run view target.
+- `npm ci` without npm's lock file runs `npm install` and says so; another manager's package is never installed with npm.
+- The tab is named "npm: build" for the root's package and "npm: build (src/app)" for another's; a second run of a running script is refused, said.
+- The file icons are W-files' drawn library set (package.json, package-lock.json, .npmrc, .nvmrc, node_modules), merged before this slot; the plug-in registers none to shadow them.
+- The plug-in uses the "system" folder watcher, as the git plug-in does.
+
+**Tests**: new group `WebNpm` (9): package.json from bytes (BOM, comments, trailing commas, odd and escaped names, a
+duplicate, values skipped, broken and empty files, `packageManager`, lock files in the folder and above, node_modules and
+`.gitignore` never walked); Node on a fake machine (Windows', Unix's and a linked layout, both settings, the reasons, the
+version, long-running and time limits, the variables, the command); a workspace refused for the Node path (read, write,
+the page's note, back once the plug-in is gone; Git's and approve-each's settings); the scripts as commands, menu rows and
+Run targets following Refresh, the watcher, a switch and a close; no Node says why and adds nothing; approve-each's question
+naming the npm plug-in and the script's text, Deny, Allow, the limits and variables, the tab, one activity, no time limit for
+dev and Cancel stopping it, `.npmrc` nowhere; install as an activity with its elapsed time and last line, ci and install,
+yarn and pnpm said once, a pnpm package not installed, a sandbox not registered; loaded from its folder and removed;
+real Node (skipped with its reason without it; it ran here, Node 22.23.4): `npm run` through the process sandbox with the
+variables, Cancel ending an endless script, a script reading "Ada" typed into its terminal tab. First run: 5 of 9 (a real
+bug: a `u8` literal of "\xEF" is U+00EF's bytes, so a BOM was not passed over; a Windows test separator and case; the
+activity checks looked at Recent, which keeps only longer activities); then all passed. After the rebase onto W0 and
+W-files, the full filter `WebNpm|WebPlugins|RunView|Terminal|ContextMenus|Settings|Plugins|PluginKit|PhaseP|ApiGuard|Inventory|SourceControl`:
+138 of 138. API dumps of Craft.Abstractions, Craft.Editor, the new Craft.Plugins.Npm and the contract list (1.1)
+regenerated, lines added only; the inventory unchanged.
+
+**Not run here** (the owner's): the menus, tabs, program tab and status item on WinUI; Windows' Node layout and PATHEXT on
+a real machine; `npm install` over the network.
+
+**Left**: a package.json edited outside the editor is read again on Refresh, a save or a name change (the watcher sees
+names only); yarn, pnpm and bun runners; npm workspaces' `--workspace` runs; problems from a script's output use the
+Run view's MSBuild form only (tsc's `file(line,col)` lines), not Angular's or ESLint's.
+
+**The owner's commands.** Idrak first (Craft builds against it):
+```powershell
+cd D:\Projects\Idrak; git checkout main; git pull origin main
+dotnet build -c Release tests\Idrak.Tests
+$env:IDRAK_DEVICES="cpu"; $env:IDRAK_FILTER="command sandboxes|public API|abstraction inventory"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:IDRAK_FILTER; Remove-Item Env:IDRAK_DEVICES
+```
+Then Craft (a small npm project under `test-output` to try the scripts):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebNpm|WebPlugins|RunView|Terminal|ContextMenus|Settings|Plugins|PluginKit|PhaseP|ApiGuard|Inventory|SourceControl"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$p="D:\Projects\Craft\test-output\NpmTestPOC"; New-Item -ItemType Directory -Force $p | Out-Null; cd $p; npm init -y; Set-Content ask.js "process.stdout.write('Name? '); process.stdin.once('data', d => { console.log('Hello ' + String(d).trim()); process.exit(0); });"; Set-Content tick.js "setInterval(() => console.log(new Date().toISOString()), 1000);"; npm pkg set scripts.hello="node --version" scripts.ask="node ask.js" scripts.dev="node tick.js"; cd D:\Projects\Craft
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\NpmTestPOC
+```
+In the app: "Node 22.x" in the status bar (its click opens the Run view, which lists hello, ask, dev); Ctrl+Shift+P "npm: run
+hello" (the question "The npm plug-in wants to run a command" with "Runs: the script hello of package.json: node --version";
+Allow once; the tab "npm: hello"); right-click package.json › Run npm script › dev (no time limit in the question; the
+activity's Cancel in the status bar stops it); "Run npm script in a terminal" › ask (type a name, Enter); "npm install" from
+the same menu (an activity with its time and last line); Settings › Terminal › npm › Node says "This machine's only"; with
+`"CRAFT_PLUGIN_NPM_NODE": "C:\\nowhere\\node.exe"` in the project's `.craft\settings.json` nothing changes (passed over).
+
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 
 Planned by a read-only agent from `wip/p-batch-2` (`74a5c21` on `e04652c`; `main` 47 commits ahead). The WIP holds P6

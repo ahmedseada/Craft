@@ -720,6 +720,7 @@ static class Craft.Abstractions.EditorMenus
 static class Craft.Abstractions.EditorPlugins
   static Craft.Abstractions.IEditorPlugin Find(System.ReadOnlySpan<System.Char> name)
   static Craft.Abstractions.IEditorPlugin Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean IsMachineOnly(System.ReadOnlySpan<System.Char> variable)
   static System.Boolean Unregister(System.String name)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPlugin> All { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
@@ -1141,6 +1142,7 @@ interface Craft.Abstractions.IEditorHost
   event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> SelectionChanged
   event System.EventHandler<Craft.Abstractions.EditorKeyEventArgs> KeyPressed
   event System.EventHandler<Craft.Abstractions.LineMarkEventArgs> LineMarkClicked
+  event System.EventHandler<Craft.Abstractions.WorkspaceChangedEventArgs> WorkspaceChanged
 interface Craft.Abstractions.IEditorInputSink
   System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Void OnText(System.String text)
@@ -2366,13 +2368,16 @@ sealed class Craft.Abstractions.PluginSetting : System.IEquatable<Craft.Abstract
   Craft.Abstractions.SettingShape Shape { get; init; }
   System.Boolean Equals(Craft.Abstractions.PluginSetting other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean MachineOnly { get; init; }
   System.Int32 GetHashCode()
   System.String Default { get; init; }
   System.String Description { get; init; }
   System.String Key { get; init; }
   System.String ToString()
   System.Void Deconstruct(out System.String Key, out System.String Default, out System.String Description)
+  const System.String VariablePrefix = CRAFT_PLUGIN_
   ctor(System.String Key, System.String Default, System.String Description)
+  static System.Boolean IsVariable(System.ReadOnlySpan<System.Char> variable, System.String plugin, System.String key)
   static System.String VariableName(System.String plugin, System.String key)
 static class Craft.Abstractions.PluginSettingShapes
   static Craft.Abstractions.SettingShape Infer(Craft.Abstractions.PluginSetting setting, System.String section)
@@ -3118,6 +3123,17 @@ sealed class Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorPanel, Cra
   System.Void SetBlocks(System.Collections.Generic.IEnumerable<Craft.Abstractions.PanelBlock> blocks)
   ctor(System.String id, System.String title, System.Func<System.String, System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task> act)
   event System.EventHandler Changed
+enum Craft.Abstractions.WorkspaceChangeKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Closed = 1
+  Opened = 0
+  Refreshed = 3
+  Switched = 2
+sealed class Craft.Abstractions.WorkspaceChangedEventArgs : System.EventArgs
+  Craft.Abstractions.WorkspaceChangeKind Kind { get; }
+  System.String Current { get; }
+  System.String Previous { get; }
+  ctor(System.String previous, System.String current, Craft.Abstractions.WorkspaceChangeKind kind)
+  static Craft.Abstractions.WorkspaceChangedEventArgs Between(System.String previous, System.String current)
 sealed class Craft.Abstractions.WorkspaceEdit : System.IEquatable<Craft.Abstractions.WorkspaceEdit>
   Craft.Abstractions.WorkspaceEdit <Clone>$()
   System.Boolean Equals(Craft.Abstractions.WorkspaceEdit other)

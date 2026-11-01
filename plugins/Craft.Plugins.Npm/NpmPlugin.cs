@@ -23,10 +23,10 @@ public sealed class NpmPluginPackage : IIdrakPluginPackage
 }
 
 /// <summary>
-/// Registers, each with how to take it back: the editor plug-in "npm" and the file icons of .npmrc and .nvmrc
-/// (<see cref="FileIcons"/>, by extension: package.json, package-lock.json and the node_modules folder take theirs once
-/// file icons go by name, phase W's contract 5). Everything else (the Run view's provider "npm", the commands, the menus)
-/// the plug-in adds in a host once it has found Node there, and takes back when it is deactivated.
+/// Registers the editor plug-in "npm", with how to take it back. Everything else (the Run view's provider "npm", the
+/// commands, the menus) the plug-in adds in a host once it has found Node there, and takes back when it is deactivated.
+/// The icons of package.json, package-lock.json, .npmrc, .nvmrc and the node_modules folder are the library's drawn set
+/// (W-files' "craft" <see cref="FileIconThemes"/>), which a text badge registered here would only shadow.
 /// </summary>
 public sealed class NpmRegistration() : IdrakPlugin(NpmSettings.PluginName)
 {
@@ -34,10 +34,6 @@ public sealed class NpmRegistration() : IdrakPlugin(NpmSettings.PluginName)
     protected override void RegisterParts()
     {
         Part(() => EditorPlugins.Register(NpmPlugin.Instance), () => EditorPlugins.Unregister(NpmSettings.PluginName));
-        foreach (var icon in NpmPlugin.Icons)
-        {
-            Part(() => FileIcons.Register(icon), () => FileIcons.Unregister(icon.Extension));
-        }
     }
 }
 
@@ -83,13 +79,6 @@ public sealed class NpmPlugin : IEditorPlugin
 
     /// <summary>The Run view's provider "npm" (registered while a session has found Node).</summary>
     public static NpmRunProvider Provider { get; } = new();
-
-    /// <summary>The file icons it registers (by extension, today's <see cref="FileIcons"/>).</summary>
-    public static IReadOnlyList<FileIcon> Icons { get; } =
-    [
-        new(".npmrc", "npm", 0xFFE06C75, "npm configuration"),
-        new(".nvmrc", "⬢", 0xFF8CC84B, "Node version (nvm)"),
-    ];
 
     /// <summary>The active session (the host the plug-in was activated in last), or null.</summary>
     internal static NpmSession? Session { get; private set; }

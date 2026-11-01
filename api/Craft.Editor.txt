@@ -353,6 +353,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Void Dispose()
   System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
   System.Void Record(System.String metric, System.Double value, System.String unit)
+  System.Void RefreshWorkspace()
   System.Void SetActive(Craft.Abstractions.IEditorDocument document)
   System.Void SetDiagnostics(Craft.Abstractions.IEditorDocument document, System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> diagnostics)
   System.Void SetKeyBindings(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> user, System.String keyMap)
@@ -375,6 +376,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   event System.EventHandler<Craft.Abstractions.EditorDocumentEventArgs> SelectionChanged
   event System.EventHandler<Craft.Abstractions.EditorKeyEventArgs> KeyPressed
   event System.EventHandler<Craft.Abstractions.LineMarkEventArgs> LineMarkClicked
+  event System.EventHandler<Craft.Abstractions.WorkspaceChangedEventArgs> WorkspaceChanged
   event System.EventHandler<Craft.Editor.EditorLogEntry> Logged
   event System.EventHandler<Craft.Editor.EditorMeasureEventArgs> Recorded
   event System.EventHandler<Craft.Editor.EditorProgressItem> ProgressChanged

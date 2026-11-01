@@ -37,11 +37,11 @@ public static class ProjectLanguages
     /// <summary>A Visual Studio solution: .sln.</summary>
     public const string Solution = "sln";
 
-    private static readonly LanguageRules MarkupRules = new(null, "<!--", "-->", [new('<', '>'), new('(', ')'), new('[', ']'), new('{', '}')]);
-    private static readonly LanguageRules RazorRules = new("//", "@*", "*@", [new('<', '>'), new('(', ')'), new('[', ']'), new('{', '}')]);
-    private static readonly LanguageRules JsonRules = new("//", "/*", "*/", [new('{', '}'), new('[', ']')]);
+    private static readonly LanguageRules MarkupRules = new(null, "<!--", "-->", [new('<', '>'), new('(', ')'), new('[', ']'), new('{', '}')]) { StringDelimiters = "\"", StringEscape = '\0' };
+    private static readonly LanguageRules RazorRules = new("//", "@*", "*@", [new('<', '>'), new('(', ')'), new('[', ']'), new('{', '}')]) { StringDelimiters = "\"" };
+    private static readonly LanguageRules JsonRules = new("//", "/*", "*/", [new('{', '}'), new('[', ']')]) { StringDelimiters = "\"" };
     private static readonly LanguageRules EditorConfigRules = new("#", null, null, [new('[', ']'), new('{', '}')]);
-    private static readonly LanguageRules SolutionRules = new("#", null, null, [new('(', ')'), new('{', '}')]);
+    private static readonly LanguageRules SolutionRules = new("#", null, null, [new('(', ')'), new('{', '}')]) { StringDelimiters = "\"", StringEscape = '\0' };
 
     /// <summary>The names, in the order they are registered.</summary>
     public static IReadOnlyList<string> Names { get; } = [MsBuild, Xml, Xaml, Razor, Json, EditorConfig, Solution];

@@ -24,7 +24,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private readonly ITextMeasurer _measurer;
     private readonly IEditorClipboard _clipboard;
     private readonly TimeProvider _time;
-    private readonly string _indentUnit;
+    private string _indentUnit;
     private readonly TokenSpanBuffer _bracketSpans = new(64);
     private SelectionState _selection;
     private int _desiredColumn = -1;
@@ -90,6 +90,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         _document = document;
         _language = language;
         Options = options ?? new CraftOptions();
+        _baseOptions = Options;
         _theme = theme ?? EditorThemes.Get(Options.Theme);
         _measurer = measurer;
         _clipboard = clipboard;
@@ -153,8 +154,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>The language's name, or "Plain text" with the reason ("Plain text — no language for .xyz").</summary>
     public string LanguageName { get; }
 
-    /// <summary>The settings.</summary>
-    public CraftOptions Options { get; }
+    /// <summary>The settings in effect: the editor's options with the file's own settings over them (<see cref="ApplyFileSettings"/>).</summary>
+    public CraftOptions Options { get; private set; }
 
     /// <summary>The colours; setting it redraws.</summary>
     public ITheme Theme
@@ -180,14 +181,15 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>The cells of the gutter's fold column (its chevrons), when the document folds.</summary>
     public const int FoldGutterCells = 2;
 
-    /// <summary>The rows drawn: the lines minus those the folds hide.</summary>
-    public int RowCount => Folding.Map.HasHidden ? Folding.Map.RowCount : Snapshot.LineCount;
+    /// <summary>The rows drawn: the lines minus those the folds hide, each wrapped line counting its rows (X part 9).</summary>
+    public int RowCount => WordWrap.IsActive ? WordWrap.RowCount : Folding.Map.HasHidden ? Folding.Map.RowCount : Snapshot.LineCount;
 
-    /// <summary>The row <paramref name="line"/> is drawn on (its fold's header row when hidden).</summary>
-    public int RowOfLine(int line) => Folding.Map.HasHidden ? Folding.Map.RowOf(line) : line;
+    /// <summary>The row <paramref name="line"/> is drawn on, its first when wrapped (its fold's header row when hidden).</summary>
+    public int RowOfLine(int line) => WordWrap.IsActive ? WordWrap.RowOfLine(line) : Folding.Map.HasHidden ? Folding.Map.RowOf(line) : line;
 
-    /// <summary>The line drawn on <paramref name="row"/>.</summary>
-    public int LineAtRow(int row) => Folding.Map.HasHidden ? Folding.Map.LineAt(row) : Math.Clamp(row, 0, Snapshot.LineCount - 1);
+    /// <summary>The line drawn on <paramref name="row"/> (any of its rows when wrapped).</summary>
+    public int LineAtRow(int row) => WordWrap.IsActive ? WordWrap.LineAtRow(row, out _)
+        : Folding.Map.HasHidden ? Folding.Map.LineAt(row) : Math.Clamp(row, 0, Snapshot.LineCount - 1);
 
     /// <summary>The next line drawn after <paramref name="line"/> (the line count when it is the last).</summary>
     public int NextShownLine(int line) => Folding.Map.HasHidden ? Folding.Map.NextShown(line) : line + 1;
@@ -319,7 +321,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// The content's width: the longest line seen while drawing (or with the caret on it) plus the margin. It only grows:
     /// no whole-file scan is made to find the longest line.
     /// </summary>
-    public float ContentWidth => TextLeft + (_maxColumns + Options.ScrollMarginColumns + 1) * Metrics.CellWidth;
+    public float ContentWidth => WordWrap.Mode == "on" && WordWrap.IsActive ? ViewportWidth
+        : TextLeft + (_maxColumns + Options.ScrollMarginColumns + 1) * Metrics.CellWidth;
 
     /// <summary>The bracket at or just before the caret and its partner, or null (searched once per caret and version).</summary>
     public BracketMatch? MatchingBrackets
@@ -416,22 +419,16 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>The top-left of the cell of <paramref name="position"/>, in content coordinates.</summary>
     public EditorPoint PointFromPosition(int position)
     {
-        int line = Snapshot.GetLineIndex(Math.Clamp(position, 0, Snapshot.Length));
-        return new EditorPoint(TextLeft + ColumnOf(position) * Metrics.CellWidth, RowOfLine(line) * Metrics.LineHeight);
+        var (row, column) = VisualOf(position);
+        return new EditorPoint(TextLeft + column * Metrics.CellWidth, row * Metrics.LineHeight);
     }
 
     /// <summary>The position nearest to the content point (<paramref name="x"/>, <paramref name="y"/>), clamped to the text.</summary>
     public int PositionFromPoint(float x, float y)
     {
-        var snapshot = Snapshot;
-        int index = LineAtRow(Math.Clamp((int)MathF.Floor(y / Metrics.LineHeight), 0, RowCount - 1));
-        if (y < 0)
-        {
-            index = 0;
-        }
-
+        int row = y < 0 ? 0 : Math.Clamp((int)MathF.Floor(y / Metrics.LineHeight), 0, Math.Max(0, RowCount - 1));
         float column = Math.Max(0, (x - TextLeft) / Metrics.CellWidth);
-        return PositionAtColumn(snapshot.GetLine(index), column, nearest: true);
+        return PositionAtVisual(row, column, nearest: true);
     }
 
     /// <summary>Measures the options' font again (after the platform measured it for real) and redraws.</summary>
@@ -539,10 +536,10 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         }
 
         var metrics = Metrics;
-        int column = CaretColumn;
+        var (caretRow, column) = VisualOf(CaretPosition);
         NoteLineColumns(column);
         float caretX = column * metrics.CellWidth;
-        float caretY = RowOfLine(CaretLine) * metrics.LineHeight;
+        float caretY = caretRow * metrics.LineHeight;
         // The overview ruler covers the right edge, the sticky headers the top rows: the caret is kept out from under them.
         float textWidth = Math.Max(metrics.CellWidth, ViewportWidth - TextLeft - OverviewRulerWidth);
         float stickyTop = StickyScroll.Height;
@@ -592,6 +589,7 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
 
         _disposed = true;
         _document.Buffer.Changed -= OnBufferChanged;
+        _lightbulb?.Dispose();
         DetachLineMarks();
         Folding.Dispose();
         InlineCompletion.Dispose();
@@ -690,6 +688,11 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         }
 
         int line = LineAtRow(row);
+        if (RowOfLine(line) != row)
+        {
+            return null;                                          // a wrapped line's chevron is on its first row
+        }
+
         return Folding.IsFoldable(line) || Folding.IsFolded(line) ? line : null;
     }
 
@@ -751,8 +754,10 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private void OnBufferChanged(object? sender, TextChangedEventArgs e)
     {
         NoteLineChange(e);                                   // the minimap moves its kept lines through it (piece 2b)
-        // The folds first: the selections mapped below may land on lines they hide.
+        // The folds first: the selections mapped below may land on lines they hide; then the rows and the bracket states.
         Folding.OnBufferChanged(e);
+        _wordWrap?.OnBufferChanged(e);
+        _bracketColors?.OnBufferChanged(e);
         if (!_applying)
         {
             // A change that did not come through this editor (a reload, another view): the selection follows the edits.

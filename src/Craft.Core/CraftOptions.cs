@@ -362,6 +362,54 @@ public sealed record CraftOptions
     /// </summary>
     public bool CompletionAllCarets { get; init; } = true;
 
+    // X part 9: the editing helpers (word wrap, bracket pair colours, diagnostics at the line end, the lightbulb, rendered
+    // white space, rulers, trimming and the final newline on save, .editorconfig).
+
+    /// <summary>
+    /// How long lines wrap (<c>CRAFT_WORD_WRAP</c>): "off", "on" (at the editor's width) or "column" (at
+    /// <see cref="WordWrapColumn"/>); Alt+Z switches it for the editor in hand.
+    /// </summary>
+    public string WordWrap { get; init; } = "off";
+
+    /// <summary>The column lines wrap at when <see cref="WordWrap"/> is "column" (<c>CRAFT_WORD_WRAP_COLUMN</c>).</summary>
+    public int WordWrapColumn { get; init; } = 80;
+
+    /// <summary>Whether brackets are coloured by their nesting depth, an unmatched one in the error colour (<c>CRAFT_BRACKET_COLORS</c>).</summary>
+    public bool BracketColors { get; init; } = true;
+
+    /// <summary>
+    /// The lines one frame reads ahead for bracket depths it does not know yet (a jump deep into a long file colours the
+    /// brackets over a few frames instead of one long one; <c>CRAFT_BRACKET_COLORS_SCAN_LINES</c>).
+    /// </summary>
+    public int BracketColorsScanLines { get; init; } = 20_000;
+
+    /// <summary>Which diagnostics show their message after the line's text (<c>CRAFT_INLINE_DIAGNOSTICS</c>): "off", "errors" or "all".</summary>
+    public string InlineDiagnostics { get; init; } = "errors";
+
+    /// <summary>Whether a lightbulb in the gutter marks the caret's line when code actions exist there (<c>CRAFT_LIGHTBULB</c>).</summary>
+    public bool Lightbulb { get; init; } = true;
+
+    /// <summary>Milliseconds after the caret or the diagnostics stop changing before the code actions are asked for the lightbulb (<c>CRAFT_LIGHTBULB_DELAY_MS</c>).</summary>
+    public int LightbulbDelayMilliseconds { get; init; } = 250;
+
+    /// <summary>
+    /// Which white space is drawn, a dot for a space and an arrow for a tab (<c>CRAFT_RENDER_WHITESPACE</c>): "none",
+    /// "boundary" (leading, trailing and runs of two or more), "selection" (inside the selections) or "all".
+    /// </summary>
+    public string RenderWhitespace { get; init; } = "selection";
+
+    /// <summary>The columns vertical rulers mark, separated by commas ("80,120"; <c>CRAFT_RULERS</c>); empty for none.</summary>
+    public string Rulers { get; init; } = "";
+
+    /// <summary>Whether Save removes the white space at the ends of the lines first, as one undo step (<c>CRAFT_TRIM_TRAILING_WHITESPACE</c>).</summary>
+    public bool TrimTrailingWhitespace { get; init; }
+
+    /// <summary>Whether Save ends the text with a line break when it has none, as one undo step (<c>CRAFT_INSERT_FINAL_NEWLINE</c>).</summary>
+    public bool InsertFinalNewline { get; init; }
+
+    /// <summary>Whether a file's <c>.editorconfig</c> settings apply to it, over these options (<c>CRAFT_EDITORCONFIG</c>).</summary>
+    public bool EditorConfig { get; init; } = true;
+
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
 
@@ -873,6 +921,19 @@ public sealed record CraftOptions
         new("CRAFT_MINIMAP_DIAGNOSTICS", "true", "Whether the minimap marks the lines with errors and warnings.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Minimap marks problems", "Display") },
         new("CRAFT_MINIMAP_FIND", "true", "Whether the minimap marks the find box's hits.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Minimap marks search hits", "Display") },
         new("CRAFT_COMPLETION_ALL_CARETS", "true", "Whether the completion list and ghost text work at several carets: asked at the primary caret, applied at every caret whose text before it matches (the rest left and said); off closes them while there are several carets.") { Shape = SettingShape.Toggle(SettingSections.Completion, "Complete at every matching caret", "Completion list") },
+        // X part 9: the editing helpers.
+        new("CRAFT_WORD_WRAP", "off", "How long lines wrap: off, on (at the editor's width) or column (at CRAFT_WORD_WRAP_COLUMN); Alt+Z switches it for the editor in hand.") { Shape = SettingShape.Choice(SettingSections.Editor, "Word wrap", ["off", "on", "column"], "Display") },
+        new("CRAFT_WORD_WRAP_COLUMN", "80", "The column lines wrap at when CRAFT_WORD_WRAP is column.") { Shape = SettingShape.Whole(SettingSections.Editor, "Wrap at column", 10, 10_000, "columns", "Display") },
+        new("CRAFT_BRACKET_COLORS", "true", "Whether brackets are coloured by their nesting depth (strings and comments skipped), an unmatched one in the error colour.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Bracket pair colours", "Display") },
+        new("CRAFT_BRACKET_COLORS_SCAN_LINES", "20000", "The lines one frame reads ahead for bracket depths it does not know yet (a jump deep into a long file colours over a few frames).") { Shape = SettingShape.Whole(SettingSections.Editor, "Bracket depths read a frame", 100, 10_000_000, "lines", "Advanced", step: 1000) },
+        new("CRAFT_INLINE_DIAGNOSTICS", "errors", "Which diagnostics show their message, faded, after the line's text: off, errors or all.") { Shape = SettingShape.Choice(SettingSections.Editor, "Diagnostics at the line end", ["off", "errors", "all"], "Display") },
+        new("CRAFT_LIGHTBULB", "true", "Whether a lightbulb in the gutter marks the caret's line when code actions exist there (a click opens Quick fix).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Lightbulb for code actions", "Display") },
+        new("CRAFT_LIGHTBULB_DELAY_MS", "250", "Milliseconds after the caret or the diagnostics stop changing before the code actions are asked for the lightbulb.") { Shape = SettingShape.Whole(SettingSections.Editor, "Lightbulb asks after", 0, 60_000, "ms", "Display", step: 50) },
+        new("CRAFT_RENDER_WHITESPACE", "selection", "Which white space is drawn (a dot a space, an arrow a tab): none, boundary (leading, trailing, runs of two or more), selection or all.") { Shape = SettingShape.Choice(SettingSections.Editor, "Render white space", ["none", "boundary", "selection", "all"], "Display") },
+        new("CRAFT_RULERS", "", "The columns vertical rulers mark, separated by commas (80,120); empty for none (a file's .editorconfig max_line_length adds one).") { Shape = SettingShape.Text(SettingSections.Editor, "Vertical rulers at columns", "Display") },
+        new("CRAFT_TRIM_TRAILING_WHITESPACE", "false", "Whether Save removes the white space at the ends of the lines first, as one undo step (a file's .editorconfig wins).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Trim trailing white space on save", "Files") },
+        new("CRAFT_INSERT_FINAL_NEWLINE", "false", "Whether Save ends the text with a line break when it has none, as one undo step (a file's .editorconfig wins).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Insert a final newline on save", "Files") },
+        new("CRAFT_EDITORCONFIG", "true", "Whether a file's .editorconfig (indentation, line ending, charset, trimming, final newline, max_line_length as a ruler) applies to it, over these settings.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Apply .editorconfig", "Files") },
         // Phase X slice 3: inline, not modal; the welcome page.
         new("CRAFT_WELCOME_AT_START", "true", "Whether the welcome page (open a folder, a new file, the recent folders, the main shortcuts) opens at start when no folder is open; Help › Welcome opens it any time.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Show the welcome page at start", "Welcome") },
         new("CRAFT_UNDO_BAR_MS", "5000", "Milliseconds the inline bar with Undo stays after a change that can be taken back (the notification centre cleared, a recent folder removed).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Undo bar stays for", 500, 600_000, "ms", "Notifications", step: 500) },
@@ -1232,6 +1293,66 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_COMPLETION_ALL_CARETS") is { } allCarets)
         {
             options = options with { CompletionAllCarets = Flag(allCarets, "CRAFT_COMPLETION_ALL_CARETS") };
+        }
+
+        if (Text(read, "CRAFT_WORD_WRAP") is { } wrap)
+        {
+            options = options with { WordWrap = OneOf(wrap, "CRAFT_WORD_WRAP", "off", "on", "column") };
+        }
+
+        if (Text(read, "CRAFT_WORD_WRAP_COLUMN") is { } wrapColumn)
+        {
+            options = options with { WordWrapColumn = Whole(wrapColumn, "CRAFT_WORD_WRAP_COLUMN", 10, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_BRACKET_COLORS") is { } bracketColors)
+        {
+            options = options with { BracketColors = Flag(bracketColors, "CRAFT_BRACKET_COLORS") };
+        }
+
+        if (Text(read, "CRAFT_BRACKET_COLORS_SCAN_LINES") is { } bracketScan)
+        {
+            options = options with { BracketColorsScanLines = Whole(bracketScan, "CRAFT_BRACKET_COLORS_SCAN_LINES", 100, 10_000_000) };
+        }
+
+        if (Text(read, "CRAFT_INLINE_DIAGNOSTICS") is { } inline)
+        {
+            options = options with { InlineDiagnostics = OneOf(inline, "CRAFT_INLINE_DIAGNOSTICS", "off", "errors", "all") };
+        }
+
+        if (Text(read, "CRAFT_LIGHTBULB") is { } lightbulb)
+        {
+            options = options with { Lightbulb = Flag(lightbulb, "CRAFT_LIGHTBULB") };
+        }
+
+        if (Text(read, "CRAFT_LIGHTBULB_DELAY_MS") is { } lightbulbDelay)
+        {
+            options = options with { LightbulbDelayMilliseconds = Whole(lightbulbDelay, "CRAFT_LIGHTBULB_DELAY_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_RENDER_WHITESPACE") is { } whitespace)
+        {
+            options = options with { RenderWhitespace = OneOf(whitespace, "CRAFT_RENDER_WHITESPACE", "none", "boundary", "selection", "all") };
+        }
+
+        if (read("CRAFT_RULERS") is { } rulers)
+        {
+            options = options with { Rulers = RulerColumns(rulers) };
+        }
+
+        if (Text(read, "CRAFT_TRIM_TRAILING_WHITESPACE") is { } trim)
+        {
+            options = options with { TrimTrailingWhitespace = Flag(trim, "CRAFT_TRIM_TRAILING_WHITESPACE") };
+        }
+
+        if (Text(read, "CRAFT_INSERT_FINAL_NEWLINE") is { } finalNewline)
+        {
+            options = options with { InsertFinalNewline = Flag(finalNewline, "CRAFT_INSERT_FINAL_NEWLINE") };
+        }
+
+        if (Text(read, "CRAFT_EDITORCONFIG") is { } editorConfig)
+        {
+            options = options with { EditorConfig = Flag(editorConfig, "CRAFT_EDITORCONFIG") };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)
@@ -1815,6 +1936,45 @@ public sealed record CraftOptions
         }
 
         return [.. entries];
+    }
+
+    /// <summary>
+    /// The columns of <paramref name="text"/> ("80, 120") as the rulers keep them ("80,120"), in order, each 1 to 10,000;
+    /// empty for none.
+    /// </summary>
+    /// <exception cref="ArgumentException">A part is not such a whole number (the message names CRAFT_RULERS).</exception>
+    public static string RulerColumns(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var columns = new List<int>();
+        foreach (var part in text.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            columns.Add(Whole(part, "CRAFT_RULERS", 1, 10_000));
+        }
+
+        columns.Sort();
+        return string.Join(',', columns.Distinct().Select(c => c.ToString(CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>The columns of <see cref="Rulers"/>, in order (parsed by the caller once per value, never per frame).</summary>
+    public static int[] ParseRulers(string? rulers)
+    {
+        if (string.IsNullOrWhiteSpace(rulers))
+        {
+            return [];
+        }
+
+        var columns = new List<int>();
+        foreach (var part in rulers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out int column) && column > 0)
+            {
+                columns.Add(column);
+            }
+        }
+
+        columns.Sort();
+        return [.. columns];
     }
 
     private static string OneOf(string value, string name, params ReadOnlySpan<string> choices)

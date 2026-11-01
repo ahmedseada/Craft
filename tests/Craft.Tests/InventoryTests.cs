@@ -131,6 +131,10 @@ public static class InventoryTests
             ["CRAFT_CHAT_SHOW_METRICS"] = "false",
             // X part 7: rich context menus.
             ["CRAFT_TABS_REOPEN_LIMIT"] = "7", ["CRAFT_DELETE_UNDO_MAX_MB"] = "2", ["CRAFT_MENU_TYPE_AHEAD_MS"] = "400", ["CRAFT_MENU_SUBMENU_DELAY_MS"] = "0",
+            // X part 9: the editing helpers.
+            ["CRAFT_WORD_WRAP"] = "column", ["CRAFT_WORD_WRAP_COLUMN"] = "100", ["CRAFT_BRACKET_COLORS"] = "false", ["CRAFT_BRACKET_COLORS_SCAN_LINES"] = "5000",
+            ["CRAFT_INLINE_DIAGNOSTICS"] = "all", ["CRAFT_LIGHTBULB"] = "false", ["CRAFT_LIGHTBULB_DELAY_MS"] = "100", ["CRAFT_RENDER_WHITESPACE"] = "boundary",
+            ["CRAFT_RULERS"] = "120, 80", ["CRAFT_TRIM_TRAILING_WHITESPACE"] = "true", ["CRAFT_INSERT_FINAL_NEWLINE"] = "true", ["CRAFT_EDITORCONFIG"] = "false",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -176,6 +180,8 @@ public static class InventoryTests
             RunSandbox = "approve-each", RunTimeLimitMinutes = 30, RunApproval = "each", RunInteractive = "off",
             ChatExpanded = true, ComposerMaxLines = 6, ChatCopyFormat = "plain", ChatFoldCodeLines = 10, ChatShowMetrics = false,
             TabsReopenLimit = 7, DeleteUndoMaxMegabytes = 2, MenuTypeAheadMilliseconds = 400, MenuSubmenuDelayMilliseconds = 0,
+            WordWrap = "column", WordWrapColumn = 100, BracketColors = false, BracketColorsScanLines = 5000, InlineDiagnostics = "all", Lightbulb = false,
+            LightbulbDelayMilliseconds = 100, RenderWhitespace = "boundary", Rulers = "80,120", TrimTrailingWhitespace = true, InsertFinalNewline = true, EditorConfig = false,
         }, options, "options read from every variable");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");
         Check.True(Equals(new CraftOptions(), new CraftOptions()), "two default options compare equal (no list made per instance)");

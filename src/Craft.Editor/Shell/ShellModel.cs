@@ -1228,6 +1228,7 @@ public sealed partial class ShellModel : IDisposable
         try
         {
             _treeWatch = new FolderTreeWatch(tree, FolderWatchers.Get(Options.WorkspaceWatcher), Options.WorkspaceWatchMilliseconds, Host.Dispatch);
+            _treeWatch.EntryChanged += OnEntryChanged;
         }
         catch (NotRegisteredException e)
         {
@@ -1255,6 +1256,15 @@ public sealed partial class ShellModel : IDisposable
         }
 
         _treeWatch?.Touch(path);
+        if (IsConfigurationFile(path))
+        {
+            OnConfigurationFileChanged(path);
+        }
+        else
+        {
+            FileSettingsChanged?.Invoke(this, new FileSettingsChangedEventArgs(path));
+        }
+
         if (Groups.AllTabs.FirstOrDefault(t => ReferenceEquals(t.HostDocument, e.Document)) is { } tab && EditorLanguages.ForFile(path) is var language && !ReferenceEquals(language, tab.Language))
         {
             Groups.SetLanguage(tab, language);
@@ -1349,6 +1359,9 @@ public sealed partial class ShellModel : IDisposable
             // Off the UI thread, applied on it as one undo step; a malformed file is saved as it is (the format says why).
             await editor.FormatDocumentAsync(cancellationToken);
         }
+
+        // X part 9: the trailing white space and the final newline (the file's .editorconfig over the options), a new file's charset.
+        await ApplySaveActionsAsync(tab, path, cancellationToken);
 
         try
         {

@@ -142,6 +142,73 @@ public sealed record EditorColors(uint Background, uint Foreground, uint Selecti
 
     /// <summary>The minimap's slider while it is dragged (the text colour, a little stronger, unless set).</summary>
     public uint MinimapSliderActive { get => _minimapSliderActive ?? ((Foreground & 0x00FFFFFFu) | 0x34000000u); init => _minimapSliderActive = value; }
+
+    // X part 9: the editing helpers' marks. Each follows the theme's own colours unless a theme sets it (a plug-in's theme
+    // made before them draws them in its own accent, info, success, warning, error and line-number colours).
+
+    private uint? _bracket1;
+    private uint? _bracket2;
+    private uint? _bracket3;
+    private uint? _bracket4;
+    private uint? _bracket5;
+    private uint? _bracket6;
+    private uint? _bracketUnmatched;
+    private uint? _whitespace;
+    private uint? _verticalRuler;
+    private uint? _inlineError;
+    private uint? _inlineWarning;
+    private uint? _inlineInfo;
+    private uint? _lightbulb;
+
+    /// <summary>A bracket at nesting depth 1 (outermost) with bracket pair colours on (the theme's <see cref="Accent"/> unless set).</summary>
+    public uint BracketDepth1 { get => _bracket1 ?? Accent; init => _bracket1 = value; }
+
+    /// <summary>A bracket at depth 2 (the theme's <see cref="Info"/> unless set).</summary>
+    public uint BracketDepth2 { get => _bracket2 ?? Info; init => _bracket2 = value; }
+
+    /// <summary>A bracket at depth 3 (the theme's <see cref="Success"/> unless set).</summary>
+    public uint BracketDepth3 { get => _bracket3 ?? Success; init => _bracket3 = value; }
+
+    /// <summary>A bracket at depth 4 (depth 1's colour mixed a third toward the text's, unless set).</summary>
+    public uint BracketDepth4 { get => _bracket4 ?? ColorContrast.Mix(BracketDepth1, Foreground, 0.35); init => _bracket4 = value; }
+
+    /// <summary>A bracket at depth 5 (depth 2's colour mixed a third toward the text's, unless set).</summary>
+    public uint BracketDepth5 { get => _bracket5 ?? ColorContrast.Mix(BracketDepth2, Foreground, 0.35); init => _bracket5 = value; }
+
+    /// <summary>A bracket at depth 6 (depth 3's colour mixed a third toward the text's, unless set); deeper brackets take the six in turn again.</summary>
+    public uint BracketDepth6 { get => _bracket6 ?? ColorContrast.Mix(BracketDepth3, Foreground, 0.35); init => _bracket6 = value; }
+
+    /// <summary>A bracket with no partner (the theme's <see cref="Error"/> unless set).</summary>
+    public uint BracketUnmatched { get => _bracketUnmatched ?? Error; init => _bracketUnmatched = value; }
+
+    /// <summary>Rendered white space: a space's dot and a tab's arrow (the line numbers' colour, faint, unless set).</summary>
+    public uint Whitespace { get => _whitespace ?? ((GutterText & 0x00FFFFFFu) | 0x70000000u); init => _whitespace = value; }
+
+    /// <summary>A vertical ruler at a column (the line numbers' colour, faint, unless set).</summary>
+    public uint VerticalRuler { get => _verticalRuler ?? ((GutterText & 0x00FFFFFFu) | 0x38000000u); init => _verticalRuler = value; }
+
+    /// <summary>An error's message drawn faded after its line's text (the error colour, see-through, unless set).</summary>
+    public uint InlineError { get => _inlineError ?? ((Error & 0x00FFFFFFu) | 0xA8000000u); init => _inlineError = value; }
+
+    /// <summary>A warning's message after its line's text (the warning colour, see-through, unless set).</summary>
+    public uint InlineWarning { get => _inlineWarning ?? ((Warning & 0x00FFFFFFu) | 0xA8000000u); init => _inlineWarning = value; }
+
+    /// <summary>An informational message after its line's text (the info colour, see-through, unless set).</summary>
+    public uint InlineInfo { get => _inlineInfo ?? ((Info & 0x00FFFFFFu) | 0xA8000000u); init => _inlineInfo = value; }
+
+    /// <summary>The lightbulb in the gutter where code actions exist (the theme's <see cref="Warning"/> unless set).</summary>
+    public uint Lightbulb { get => _lightbulb ?? Warning; init => _lightbulb = value; }
+
+    /// <summary>The colour of a bracket at <paramref name="depth"/> (1 the outermost): the six depth colours in turn.</summary>
+    public uint BracketDepth(int depth) => ((Math.Max(1, depth) - 1) % 6) switch
+    {
+        0 => BracketDepth1,
+        1 => BracketDepth2,
+        2 => BracketDepth3,
+        3 => BracketDepth4,
+        4 => BracketDepth5,
+        _ => BracketDepth6,
+    };
 }
 
 /// <summary>

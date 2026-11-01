@@ -26,7 +26,7 @@ public sealed class CSharpLanguage : ILanguage
     /// <summary>The name of C# script.</summary>
     public const string ScriptName = "csharp-script";
 
-    private static readonly LanguageRules CSharpRules = new("//", "/*", "*/", [new('(', ')'), new('[', ']'), new('{', '}')]);
+    private static readonly LanguageRules CSharpRules = new("//", "/*", "*/", [new('(', ')'), new('[', ']'), new('{', '}')]) { StringDelimiters = "\"'" };
 
     /// <summary>Regular C# ("csharp", ".cs").</summary>
     public CSharpLanguage() : this(SourceCodeKind.Regular)

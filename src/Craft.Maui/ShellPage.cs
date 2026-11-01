@@ -123,6 +123,7 @@ public sealed class ShellPage : ContentPage, IDisposable
     private bool _keysRouted;
     private bool _closeGuarded;
     private bool _disposed;
+    private Craft.Abstractions.FileSettings? _statusSettings;
     private Window? _window;
     private EditorView? _shown;
     private bool _started;
@@ -472,6 +473,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             }
         };
         _shell.ThemeChanged += (_, _) => ApplyTheme();
+        _shell.FileSettingsChanged += OnFileSettingsChanged;
         _shell.ViewRequested += (_, view) => OnViewRequested(view);
         _shell.RevealRequested += (_, path) => _tree.ScrollTo(path);
         // X part 7: names typed in place in the tree (new file, new folder, rename), checked as they are typed.
@@ -1685,6 +1687,60 @@ public sealed class ShellPage : ContentPage, IDisposable
 
     private IEditorNotification? _completionStatus;
 
+    // X part 9: a file's own settings on its view: at once when its folders were read, else read off the UI thread and
+    // applied when they come back (the view's model is not made again).
+    private void ApplyFileSettings(EditorView view, string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        if (_shell.CachedFileSettings(path) is { } known)
+        {
+            view.FileSettings = known;
+            return;
+        }
+
+        _ = ApplyFileSettingsAsync(view, path);
+    }
+
+    private async Task ApplyFileSettingsAsync(EditorView view, string path)
+    {
+        try
+        {
+            var settings = await _shell.FileSettingsAsync(path);
+            if (!_disposed && _views.Contains(view))
+            {
+                view.FileSettings = settings;
+                if (ReferenceEquals(view, _shown))
+                {
+                    UpdateStatus();
+                }
+            }
+        }
+#pragma warning disable CA1031 // An unreadable .editorconfig leaves the options as they are, never a crash.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(Craft.Abstractions.EditorLogLevel.Warning, $"The settings of {path} could not be read: {error.Message}", error);
+        }
+    }
+
+    private void OnFileSettingsChanged(object? sender, Craft.Editor.Shell.FileSettingsChangedEventArgs e)
+    {
+        foreach (var tab in _shell.Groups.AllTabs)
+        {
+            if (tab.View is EditorView view && tab.FilePath is { } path
+                && (e.Path is null || string.Equals(Path.GetFullPath(e.Path), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)))
+            {
+                ApplyFileSettings(view, path);
+            }
+        }
+
+        UpdateStatus();
+    }
+
     private EditorView MakeView(DocumentTab tab)
     {
         var view = new EditorView
@@ -1699,6 +1755,10 @@ public sealed class ShellPage : ContentPage, IDisposable
         };
         view.Sessions = _shell.Sessions;                    // one language session per document, shared by its views
         view.Open(tab.Document, tab.Language);
+        // X part 9: the lightbulb asks the code action providers; the file's .editorconfig applies over the options.
+        view.LightbulbProbe = ShellModel.LightbulbProbe(tab);
+        view.QuickFixRequested += (_, _) => _ = _host.ExecuteCommandAsync(Craft.Editor.Shell.StandardShortcuts.QuickFix);
+        ApplyFileSettings(view, tab.FilePath);
         view.Engaged += (_, _) =>
         {
             if (OwnerOf(view) is { } owner && _shell.Groups.GroupOf(owner) is { } group)
@@ -2397,6 +2457,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         Set(_status.Language, LanguageText(model, tab.FilePath));
         Set(_status.Position, ShellText.Position(model.CaretLine, model.CaretColumn));
         Set(_status.Indentation, ShellText.Indentation(model.Options));
+        if (!ReferenceEquals(model.FileSettings, _statusSettings))
+        {
+            _statusSettings = model.FileSettings;
+            ToolTipProperties.SetText(_status.Indentation, ShellText.IndentationTooltip(model));
+            ToolTipProperties.SetText(_status.LineEnding, ShellText.LineEndingTooltip(model));
+        }
         if (tab.Document is TextDocument document)
         {
             Set(_status.Encoding, ShellText.EncodingName(document.Encoding, document.HasBom));

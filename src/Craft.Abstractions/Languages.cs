@@ -17,6 +17,15 @@ public sealed record LanguageRules(string? LineComment, string? BlockCommentOpen
 {
     /// <summary>No comments; (), [] and {} as brackets: the rules of a file of no language.</summary>
     public static LanguageRules Plain { get; } = new(null, null, null, [new('(', ')'), new('[', ']'), new('{', '}')]);
+
+    /// <summary>
+    /// The characters that open a string and close it on the same line ("\"'" for C#; empty for none): the editor's bracket
+    /// pair colours (X part 9) skip the brackets inside them, as they skip comments.
+    /// </summary>
+    public string StringDelimiters { get; init; } = "";
+
+    /// <summary>The character that escapes the next one inside a string ('\\'), or '\0' for none.</summary>
+    public char StringEscape { get; init; } = '\\';
 }
 
 /// <summary>

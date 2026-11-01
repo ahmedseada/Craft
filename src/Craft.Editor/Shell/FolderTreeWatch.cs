@@ -43,6 +43,12 @@ public sealed class FolderTreeWatch : IDisposable
         _watch = watcher.Watch(_workspace.Root, OnChanged);
     }
 
+    /// <summary>
+    /// Raised on the watcher's threads (never the UI thread) with each entry made, removed or renamed (both paths of a
+    /// rename): the shell reads a file's settings again when an <c>.editorconfig</c> changed (X part 9).
+    /// </summary>
+    public event Action<string>? EntryChanged;
+
     /// <summary>The batches applied to the tree so far.</summary>
     public int Batches => Volatile.Read(ref _batches);
 
@@ -89,9 +95,11 @@ public sealed class FolderTreeWatch : IDisposable
         else
         {
             added = Add(change.Path);
+            EntryChanged?.Invoke(change.Path);
             if (change.OldPath is { } old)
             {
                 added |= Add(old);
+                EntryChanged?.Invoke(old);
             }
         }
 

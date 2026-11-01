@@ -169,6 +169,13 @@ public sealed partial class EditorModel
         CloseTooltips();
         _completion?.Close();
         _pointerMode = PointerMode.Select;
+        if (_lightbulb is { } bulb && bulb.HitTest(viewX, viewY))
+        {
+            _pointerDown = false;
+            bulb.Press();
+            return;
+        }
+
         if (PressOnLineMark(viewX, viewY))
         {
             return;
@@ -344,9 +351,9 @@ public sealed partial class EditorModel
             case EditorKey.PageDown:
                 return LineMove(caret, (key == EditorKey.PageUp ? -1 : 1) * PageLines(), ref desired);
             case EditorKey.Home:
-                return control ? 0 : SmartHome(caret);
+                return control ? 0 : WrappedHome(caret) ?? SmartHome(caret);
             default:
-                return control ? snapshot.Length : snapshot.GetLine(snapshot.GetLineIndex(caret)).End;
+                return control ? snapshot.Length : WrappedEnd(caret) ?? snapshot.GetLine(snapshot.GetLineIndex(caret)).End;
         }
     }
 
@@ -513,17 +520,18 @@ public sealed partial class EditorModel
         }
     }
 
-    // A vertical move by rows: folded lines are stepped over, never entered.
+    // A vertical move by rows: folded lines are stepped over, never entered; a wrapped line's rows are each a row
+    // (X part 9), the column kept on the screen's grid.
     private int LineMove(int position, int lines, ref int desired)
     {
         var snapshot = Snapshot;
-        int index = snapshot.GetLineIndex(position);
+        var (row, column) = VisualOf(position);
         if (desired < 0)
         {
-            desired = ColumnOf(position);
+            desired = column;
         }
 
-        int target = RowOfLine(index) + lines;
+        int target = row + lines;
         if (target < 0)
         {
             return 0;
@@ -534,7 +542,55 @@ public sealed partial class EditorModel
             return snapshot.Length;
         }
 
-        return PositionAtColumn(snapshot.GetLine(LineAtRow(target)), desired, nearest: false);
+        return PositionAtVisual(target, desired, nearest: false);
+    }
+
+    // Home on a wrapped line's continuation row: the row's start (after its indent); at the row's start, the line's Home.
+    private int? WrappedHome(int position)
+    {
+        if (!WordWrap.IsActive)
+        {
+            return null;
+        }
+
+        var snapshot = Snapshot;
+        var line = snapshot.GetLine(snapshot.GetLineIndex(position));
+        var wrapped = WordWrap.Line(line.Index);
+        if (wrapped is not { Rows: > 1 })
+        {
+            return null;
+        }
+
+        int row = wrapped.RowOf(position - line.Start);
+        int start = line.Start + wrapped.RowStart(row);
+        return row > 0 && position != start ? start : null;
+    }
+
+    // End on a wrapped line's row before its last: the row's end (before its last character, the next row's start being
+    // drawn there); at it, the line's end.
+    private int? WrappedEnd(int position)
+    {
+        if (!WordWrap.IsActive)
+        {
+            return null;
+        }
+
+        var snapshot = Snapshot;
+        var line = snapshot.GetLine(snapshot.GetLineIndex(position));
+        var wrapped = WordWrap.Line(line.Index);
+        if (wrapped is not { Rows: > 1 })
+        {
+            return null;
+        }
+
+        int row = wrapped.RowOf(position - line.Start);
+        if (row + 1 >= wrapped.Rows)
+        {
+            return null;
+        }
+
+        int end = line.Start + Math.Max(wrapped.RowStart(row), wrapped.RowEnd(row) - 1);
+        return position != end ? end : null;
     }
 
     private bool SelectAll()
@@ -623,6 +679,11 @@ public sealed partial class EditorModel
     {
         get
         {
+            if (FileSettings.NewLine is { } fileNewLine)
+            {
+                return fileNewLine;                               // .editorconfig's end_of_line wins for the breaks the editor inserts
+            }
+
             var snapshot = Snapshot;
             if (snapshot.LineCount > 1)
             {

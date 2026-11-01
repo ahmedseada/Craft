@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable) | Parts 6-10 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view), X part 7 (rich context menus), X part 8 (Source Control), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5 |
 | 5 | X rest: minimap, completion at several carets, peek, measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -3162,6 +3162,41 @@ It takes in Phase X's bullet "The chat and the agent feel like a conversation". 
   approval inline, the composer's chips, history and slash commands, expand and restore keep the rail and side view
   and the widths, conversations list with Undo; only visible messages laid out, 0 bytes per warm frame).
 - Slot: slot s4 right after piece 1b (it changes the same chat files), before X part 8.
+
+### X part 11: AI features on Idrak (the owner, 2026-11-01: "go with your pick" of five proposed)
+Each runs on the models already loaded with their roles' settings (note 25's leases, one copy; a load only when asked,
+note 23), every model change to a document is a diff the user accepts (no silent edit), every command through the
+sandbox with approval.
+1. **Speculative decoding (Idrak first).** Checked 2026-11-01: Idrak has none (no draft/verify loop in its text
+   generator). Idrak gap, on Idrak `main` by Idrak's rules: a draft model proposes K tokens, the target verifies them in
+   one batched forward pass, accepted tokens kept, the first rejected one resampled from the target, so the output
+   distribution is the target's own (greedy: identical tokens, proven by rule 71 on fixed prompts); K adapts to the
+   acceptance rate; both models' KV caches kept in step; a contract (`GenerationOptions.Draft` or a decoding strategy in
+   a registry) so any pair with the same tokenizer works, refused with the reason otherwise; measured tokens/s with and
+   without on CPU here and the owner's GPU numbers. Craft: `CRAFT_PLUGIN_AI_DRAFTMODEL` per role (empty: the completion
+   role's model when its tokenizer matches the role's, else off), `_DRAFTTOKENS` (auto); the chip and the status bar show
+   "draft: 1.5B, 72% accepted".
+2. **Next-edit suggestions.** After an edit, the completion model predicts the next place to change and the change
+   (from the recent edits, the cursor's surroundings and the diagnostics), shown as a ghost marker in the gutter and a
+   ghost diff at that place; Tab jumps there, Tab again applies (one undo step), Escape dismisses; off the UI thread,
+   cancelled by the next keystroke, `CRAFT_PLUGIN_AI_NEXTEDIT` (on), `_NEXTEDITDELAYMS` (800); a contract
+   `INextEditProvider : IKind` so another plug-in can offer them.
+3. **Repo-aware completion.** Inline completion adds the workspace's most similar snippets to its prompt (BM25 over
+   identifiers, and embeddings when an encoder is set; shared with P6's index when present, else a small index of its
+   own kept on disk, updated per saved file), within `CRAFT_PLUGIN_AI_COMPLETIONCONTEXTTOKENS`; the snippets chosen
+   shown in the completion's tooltip; measured: acceptance rate with and without on the test project.
+4. **AI review before commit.** Source Control's "Review changes" (X part 8): the staged diff (else all changes) reviewed
+   by the chat role's loaded model; findings as inline notes on the diff view and the editor (severity, one line, the
+   reason), each with "Apply fix" as a diff, "Dismiss", and "Copy all"; trimmed to the role's budget by file; Stop.
+5. **Fix the build with AI.** When a Run-view build or test (X part 6) fails, its Problems rows and the run's panel get
+   "Fix with AI": the errors with their code around them go to the agent (or the chat for one error), the fix arrives as
+   a diff, and "Run again" re-runs the same configuration after the user accepts.
+- Decisions (recommended, noted): speculative decoding built in Idrak, used by Craft only where the tokenizers match;
+  next-edit on by default with its delay; repo-aware completion shares P6's index when it exists.
+- Tests: Idrak `speculative decoding` (greedy output identical to the target alone, sampling distribution checked on a
+  tiny model, acceptance tracked, K adapts, a tokenizer mismatch refused, memory flat); Craft `DraftModel`, `NextEdit`,
+  `RepoCompletion`, `CommitReview`, `BuildFix` (scripted fake models, diffs of one undo step, cancel on keystroke).
+- Slot: after X part 10; item 1's Idrak part may start earlier in any free slot (it touches only Idrak's generation).
 
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 10 (the chat

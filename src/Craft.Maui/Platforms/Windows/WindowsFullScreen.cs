@@ -21,4 +21,16 @@ public sealed class WindowsFullScreen : IWindowFullScreen
         native.AppWindow.SetPresenter(fullScreen ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
         return true;
     }
+
+    /// <inheritdoc />
+    public bool Maximize(MauiWindow window)
+    {
+        if (window?.Handler?.PlatformView is not NativeWindow native || native.AppWindow.Presenter is not OverlappedPresenter overlapped)
+        {
+            return false;
+        }
+
+        overlapped.Maximize();
+        return true;
+    }
 }

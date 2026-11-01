@@ -342,7 +342,7 @@ static class Craft.Plugins.Learning.LearningView
   const System.String BetterIcon = M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z
   const System.String Explanation = Craft can learn from how you accept, edit or reject the AI's suggestions, and train a small adapter so the model writes code more like you. Everything stays on this machine unless you choose to share.
   const System.String LearningIcon = M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6
-  const System.String RecordIcon = M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M12 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0 -16 0
+  const System.String RecordIcon = M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0
   const System.String TrainIcon = M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Build(Craft.Plugins.Learning.LearningViewState state)
   static System.String Ago(System.TimeSpan age)

@@ -14,4 +14,10 @@ public interface IWindowFullScreen
 {
     /// <summary>Puts <paramref name="window"/> in full screen, or back to its ordinary frame; false when it could not (no platform window yet).</summary>
     bool Set(Window window, bool fullScreen);
+
+    /// <summary>
+    /// Maximizes <paramref name="window"/> to the work area (<c>CRAFT_WINDOW_STATE</c> "maximized", applied once its platform
+    /// window exists); false when the platform has no such state or the window is not there yet (the default).
+    /// </summary>
+    bool Maximize(Window window) => false;
 }

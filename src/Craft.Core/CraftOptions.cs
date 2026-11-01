@@ -900,6 +900,9 @@ public sealed record CraftOptions
     /// <summary>Whether Zen mode also puts the window in full screen, and takes it back out when it ends (<c>CRAFT_ZEN_FULL_SCREEN</c>).</summary>
     public bool ZenFullScreen { get; init; } = true;
 
+    /// <summary>How the window opens (<c>CRAFT_WINDOW_STATE</c>): "maximized" (the whole work area, the default) or "normal" (the platform's own size).</summary>
+    public string WindowState { get; init; } = "maximized";
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -1135,6 +1138,7 @@ public sealed record CraftOptions
         new("CRAFT_RECOVERY_PROMPT", "true", "Whether the start offers the recovery copies of files an unclean end left unsaved (a card and a notification with Restore, Compare and Discard).") { Shape = SettingShape.Toggle(SettingSections.Files, "Offer recovered files at start", "Recovery") },
         new("CRAFT_ZEN_WIDTH", "960", "The width Zen mode (Ctrl+K Z) centres the editor in, in units; 0 uses the whole width.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Zen mode's text width", 0, 10_000, "units", "Zen mode", step: 20) },
         new("CRAFT_ZEN_FULL_SCREEN", "true", "Whether Zen mode also puts the window in full screen (and takes it back out when it ends).") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Zen mode goes full screen", "Zen mode") },
+        new("CRAFT_WINDOW_STATE", "maximized", "How the window opens: maximized (the whole work area) or normal (the platform's own size).") { Shape = SettingShape.Choice(SettingSections.Appearance, "Window at start", ["maximized", "normal"], "Layout") },
     ];
 
     /// <summary>
@@ -2250,6 +2254,11 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_ZEN_FULL_SCREEN") is { } zenFullScreen)
         {
             options = options with { ZenFullScreen = Flag(zenFullScreen, "CRAFT_ZEN_FULL_SCREEN") };
+        }
+
+        if (Text(read, "CRAFT_WINDOW_STATE") is { } windowState)
+        {
+            options = options with { WindowState = OneOf(windowState, "CRAFT_WINDOW_STATE", "maximized", "normal") };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

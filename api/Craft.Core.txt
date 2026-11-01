@@ -256,6 +256,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String Theme { get; init; }
   System.String TitleBar { get; init; }
   System.String ToString()
+  System.String WindowState { get; init; }
   System.String WordWrap { get; init; }
   System.String WorkspaceConfiguration { get; init; }
   System.String WorkspaceWatcher { get; init; }

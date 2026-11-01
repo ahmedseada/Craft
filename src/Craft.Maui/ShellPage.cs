@@ -584,6 +584,20 @@ public sealed class ShellPage : ContentPage, IDisposable
 
         UpdateTitle();
         ApplyLayout();
+
+        // CRAFT_WINDOW_STATE: maximized by default, once the platform window exists (its handler set).
+        if (_shell.Options.WindowState == "maximized" && _startup.Platform.FullScreen is { } screen && !screen.Maximize(window))
+        {
+            window.HandlerChanged += OnWindowHandler;
+        }
+    }
+
+    private void OnWindowHandler(object? sender, EventArgs e)
+    {
+        if (sender is Window window && window.Handler is not null && (_startup.Platform.FullScreen?.Maximize(window) ?? true))
+        {
+            window.HandlerChanged -= OnWindowHandler;
+        }
     }
 
     /// <inheritdoc />

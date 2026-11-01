@@ -375,7 +375,7 @@ public sealed class StrokeIcon : ContentView
         ArgumentNullException.ThrowIfNull(data);
         _path = new MauiPath
         {
-            Data = (Geometry?)new PathGeometryConverter().ConvertFromInvariantString(data),
+            Data = Drawable((Geometry?)new PathGeometryConverter().ConvertFromInvariantString(data)),
             StrokeThickness = strokeWidth,
             StrokeLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round,
@@ -388,6 +388,24 @@ public sealed class StrokeIcon : ContentView
         HeightRequest = size;
         InputTransparent = true;
         Content = _path;
+    }
+
+    // A figure with no segments ("M12 12m-3 0…", a move followed by a move) makes Win2D begin a figure twice and the
+    // window fails (the owner's run, 2026-11-01: the Learning view's Record icon); it draws nothing, so it is dropped.
+    private static Geometry? Drawable(Geometry? geometry)
+    {
+        if (geometry is PathGeometry path)
+        {
+            for (int i = path.Figures.Count - 1; i >= 0; i--)
+            {
+                if (path.Figures[i].Segments.Count == 0)
+                {
+                    path.Figures.RemoveAt(i);
+                }
+            }
+        }
+
+        return geometry;
     }
 
     /// <summary>The stroke's colour.</summary>

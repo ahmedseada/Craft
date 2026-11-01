@@ -145,7 +145,7 @@ public static class InventoryTests
             // W-files: the icon theme, the skipped folders in the explorer.
             ["CRAFT_ICON_THEME"] = "mono", ["CRAFT_WORKSPACE_SHOW_IGNORED"] = "false",
             // X part 9, the look group and the recovery prompt.
-            ["CRAFT_RECOVERY_PROMPT"] = "false", ["CRAFT_ZEN_WIDTH"] = "720", ["CRAFT_ZEN_FULL_SCREEN"] = "false",
+            ["CRAFT_RECOVERY_PROMPT"] = "false", ["CRAFT_ZEN_WIDTH"] = "720", ["CRAFT_ZEN_FULL_SCREEN"] = "false", ["CRAFT_WINDOW_STATE"] = "normal",
             ["CRAFT_SNIPPETS"] = "false", ["CRAFT_SNIPPETS_FOLDER"] = "/snip", ["CRAFT_INLAY_HINTS"] = "ctrl-held", ["CRAFT_INLAY_HINTS_PARAMETERS"] = "false",
             ["CRAFT_INLAY_HINTS_TYPES"] = "false", ["CRAFT_INLAY_HINTS_DELAY_MS"] = "300", ["CRAFT_CODE_LENS"] = "false", ["CRAFT_CODE_LENS_DELAY_MS"] = "700",
             ["CRAFT_LINKED_EDITING"] = "false", ["CRAFT_OUTLINE_SORT"] = "kind", ["CRAFT_OUTLINE_FOLLOW_CARET"] = "false", ["CRAFT_HIERARCHY_LIMIT"] = "50",
@@ -200,7 +200,7 @@ public static class InventoryTests
             LightbulbDelayMilliseconds = 100, RenderWhitespace = "boundary", Rulers = "80,120", TrimTrailingWhitespace = true, InsertFinalNewline = true, EditorConfig = false,
             BookmarksWrap = false, PreviewTabs = false, RestoreSession = false, LocalHistoryMaxMegabytes = 64, LocalHistoryDays = 7, LocalHistoryFileMegabytes = 2,
             LinksUnderline = "always", IconTheme = "mono", WorkspaceShowIgnored = false,
-            RecoveryPrompt = false, ZenWidth = 720, ZenFullScreen = false,
+            RecoveryPrompt = false, ZenWidth = 720, ZenFullScreen = false, WindowState = "normal",
             Snippets = false, SnippetsFolder = "/snip", InlayHints = "ctrl-held", InlayHintsParameters = false, InlayHintsTypes = false, InlayHintsDelayMilliseconds = 300,
             CodeLens = false, CodeLensDelayMilliseconds = 700, LinkedEditing = false, OutlineSort = "kind", OutlineFollowCaret = false, HierarchyLimit = 50,
         }, options, "options read from every variable");

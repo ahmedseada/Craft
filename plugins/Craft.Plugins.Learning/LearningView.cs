@@ -227,7 +227,7 @@ public sealed record LearningViewState
 public static class LearningView
 {
     /// <summary>A record dot (the first step).</summary>
-    public const string RecordIcon = "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M12 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0 -16 0";
+    public const string RecordIcon = "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0";
 
     /// <summary>A loop of arrows (the second step: training).</summary>
     public const string TrainIcon = "M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4";

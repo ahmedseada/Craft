@@ -1,9 +1,6 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
-using System.Runtime.Versioning;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 
@@ -69,15 +66,12 @@ public static class McpConfig
 
         string folder = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(folder);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
+        PrivateFiles.RestrictFolder(folder);
 
         // Written to a new file made private first, then moved over the old one: the token is never readable by others.
         string temporary = path + ".tmp";
         File.WriteAllText(temporary, "");
-        Restrict(temporary);
+        PrivateFiles.RestrictFile(temporary);
         File.WriteAllText(temporary, Text(address, token));
         File.Move(temporary, path, overwrite: true);
         return path;
@@ -89,32 +83,5 @@ public static class McpConfig
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
         return Path.GetFullPath(path).StartsWith(root, comparison);
-    }
-
-    // The user alone may read and write it.
-    private static void Restrict(string path)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            RestrictOnWindows(path);
-        }
-        else
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private static void RestrictOnWindows(string path)
-    {
-        if (WindowsIdentity.GetCurrent().User is not { } user)
-        {
-            return;
-        }
-
-        var security = new FileSecurity();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
-        new FileInfo(path).SetAccessControl(security);
     }
 }

@@ -1476,6 +1476,7 @@ interface Craft.Abstractions.IEditorHost
   System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PromptAsync(System.String title, System.String text, System.String placeholder, System.String initial = "", System.Threading.CancellationToken cancellationToken = null)
   System.Void ClearDiagnostics(System.String source)
   System.Void Dispatch(System.Action action)
   System.Void Dispatch(System.String label, System.Action action)

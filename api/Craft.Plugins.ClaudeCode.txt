@@ -2,28 +2,28 @@ sealed class Craft.Plugins.ClaudeCode.ClaudeAccount : System.IEquatable<Craft.Pl
   Craft.Plugins.ClaudeCode.ClaudeAccount <Clone>$()
   System.Boolean Equals(Craft.Plugins.ClaudeCode.ClaudeAccount other)
   System.Boolean Equals(System.Object obj)
-  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
+  System.Boolean? IsLoggedIn { get; }
+  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; }
   System.Int32 GetHashCode()
+  System.String Folder { get; init; }
   System.String Model { get; }
   System.String Name { get; init; }
-  System.String Problem { get; init; }
-  System.String Source { get; init; }
   System.String ToString()
-  System.Void Deconstruct(out System.String Name, out System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment, out System.String Source)
-  ctor(System.String Name, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment, System.String Source)
+  System.Void Deconstruct(out System.String Name, out System.String Folder)
+  ctor(System.String Name, System.String Folder)
 static class Craft.Plugins.ClaudeCode.ClaudeAccounts
   const System.String ConfigVariable = CLAUDE_CONFIG_DIR
-  const System.String PlainModel = Claude Code
-  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> Detect(System.String documents, System.String localAppData, System.Func<System.String, System.String> variable, System.Func<System.String, System.String> read)
-  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> FromPowerShellProfile(System.String text, System.String source, System.Func<System.String, System.String> variable)
-  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> FromWindowsTerminal(System.String json, System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> functions, System.Func<System.String, System.String> variable)
-  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> Merge(System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> configured, System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> detected)
-  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> Parse(System.String setting)
-  static System.Collections.Generic.IReadOnlyList<System.String> ProfilePaths(System.String documents)
-  static System.Collections.Generic.IReadOnlyList<System.String> TerminalSettingsPaths(System.String localAppData)
+  const System.String CredentialsFile = .credentials.json
+  const System.String DefaultName = default
+  static Craft.Plugins.ClaudeCode.ClaudeAccount Add(System.String dataFolder, System.String workspace, System.String name)
+  static Craft.Plugins.ClaudeCode.ClaudeAccount Default { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Plugins.ClaudeCode.ClaudeAccount> List(System.String dataFolder)
   static System.String AccountOf(System.String model)
+  static System.String DefaultModel { get; }
   static System.String ModelOf(System.String name)
-  static System.String ReadText(System.String path)
+  static System.String Problem(System.String name)
+  static System.String Root(System.String dataFolder)
+  static System.Void Remove(Craft.Plugins.ClaudeCode.ClaudeAccount account)
 sealed class Craft.Plugins.ClaudeCode.ClaudeCodePackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
   System.String Name { get; }
@@ -33,11 +33,14 @@ sealed class Craft.Plugins.ClaudeCode.ClaudeCodePlugin : Craft.Abstractions.IEdi
   System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
   System.String Name { get; }
   System.String Summary { get; }
+  const System.String AddAccountCommand = claudeCode.addAccount
   const System.String BuildCommand = claudeCode.buildAndTest
   const System.String CrashCommand = claudeCode.diagnoseCrash
   const System.String FindCommand = claudeCode.find
+  const System.String LoginCommand = claudeCode.login
   const System.String McpCommand = claudeCode.testMcp
   const System.String OpenCommand = claudeCode.open
+  const System.String RemoveAccountCommand = claudeCode.removeAccount
   const System.String StallCommand = claudeCode.diagnoseStall
   static Craft.Plugins.ClaudeCode.ClaudeCodePlugin Instance { get; }
   static Craft.Plugins.ClaudeCode.ClaudeCodeSession Session { get; }
@@ -54,35 +57,41 @@ sealed class Craft.Plugins.ClaudeCode.ClaudeCodeSession : System.IDisposable
   System.Collections.Generic.IReadOnlyList<System.String> Models { get; }
   System.String Check(System.String model)
   System.String CommandModel { get; }
+  System.String DataFolder { get; }
   System.String Problem { get; }
+  System.Threading.Tasks.Task AddAccountAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task AskAboutAsync(Craft.Abstractions.DiagnosticReport report)
   System.Threading.Tasks.Task AskAsync(System.String task)
   System.Threading.Tasks.Task DiagnoseAsync(System.String kind, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task FindAgainAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task Found { get; }
+  System.Threading.Tasks.Task LoginAgainAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task LoginAsync(Craft.Plugins.ClaudeCode.ClaudeAccount account)
   System.Threading.Tasks.Task PromptAsync(System.Func<Craft.Plugins.ClaudeCode.ClaudeCodeSettings, System.String> template)
+  System.Threading.Tasks.Task RemoveAccountAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.AgentEngineResult> RunAsync(Craft.Abstractions.AgentEngineRequest request, System.Action<Craft.Abstractions.AgentEngineEvent> report, System.Threading.CancellationToken cancellationToken)
   System.Void Allow(System.String tool)
   System.Void Dispose()
   System.Void Start()
   ctor(Craft.Abstractions.IEditorHost host)
   static Craft.Abstractions.DiagnosticReport Latest(Craft.Abstractions.IEditorDiagnostics diagnostics, System.String kind)
+  static System.Boolean NeedsLogin(System.String end)
   static System.Collections.Generic.IReadOnlyList<System.String> Arguments(Craft.Plugins.ClaudeCode.ClaudeFlags flags, Craft.Plugins.ClaudeCode.ClaudeCodeSettings settings, System.String mcpConfig, System.String resume, System.Collections.Generic.List<System.String> notes)
+  static System.Collections.Generic.IReadOnlyList<System.String> LoginArguments(Craft.Plugins.ClaudeCode.ClaudeFlags flags)
   static System.Collections.Generic.IReadOnlyList<System.String> SplitArguments(System.String line)
+  static System.String LoginHelp(Craft.Plugins.ClaudeCode.ClaudeAccount account, Craft.Plugins.ClaudeCode.ClaudeFlags flags, System.String program)
   static System.String PromptFor(Craft.Plugins.ClaudeCode.ClaudeCodeSettings settings, Craft.Abstractions.DiagnosticReport report, System.String craft, System.String workspace)
   static System.Threading.Tasks.Task<Craft.Abstractions.AgentEngineResult> RunProcessAsync(System.Diagnostics.ProcessStartInfo info, System.String task, System.Action<Craft.Abstractions.AgentEngineEvent> report, System.Threading.CancellationToken cancellationToken)
 sealed class Craft.Plugins.ClaudeCode.ClaudeCodeSettings : System.IEquatable<Craft.Plugins.ClaudeCode.ClaudeCodeSettings>
   Craft.Plugins.ClaudeCode.ClaudeCodeSettings <Clone>$()
   Craft.Plugins.ClaudeCode.McpWhenOff McpWhenOff { get; init; }
   System.Boolean Approvals { get; init; }
-  System.Boolean DetectAccounts { get; init; }
   System.Boolean Equals(Craft.Plugins.ClaudeCode.ClaudeCodeSettings other)
   System.Boolean Equals(System.Object obj)
   System.Int32 GetHashCode()
   System.Int32 TestMinutes { get; init; }
   System.Int32 ToolOutputCharacters { get; init; }
   System.String Account { get; init; }
-  System.String Accounts { get; init; }
   System.String Arguments { get; init; }
   System.String CraftRepository { get; init; }
   System.String CraftRepositoryFrom(System.String start)
@@ -118,6 +127,7 @@ sealed class Craft.Plugins.ClaudeCode.ClaudeFlags : System.IEquatable<Craft.Plug
   System.Boolean Equals(Craft.Plugins.ClaudeCode.ClaudeFlags other)
   System.Boolean Equals(System.Object obj)
   System.Boolean Has(System.String flag)
+  System.Boolean HasCommand(System.String name)
   System.Collections.Generic.IReadOnlyList<System.String> MissingForHeadless()
   System.Int32 GetHashCode()
   System.String Help { get; init; }
@@ -126,6 +136,7 @@ sealed class Craft.Plugins.ClaudeCode.ClaudeFlags : System.IEquatable<Craft.Plug
   System.Void Deconstruct(out System.String Version, out System.String Help)
   ctor(System.String Version, System.String Help)
 sealed class Craft.Plugins.ClaudeCode.ClaudeProgram
+  Craft.Abstractions.TerminalShell TerminalShellFor(System.Collections.Generic.IReadOnlyList<System.String> arguments)
   System.Boolean IsScript { get; }
   System.Diagnostics.ProcessStartInfo StartInfo(System.Collections.Generic.IReadOnlyList<System.String> arguments, System.String folder)
   System.String Path { get; }
@@ -183,3 +194,6 @@ enum Craft.Plugins.ClaudeCode.McpWhenOff : System.IComparable, System.IConvertib
   Ask = 0
   Start = 1
   Without = 2
+static class Craft.Plugins.ClaudeCode.PrivateFiles
+  static System.Void RestrictFile(System.String path)
+  static System.Void RestrictFolder(System.String path)

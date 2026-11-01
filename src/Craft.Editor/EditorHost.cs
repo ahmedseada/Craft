@@ -791,6 +791,10 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <inheritdoc />
     public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) => AskAsync(question, HostSource, cancellationToken);
 
+    /// <inheritdoc />
+    public Task<string?> PromptAsync(string title, string text, string placeholder, string initial = "", CancellationToken cancellationToken = default) =>
+        Presenter is { } presenter ? presenter.PromptAsync(title, text, placeholder, initial, cancellationToken) : Task.FromResult<string?>(null);
+
     /// <summary>Asks <paramref name="question"/> for <paramref name="source"/> through the presenter; without one, -1 (logged: nobody could answer).</summary>
     internal async Task<int> AskAsync(EditorQuestion question, string source, CancellationToken cancellationToken)
     {

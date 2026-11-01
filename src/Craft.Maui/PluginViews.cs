@@ -340,4 +340,8 @@ public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<IThe
     /// cancellation, gives the question's <see cref="EditorQuestion.Dismissed"/>.
     /// </remarks>
     public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken) => _dialog.AskAsync(question, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<string?> PromptAsync(string title, string text, string placeholder, string initial, CancellationToken cancellationToken) =>
+        _dialog.PromptAsync(title, text, placeholder, "OK", cancellationToken, initial);
 }

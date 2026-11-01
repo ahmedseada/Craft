@@ -16,7 +16,7 @@ namespace Craft.Tests;
 
 /// <summary>
 /// The Claude Code plug-in (plugins/Craft.Plugins.ClaudeCode), headless: finding the CLI on a fake PATH, its flags and the
-/// headless arguments, the accounts read as text from PowerShell profiles and Windows Terminal, the MCP config written with
+/// headless arguments, Craft's own accounts (their folders, their login by the CLI's own flow), the MCP config written with
 /// the address and the token outside the workspace, the stream read as steps, a whole run through a stand-in process, each
 /// diagnostic MCP tool's bounded output from fake reports, run_tests refusing a missing filter and going through the
 /// sandbox, the commands' prompts naming the right report, and the agent chip listing the engine's models.
@@ -59,50 +59,52 @@ public static class ClaudeCodePluginTests
     }
 
     [Test]
-    public static void AccountsAreReadAsTextFromProfilesAndWindowsTerminal()
+    public static void AccountsAreCraftsOwnFoldersLoggedInByTheClisOwnLogin()
     {
-        const string profile = """
-            function claude-personal {
-                $env:CLAUDE_CONFIG_DIR = "$HOME\.claude-personal"
-                claude @args
-            }
-            function claude-work { $env:CLAUDE_CONFIG_DIR = Join-Path $HOME '.claude-work'; claude @args }
-            function claude-other { claude --verbose @args }
-            Set-Alias claude-w2 Start-Work
-            function Start-Work { $env:CLAUDE_CONFIG_DIR = 'D:\cfg\work2' }
-            """;
-        Func<string, string?> variable = name => name == "USERPROFILE" ? @"C:\Users\me" : null;
-        var found = ClaudeAccounts.FromPowerShellProfile(profile, "profile.ps1", variable);
-        Check.SequenceEqual(["claude-personal", "claude-work", "claude-other", "claude-w2"], [.. found.Select(a => a.Name)], "the claude-* functions and the alias, never run");
-        Check.Equal(@"C:\Users\me\.claude-personal", found[0].Environment[ClaudeAccounts.ConfigVariable], "$HOME expanded in a double-quoted value");
-        Check.Equal(Path.Combine(@"C:\Users\me", ".claude-work"), found[1].Environment[ClaudeAccounts.ConfigVariable], "Join-Path $HOME '.claude-work'");
-        Check.True(found[2].Problem is { } problem && problem.Contains("CRAFT_PLUGIN_CLAUDECODE_ACCOUNTS", StringComparison.Ordinal), "a function that sets nothing readable says what to do");
-        Check.Equal(@"D:\cfg\work2", found[3].Environment[ClaudeAccounts.ConfigVariable], "an alias takes its function's variables");
+        using var folder = new TempFolder();
+        string data = Path.Combine(folder.Path, "data");
+        string workspace = Path.Combine(folder.Path, "project");
+        Directory.CreateDirectory(workspace);
+        var first = ClaudeAccounts.List(data);
+        Check.True(first is [{ Name: "default", Folder: null }] && first[0].Environment.Count == 0 && first[0].IsLoggedIn is null && first[0].Model == "Claude Code (default)",
+            "with no setup, one account: default, the CLI's own configuration (an already logged-in CLI works)");
+        var work = ClaudeAccounts.Add(data, workspace, "work");
+        Check.True(work.Folder == Path.Combine(ClaudeAccounts.Root(data), "work") && Directory.Exists(work.Folder) && !McpConfig.IsInside(work.Folder!, workspace),
+            "an account's own configuration folder under Craft's data folder, never the workspace");
+        if (!OperatingSystem.IsWindows())
+        {
+            Check.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(work.Folder!), "usable by the user only");
+        }
 
-        const string terminal = """
-            // Windows Terminal's settings (comments and trailing commas allowed)
-            { "profiles": { "list": [
-                { "name": "claude-work", "commandline": "pwsh.exe -NoExit -Command claude-work" },
-                { "name": "claude-cmd", "commandline": "cmd.exe /k set CLAUDE_CONFIG_DIR=C:\\cfg\\cmd&& claude" },
-                { "name": "Claude Env", "environment": { "CLAUDE_CONFIG_DIR": "%USERPROFILE%\\x" }, "commandline": "claude" },
-                { "name": "PowerShell" },
-            ], }, }
-            """;
-        var profiles = ClaudeAccounts.FromWindowsTerminal(terminal, found, variable);
-        Check.SequenceEqual(["claude-work", "claude-cmd", "Claude Env"], [.. profiles.Select(a => a.Name)], "Windows Terminal's profiles named claude*");
-        Check.Equal(Path.Combine(@"C:\Users\me", ".claude-work"), profiles[0].Environment[ClaudeAccounts.ConfigVariable], "a profile calling a function takes the function's variables");
-        Check.Equal(@"C:\cfg\cmd", profiles[1].Environment[ClaudeAccounts.ConfigVariable], "cmd's set NAME=value");
+        Check.Equal(work.Folder, work.Environment[ClaudeAccounts.ConfigVariable], "a run as the account sets its CLAUDE_CONFIG_DIR");
+        Check.True(work.IsLoggedIn == (OperatingSystem.IsMacOS() ? null : false), "a new account is not logged in: its first use asks to log in");
+        File.WriteAllText(Path.Combine(work.Folder!, ClaudeAccounts.CredentialsFile), "{}");     // stands for the CLI's own login having run
+        Check.True(OperatingSystem.IsMacOS() || work.IsLoggedIn == true, "logged in once the CLI's own login wrote its sign-in (only its presence is checked)");
+        ClaudeAccounts.Add(data, workspace, "personal");
+        Check.SequenceEqual(["default", "personal", "work"], [.. ClaudeAccounts.List(data).Select(a => a.Name)], "the accounts: default, then Craft's own by name");
+        Check.Throws<InvalidOperationException>(() => ClaudeAccounts.Add(data, workspace, "work"), "an account of that name exists: log in again instead");
+        Check.Throws<InvalidOperationException>(() => ClaudeAccounts.Add(Path.Combine(workspace, ".data"), workspace, "team"), "never inside the workspace (a sign-in is never in a project)");
+        foreach (var bad in (ReadOnlySpan<string>)["", "default", "a b", "../x", new string('n', 41)])
+        {
+            Check.True(ClaudeAccounts.Problem(bad) is not null, $"'{bad}' cannot name an account");
+        }
 
-        var configured = ClaudeAccounts.Parse("claude-work=E:\\mine|team=CLAUDE_CONFIG_DIR=F:\\t;HTTPS_PROXY=http://p");
-        Check.True(configured[0].Environment[ClaudeAccounts.ConfigVariable] == "E:\\mine" && configured[1].Environment["HTTPS_PROXY"] == "http://p", "the setting: a folder, or variables");
-        var merged = ClaudeAccounts.Merge(configured, [.. found, .. profiles]);
-        Check.True(merged.Count(a => a.Name == "claude-work") == 1 && merged.First(a => a.Name == "claude-work").Source == "settings", "a name once: the setting's wins");
-        Check.Throws<ArgumentException>(() => ClaudeAccounts.Parse("=x"), "an entry with no name is refused, naming the setting");
-        Check.True(ClaudeAccounts.ModelOf("claude-work") == "Claude Code (claude-work)" && ClaudeAccounts.AccountOf("Claude Code (claude-work)") == "claude-work"
-            && ClaudeAccounts.AccountOf(ClaudeAccounts.PlainModel) is null, "an account's model at the chip, and back");
-        var detected = ClaudeAccounts.Detect("Docs", "Local", variable, path =>
-            path == ClaudeAccounts.ProfilePaths("Docs")[0] ? profile : path == ClaudeAccounts.TerminalSettingsPaths("Local")[0] ? terminal : null);
-        Check.True(detected.Any(a => a.Name == "claude-cmd") && detected.Count(a => a.Name == "claude-work") == 1, "detection reads the profile and the terminal's settings, one account a name");
+        ClaudeAccounts.Remove(work);
+        Check.True(!Directory.Exists(work.Folder) && ClaudeAccounts.List(data).Count == 2, "removed, its folder and sign-in are gone");
+        Check.Throws<InvalidOperationException>(() => ClaudeAccounts.Remove(ClaudeAccounts.Default), "default, the CLI's own configuration, is never removed");
+        Check.True(ClaudeAccounts.AccountOf("Claude Code (work)") == "work" && ClaudeAccounts.AccountOf("local-a") is null, "an account's model at the chip, and back");
+
+        var withLogin = new ClaudeFlags("2.1", "Usage: claude [options] [command]\n\nOptions:\n  -p, --print\n\nCommands:\n  config  Manage configuration\n  login  Log in\n  update  Check for updates\n");
+        var without = new ClaudeFlags("2.0", "Usage: claude [options]\n\nCommands:\n  mcp  Configure MCP servers\n  update  Check for updates\nTo login run /login\n");
+        Check.True(ClaudeCodeSession.LoginArguments(withLogin) is ["login"] && ClaudeCodeSession.LoginArguments(without).Count == 0 && ClaudeCodeSession.LoginArguments(null).Count == 0,
+            "the login: the CLI's login command when its help lists one, else Claude Code itself (its first run logs in)");
+        var account = new ClaudeAccount("work", Path.Combine(data, "w"));
+        Check.True(ClaudeCodeSession.LoginHelp(account, without, "claude").Contains("/login", StringComparison.Ordinal)
+            && ClaudeCodeSession.LoginHelp(account, without, "claude").Contains("CLAUDE_CONFIG_DIR=" + account.Folder, StringComparison.Ordinal), "what to do in the tab, with the account's folder");
+        Check.True(ClaudeProgram.At("/usr/bin/claude").TerminalShellFor(["login"]) == new TerminalShell("/usr/bin/claude", "login"), "the login's shell");
+        var script = ClaudeProgram.At(@"C:\npm\claude.cmd").TerminalShellFor([]);
+        Check.True(script.Arguments.StartsWith("/d /s /c \"", StringComparison.Ordinal) && script.Arguments.Contains(@"C:\npm\claude.cmd", StringComparison.Ordinal), $"npm's claude.cmd through cmd: {script.Arguments}");
+        Check.True(ClaudeCodeSession.NeedsLogin("Invalid API key · Please run /login") && !ClaudeCodeSession.NeedsLogin("Done in 3 turns · 4 s."), "a run that ends not signed in asks to log in");
     }
 
     [Test]
@@ -304,10 +306,11 @@ public static class ClaudeCodePluginTests
             && settings.PromptBuild.Contains("net10.0-windows10.0.19041.0", StringComparison.Ordinal) && settings.PromptBuild.Contains("never the full suite", StringComparison.Ordinal),
             "build and test names Craft's and Idrak's targeted commands, the Windows app and the GPU tests");
         Check.True(settings.PromptMcp.Contains("Do not call propose_edit", StringComparison.Ordinal), "testing the MCP server calls the read-only tools only");
-        Check.SequenceEqual(["claudeCode.open", "claudeCode.diagnoseCrash", "claudeCode.diagnoseStall", "claudeCode.testMcp", "claudeCode.buildAndTest", "claudeCode.find"],
-            [.. ClaudeCodePlugin.Commands.Select(c => c.Name)], "the commands in the palette and the Run menu");
+        Check.SequenceEqual(["claudeCode.open", "claudeCode.diagnoseCrash", "claudeCode.diagnoseStall", "claudeCode.testMcp", "claudeCode.buildAndTest", "claudeCode.find",
+            "claudeCode.addAccount", "claudeCode.login", "claudeCode.removeAccount"],
+            [.. ClaudeCodePlugin.Commands.Select(c => c.Name)], "the commands in the palette and the Run menu, the accounts' add, log in again and remove among them");
         Check.True(ClaudeReportAction.Instance is { Label: "Ask Claude Code", IsAvailable: false }, "Ask Claude Code, offered once Claude Code is found");
-        Check.True(ClaudeEngine.Instance.Check("Claude Code") is { } inactive && inactive.Contains("not active", StringComparison.Ordinal), "the engine says when the plug-in is not active");
+        Check.True(ClaudeEngine.Instance.Check("Claude Code (default)") is { } inactive && inactive.Contains("not active", StringComparison.Ordinal), "the engine says when the plug-in is not active");
 
         var asked = new List<(string, string)>();
         EventHandler<AgentEngineAskEventArgs> take = (_, e) =>
@@ -318,14 +321,14 @@ public static class ClaudeCodePluginTests
         AgentEngines.Asked += take;
         try
         {
-            Check.True(AgentEngines.Ask("Claude Code (claude-work)", onStall) && asked.Single() == ("Claude Code (claude-work)", onStall), "the prompt goes to the agent panel with the account's model");
+            Check.True(AgentEngines.Ask("Claude Code (work)", onStall) && asked.Single() == ("Claude Code (work)", onStall), "the prompt goes to the agent panel with the account's model");
         }
         finally
         {
             AgentEngines.Asked -= take;
         }
 
-        Check.True(!AgentEngines.Ask("Claude Code", "x"), "with no agent panel, nobody takes it");
+        Check.True(!AgentEngines.Ask("Claude Code (default)", "x"), "with no agent panel, nobody takes it");
     }
 
     [Test]
@@ -333,9 +336,10 @@ public static class ClaudeCodePluginTests
     {
         var read = new Dictionary<string, string> { ["path"] = "C:/c/claude.exe", ["mcpWhenOff"] = "start", ["testMinutes"] = "5", ["approvals"] = "false" };
         var settings = ClaudeCodeSettings.From(new FakeSettings(read));
-        Check.True(settings is { Path: "C:/c/claude.exe", McpWhenOff: McpWhenOff.Start, TestMinutes: 5, Approvals: false, PermissionMode: "acceptEdits" }, "the settings read");
+        Check.True(settings is { Path: "C:/c/claude.exe", McpWhenOff: McpWhenOff.Start, TestMinutes: 5, Approvals: false, PermissionMode: "acceptEdits", Account: "default" }, "the settings read");
+        Check.True(!ClaudeCodeSettings.Declared.Any(s => s.Key is "accounts" or "detectAccounts"), "nothing is read from the machine's own launchers: accounts are Craft's own");
         Check.Throws<ArgumentException>(() => ClaudeCodeSettings.From(new FakeSettings(new() { ["testMinutes"] = "zero" })), "a bad number names its variable");
-        foreach (var key in (ReadOnlySpan<string>)["path", "accounts", "craftRepository", "idrakRepository"])
+        foreach (var key in (ReadOnlySpan<string>)["path", "craftRepository", "idrakRepository"])
         {
             Check.True(ClaudeCodeSettings.Declared.Single(s => s.Key == key).MachineOnly, $"{key} is this machine's only");
         }
@@ -352,12 +356,12 @@ public static class ClaudeCodePluginTests
             };
             var status = new ModelProviderStatus { Roles = [new ModelRole("Chat", "local-a", "loaded"), agent], Models = ["local-a"], LoadCommand = "ai.loadModel" };
             var picks = ShellText.ModelPicks(status, ModelRoleKeys.Agent);
-            Check.True(picks.Any(p => p.Value == "Claude Code (claude-work)") && !ShellText.ModelPicks(status, ModelRoleKeys.Chat).Any(p => p.Value.StartsWith("Claude", StringComparison.Ordinal)),
+            Check.True(picks.Any(p => p.Value == "Claude Code (work)") && !ShellText.ModelPicks(status, ModelRoleKeys.Chat).Any(p => p.Value.StartsWith("Claude", StringComparison.Ordinal)),
                 "the agent's chip lists the engine's models, one per account; the chat's does not");
-            var write = ShellText.WriteOf(status, ModelRoleKeys.Agent, picks.First(p => p.Value == "Claude Code (claude-work)"));
-            Check.True(write is { Variable: "CRAFT_PLUGIN_AI_AGENTMODEL", Value: "Claude Code (claude-work)", LoadCommand: null, IsEngine: true },
+            var write = ShellText.WriteOf(status, ModelRoleKeys.Agent, picks.First(p => p.Value == "Claude Code (work)"));
+            Check.True(write is { Variable: "CRAFT_PLUGIN_AI_AGENTMODEL", Value: "Claude Code (work)", LoadCommand: null, IsEngine: true },
                 "picking it sets the agent's model, loads nothing, and is kept per workspace");
-            Check.True(AgentEngines.FindModel("claude code (CLAUDE-WORK)") == engine && AgentEngines.FindModel("local-a") is null, "which engine a model is, ignoring case");
+            Check.True(AgentEngines.FindModel("claude code (WORK)") == engine && AgentEngines.FindModel("local-a") is null, "which engine a model is, ignoring case");
         }
         finally
         {
@@ -411,7 +415,7 @@ public static class ClaudeCodePluginTests
 
         public string Summary => "lists models";
 
-        public IReadOnlyList<string> Models { get; } = ["Claude Code", "Claude Code (claude-work)"];
+        public IReadOnlyList<string> Models { get; } = ["Claude Code (default)", "Claude Code (work)"];
 
         public Task<AgentEngineResult> RunAsync(AgentEngineRequest request, Action<AgentEngineEvent> report, CancellationToken cancellationToken = default) =>
             Task.FromResult(new AgentEngineResult("", null));

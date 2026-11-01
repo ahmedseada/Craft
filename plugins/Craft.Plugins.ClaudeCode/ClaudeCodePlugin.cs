@@ -65,8 +65,17 @@ public sealed class ClaudeCodePlugin : IEditorPlugin
     /// <summary>Asks Claude Code to build and test Craft and Idrak on this machine.</summary>
     public const string BuildCommand = "claudeCode.buildAndTest";
 
-    /// <summary>Finds the program and the accounts again and says what was found.</summary>
+    /// <summary>Finds the program again and says what was found, with the accounts.</summary>
     public const string FindCommand = "claudeCode.find";
+
+    /// <summary>Adds an account (its own configuration folder in Craft's data folder) and starts its login.</summary>
+    public const string AddAccountCommand = "claudeCode.addAccount";
+
+    /// <summary>Runs an account's login again.</summary>
+    public const string LoginCommand = "claudeCode.login";
+
+    /// <summary>Removes an account (its folder, after a confirm).</summary>
+    public const string RemoveAccountCommand = "claudeCode.removeAccount";
 
     private ClaudeCodePlugin()
     {
@@ -91,8 +100,14 @@ public sealed class ClaudeCodePlugin : IEditorPlugin
             "Asks Claude Code to call each of Craft's read-only MCP tools and report what failed"),
         new EditorCommand(BuildCommand, "Claude Code: build and test on this machine", (_, _) => Session!.PromptAsync(s => s.PromptBuild), _ => Session is not null,
             "Asks Claude Code to build and test Craft and Idrak here, with this machine's CPU and GPU"),
-        new EditorCommand(FindCommand, "Claude Code: find the program and accounts again", (_, token) => Session!.FindAgainAsync(token), _ => Session is not null,
-            "Looks for claude and your claude-* accounts again (PowerShell profiles, Windows Terminal), and says what was found"),
+        new EditorCommand(FindCommand, "Claude Code: find the program again", (_, token) => Session!.FindAgainAsync(token), _ => Session is not null,
+            "Looks for claude on PATH (or its setting) again, and says what was found and which accounts Craft has"),
+        new EditorCommand(AddAccountCommand, "Claude Code: add an account…", (_, token) => Session!.AddAccountAsync(token), _ => Session is not null,
+            "A named account with its own Claude Code configuration in Craft's data folder; you log in with Claude Code's own login"),
+        new EditorCommand(LoginCommand, "Claude Code: log in again…", (_, token) => Session!.LoginAgainAsync(token), _ => Session is not null,
+            "Runs Claude Code's own login for an account, in a terminal tab"),
+        new EditorCommand(RemoveAccountCommand, "Claude Code: remove an account…", (_, token) => Session!.RemoveAccountAsync(token), _ => Session is not null,
+            "Deletes an account's folder and its sign-in, after you confirm"),
     ];
 
     /// <inheritdoc />
@@ -163,8 +178,8 @@ public sealed class ClaudeReportAction : IEditorReportAction
 }
 
 /// <summary>
-/// The agent engine "claude-code": the user's Claude Code CLI, headless, one model per account ("Claude Code", "Claude
-/// Code (claude-work)"), run by the active session. None where Claude Code cannot run (a phone) or the plug-in is not active.
+/// The agent engine "claude-code": the user's Claude Code CLI, headless, one model per account ("Claude Code (default)", "Claude
+/// Code (work)"), run by the active session. None where Claude Code cannot run (a phone) or the plug-in is not active.
 /// </summary>
 public sealed class ClaudeEngine : IAgentEngine
 {
@@ -211,7 +226,7 @@ public sealed class ClaudeCodeSession : IDisposable
     private readonly Lock _gate = new();
     private IDisposable? _shown;
     private Task _found = Task.CompletedTask;
-    private IReadOnlyList<ClaudeAccount> _accounts = [];
+    private IReadOnlyList<ClaudeAccount> _accounts = [ClaudeAccounts.Default];
     private bool _disposed;
 
     /// <summary>The session in <paramref name="host"/>.</summary>
@@ -226,11 +241,14 @@ public sealed class ClaudeCodeSession : IDisposable
     /// <summary>Why it cannot run (not found, no headless flags), or null.</summary>
     public string? Problem { get; private set; }
 
-    /// <summary>The accounts: the setting's, then the found ones.</summary>
+    /// <summary>The accounts: "default" (the CLI's own configuration), then Craft's own, by name.</summary>
     public IReadOnlyList<ClaudeAccount> Accounts => Volatile.Read(ref _accounts);
 
-    /// <summary>The models the agent's chip lists: the plain one, then one per account.</summary>
-    public IReadOnlyList<string> Models => [ClaudeAccounts.PlainModel, .. Accounts.Select(a => a.Model)];
+    /// <summary>The models the agent's chip lists: one per account ("Claude Code (default)", "Claude Code (work)").</summary>
+    public IReadOnlyList<string> Models => [.. Accounts.Select(a => a.Model)];
+
+    /// <summary>Craft's data folder (the accounts' and the MCP config's place): the host's, else the local application data's "Craft".</summary>
+    public string DataFolder => _host.DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Craft");
 
     /// <summary>Completes when the program and the accounts were found.</summary>
     public Task Found => _found;
@@ -266,7 +284,7 @@ public sealed class ClaudeCodeSession : IDisposable
     {
         _found = FindAsync(cancellationToken);
         await _found.ConfigureAwait(true);
-        string accounts = Accounts.Count == 0 ? "no account (plain claude only)" : string.Join("\n", Accounts.Select(a => $"{a.Name} · {a.Source}{(a.Problem is null ? "" : " · " + a.Problem)}"));
+        string accounts = string.Join("\n", Accounts.Select(a => $"{a.Name} · {(a.Folder ?? "the CLI's own configuration")} · {LoginText(a.IsLoggedIn)}"));
         await _host.ShowMessageAsync("Claude Code", (Problem ?? $"Claude Code {Flags?.Version} at {Program?.Path}") + "\n\nAccounts:\n" + accounts).ConfigureAwait(true);
     }
 
@@ -274,6 +292,7 @@ public sealed class ClaudeCodeSession : IDisposable
     private async Task FindAsync(CancellationToken cancellationToken)
     {
         var settings = Settings;
+        string data = DataFolder;
         var found = await Task.Run(async () =>
         {
             var program = ClaudeProgram.Find(settings.Path, out var why);
@@ -295,22 +314,7 @@ public sealed class ClaudeCodeSession : IDisposable
                 }
             }
 
-            IReadOnlyList<ClaudeAccount> configured;
-            try
-            {
-                configured = ClaudeAccounts.Parse(settings.Accounts);
-            }
-            catch (ArgumentException error)
-            {
-                configured = [];
-                why ??= error.Message;
-            }
-
-            var detected = settings.DetectAccounts && ClaudeProgram.Unavailable is null
-                ? ClaudeAccounts.Detect(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    Environment.GetEnvironmentVariable, ClaudeAccounts.ReadText)
-                : [];
-            return (program, flags, why, ClaudeAccounts.Merge(configured, detected));
+            return (program, flags, why, ClaudeAccounts.List(data));
         }, cancellationToken).ConfigureAwait(false);
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _host.Dispatch("claude code: found", () =>
@@ -323,7 +327,7 @@ public sealed class ClaudeCodeSession : IDisposable
                 Volatile.Write(ref _accounts, found.Item4);
                 _status.Text = found.program is null ? "Claude Code: not found" : found.why is null ? $"Claude Code {found.flags?.Version}" : "Claude Code: needs an update";
                 _status.Tooltip = (found.why ?? $"Claude Code {found.flags?.Version} at {found.program?.Path}: pick it at the agent's model chip.")
-                    + (found.Item4.Count == 0 ? "" : "\nAccounts: " + string.Join(", ", found.Item4.Select(a => a.Name)));
+                    + "\nAccounts: " + string.Join(", ", found.Item4.Select(a => a.Name)) + " (Claude Code: add an account…)";
                 _host.Log(found.why is null ? EditorLogLevel.Information : EditorLogLevel.Warning, "Claude Code: " + _status.Tooltip.Replace('\n', ' '));
                 AgentEngines.RaiseChanged();
             }
@@ -351,11 +355,20 @@ public sealed class ClaudeCodeSession : IDisposable
             return $"This Claude Code ({flags.Version}) does not support {string.Join(" and ", missing)}: not supported by this version. Update it (claude update).";
         }
 
-        return AccountFor(model) is { Problem: { } problem } ? problem : null;
+        return ClaudeAccounts.AccountOf(model) is { } name && AccountFor(model) is null
+            ? $"Craft has no Claude Code account {name}: add it with Claude Code: add an account…, or pick another at the agent's model chip."
+            : null;
     }
 
     private ClaudeAccount? AccountFor(string model) =>
         ClaudeAccounts.AccountOf(model) is { } name ? Accounts.FirstOrDefault(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) : null;
+
+    private static string LoginText(bool? loggedIn) => loggedIn switch
+    {
+        true => "logged in",
+        false => "not logged in",
+        _ => "its sign-in is the CLI's own",
+    };
 
     /// <summary>Whether <paramref name="tool"/> was allowed for this run (the approval's "Allow for this run").</summary>
     public bool IsAllowed(string tool)
@@ -500,6 +513,13 @@ public sealed class ClaudeCodeSession : IDisposable
             _allowed.Clear();                                         // "for this run" starts again
         }
 
+        // An account Craft knows is not logged in: ask to log in rather than fail.
+        var account = AccountFor(request.Model) ?? ClaudeAccounts.Default;
+        if (account.IsLoggedIn == false)
+        {
+            return await AskLoginAsync(account, cancellationToken).ConfigureAwait(false);
+        }
+
         var settings = Settings;
         var notes = new List<string>();
         string? config = await McpConfigAsync(settings, request.Workspace, notes, cancellationToken).ConfigureAwait(false);
@@ -510,17 +530,202 @@ public sealed class ClaudeCodeSession : IDisposable
         }
 
         var info = Program!.StartInfo(arguments, request.Folder);
-        if (AccountFor(request.Model) is { } account)
+        foreach (var (name, value) in account.Environment)
         {
-            foreach (var (name, value) in account.Environment)
-            {
-                info.Environment[name] = value;
-            }
-
-            report(new AgentEngineEvent(AgentEngineStep.Note, $"As the account {account.Name} ({string.Join(", ", account.Environment.Keys)} from {account.Source})."));
+            info.Environment[name] = value;
         }
 
-        return await RunProcessAsync(info, request.Task, report, cancellationToken).ConfigureAwait(false);
+        report(new AgentEngineEvent(AgentEngineStep.Note, account.Folder is null
+            ? "As the account default (the CLI's own sign-in)."
+            : $"As the account {account.Name} (its own configuration, {account.Folder})."));
+        var result = await RunProcessAsync(info, request.Task, report, cancellationToken).ConfigureAwait(false);
+        return result.Failed && NeedsLogin(result.End) ? await AskLoginAsync(account, cancellationToken).ConfigureAwait(false) : result;
+    }
+
+    /// <summary>Whether a run's end says Claude Code is not signed in (its own words: log in, /login, an API key, authentication).</summary>
+    public static bool NeedsLogin(string end)
+    {
+        ArgumentNullException.ThrowIfNull(end);
+        foreach (var words in (ReadOnlySpan<string>)["/login", "log in", "login", "not logged", "invalid api key", "api key", "authenticat", "oauth"])
+        {
+            if (end.Contains(words, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Off the UI thread: asks to log in to the account (Log in opens the CLI's own login in a terminal tab); the run's end.
+    private async Task<AgentEngineResult> AskLoginAsync(ClaudeAccount account, CancellationToken cancellationToken)
+    {
+        var question = new EditorQuestion($"Log in to Claude Code ({account.Name})",
+            $"The account {account.Name} is not logged in. Claude Code's own login opens in a terminal tab; Craft never sees your password or token.",
+            ["Log in", "Not now"]) { Dismissed = 1 };
+        bool login = await OnUiAsync(() => _host.AskAsync(question, cancellationToken)).Unwrap().ConfigureAwait(false) == 0;
+        if (login)
+        {
+            await OnUiAsync(() => LoginAsync(account)).Unwrap().ConfigureAwait(false);
+        }
+
+        return new AgentEngineResult(login
+            ? $"Log in to {account.Name} in the terminal tab that opened (Claude Code's own steps), then send the task again."
+            : $"Not run: the account {account.Name} is not logged in (Claude Code: log in again…).", null);
+    }
+
+    /// <summary>
+    /// Opens Claude Code's own login for <paramref name="account"/> in a terminal tab (its folder as CLAUDE_CONFIG_DIR):
+    /// the CLI's <c>login</c> command when its help lists one, else Claude Code itself, whose first run with a new folder
+    /// walks through its login (<c>/login</c> inside it logs in again). On the UI thread; Craft reads nothing it types.
+    /// </summary>
+    public async Task LoginAsync(ClaudeAccount account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        if (Program is not { } program || ClaudeProgram.Unavailable is not null)
+        {
+            await _host.ShowMessageAsync("Claude Code", Problem ?? ClaudeProgram.Unavailable ?? "Claude Code was not found. " + ClaudeProgram.InstallHint).ConfigureAwait(true);
+            return;
+        }
+
+        if (_host.Terminals is not { } terminals)
+        {
+            await _host.ShowMessageAsync("Claude Code: log in", LoginHelp(account, Flags, program.Path)).ConfigureAwait(true);
+            return;
+        }
+
+        var arguments = LoginArguments(Flags);
+        var environment = new Dictionary<string, string?>();
+        foreach (var (name, value) in account.Environment)
+        {
+            environment[name] = value;
+        }
+
+        try
+        {
+            terminals.Open(new EditorTerminalRequest
+            {
+                Name = $"Claude Code login: {account.Name}",
+                Folder = account.Folder,
+                Shell = program.TerminalShellFor(arguments),
+                Environment = environment,
+                Show = true,
+            });
+            _host.Notify($"Log in to Claude Code ({account.Name})", LoginHelp(account, Flags, program.Path));
+        }
+        catch (InvalidOperationException error)
+        {
+            await _host.ShowMessageAsync("Claude Code: the login did not start", error.Message).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>The login's arguments: the CLI's <c>login</c> command when its help lists one, else none (Claude Code itself).</summary>
+    public static IReadOnlyList<string> LoginArguments(ClaudeFlags? flags) => flags is not null && flags.HasCommand("login") ? ["login"] : [];
+
+    /// <summary>What the user does to log in, in words.</summary>
+    public static string LoginHelp(ClaudeAccount account, ClaudeFlags? flags, string program)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        string where = account.Folder is null ? "with its own default configuration" : $"with {ClaudeAccounts.ConfigVariable}={account.Folder}";
+        return LoginArguments(flags).Count > 0
+            ? $"Claude Code's login runs in the terminal tab ({program} login, {where}): follow its steps in the browser it opens."
+            : $"Claude Code runs in the terminal tab ({where}): follow its first-run steps, or type /login and press Enter, then follow its steps in the browser it opens. Close the tab when it says you are logged in.";
+    }
+
+    /// <summary>Adds an account: asks its name, makes its folder, then opens its login.</summary>
+    public async Task AddAccountAsync(CancellationToken cancellationToken)
+    {
+        string? name = await _host.PromptAsync("Add a Claude Code account",
+            "A name for the account (\"work\", \"personal\"). Craft makes its own Claude Code configuration folder in your data folder (never the project), then opens Claude Code's login for it.",
+            "work", "", cancellationToken).ConfigureAwait(true);
+        if (name is null)
+        {
+            return;
+        }
+
+        if (ClaudeAccounts.Problem(name) is { } problem)
+        {
+            await _host.ShowMessageAsync("Claude Code: the account was not added", problem).ConfigureAwait(true);
+            return;
+        }
+
+        ClaudeAccount account;
+        try
+        {
+            string data = DataFolder;
+            string? workspace = _host.WorkspaceFolder;
+            account = await Task.Run(() => ClaudeAccounts.Add(data, workspace, name), cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception error) when (error is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            await _host.ShowMessageAsync("Claude Code: the account was not added", error.Message).ConfigureAwait(true);
+            return;
+        }
+
+        await RefreshAccountsAsync(cancellationToken).ConfigureAwait(true);
+        _host.Log(EditorLogLevel.Information, $"Claude Code: the account {account.Name} was added ({account.Folder}).");
+        await LoginAsync(account).ConfigureAwait(true);
+    }
+
+    /// <summary>Picks an account and runs its login again.</summary>
+    public async Task LoginAgainAsync(CancellationToken cancellationToken)
+    {
+        if (await PickAccountAsync("Log in again: which account?", Accounts, cancellationToken).ConfigureAwait(true) is { } account)
+        {
+            await LoginAsync(account).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Picks one of Craft's own accounts and, confirmed, deletes its folder.</summary>
+    public async Task RemoveAccountAsync(CancellationToken cancellationToken)
+    {
+        var own = Accounts.Where(a => a.Folder is not null).ToArray();
+        if (own.Length == 0)
+        {
+            await _host.ShowMessageAsync("Claude Code", "Craft has no account of its own to remove (\"default\" is the CLI's own configuration).").ConfigureAwait(true);
+            return;
+        }
+
+        if (await PickAccountAsync("Remove which account?", own, cancellationToken).ConfigureAwait(true) is not { } account)
+        {
+            return;
+        }
+
+        var confirm = new EditorQuestion($"Remove the account {account.Name}?", $"Its folder and its sign-in are deleted: {account.Folder}. Claude Code itself and your other accounts stay.",
+            ["Remove", "Cancel"]) { Dismissed = 1 };
+        if (await _host.AskAsync(confirm, cancellationToken).ConfigureAwait(true) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Run(() => ClaudeAccounts.Remove(account), cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            await _host.ShowMessageAsync("Claude Code: the account was not removed", error.Message).ConfigureAwait(true);
+            return;
+        }
+
+        await RefreshAccountsAsync(cancellationToken).ConfigureAwait(true);
+        _host.Log(EditorLogLevel.Information, $"Claude Code: the account {account.Name} was removed.");
+    }
+
+    private async Task<ClaudeAccount?> PickAccountAsync(string title, IReadOnlyList<ClaudeAccount> accounts, CancellationToken cancellationToken)
+    {
+        var question = new EditorQuestion(title, "Craft's Claude Code accounts.", [.. accounts.Select(a => $"{a.Name} · {LoginText(a.IsLoggedIn)}"), "Cancel"]) { Dismissed = accounts.Count };
+        int picked = await _host.AskAsync(question, cancellationToken).ConfigureAwait(true);
+        return picked >= 0 && picked < accounts.Count ? accounts[picked] : null;
+    }
+
+    // The accounts listed again off the UI thread; the chip lists them.
+    private async Task RefreshAccountsAsync(CancellationToken cancellationToken)
+    {
+        string data = DataFolder;
+        var accounts = await Task.Run(() => ClaudeAccounts.List(data), cancellationToken).ConfigureAwait(true);
+        Volatile.Write(ref _accounts, accounts);
+        AgentEngines.RaiseChanged();
     }
 
     /// <summary>Runs Claude Code as <paramref name="info"/> says with <paramref name="task"/> on its input, its stream read as steps; the run's end.</summary>
@@ -649,7 +854,7 @@ public sealed class ClaudeCodeSession : IDisposable
         }
     }
 
-    /// <summary>The model the commands use: the agent's when it is a Claude Code one, else the <c>account</c> setting's, else the plain one.</summary>
+    /// <summary>The model the commands use: the agent's when it is a Claude Code one, else the <c>account</c> setting's, else "default"'s.</summary>
     public string CommandModel
     {
         get
@@ -661,7 +866,7 @@ public sealed class ClaudeCodeSession : IDisposable
             }
 
             var account = Settings.Account;
-            return account.Length > 0 && Accounts.Any(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase)) ? ClaudeAccounts.ModelOf(account) : ClaudeAccounts.PlainModel;
+            return Accounts.Any(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase)) ? ClaudeAccounts.ModelOf(account) : ClaudeAccounts.DefaultModel;
         }
     }
 

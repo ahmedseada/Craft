@@ -31,14 +31,8 @@ public sealed record ClaudeCodeSettings
     /// <summary>More arguments for every run (<c>args</c>, a command line).</summary>
     public string Arguments { get; init; } = "";
 
-    /// <summary>The accounts (<c>accounts</c>, this machine's only): <c>name=folder</c> (its CLAUDE_CONFIG_DIR) or <c>name=VAR=value;VAR=value</c>, separated by '|'.</summary>
-    public string Accounts { get; init; } = "";
-
-    /// <summary>The account commands use when the agent's model is not a Claude Code one (<c>account</c>; empty: plain <c>claude</c>).</summary>
-    public string Account { get; init; } = "";
-
-    /// <summary>Whether accounts are found in the PowerShell profiles and Windows Terminal's settings, read as text (<c>detectAccounts</c>).</summary>
-    public bool DetectAccounts { get; init; } = true;
+    /// <summary>The account the commands use when the agent's model is not a Claude Code one (<c>account</c>: "default", or an account added in Craft).</summary>
+    public string Account { get; init; } = ClaudeAccounts.DefaultName;
 
     /// <summary>Claude Code's <c>--permission-mode</c> for a run on the copy (<c>permissionMode</c>: acceptEdits, default, plan, bypassPermissions).</summary>
     public string PermissionMode { get; init; } = "acceptEdits";
@@ -112,9 +106,7 @@ public sealed record ClaudeCodeSettings
     [
         new("path", "", "The Claude Code program (claude.exe, or the claude.cmd npm installs). Empty: claude on PATH. This machine's only.") { MachineOnly = true },
         new("args", "", "More arguments for every Claude Code run, as a command line (its documented flags: --model, --add-dir …)."),
-        new("accounts", "", "Your Claude Code accounts: name=folder (that account's CLAUDE_CONFIG_DIR) or name=VAR=value;VAR=value, separated by '|'. Each shows at the agent's model chip as Claude Code (name). This machine's only.") { MachineOnly = true },
-        new("account", "", "The account the Claude Code commands use when the agent's model is not a Claude Code one; empty: plain claude."),
-        new("detectAccounts", "true", "Find accounts in your PowerShell profiles (functions named claude-*) and Windows Terminal's profiles named claude*, read as text, never run."),
+        new("account", ClaudeAccounts.DefaultName, "The account the Claude Code commands use when the agent's model is not a Claude Code one: default (the CLI's own sign-in), or one added with 'Claude Code: add an account'."),
         new("permissionMode", "acceptEdits", "Claude Code's --permission-mode for a run (it works on a copy of the folder; every change still comes to you as a diff)."),
         new("approvals", "true", "Ask you before Claude Code does what needs permission (a command, a web fetch), through Craft's MCP tool claude_code_approve."),
         new("mcpWhenOff", "ask", "When Craft's MCP server is off: ask, start (its own command) or without (no Craft tools and no approvals).") { Shape = SettingShape.Choice(SettingSections.Agent, "When Craft's MCP server is off", ["ask", "start", "without"], "Claude Code") },
@@ -164,9 +156,7 @@ public sealed record ClaudeCodeSettings
         {
             Path = Get("path"),
             Arguments = Get("args"),
-            Accounts = Get("accounts"),
-            Account = Get("account"),
-            DetectAccounts = Flag("detectAccounts", defaults.DetectAccounts),
+            Account = Text("account", defaults.Account),
             PermissionMode = Text("permissionMode", defaults.PermissionMode),
             Approvals = Flag("approvals", defaults.Approvals),
             McpWhenOff = when.Length == 0 ? defaults.McpWhenOff

@@ -11,6 +11,7 @@ interface Craft.Editor.Abstractions.IEditorPresenter
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.Boolean>> ChooseHunksAsync(Craft.Editor.EditProposal proposal, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<System.Boolean>>> ChooseFilesAsync(System.Collections.Generic.IReadOnlyList<Craft.Editor.EditProposal> proposals, System.String title, System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<System.String> PromptAsync(System.String title, System.String text, System.String placeholder, System.String initial, System.Threading.CancellationToken cancellationToken)
 interface Craft.Editor.Abstractions.IFileDialogs
   System.Threading.Tasks.Task<System.String> PickFileAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
@@ -430,6 +431,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PromptAsync(System.String title, System.String text, System.String placeholder, System.String initial = "", System.Threading.CancellationToken cancellationToken = null)
   System.Void ClearDiagnostics(System.String source)
   System.Void Close(Craft.Abstractions.IEditorDocument document)
   System.Void Dispatch(System.Action action)

@@ -295,6 +295,14 @@ public interface IEditorHost
     /// </summary>
     Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) => Task.FromResult(-1);
 
+    /// <summary>
+    /// Asks the user for a line of text (a name) in the host's own dialog: <paramref name="title"/>, what it is for
+    /// (<paramref name="text"/>), a hint in the empty box (<paramref name="placeholder"/>) and <paramref name="initial"/>;
+    /// the text, or null when the user cancelled or nobody can be asked (the default).
+    /// </summary>
+    Task<string?> PromptAsync(string title, string text, string placeholder, string initial = "", CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
     /// <summary>Writes a line to the editor's log, under the plug-in's name.</summary>
     void Log(EditorLogLevel level, string message, Exception? error = null);
 

@@ -220,6 +220,9 @@ public sealed partial class EditorHost
         public Task<int> AskAsync(EditorQuestion question, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(-1) : host.AskAsync(question, name, cancellationToken);
 
+        public Task<string?> PromptAsync(string title, string text, string placeholder, string initial = "", CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult<string?>(null) : host.PromptAsync(title, text, placeholder, initial, cancellationToken);
+
         public void Log(EditorLogLevel level, string message, Exception? error = null) => host.Log(name, level, message, error);
 
         public void Record(string metric, double value, string unit) => host.Record(name, metric, value, unit);

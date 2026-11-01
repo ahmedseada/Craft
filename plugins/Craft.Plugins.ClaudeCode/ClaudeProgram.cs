@@ -32,6 +32,41 @@ public sealed record ClaudeFlags(string Version, string Help)
         return false;
     }
 
+    /// <summary>Whether its help's "Commands:" list has <paramref name="name"/> ("login"): a line whose first word it is.</summary>
+    public bool HasCommand(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        bool inCommands = false;
+        foreach (var raw in Help.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (line.TrimStart().StartsWith("Commands:", StringComparison.OrdinalIgnoreCase))
+            {
+                inCommands = true;
+                continue;
+            }
+
+            if (!inCommands || line.Length == 0)
+            {
+                continue;
+            }
+
+            if (!char.IsWhiteSpace(line[0]))
+            {
+                inCommands = false;                               // the next section
+                continue;
+            }
+
+            var first = line.TrimStart().Split([' ', '|', '\t'], 2)[0];
+            if (first.Equals(name, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>The headless flags a run needs and this version lacks, each said (empty: it can run headless).</summary>
     public IReadOnlyList<string> MissingForHeadless()
     {
@@ -167,6 +202,20 @@ public sealed class ClaudeProgram
         info.StandardOutputEncoding = Encoding.UTF8;
         info.StandardErrorEncoding = Encoding.UTF8;
         return info;
+    }
+
+    /// <summary>The shell a terminal tab starts to run it with <paramref name="arguments"/> (a <c>.cmd</c> through <c>%ComSpec%</c>).</summary>
+    public Craft.Abstractions.TerminalShell TerminalShellFor(IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        string line = string.Join(' ', arguments.Select(Quote));
+        if (IsScript)
+        {
+            string comspec = Environment.GetEnvironmentVariable("ComSpec") is { Length: > 0 } found ? found : "cmd.exe";
+            return new Craft.Abstractions.TerminalShell(comspec, $"/d /s /c \"{Quote(Path)}{(line.Length > 0 ? " " + line : "")}\"");
+        }
+
+        return new Craft.Abstractions.TerminalShell(Path, line);
     }
 
     /// <summary>An argument as the Windows command line writes it: quoted when it holds a space or a quote, its quotes and the backslashes before them escaped.</summary>

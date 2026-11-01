@@ -233,6 +233,13 @@ public sealed record AiSettings
     public int CompletionSuffixCharacters { get; init; } = 512;
 
     /// <summary>
+    /// Inline completion's prompt format (<c>completionFormat</c>): auto (the fill-in-the-middle format detected from the
+    /// model's tokenizer, else the prefix alone), prefix (the prefix alone: for a model whose vocabulary holds a format's
+    /// tokens without its training, such as an instruct model sharing a coder's tokenizer), or a registered format's name.
+    /// </summary>
+    public string CompletionFormat { get; init; } = "auto";
+
+    /// <summary>
     /// How much text before the caret a prompt carries, in characters (<c>completionPrefixChars</c>); 0: as much as the
     /// model's context leaves after the answer and the suffix (its MaxPositions, never a fixed number).
     /// </summary>
@@ -306,6 +313,22 @@ public sealed record AiSettings
     /// never when the editor held unsaved edits of the user's before the diff. A new file accepted whole is always created.
     /// </summary>
     public bool AgentSaveOnAccept { get; init; } = true;
+
+    /// <summary>
+    /// Whether the agent's changes are applied to the workspace when its run ends, without showing each diff
+    /// (<c>agentAutoApply</c>, off: every change is a diff to accept). On, each file's change is still one undo step,
+    /// named in the timeline, and saved as an accepted one is (<see cref="AgentSaveOnAccept"/>); never over the user's own
+    /// unsaved edits, which keep it waiting as a diff.
+    /// </summary>
+    public bool AgentAutoApply { get; init; }
+
+    /// <summary>
+    /// The editor's live tools the local agent is offered beside its coding tools (<c>agentEditorTools</c>): the same
+    /// tools Craft's MCP server serves an outside agent (the open documents, the selection, the diagnostics, the
+    /// symbols), by name; empty: none. The tools that read or change the workspace itself are left to the agent's own
+    /// tools on its copy.
+    /// </summary>
+    public IReadOnlyList<string> AgentEditorTools { get; init; } = ["get_diagnostics", "find_symbol", "open_documents", "get_selection"];
 
     /// <summary>
     /// Corrections in a row the agent sends when a reply holds tool calls it could not read (note 27: calls written as text
@@ -460,6 +483,7 @@ public sealed record AiSettings
         new("completionDelayMs", "600", "The pause after the last keystroke before a completion is asked for, ms; each keystroke starts the wait again."),
         new("completionMaxTokens", "64", "The most tokens one completion samples."),
         new("completionMaxLines", "8", "The most lines one completion shows."),
+        new("completionFormat", "auto", "Inline completion's prompt format: auto (fill-in-the-middle when the model's tokenizer has a registered format's tokens, else the prefix alone), prefix (the prefix alone: for an instruct model sharing a coder's tokenizer without its training), or a format's name."),
         new("completionSuffixChars", "512", "Characters after the caret a fill-in-the-middle prompt carries (a prefix-first model processes them again each request); 0: none."),
         new("completionPrefixChars", "0", "Characters before the caret a prompt carries; 0: what the model's context leaves."),
         new("completionChunk", "1", "Tokens sampled between host synchronizations while a completion streams; 1 shows each token."),
@@ -500,6 +524,8 @@ public sealed record AiSettings
         new("agentCopyIgnore", "bin;.git;.vs;node_modules;test-output", "Folder names the agent's working copy leaves out (';' or ',' between them)."),
         new("agentChangesIgnore", "bin;obj;.git;.vs;node_modules;test-output", "Folder names whose files written by the agent's commands are not listed as changes (build output)."),
         new("agentSaveOnAccept", "true", "Save an existing file's accepted agent change to the workspace at once (never over your own unsaved edits)."),
+        new("agentEditorTools", "get_diagnostics;find_symbol;open_documents;get_selection", "The editor's tools the local agent is offered beside its own, as Craft's MCP server offers them to Claude Code (';' between names); empty: none."),
+        new("agentAutoApply", "false", "Apply the agent's changes to the workspace when its run ends, without asking (each file one undo step, named in the timeline); off: each change is a diff to accept."),
         new("agentNudges", "2", "Corrections in a row the agent sends when the model writes tool calls it cannot read (0-20); 0: none, the run ends."),
         new("agentCallsInText", "true", "Read tool calls the model writes as text (markdown fences, JSON) naming an offered tool; off: only its template's format."),
         new("inlineChat", "true", "Ctrl+I opens the inline chat in the editor: the chat's loaded model rewrites the lines, shown as a ghost diff to accept."),
@@ -627,6 +653,7 @@ public sealed record AiSettings
             CompletionMaxTokens = Whole("completionMaxTokens", defaults.CompletionMaxTokens, 1, 100_000),
             CompletionMaxLines = Whole("completionMaxLines", defaults.CompletionMaxLines, 1, 10_000),
             CompletionSuffixCharacters = Whole("completionSuffixChars", defaults.CompletionSuffixCharacters, 0, 10_000_000),
+            CompletionFormat = Text("completionFormat") ?? defaults.CompletionFormat,
             CompletionPrefixCharacters = Whole("completionPrefixChars", 0, 0, 100_000_000),
             CompletionChunk = Whole("completionChunk", defaults.CompletionChunk, 1, 4096),
             CompletionTemperature = (float)Real("completionTemperature", 0, 0, 10),
@@ -649,6 +676,8 @@ public sealed record AiSettings
             AgentCopyIgnore = List("agentCopyIgnore", defaults.AgentCopyIgnore),
             AgentChangesIgnore = List("agentChangesIgnore", defaults.AgentChangesIgnore),
             AgentSaveOnAccept = Flag("agentSaveOnAccept", defaults.AgentSaveOnAccept),
+            AgentAutoApply = Flag("agentAutoApply", defaults.AgentAutoApply),
+            AgentEditorTools = List("agentEditorTools", defaults.AgentEditorTools),
             AgentNudges = Whole("agentNudges", defaults.AgentNudges, 0, 20),
             AgentCallsInText = Flag("agentCallsInText", defaults.AgentCallsInText),
             InlineChat = Flag("inlineChat", defaults.InlineChat),

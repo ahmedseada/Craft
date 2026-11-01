@@ -7461,3 +7461,43 @@ durations are the framework's and did not move.
 files at start-up would cut it (one copy of `Craft.Web` instead of five, plug-ins loaded on first use), which changes
 plug-in loading and is for the owner's word. The first stall is MAUI making the whole page's platform views; fewer views
 at start (panels made when first shown) would cut it.
+
+### The AI end to end, measured on the owner's machine (2026-11-02)
+
+The owner's ask: Claude Code as the agent with Craft's MCP server, then local models (Qwen2.5 Instruct and Coder, 1.5B
+for inline completion and chat, 7B for chat and the agent), changes applied automatically or each chosen, and every
+weakness of the library fixed in Idrak. Measured with the new benches (`benches/Craft.Benches`: `agent`, `chat`,
+`complete`; `CRAFT_BENCH_AGENT_MODEL`, `CRAFT_BENCH_AGENT_APPLY` auto|ask, `CRAFT_BENCH_CHAT_MODEL`,
+`CRAFT_BENCH_COMPLETION_MODEL`; reports under `test-output\benches\`), on a copy of the owner's test project.
+
+- **Claude Code with Craft's MCP server**: 3 of 3 passed (Calculator.cs made, Program.cs uses it, `dotnet build` passes):
+  auto-apply 17.4 s and 24.2 s, ask 24.3 s (both diffs accepted in 38 ms); no repeated text, the run ends by itself.
+- **Apply switch** (`agentAutoApply`, off by default): the run's changes are applied when it ends, each file one undo
+  step, named in the timeline, saved as an accepted change is; never over the user's own unsaved edits (that file stays
+  a diff). `IEditorHost.ApplyAsync` (a default member that proposes instead, so another host never applies silently).
+- **The owner's test project did not build**: Craft's `Directory.Build.props`/`.targets` reached every project under
+  `test-output` ("The type or namespace name 'Idrak' could not be found"); they now apply to Craft's own projects only.
+- **The local agent hung**: a command's approval is asked inline in the agent's timeline (X part 10) and waits for the
+  click; in the app that is the timeline's Allow. **The local agent's sampling**: with the library's generic defaults
+  (repeat penalty 1.1) Qwen2.5-7B answered in Chinese and wrote code as prose; with the model's own recommended sampling
+  (generation_config.json) it calls its tools in English and ends in 14-19 s. Idrak reads that file now (slot
+  model-defaults); until then `chatTemperature 0.7, chatTopP 0.8, chatTopK 20, chatRepeatPenalty 1.05` give it.
+- **The local agent gets the editor's tools** Claude Code reaches through MCP (`agentEditorTools`: get_diagnostics,
+  find_symbol, open_documents, get_selection by default).
+- **Inline completion**: a caret after indentation alone ended the prompt inside the indentation's token, so the model
+  skipped the "//" it would have written; the prompt now ends at the line break and the model's indentation is dropped
+  from the ghost text. A completion ends before the line the text after the caret already holds (the method's "}").
+  `completionFormat` (auto, prefix, a format's name): Qwen2.5-1.5B-**Instruct** has the fill-in-the-middle tokens but not
+  the training (it wrote a new file), so prefix for it; Qwen2.5-**Coder**-1.5B fills in the middle correctly (warm: first
+  piece 95 ms, whole 488 ms) and prefix-only (26 ms, 459 ms). The panel shows no empty message for a reply that is only a
+  tool call.
+- **Chat** passes on Qwen2.5-7B-Instruct, Coder-7B and Coder-1.5B (replies end, no repeated lines). Decoding speed in
+  Idrak's CLI, Coder-7B: int8 58 tok/s, int4 102.6 tok/s.
+- **Found in Idrak, fixed there** (slots modelhost, model-defaults): a failed load's unobserved task; the model's
+  recommended sampling; weights chosen to fit before a load (bfloat16 7B ran out of memory); a turn's tool results
+  reported only after its last call (a write before a command waiting for approval never showed); calls written in
+  several ```json fences of which only one ran; a coding tool's error returned as success; edits without reading.
+- **Tests**: AiPlugins (indentation, the suffix's line, completionFormat, auto-apply, the editor's tools), Ai (the three
+  settings read), OutputLinks (a Windows path expectation). The touched groups `AiPlugins|Ai|ModelRoles|ModelLoading|Mcp|ClaudeCodePlugin|ApiGuard|Inventory|InlineChat|Learning|DraftModel|SessionModel|Plugins|PluginKit|CSharp|Semantic|BuildFix|TestExplorer|RunView|ProjectLanguages`:
+  238 passed, 3 failed, then the 3 fixed (the settings count, the Windows path test) or passing on a rerun (WebNpm's
+  install, timing-dependent).

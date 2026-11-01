@@ -46,6 +46,7 @@ sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstracti
   System.Threading.Tasks.Task Run { get; }
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> ApplyAllAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ReviewAsync(Craft.Ai.AgentChange change, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ReviewAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> SaveModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
@@ -167,7 +168,12 @@ sealed class Craft.Ai.AiInlineCompletion : Craft.Abstractions.IInlineCompletionP
   event System.EventHandler<Craft.Ai.CompletionMode> ModeChanged
   event System.EventHandler<Idrak.Abstraction.Generation.GenerationStats> Completed
   event System.EventHandler<System.String> Unavailable
+  static System.Int32 Indentation(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 caret)
   static System.Int32 PrefixStart(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 caret, System.Int32 budget)
+  static System.String FirstLineAfter(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 caret)
+sealed class Craft.Ai.AiInlineCompletion.SuffixMeeting
+  System.ValueTuple<System.String, System.Boolean> Take(System.String piece, System.Boolean final)
+  ctor(System.String guard)
 sealed class Craft.Ai.AiMcpServer : Craft.Abstractions.IEditorMcpServer, Idrak.Abstraction.IKind
   System.String Address { get; }
   System.String Name { get; }
@@ -313,6 +319,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   Craft.Ai.AiRoleSettings CompletionRole { get; }
   Craft.Ai.AiRoleSettings RoleOf(System.String key)
   Craft.Ai.AiSettings <Clone>$()
+  System.Boolean AgentAutoApply { get; init; }
   System.Boolean AgentCallsInText { get; init; }
   System.Boolean AgentEnabled { get; init; }
   System.Boolean AgentSaveOnAccept { get; init; }
@@ -331,6 +338,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Boolean? CompletionOffload { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentChangesIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentCopyIgnore { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> AgentEditorTools { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentStops { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> ChatStops { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> IdrakPlugins { get; init; }
@@ -389,6 +397,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.String AgentWeights { get; init; }
   System.String ChatFile { get; init; }
   System.String CompletionDevice { get; init; }
+  System.String CompletionFormat { get; init; }
   System.String CompletionModel { get; init; }
   System.String CompletionWeights { get; init; }
   System.String Device { get; init; }

@@ -560,7 +560,7 @@ public static class OutputLinkTests
         using var folder = new TempFolder();
         using var fixture = new SplitFixture(folder);
         var shell = await fixture.OpenWorkspaceAsync();
-        var inWorkspace = fixture.Write("src/A.cs", "zero\none\ntwo\n");
+        var inWorkspace = Path.GetFullPath(fixture.Write("src/A.cs", "zero\none\ntwo\n"));   // as Windows writes it (back slashes)
         var run = Path.Combine(fixture.Workspace, "run");
         Directory.CreateDirectory(Path.Combine(run, "src"));
         var inRun = Path.Combine(run, "src", "A.cs");

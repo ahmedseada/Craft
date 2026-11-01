@@ -1,6 +1,15 @@
 <Project>
-  <!-- Craft's settings, the same as Idrak's (net10.0, nullable, implicit usings, warnings as errors). -->
+  <!-- Craft's own projects only: a project under test-output (the owner's test project the app opens, the agent bench's
+       workspaces, the tests' temporary projects) builds as it would anywhere else, without Craft's settings, its global
+       usings or its Idrak clone (such a project failed to build: "The type or namespace name 'Idrak' could not be found",
+       from the global using below). -->
   <PropertyGroup>
+    <CraftOwnProject Condition="'$(CraftOwnProject)' == '' and $([System.String]::new('$(MSBuildProjectDirectory)\').StartsWith('$(MSBuildThisFileDirectory)test-output\', System.StringComparison.OrdinalIgnoreCase))">false</CraftOwnProject>
+    <CraftOwnProject Condition="'$(CraftOwnProject)' == ''">true</CraftOwnProject>
+  </PropertyGroup>
+
+  <!-- Craft's settings, the same as Idrak's (net10.0, nullable, implicit usings, warnings as errors). -->
+  <PropertyGroup Condition="'$(CraftOwnProject)' == 'true'">
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -15,7 +24,7 @@
 
   <!-- The global usings the Idrak.Abstraction package gives a project; a project reference (IdrakFromSource) does not
        bring its buildTransitive props, so they are stated here, as Idrak's own Directory.Build.props does. -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(CraftOwnProject)' == 'true'">
     <Using Include="Idrak.Abstraction" />
   </ItemGroup>
 
@@ -27,7 +36,7 @@
       another clone:        dotnet build ... -p:IdrakFromSource=D:\path\to\Idrak
       published packages:   dotnet build ... -p:IdrakFromPackages=true -p:IdrakVersion=VERSION
   -->
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(CraftOwnProject)' == 'true'">
     <IdrakFromSource Condition="'$(IdrakFromSource)' == '' and '$(IdrakFromPackages)' != 'true'">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../Idrak'))</IdrakFromSource>
     <IdrakVersion Condition="'$(IdrakVersion)' == ''">0.4.1</IdrakVersion>
     <RoslynVersion Condition="'$(RoslynVersion)' == ''">5.9.0</RoslynVersion>

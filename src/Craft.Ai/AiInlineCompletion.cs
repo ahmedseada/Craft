@@ -41,6 +41,7 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
     private readonly AiModels _models;
     private readonly Func<bool> _active;
     private ModelLease? _detectedFor;
+    private string _detectedWith = "auto";
     private CompletionMode? _mode;
     private string? _unavailable;
     private (string Key, string Reason)? _generationFailure;
@@ -134,6 +135,11 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
 
         int lines = 0;
         int generated = 0;
+        // The indentation the prompt left out (Layout): the model writes it again first; the ghost text starts at the caret.
+        int skip = Indentation(request.Snapshot, Math.Clamp(request.Position, 0, request.Snapshot.Length));
+        // The completion ends before a whole line that is the text after the caret's first line (a method's "}" the model
+        // writes again, then the next method): such a line is held back until it is known not to be that one.
+        var meets = new SuffixMeeting(FirstLineAfter(request.Snapshot, Math.Clamp(request.Position, 0, request.Snapshot.Length)));
         // What the ghost showed, for the AI events' sinks (the learning plug-in); gathered only while one listens.
         var shown = AiEvents.Listening ? new StringBuilder() : null;
         // Phase U: a request that runs long shows in the status bar while it writes (never kept: the next key ends it).
@@ -149,6 +155,32 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
                 }
 
                 string text = chunk.Text;
+                if (skip > 0 && text.Length > 0)
+                {
+                    int drop = 0;
+                    while (drop < text.Length && drop < skip && text[drop] is ' ' or '\t')
+                    {
+                        drop++;
+                    }
+
+                    // Past the indentation (or a model that wrote none): nothing more is dropped.
+                    skip = drop == text.Length ? skip - drop : 0;
+                    text = text[drop..];
+                }
+
+                var (passed, met) = meets.Take(text, chunk.Done);
+                text = passed;
+                if (met)
+                {
+                    shown?.Append(text);
+                    if (text.Length > 0)
+                    {
+                        yield return new InlineCompletionPiece(text, chunk.Generated > generated ? chunk.Generated - generated : 1);
+                    }
+
+                    yield break;
+                }
+
                 int tokens = chunk.Generated > generated ? chunk.Generated - generated : text.Length > 0 ? 1 : 0;
                 generated = Math.Max(generated, chunk.Generated);
                 if (text.Length == 0 && tokens == 0)
@@ -252,12 +284,16 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(lease);
         ArgumentNullException.ThrowIfNull(settings);
-        var format = Detect(lease);
+        var format = Detect(lease, settings.CompletionFormat);
         var snapshot = request.Snapshot;
         int caret = Math.Clamp(request.Position, 0, snapshot.Length);
         string suffix = format is null ? "" : Suffix(snapshot, caret, settings.CompletionSuffixCharacters);
         int prefixStart = PrefixStart(snapshot, caret, PrefixBudget(lease, settings, suffix));
-        string prefix = snapshot.GetText(prefixStart, caret - prefixStart);
+        // A caret after a line's indentation alone: the prompt ends at the line break, not inside the indentation's token
+        // (a model never saw eight spaces as one token before "//", so it skipped the "//"); the model writes the
+        // indentation itself, and CompleteAsync drops it from the ghost text, which starts at the caret.
+        int end = Math.Max(prefixStart, caret - Indentation(snapshot, caret));
+        string prefix = snapshot.GetText(prefixStart, end - prefixStart);
         if (format is null)
         {
             return (prefix, ["\n\n"]);
@@ -266,6 +302,135 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
         var context = new FillInMiddleContext(lease.Tokenizer!, prefix, suffix) { Path = RelativePath(request) };
         var prompt = format.Create(context);
         return (prompt.Text, prompt.Stop);
+    }
+
+    /// <summary>The first line after <paramref name="caret"/>'s own line that is not blank, trimmed; empty when there is none.</summary>
+    public static string FirstLineAfter(ITextSnapshot snapshot, int caret)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        int at = Math.Clamp(caret, 0, snapshot.Length);
+        int length = Math.Min(snapshot.Length - at, 4096);
+        string after = snapshot.GetText(at, length);
+        int newline = after.IndexOf('\n', StringComparison.Ordinal);
+        if (newline < 0)
+        {
+            return "";
+        }
+
+        foreach (var line in after[(newline + 1)..].Split('\n'))
+        {
+            string trimmed = line.Trim();
+            if (trimmed.Length > 0)
+            {
+                return trimmed;
+            }
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// A completion's text as it streams, ended before a whole line equal to <c>guard</c> (the first line after the caret's,
+    /// trimmed): a line break and a line that may still turn out to be that line are held back, the rest passes at once.
+    /// The caret's own line (the first) never ends it.
+    /// </summary>
+    public sealed class SuffixMeeting(string guard)
+    {
+        private readonly StringBuilder _line = new();
+        private bool _whole;        // the line being read started after a line break (not the caret's own)
+        private bool _breakHeld;    // a line break waits until its line is known not to be the guard
+        private bool _lineFree;     // the line being read is known not to be the guard: its text passes at once
+
+        /// <summary>The text of <paramref name="piece"/> that may be shown, and whether the guard's line was met.</summary>
+        public (string Text, bool Met) Take(string piece, bool final)
+        {
+            ArgumentNullException.ThrowIfNull(piece);
+            if (guard.Length == 0)
+            {
+                return (piece, false);
+            }
+
+            var shown = new StringBuilder(piece.Length);
+            foreach (char c in piece)
+            {
+                if (c == '\n')
+                {
+                    if (_whole && !_lineFree && string.Equals(_line.ToString().Trim(), guard, StringComparison.Ordinal))
+                    {
+                        return (shown.ToString(), true);
+                    }
+
+                    Release(shown);
+                    _breakHeld = true;
+                    _whole = true;
+                    _lineFree = false;
+                    continue;
+                }
+
+                _line.Append(c);
+                if (!_lineFree && (!_whole || !guard.StartsWith(_line.ToString().TrimStart(), StringComparison.Ordinal)))
+                {
+                    _lineFree = true;
+                }
+
+                if (_lineFree)
+                {
+                    Release(shown);
+                }
+            }
+
+            if (final)
+            {
+                if (_whole && !_lineFree && string.Equals(_line.ToString().Trim(), guard, StringComparison.Ordinal))
+                {
+                    return (shown.ToString(), true);
+                }
+
+                Release(shown);
+            }
+
+            return (shown.ToString(), false);
+        }
+
+        private void Release(StringBuilder shown)
+        {
+            if (_breakHeld)
+            {
+                shown.Append('\n');
+                _breakHeld = false;
+            }
+
+            shown.Append(_line);
+            _line.Clear();
+        }
+    }
+
+    /// <summary>
+    /// The characters before <paramref name="caret"/> on its line when they are all spaces or tabs (the line's indentation
+    /// alone), else 0.
+    /// </summary>
+    public static int Indentation(ITextSnapshot snapshot, int caret)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        int at = Math.Clamp(caret, 0, snapshot.Length);
+        int start = at;
+        while (start > 0)
+        {
+            char c = snapshot[start - 1];
+            if (c is '\n' or '\r')
+            {
+                break;
+            }
+
+            if (c is not (' ' or '\t'))
+            {
+                return 0;
+            }
+
+            start--;
+        }
+
+        return at - start;
     }
 
     /// <summary>
@@ -336,16 +501,28 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
         return (int)Math.Clamp(tokens * CharactersPerToken, 0, int.MaxValue);
     }
 
-    private IFillInMiddleFormat? Detect(ModelLease lease)
+    // The format: the setting's (completionFormat: "prefix", or a registered format's name), else the one detected from the
+    // model's tokenizer. A tokenizer holding a format's tokens does not prove the model was trained to fill in the middle
+    // (an instruct model may share its coder sibling's vocabulary), so the setting can name prefix-only for such a model.
+    private IFillInMiddleFormat? Detect(ModelLease lease, string chosen)
     {
-        if (ReferenceEquals(_detectedFor, lease) && _mode is { } known)
+        if (ReferenceEquals(_detectedFor, lease) && string.Equals(_detectedWith, chosen, StringComparison.OrdinalIgnoreCase) && _mode is { } known)
         {
             return known.Format is null ? null : FillInMiddleFormats.Get(known.Format);
         }
 
         CompletionMode mode;
         IFillInMiddleFormat? format = null;
-        if (lease.Tokenizer is not { } tokenizer)
+        if (chosen.Equals("prefix", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = new CompletionMode(null, lease.Model, "completionFormat is prefix");
+        }
+        else if (!chosen.Equals("auto", StringComparison.OrdinalIgnoreCase) && chosen.Length > 0)
+        {
+            format = FillInMiddleFormats.Get(chosen);       // a name that is not registered fails loudly, naming those that are
+            mode = new CompletionMode(format.Name, lease.Model, null);
+        }
+        else if (lease.Tokenizer is not { } tokenizer)
         {
             mode = new CompletionMode(null, lease.Model, "the model gives no tokenizer to detect its fill-in-the-middle format from");
         }
@@ -361,6 +538,7 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
         }
 
         _detectedFor = lease;
+        _detectedWith = chosen;
         bool changed = _mode != mode;
         _mode = mode;
         if (changed)

@@ -146,6 +146,149 @@ public static class AiPluginTests
     }
 
     [Test]
+    public static async Task ACaretAfterIndentationAloneEndsThePromptAtTheLineBreakAndTheGhostStartsAtTheCaret()
+    {
+        // The owner's 2026-11-02 run: a prompt ending in eight spaces (one token) made Qwen skip the "//" it would have written.
+        var text = new FakeTextModel(["        ", "// check", " it\n", "        return 1;"], stepMilliseconds: 1);
+        using var fixture = new CompletionFixture(text, withFormat: true);
+        var (model, document, ui) = fixture.Editor("class A\n{\n    int M()\n    {\n        \n    }\n}\n", caretLine: 4);
+        model.OnText(" ");
+        model.OnKey(EditorKey.Backspace, KeyModifiers.None);
+        await PumpUntil(ui, () => model.InlineCompletion.IsShown && !model.InlineCompletion.IsRequesting, "the ghost text after the pause");
+        string prompt = text.Prompts.Last();
+        Check.True(prompt.Contains("    {\n<SUF>\n    }\n}\n<MID>", StringComparison.Ordinal), $"the prefix ends at the line break, the indentation left out ({prompt})");
+        Check.Equal("// check it\n        return 1;", model.InlineCompletion.Text, "the model's indentation is dropped: the ghost starts at the caret, its later lines keep theirs");
+        Check.Equal(8, AiInlineCompletion.Indentation(document.Buffer.Current, model.Selection.Caret), "the caret's line holds its indentation alone");
+        Check.Equal(0, AiInlineCompletion.Indentation(TextDocument.Create("    x").Buffer.Current, 5), "a line with code before the caret has none to leave out");
+    }
+
+    [Test]
+    public static async Task ACompletionEndsBeforeTheLineTheTextAfterTheCaretAlreadyHolds()
+    {
+        // Qwen2.5-Coder wrote the method's body, its "}" again, then the next method (the owner's 2026-11-02 run).
+        var text = new FakeTextModel(["return 1;", "\n    }", "\n\n    // next", "\n    int N() => 2;"], stepMilliseconds: 1);
+        using var fixture = new CompletionFixture(text, withFormat: true);
+        var (model, _, ui) = fixture.Editor("class A\n{\n    int M()\n    {\n        \n    }\n}\n", caretLine: 4);
+        model.OnText("r");
+        await PumpUntil(ui, () => model.InlineCompletion.IsShown && !model.InlineCompletion.IsRequesting, "the ghost text");
+        Check.Equal("return 1;", model.InlineCompletion.Text, "the completion stops before the \"}\" that follows the caret, and what comes after it");
+
+        Check.Equal("}", AiInlineCompletion.FirstLineAfter(TextDocument.Create("x\n\n   }\n").Buffer.Current, 1), "the first line after the caret's that is not blank, trimmed");
+        var meets = new AiInlineCompletion.SuffixMeeting("}");
+        Check.Equal(("}", false), meets.Take("}", final: false), "the caret's own line never ends it (it closes something the user opened)");
+        var streamed = new AiInlineCompletion.SuffixMeeting("}");
+        var first = streamed.Take("a;\n  ", final: false);
+        var second = streamed.Take("}\nb", final: false);
+        Check.True(first == ("a;", false) && second == ("", true), $"the line break and a line that may still be the guard wait; meeting it ends the completion ({first}, {second})");
+        var other = new AiInlineCompletion.SuffixMeeting("}");
+        Check.Equal(("a;\n  x", false), other.Take("a;\n  x", final: false), "a line that cannot be the guard passes at once");
+        Check.Equal(("a\nb", false), new AiInlineCompletion.SuffixMeeting("").Take("a\nb", final: true), "with nothing after the caret, everything passes");
+    }
+
+    [Test]
+    public static async Task CompletionFormatPrefixTakesThePrefixAloneForAModelWhoseTokenizerHasAFormat()
+    {
+        // An instruct model sharing its coder sibling's vocabulary (Qwen2.5-1.5B-Instruct) wrote a new file when asked to fill in the middle.
+        var text = new FakeTextModel(["Line", "();"], stepMilliseconds: 1);
+        using var fixture = new CompletionFixture(text, withFormat: true);
+        fixture.Settings = fixture.Settings with { CompletionFormat = "prefix" };
+        var (model, _, ui) = fixture.Editor("\n", caretLine: 0);
+        model.OnText("Console.Write");
+        await PumpUntil(ui, () => model.InlineCompletion.Text == "Line();" && !model.InlineCompletion.IsRequesting, "the ghost text");
+        Check.True(fixture.Provider.Mode is { Format: null, Reason: "completionFormat is prefix" }, $"the setting chose prefix-only, and says so ({fixture.Provider.Mode?.Text})");
+        Check.Equal("Console.Write", text.Prompts.Last(), "the prompt is the prefix alone, no format's tokens");
+        fixture.Settings = fixture.Settings with { CompletionFormat = FormatName };
+        model.OnText(";");
+        await PumpUntil(ui, () => text.Prompts.Count == 2 && !model.InlineCompletion.IsRequesting, "a second request");
+        Check.True(fixture.Provider.Mode?.Format == FormatName && text.Prompts[1].Contains("<SUF>", StringComparison.Ordinal), "a format named in the setting is used");
+        Check.Equal("auto", AiSettings.Read(_ => null).CompletionFormat, "auto by default: detected from the tokenizer");
+    }
+
+    [Test]
+    public static async Task AutoApplyAppliesTheAgentsChangesWhenItsRunEndsEachOneUndoStepAndNeverOverUnsavedEdits()
+    {
+        string root = Path.Combine(Folder(), "auto");
+        Directory.CreateDirectory(Path.Combine(root, "src"));
+        await File.WriteAllTextAsync(Path.Combine(root, "src", "Program.cs"), "class Program\n{\n}\n");
+        await File.WriteAllTextAsync(Path.Combine(root, "Notes.txt"), "a\n");
+        try
+        {
+            var presenter = new AcceptingPresenter();
+            using var host = new EditorHost(dispatch: Serial(), presenter: presenter) { WorkspaceFolder = root };
+            host.OpenFile = async (path, token) => File.Exists(path) ? host.Open(await TextDocument.OpenAsync(path, cancellationToken: token), null) : host.Open(TextDocument.Create(""), null);
+            var notes = await host.OpenDocumentAsync(Path.Combine(root, "Notes.txt"));
+            notes!.Document.Edit([new TextEdit(0, 0, "mine ")], EditKind.Typing, default, default);   // the user's own unsaved edit
+            static ChatMessage Calls(ToolCall call) => new("assistant", "\n\n", ToolCalls: [call]);
+            var chat = new ComputedChatModel(turn => turn switch
+            {
+                0 => Calls(new ToolCall("write_file", new JsonObject { ["path"] = "src/Calculator.cs", ["content"] = "static class Calculator { }\n" })),
+                1 => Calls(new ToolCall("edit_file", new JsonObject { ["path"] = "src/Program.cs", ["old_text"] = "{\n}", ["new_text"] = "{\n    static void Main() { }\n}" })),
+                2 => Calls(new ToolCall("write_file", new JsonObject { ["path"] = "Notes.txt", ["content"] = "b\n" })),
+                _ => new ChatMessage("assistant", "Done."),
+            });
+            using var fixture = new ChatFixture(chat, agentFolder: root + " copies");
+            fixture.Settings = fixture.Settings with { AgentAutoApply = true };
+            using var panel = new AiAgentPanel(host, () => fixture.Settings, fixture.Models);
+            await panel.SubmitAsync("Add a calculator");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
+            Check.Equal(0, presenter.Proposals.Count, "no diff was shown: agentAutoApply applies without asking");
+            Check.Equal("static class Calculator { }\n", await File.ReadAllTextAsync(Path.Combine(root, "src", "Calculator.cs")), "the new file is created");
+            Check.Equal("class Program\n{\n    static void Main() { }\n}\n", await File.ReadAllTextAsync(Path.Combine(root, "src", "Program.cs")), "the edited file is saved");
+            Check.True(panel.Entries.Count(e => e.Role == ConversationRole.Note && e.Text.Contains("applied automatically (agentAutoApply) (one undo step)", StringComparison.Ordinal)) == 2,
+                "each applied file is named in the timeline");
+            Check.True(panel.Changes.Select(c => c.Relative).SequenceEqual(["Notes.txt"]) && Text(notes.Document) == "mine a\n"
+                       && panel.Entries.Any(e => e.Text.Contains("Notes.txt: not applied, the file has unsaved edits of yours", StringComparison.Ordinal)),
+                "a file with the user's unsaved edits keeps its change waiting as a diff");
+            Check.True(!panel.Entries.Any(e => e.Role == ConversationRole.Assistant && string.IsNullOrWhiteSpace(e.Text)),
+                "a reply that is only tool calls shows no empty message");
+            var program = host.Documents.Single(d => d.FilePath is { } p && p.EndsWith("Program.cs", StringComparison.Ordinal));
+            program.Document.Undo();
+            Check.Equal("class Program\n{\n}\n", Text(program.Document), "one undo takes the applied change back");
+        }
+        finally
+        {
+            await AiAgentPanel.DiscardsDone();
+            Directory.Delete(Path.GetDirectoryName(root)!, recursive: true);
+        }
+    }
+
+    [Test]
+    public static async Task TheLocalAgentIsOfferedTheEditorsToolsThatTheMcpServerServes()
+    {
+        string root = Folder();
+        try
+        {
+            using var host = new EditorHost(dispatch: Serial(), presenter: new AcceptingPresenter()) { WorkspaceFolder = root };
+            var chat = new ScriptedChatModel(new ChatMessage("assistant", "Nothing to do."));
+            using var fixture = new ChatFixture(chat, agentFolder: root + "-copies");
+            using var panel = new AiAgentPanel(host, () => fixture.Settings, fixture.Models);
+            await panel.SubmitAsync("Look around");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
+            var offered = chat.Requests[0].Tools!.Select(t => t.Name).ToList();
+            Check.True(offered.Contains("write_file") && offered.Contains("get_diagnostics") && offered.Contains("find_symbol") && offered.Contains("open_documents") && offered.Contains("get_selection"),
+                $"the coding tools and the editor's tools by default ({string.Join(", ", offered)})");
+            Check.True(!offered.Contains("propose_edit") && !offered.Contains("read_document"), "the editor's tools that change or read the workspace itself are left to the copy's own tools");
+            fixture.Settings = fixture.Settings with { AgentEditorTools = [] };
+            await panel.SubmitAsync("/clear");
+            await panel.SubmitAsync("Again");
+            await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
+            Check.True(!chat.Requests[^1].Tools!.Any(t => t.Name == "get_diagnostics"), "agentEditorTools empty: none");
+            var read = AiSettings.Read(key => key switch { "agentEditorTools" => "find_symbol", "agentAutoApply" => "true", _ => null });
+            Check.True(read.AgentEditorTools.SequenceEqual(["find_symbol"]) && read.AgentAutoApply && !AiSettings.Read(_ => null).AgentAutoApply,
+                "the settings read: the tools by name, auto-apply on when asked and off by default");
+        }
+        finally
+        {
+            await AiAgentPanel.DiscardsDone();
+            Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root + "-copies"))
+            {
+                Directory.Delete(root + "-copies", recursive: true);
+            }
+        }
+    }
+
+    [Test]
     public static async Task TheChatStreamsCallsAToolAndAppliesCodeAsADiff()
     {
         string root = Folder();
@@ -714,7 +857,7 @@ public static class AiPluginTests
             InlineCompletionProviders.Register(Provider);
         }
 
-        public AiSettings Settings { get; }
+        public AiSettings Settings { get; set; }
 
         public AiInlineCompletion Provider { get; }
 
@@ -762,7 +905,7 @@ public static class AiPluginTests
             Models = new AiModels(() => Settings);
         }
 
-        public AiSettings Settings { get; }
+        public AiSettings Settings { get; set; }
 
         public AiModels Models { get; }
 

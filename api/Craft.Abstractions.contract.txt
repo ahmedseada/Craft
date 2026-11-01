@@ -1622,6 +1622,7 @@ Craft.Abstractions.IEditorHost  System.String WorkspaceFolder { get; }
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task SaveAsync(Craft.Abstractions.IEditorDocument document, System.String path = null, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task ShowMessageAsync(System.String title, System.String message)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<Craft.Abstractions.IEditorDocument> OpenDocumentAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ApplyAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ExecuteCommandAsync(System.String commandId, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> OpenExternalAsync(System.String path)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)

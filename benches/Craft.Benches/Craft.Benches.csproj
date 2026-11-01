@@ -13,6 +13,11 @@
     <!-- P3's bench: the sampler and the StarCoder2 FIM layout it watches (Idrak comes with the family). -->
     <ProjectReference Include="..\..\plugins\Craft.Plugins.Sampler\Craft.Plugins.Sampler.csproj" />
     <ProjectReference Include="..\..\plugins\Craft.Plugins.StarCoder2\Craft.Plugins.StarCoder2.csproj" />
+    <!-- The agent bench: the AI plug-in and the Claude Code plug-in, loaded as the app loads them. -->
+    <ProjectReference Include="..\..\src\Craft.Ai\Craft.Ai.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.ClaudeCode\Craft.Plugins.ClaudeCode.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Tools\Craft.Plugins.Tools.csproj" />
+    <ProjectReference Include="..\..\plugins\Craft.Plugins.Sandbox\Craft.Plugins.Sandbox.csproj" />
   </ItemGroup>
 
 </Project>

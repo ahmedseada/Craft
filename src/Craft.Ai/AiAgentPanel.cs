@@ -370,7 +370,24 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
     }
 
     /// <summary>Proposes <paramref name="change"/>'s diff in the editor; true when the user accepted it.</summary>
-    public async Task<bool> ReviewAsync(AgentChange change, CancellationToken cancellationToken = default)
+    public Task<bool> ReviewAsync(AgentChange change, CancellationToken cancellationToken = default) => ReviewAsync(change, auto: false, cancellationToken);
+
+    /// <summary>
+    /// Applies every change without showing its diff (<see cref="AiSettings.AgentAutoApply"/>), each file one undo step;
+    /// a file holding the user's own unsaved edits keeps its change waiting as a diff. True when every one was applied.
+    /// </summary>
+    public async Task<bool> ApplyAllAsync(CancellationToken cancellationToken = default)
+    {
+        bool all = true;
+        foreach (var change in Changes)
+        {
+            all &= await ReviewAsync(change, auto: true, cancellationToken).ConfigureAwait(true);
+        }
+
+        return all;
+    }
+
+    private async Task<bool> ReviewAsync(AgentChange change, bool auto, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(change);
         if (_copy is not { } copy)
@@ -397,18 +414,31 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
             return true;
         }
 
-        RaiseAnswered();
         bool dirtyBefore = document.Document.IsDirty;
+        if (auto && dirtyBefore)
+        {
+            // Never applied over the user's own unsaved edits: the change waits as a diff to review.
+            Log(new ConversationEntry(ConversationRole.Note, $"{change.Relative}: not applied, the file has unsaved edits of yours; review its diff."));
+            return false;
+        }
+
+        RaiseAnswered();
         var proposal = new ProposedEdits(edits, change.IsNew ? $"Agent: new file {change.Relative}" : $"Agent: {change.Relative}")
         {
             Placement = change.IsNew ? $"a new file: accepting it creates {change.Relative}" : "the agent's copy of the file against the editor's text, line by line",
             Origin = "Agent · " + (Subtitle ?? "the model"),
         };
-        bool accepted = await Host.ProposeAsync(document, proposal, cancellationToken).ConfigureAwait(true);
+        bool accepted = auto
+            ? await Host.ApplyAsync(document, proposal, cancellationToken).ConfigureAwait(true)
+            : await Host.ProposeAsync(document, proposal, cancellationToken).ConfigureAwait(true);
         var now = document.Document.Buffer.Current;
         if (accepted)
         {
-            Judge(AiVerdicts.Accepted);
+            if (!auto)
+            {
+                Judge(AiVerdicts.Accepted);           // the user's verdict; an automatic apply is none (an undo still counts)
+            }
+
             string settled = now.GetText(0, now.Length);
             var rest = await Task.Run(() =>
             {
@@ -465,7 +495,7 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
                 }
             }
 
-            Log(new ConversationEntry(ConversationRole.Note, $"{change.Relative}: accepted into the editor (one undo step)"
+            Log(new ConversationEntry(ConversationRole.Note, $"{change.Relative}: {(auto ? "applied automatically (agentAutoApply)" : "accepted into the editor")} (one undo step)"
                 + (created ? "; the file is created" : change.IsNew ? "; save it to create the file" : saved ? "; saved to the workspace" : unsaved ?? "") + "."));
         }
 
@@ -688,9 +718,25 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         source.Dispose();
         _agent = null;
         EndAssistant();
-        Log(new ConversationEntry(ConversationRole.Note, end + (_changes.Count > 0 ? " Review the changed files below, or discard them." : "")));
+        bool apply = settings.AgentAutoApply && _changes.Count > 0 && end is not ("Stopped." or "Failed.");
+        Log(new ConversationEntry(ConversationRole.Note, end + (_changes.Count == 0 ? ""
+            : apply ? " Applying its changes to the workspace (agentAutoApply)." : " Review the changed files below, or discard them.")));
         IsBusy = false;
         UpdateStatus();
+        if (apply)
+        {
+            try
+            {
+                await ApplyAllAsync(CancellationToken.None).ConfigureAwait(true);
+            }
+#pragma warning disable CA1031 // A change that cannot be applied stays listed to review; the editor goes on.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                Host.Log(EditorLogLevel.Error, "The agent's changes could not all be applied.", error);
+                Log(new ConversationEntry(ConversationRole.Error, "Some changes could not be applied automatically: " + error.Message + " Review them below."));
+            }
+        }
     }
 
     // On the thread pool: an agent engine's run (Claude Code) on the working copy (the run's own when it continues): its
@@ -852,6 +898,7 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
             CallsInText = settings.AgentCallsInText,
             Nudges = settings.AgentNudges,
             Template = lease.ChatTemplate ?? (chat as ChatGenerator)?.Template,
+            ExtraTools = EditorToolsFor(settings.AgentEditorTools),
         };
         var tools = new CodingTools(copy.Copy, options.Tools, sandbox);
         var observed = new CountingChatModel(chat, () => Post(TurnStarted), (tokens, seconds) => Post(() => Counted(tokens, seconds)));
@@ -869,6 +916,28 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         var written = Written(copy, settings.AgentChangesIgnore);
         Post(() => Listed(written));
         return (EndNote(run, written.Count, settings, lease.ContextLength), run);
+    }
+
+    // The editor's live tools the agent is offered beside its coding tools (agentEditorTools): the ones Craft's MCP server
+    // serves Claude Code, by name, in the setting's order; none when no tool set is registered.
+    private List<ITool> EditorToolsFor(IReadOnlyList<string> names)
+    {
+        var picked = new List<ITool>(names.Count);
+        if (names.Count == 0 || EditorToolSets.Names.Count == 0)
+        {
+            return picked;
+        }
+
+        var live = EditorToolSets.Live(Host);
+        foreach (string name in names)
+        {
+            if (live.FirstOrDefault(t => string.Equals(t.Definition.Name, name, StringComparison.Ordinal)) is { } tool)
+            {
+                picked.Add(tool);
+            }
+        }
+
+        return picked;
     }
 
     /// <summary>
@@ -911,9 +980,27 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         UpdateStatus();
     }
 
+    private static bool IsBlank(StringBuilder text)
+    {
+        foreach (var chunk in text.GetChunks())
+        {
+            if (!chunk.Span.IsWhiteSpace())
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private void Said(string piece)
     {
         _text.Append(piece);
+        if (_assistant < 0 && IsBlank(_text))
+        {
+            return;     // a reply that is only a tool call leaves line breaks once the call's text is taken out: no empty message
+        }
+
         var entry = new ConversationEntry(ConversationRole.Assistant, _text.ToString()) { IsStreaming = true, Header = _header };
         if (_assistant < 0)
         {

@@ -562,6 +562,39 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     public async Task<bool> ProposeAsync(IEditorDocument document, ProposedEdits proposal, CancellationToken cancellationToken = default) =>
         await ProposeCoreAsync(document, proposal, HostSource, cancellationToken);
 
+    /// <inheritdoc />
+    public Task<bool> ApplyAsync(IEditorDocument document, ProposedEdits proposal, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ApplyCore(document, proposal, HostSource));
+
+    // A plug-in's edits applied without the diff, on its user's setting (IEditorHost.ApplyAsync): validated as a proposal
+    // is, applied as one undo step with the caret mapped through, and logged as applied without asking.
+    internal bool ApplyCore(IEditorDocument document, ProposedEdits proposed, string source)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(proposed);
+        ArgumentNullException.ThrowIfNull(proposed.Edits);
+        ArgumentException.ThrowIfNullOrWhiteSpace(proposed.Title);
+        if (document is not OpenDocument { IsClosed: false } open || open.Host != this)
+        {
+            Log(source, EditorLogLevel.Warning, $"'{proposed.Title}': the document is not open; nothing was applied.", null);
+            return false;
+        }
+
+        TextEdit[] copy = [.. proposed.Edits];
+        Validate(copy, open.Document.Buffer.Current.Length);
+        if (copy.Length == 0)
+        {
+            return false;
+        }
+
+        var before = open.Selection;
+        var after = new SelectionState(MapThrough(before.Anchor, copy), MapThrough(before.Caret, copy));
+        open.Document.Edit(copy, EditKind.Command, before, after);
+        UpdateSelection(open, after);
+        Log(source, EditorLogLevel.Information, $"'{proposed.Title}': applied without asking, on the user's setting ({copy.Length} {(copy.Length == 1 ? "edit" : "edits")}, one undo step).", null);
+        return true;
+    }
+
     /// <summary>
     /// Records the semantic session of <paramref name="document"/>'s editor (or null), so a proposal's diff view can show
     /// what the language would report after the change (<see cref="ISemanticLanguageSession.DiagnoseEditsAsync"/>).

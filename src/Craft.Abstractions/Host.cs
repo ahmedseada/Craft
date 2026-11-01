@@ -186,6 +186,17 @@ public interface IEditorHost
         ProposeEditsAsync(document, (proposal ?? throw new ArgumentNullException(nameof(proposal))).Edits, proposal.Title, cancellationToken);
 
     /// <summary>
+    /// Applies <paramref name="proposal"/> to <paramref name="document"/> without showing the diff, for a plug-in whose
+    /// user turned applying without asking on in a setting the user owns (the agent's <c>agentAutoApply</c>): one undo step
+    /// (<see cref="EditKind.Command"/>), logged under the plug-in's name. A plug-in never calls it unless its user's setting
+    /// says so. A host that does not apply without asking proposes the edits instead (the default), so nothing is applied
+    /// that the user did not see. True when applied; false when the document is not open or the edits are empty.
+    /// </summary>
+    /// <exception cref="ArgumentException">An edit runs outside the text, or the edits overlap or are out of order.</exception>
+    Task<bool> ApplyAsync(IEditorDocument document, ProposedEdits proposal, CancellationToken cancellationToken = default) =>
+        ProposeAsync(document, proposal, cancellationToken);
+
+    /// <summary>
     /// Proposes <paramref name="edit"/> (edits to several files: a rename across the workspace) under
     /// <paramref name="title"/> as one diff that lists every file, with Accept all. Accepted, each open document takes its
     /// edits as one undo step, and each file that is not open is opened in the background, edited and saved; the shell then

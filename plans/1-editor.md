@@ -6,21 +6,23 @@ Windows run, then the X restart (note 27, X parts 4 and 5, the rest of X), then 
 batch 2 last, once W is done (the owner: the Idrak plug-ins in the editor are a later priority). See "The owner's third
 Windows run (2026-11-01)" at the end.
 
-## Now (2026-11-01)
+## Now (2026-11-01, late)
 
 | # | Phase or item | Status |
 |---|---|---|
-| 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
-| 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
-| 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps; items 1, 2, 6-9 built 2026-11-01: "X part 9, editing helpers 1, 2, 6-9, as built"; items 13-17 built 2026-11-01: "X part 9, navigation 13-17, as built"), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
-| 5 | X rest: minimap, completion at several carets (both built 2026-11-01, "X restart piece 2b as built"), peek (built in piece 3a), measured response times on Windows | Response times left |
-| 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
-| 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
-| 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
-| 9 | M (Android) | Only on the owner's clear decision (2026-11-01: "needs my clear decision, don't start"); never on a recommendation |
-| 9b | A3 (remote models) | Only on the owner's clear decision; never on a recommendation |
-| 10 | Does voice dictation go through the diff view? | Only on the owner's clear decision; never on a recommendation |
+| 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2, notes 1-26, X slices 1-3 | Built earlier |
+| 2 | B1-B11 (paint and scroll, crash guard, sample plug-in and contract guard, learning's families, the start-up probe, the agent's files, learning's memory, splitters, terminal profiles, Roslyn's notification and the loader, the Learning view) | Built 2026-11-01 |
+| 3 | Note 27 (Idrak and Craft), X restart pieces 1b, 2a, 2b, 3a, 3b, X parts 6, 6b, 7, 8, 10, speculative decoding (part 11 item 1) | Built 2026-11-01 |
+| 4 | X part 9: editing helpers 1, 2, 6-9; navigation 13-17 | Built 2026-11-01 |
+| 5 | X part 9: tools 18-22 (Test explorer, Markdown and image preview, TODO list, spell check) | Running (slot s1) |
+| 6 | X part 9 item 23 and part 11 items 4-5 (inline AI chat, AI review, fix the build) | Running (slot s2) |
+| 7 | X part 9: language 3-5, 10-12 (snippets, inlay hints, code lens, linked tags, Outline, hierarchy) and two C# session speed fixes | Running (slot s3) |
+| 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test), the recovery prompt at start, X part 9's look group 24-26 | Running (slot s4) |
+| 9 | Phase W, the web languages | Started on the owner's word (2026-11-01: "start Web now"): each slot that frees takes W's next piece |
+| 10 | Left of X, for later (after W): part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times) | Planned, later |
+| 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned, after W |
+| 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
+| 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
 
 ## The original status (2026-10-31)
 

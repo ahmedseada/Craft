@@ -2613,11 +2613,13 @@ Craft.Abstractions.ModelMemoryEstimate  System.Boolean Equals(Craft.Abstractions
 Craft.Abstractions.ModelMemoryEstimate  System.Boolean Equals(System.Object obj)
 Craft.Abstractions.ModelMemoryEstimate  System.Boolean Fits { get; }
 Craft.Abstractions.ModelMemoryEstimate  System.Boolean Offload { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.Int32 Context { get; init; }
 Craft.Abstractions.ModelMemoryEstimate  System.Int32 GetHashCode()
 Craft.Abstractions.ModelMemoryEstimate  System.Int64 NeededBytes { get; }
 Craft.Abstractions.ModelMemoryEstimate  System.Int64 WeightBytes { get; init; }
 Craft.Abstractions.ModelMemoryEstimate  System.Int64 WorkingBytes { get; init; }
 Craft.Abstractions.ModelMemoryEstimate  System.Int64? FreeBytes { get; init; }
+Craft.Abstractions.ModelMemoryEstimate  System.String CacheFormat { get; init; }
 Craft.Abstractions.ModelMemoryEstimate  System.String Device { get; init; }
 Craft.Abstractions.ModelMemoryEstimate  System.String Model { get; init; }
 Craft.Abstractions.ModelMemoryEstimate  System.String Refusal { get; init; }
@@ -2671,6 +2673,7 @@ Craft.Abstractions.ModelRequest  System.Boolean? Offload { get; init; }
 Craft.Abstractions.ModelRequest  System.Int32 GetHashCode()
 Craft.Abstractions.ModelRequest  System.Int32? Context { get; init; }
 Craft.Abstractions.ModelRequest  System.String Adapter { get; init; }
+Craft.Abstractions.ModelRequest  System.String CacheFormat { get; init; }
 Craft.Abstractions.ModelRequest  System.String Device { get; init; }
 Craft.Abstractions.ModelRequest  System.String Model { get; init; }
 Craft.Abstractions.ModelRequest  System.String ToString()

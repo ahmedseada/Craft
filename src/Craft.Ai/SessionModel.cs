@@ -71,6 +71,18 @@ public sealed class SessionModel
         ? _models.SessionAsync(Role, Id, Settings, cancellationToken)
         : _models.RoleAsync(Role, cancellationToken);
 
+    /// <summary>
+    /// <paramref name="error"/> in the user's words for this session's copy (<see cref="AiErrors.Describe(Exception, AiRoleSettings, ModelMemoryEstimate?)"/>):
+    /// the role's model and variables, with the weights and the cache the copy it leases loaded with.
+    /// </summary>
+    public string DescribeFailure(Exception error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        bool own = OwnLease;
+        var role = _settings().RoleOf(Role).With(own ? Settings : null);
+        return AiErrors.Describe(error, role, own ? _models.MemoryOf(Role, Id) : _models.MemoryOf(Role));
+    }
+
     /// <summary>Its sampling for a request: the role's settings with its own fields over them.</summary>
     public GenerationOptions Sampling(int context, IReadOnlyList<string> stop, SamplingSettings? recommended = null) =>
         _settings().RoleOf(Role).Sampling(Settings, context, stop, recommended);
@@ -262,7 +274,7 @@ public sealed class SessionModel
         else
         {
             text.Append(CultureInfo.InvariantCulture,
-                $"It takes {ModelMemoryEstimate.Gigabytes(estimate.NeededBytes)} ({estimate.Weights}{(estimate.Auto ? " (auto)" : "")}: {ModelMemoryEstimate.Gigabytes(estimate.WeightBytes)} of weights, {ModelMemoryEstimate.Gigabytes(estimate.WorkingBytes)} of working memory)");
+                $"It takes {ModelMemoryEstimate.Gigabytes(estimate.NeededBytes)} ({estimate.Weights}{(estimate.Auto ? " (auto)" : "")}: {ModelMemoryEstimate.Gigabytes(estimate.WeightBytes)} of weights, {ModelMemoryEstimate.Gigabytes(estimate.WorkingBytes)} of working memory with a {estimate.CacheFormat} decoding cache)");
             text.Append(estimate.FreeBytes is { } free
                 ? $"; {ModelMemoryEstimate.Gigabytes(free)} is free on {estimate.Device} beside the copies loaded: {(estimate.Fits ? "it fits." : "it does NOT fit.")}"
                 : $"; {estimate.Device} reports no free memory.");
@@ -316,7 +328,7 @@ public sealed class SessionModel
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
-            _host.Notify($"{char.ToUpperInvariant(Title[0])}{Title[1..]}: its own copy did not load", AiErrors.Describe(error, _settings()), NotificationSeverity.Error);
+            _host.Notify($"{char.ToUpperInvariant(Title[0])}{Title[1..]}: its own copy did not load", DescribeFailure(error), NotificationSeverity.Error);
         }
     }
 }

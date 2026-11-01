@@ -57,6 +57,21 @@ public sealed record AiSettings
     public string Weights { get; init; } = WeightsAuto.Auto;
 
     /// <summary>
+    /// The chat model's decoding cache's format (<c>cacheFormat</c>): "auto" (the default: with the weights, the first pair
+    /// that fits the device's free memory, each weights format from the largest trying a float32, then a bfloat16, then an
+    /// int8 cache), "float32", "bfloat16", "int8", or a key/value layout registered with Idrak's <c>KeyValueLayouts</c> (a
+    /// name none registered fails the load, said so). A named one always wins. The caches grow on demand up to the context
+    /// the estimate counted: the role's context when set, else the model's own up to <see cref="WeightsAutoContext"/>.
+    /// </summary>
+    public string CacheFormat { get; init; } = WeightsAuto.Auto;
+
+    /// <summary>The agent's decoding cache's format (<c>agentCacheFormat</c>, as <see cref="CacheFormat"/>); empty: the chat's.</summary>
+    public string AgentCacheFormat { get; init; } = "";
+
+    /// <summary>Completion's decoding cache's format (<c>completionCacheFormat</c>, as <see cref="CacheFormat"/>); empty: the chat's.</summary>
+    public string CompletionCacheFormat { get; init; } = "";
+
+    /// <summary>
     /// Whether part of the chat model may live in system memory when the device is full (<c>offload</c>; Idrak's offload
     /// to host memory): slower, but a model that does not fit still loads. Off: a model that does not fit is refused, said why.
     /// </summary>
@@ -70,7 +85,9 @@ public sealed record AiSettings
 
     /// <summary>
     /// The context the weights "auto" choice keeps room for when a role's context is the model's own (<c>weightsAutoContext</c>,
-    /// tokens; the decoding caches grow on demand, so a model's full window is not reserved).
+    /// tokens; the decoding caches grow on demand, so a model's full window is not reserved), and the most a loaded copy's
+    /// caches then grow to, so the load never takes more than the estimate counted (a role that names its context takes
+    /// that, at most the model's own).
     /// </summary>
     public int WeightsAutoContext { get; init; } = 8192;
 
@@ -409,6 +426,7 @@ public sealed record AiSettings
     public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens)
     {
         Given = GivenFor(agent: false),
+        CacheFormat = CacheFormatOf(CacheFormat),
         DraftModel = DraftModel.Trim(),
         DraftTokens = DraftTokens,
         Offload = Offload,
@@ -430,6 +448,7 @@ public sealed record AiSettings
         AgentMaxTokens)
     {
         Given = GivenFor(agent: true),
+        CacheFormat = AgentCacheFormat.Trim() is { Length: > 0 } cache ? CacheFormatOf(cache) : CacheFormatOf(CacheFormat),
         InheritsModel = AgentModel.Trim().Length == 0,
         InheritsDevice = AgentDevice.Trim().Length == 0,
         DraftModel = AgentDraftModel.Trim() is { Length: > 0 } draft ? draft : DraftModel.Trim(),
@@ -453,6 +472,7 @@ public sealed record AiSettings
         CompletionTemperature, CompletionMaxTokens)
     {
         DraftModel = AiRoleSettings.NoDraft,                   // completion is the small model: it drafts for none of its own
+        CacheFormat = CompletionCacheFormat.Trim() is { Length: > 0 } cache ? CacheFormatOf(cache) : CacheFormatOf(CacheFormat),
         Offload = CompletionOffload ?? Offload,
     };
 
@@ -479,6 +499,17 @@ public sealed record AiSettings
             : named.ToLowerInvariant();
     }
 
+    /// <summary>
+    /// The decoding cache's format <paramref name="format"/> under one name, so equal settings make equal keys and share
+    /// one copy: empty is "auto", "f32" float32, "bf16" bfloat16, the rest lower-cased (a registered layout's name; it is
+    /// checked at the estimate and the load, through Idrak's <c>KeyValueLayouts</c>).
+    /// </summary>
+    public static string CacheFormatOf(string format)
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        return WeightsOf(format);
+    }
+
     /// <summary>The settings the plug-in declares, with their defaults and meanings (the settings page lists them).</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
@@ -489,15 +520,16 @@ public sealed record AiSettings
         new("model", "", "The chat's model (and the agent's when agentModel is empty): a folder, a .gguf file, store:NAME or a Hugging Face id (Idrak's model sources)."),
         new("device", "auto", "The device the chat's model loads on: auto, cpu, cuda:0, vulkan:0."),
         new("weights", "auto", "The chat's model's weights once loaded: auto (the largest of float32, bfloat16, int8, int4 that fits the device's free memory with its working memory, measured before the load), float32, bfloat16, int8, int4. A named one always wins."),
+        new("cacheFormat", "auto", "The chat's model's decoding cache format: auto (with weights 'auto', the first pair that fits the device's free memory: each weights format from the largest tries a float32, then a bfloat16, then an int8 cache), float32, bfloat16, int8, or a key/value layout registered with Idrak (an unregistered name fails the load). A named one always wins."),
         new("offload", "false", "Let part of the chat's model live in system memory when the device is full (slower; off: a model that does not fit is refused, said why)."),
-        new("weightsAutoContext", "8192", "The context weights 'auto' keeps room for when a role's context is the model's own (tokens; the caches grow on demand)."),
+        new("weightsAutoContext", "8192", "The context weights 'auto' keeps room for when a role's context is the model's own (tokens), and the most its caches grow to then (they grow on demand); a role that names its context takes that."),
         new("weightsAutoHeadroom", "0.1", "The share of the weights' bytes weights 'auto' keeps free beyond the working memory."),
         new("chatTopK", Library.TopK.ToString(CultureInfo.InvariantCulture), "The chat's top-k: sample among the k likeliest tokens (0: all)."),
         new("chatTopP", Library.TopP.ToString(CultureInfo.InvariantCulture), "The chat's top-p: sample among the likeliest tokens holding this share of the probability (1: all)."),
         new("chatMinP", Library.MinP.ToString(CultureInfo.InvariantCulture), "The chat's min-p: leave out tokens less likely than this share of the likeliest one (0: none)."),
         new("chatRepeatPenalty", Library.RepeatPenalty.ToString(CultureInfo.InvariantCulture), "The chat's repeat penalty: how much a recent token is held back (1: none)."),
         new("chatSeed", "", "The chat's random seed (the same seed and prompt, the same reply); empty: random."),
-        new("context", "0", "The chat's model's context window in tokens; 0: the model's own."),
+        new("context", "0", "The chat's model's context window in tokens; 0: the model's own, up to weightsAutoContext (the room the memory estimate keeps)."),
         new("keepAliveMinutes", "10", "Minutes the chat's model stays loaded once unused; 0 unloads it when no plug-in uses it."),
         new("chatTemperature", DefaultTemperature.ToString(CultureInfo.InvariantCulture), "The chat's sampling temperature; 0 takes the likeliest token."),
         new("threads", "0", "CPU threads the library may use (Idrak's ComputeResources); 0: every core."),
@@ -509,6 +541,7 @@ public sealed record AiSettings
         new("completionModel", DefaultCompletionModel, "The model inline completion uses: a small one beside the chat model (model); empty: the chat model, only while it is loaded."),
         new("completionDevice", "", "The device completion's model loads on: auto, cpu, cuda:0, vulkan:0; empty: auto."),
         new("completionWeights", "", "Completion's model's weights once loaded: auto, float32, bfloat16, int8, int4; empty: the chat's (weights)."),
+        new("completionCacheFormat", "", "Completion's model's decoding cache format: auto, float32, bfloat16, int8 or a registered layout; empty: the chat's (cacheFormat)."),
         new("completionOffload", "", "Let part of completion's model live in system memory when the device is full; empty: the chat's (offload)."),
         new("completionContext", "", "Completion's model's context window in tokens (0: the model's own); empty: the chat's (context)."),
         new("completionKeepAliveMinutes", "", "Minutes completion's model stays loaded once unused; empty: the chat's (keepAliveMinutes)."),
@@ -538,6 +571,7 @@ public sealed record AiSettings
         new("agentModel", "", "The agent's model; empty: the chat's (model), so one copy is shared on the device."),
         new("agentDevice", "", "The device the agent's model loads on: auto, cpu, cuda:0, vulkan:0; empty: the chat's (device)."),
         new("agentWeights", "", "The agent's model's weights once loaded: auto, float32, bfloat16, int8, int4; empty: the chat's (weights)."),
+        new("agentCacheFormat", "", "The agent's model's decoding cache format: auto, float32, bfloat16, int8 or a registered layout; empty: the chat's (cacheFormat)."),
         new("agentOffload", "", "Let part of the agent's model live in system memory when the device is full; empty: the chat's (offload)."),
         new("agentTopK", "", "The agent's top-k (0: all); empty: the chat's (chatTopK)."),
         new("agentTopP", "", "The agent's top-p (1: all); empty: the chat's (chatTopP)."),
@@ -644,6 +678,9 @@ public sealed record AiSettings
             Device = Text("device") ?? defaults.Device,
             Context = Whole("context", 0, 0, 16_777_216),
             Weights = Text("weights") ?? defaults.Weights,
+            CacheFormat = Text("cacheFormat") ?? defaults.CacheFormat,
+            AgentCacheFormat = Text("agentCacheFormat") ?? "",
+            CompletionCacheFormat = Text("completionCacheFormat") ?? "",
             Offload = Flag("offload", false),
             AgentOffload = Text("agentOffload") is null ? null : Flag("agentOffload", false),
             CompletionOffload = Text("completionOffload") is null ? null : Flag("completionOffload", false),
@@ -739,7 +776,7 @@ public sealed record AiSettings
 /// <param name="Model">The model's name; empty for none.</param>
 /// <param name="Device">The device ("auto", "cpu", "cuda:0").</param>
 /// <param name="Context">The context window in tokens; 0 for the model's own.</param>
-/// <param name="Weights">The weights once loaded ("int8", "int4", "bfloat16"); empty for float32.</param>
+/// <param name="Weights">The weights once loaded ("auto", "float32", "bfloat16", "int8", "int4").</param>
 /// <param name="KeepAliveMinutes">Minutes its model stays loaded once unused.</param>
 /// <param name="Temperature">Its sampling temperature.</param>
 /// <param name="MaxTokens">The most tokens one reply samples.</param>
@@ -765,6 +802,9 @@ public sealed record AiRoleSettings(string Key, bool Enabled, string Model, stri
 
     /// <summary>Whether part of its model may live in system memory when the device is full.</summary>
     public bool Offload { get; init; }
+
+    /// <summary>Its decoding cache's format ("auto", "float32", "bfloat16", "int8", or a registered key/value layout's name).</summary>
+    public string CacheFormat { get; init; } = WeightsAuto.Auto;
 
     /// <summary>Its top-k (0: every token).</summary>
     public int TopK { get; init; } = 40;

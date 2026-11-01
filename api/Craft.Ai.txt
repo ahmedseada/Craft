@@ -143,7 +143,8 @@ sealed class Craft.Ai.AiCommitMessages : Craft.Abstractions.ICommitMessageProvid
   static System.String Prompt(Craft.Abstractions.CommitMessageRequest request)
 static class Craft.Ai.AiErrors
   static System.Boolean IsOutOfMemory(System.Exception error)
-  static System.String Describe(System.Exception error, Craft.Ai.AiSettings settings, System.Boolean forCompletion = false)
+  static System.String Describe(System.Exception error, Craft.Ai.AiRoleSettings role, Craft.Abstractions.ModelMemoryEstimate loaded = null)
+  static System.String Describe(System.Exception error, Craft.Ai.AiSettings settings, System.String role = "chat", Craft.Abstractions.ModelMemoryEstimate loaded = null)
 sealed class Craft.Ai.AiInlineChat : Craft.Abstractions.IInlineChatProvider, Idrak.Abstraction.IKind
   Craft.Abstractions.InlineChatPlan Plan()
   System.Collections.Generic.IAsyncEnumerable<System.String> EditAsync(Craft.Abstractions.InlineChatRequest request, System.Threading.CancellationToken cancellationToken)
@@ -185,6 +186,7 @@ sealed class Craft.Ai.AiMcpServer : Craft.Abstractions.IEditorMcpServer, Idrak.A
   static Craft.Ai.AiMcpServer Instance { get; }
 sealed class Craft.Ai.AiModels : System.IDisposable
   Craft.Abstractions.IEditorActivities Activities { get; set; }
+  Craft.Abstractions.ModelMemoryEstimate MemoryOf(System.String role, System.String session = null)
   Craft.Ai.AiModels.DraftStatus DraftOf(System.String role)
   System.Boolean HasCompletionModel { get; }
   System.Boolean IsAgentLoaded { get; }
@@ -279,6 +281,7 @@ sealed class Craft.Ai.AiRoleSettings : System.IEquatable<Craft.Ai.AiRoleSettings
   System.Single RepeatPenalty { get; init; }
   System.Single Temperature { get; init; }
   System.Single TopP { get; init; }
+  System.String CacheFormat { get; init; }
   System.String Device { get; init; }
   System.String DraftModel { get; init; }
   System.String Key { get; init; }
@@ -392,13 +395,16 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Single? AgentRepeatPenalty { get; init; }
   System.Single? AgentTemperature { get; init; }
   System.Single? AgentTopP { get; init; }
+  System.String AgentCacheFormat { get; init; }
   System.String AgentDevice { get; init; }
   System.String AgentDraftModel { get; init; }
   System.String AgentFolder { get; init; }
   System.String AgentModel { get; init; }
   System.String AgentSandbox { get; init; }
   System.String AgentWeights { get; init; }
+  System.String CacheFormat { get; init; }
   System.String ChatFile { get; init; }
+  System.String CompletionCacheFormat { get; init; }
   System.String CompletionDevice { get; init; }
   System.String CompletionFormat { get; init; }
   System.String CompletionModel { get; init; }
@@ -423,6 +429,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> SamplingKeys { get; }
   static System.Single DefaultTemperature { get; }
+  static System.String CacheFormatOf(System.String format)
 sealed class Craft.Ai.CompletionMode : System.IEquatable<Craft.Ai.CompletionMode>
   Craft.Ai.CompletionMode <Clone>$()
   System.Boolean Equals(Craft.Ai.CompletionMode other)
@@ -520,6 +527,7 @@ sealed class Craft.Ai.SessionModel
   System.Boolean OwnLease { get; }
   System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> Fields(Craft.Abstractions.ModelSessionSettings proposed)
   System.String Describe(Craft.Abstractions.ModelSessionSettings proposed, Craft.Abstractions.ModelMemoryEstimate estimate)
+  System.String DescribeFailure(System.Exception error)
   System.String Id { get; }
   System.String Role { get; }
   System.String Title { get; }
@@ -539,11 +547,14 @@ static class Craft.Ai.SnippetPlacement
 static class Craft.Ai.WeightsAuto
   const System.String Auto = auto
   const System.String Float32 = float32
-  static Craft.Abstractions.ModelMemoryEstimate Choose(System.String model, System.String device, Craft.Ai.ModelShape shape, System.String setting, System.Int32 context, System.Int64? free, System.Boolean offload, System.Double headroom)
+  static Craft.Abstractions.ModelMemoryEstimate Choose(System.String model, System.String device, Craft.Ai.ModelShape shape, System.String setting, System.Int32 context, System.Int64? free, System.Boolean offload, System.Double headroom, System.String cacheSetting = "float32")
   static Craft.Ai.ModelShape ShapeOf(System.String folder)
+  static System.Collections.Generic.IReadOnlyList<System.String> CacheFormats { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Formats { get; }
   static System.Func<System.String, System.Int64?> FreeMemoryProbe { get; set; }
   static System.Int32 BudgetContext(Craft.Ai.ModelShape shape, System.Int32 roleContext, System.Int32 autoContext)
+  static System.Int32 BudgetContext(System.Int32 maxPositions, System.Int32 roleContext, System.Int32 autoContext)
+  static System.Int64 CacheBytes(Craft.Ai.ModelShape shape, System.Int32 context, System.String cacheFormat = "float32")
   static System.Int64 WeightBytes(Craft.Ai.ModelShape shape, System.String format)
-  static System.Int64 WorkingBytes(Craft.Ai.ModelShape shape, System.Int32 context, System.Int64 weightBytes, System.Double headroom)
+  static System.Int64 WorkingBytes(Craft.Ai.ModelShape shape, System.Int32 context, System.Int64 weightBytes, System.Double headroom, System.String cacheFormat = "float32")
   static System.Int64? FreeMemory(System.String device)

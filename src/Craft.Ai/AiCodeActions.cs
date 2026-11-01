@@ -190,7 +190,7 @@ public sealed class AiCodeActions : ICodeActionProvider
         {
             // A failure (a load that did not fit, an out-of-memory one saying what to do) is a notification, never a modal stop.
             _host.Log(EditorLogLevel.Error, $"AI: {title} failed.", error);
-            _host.Notify($"AI: {title} failed", AiErrors.Describe(error, settings), NotificationSeverity.Error);
+            _host.Notify($"AI: {title} failed", AiErrors.Describe(error, settings, ModelRoleKeys.Chat, _models.MemoryOf(ModelRoleKeys.Chat)), NotificationSeverity.Error);
             return;
         }
 

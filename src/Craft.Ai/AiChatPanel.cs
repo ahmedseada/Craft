@@ -943,7 +943,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IMode
         catch (Exception error)
 #pragma warning restore CA1031
         {
-            string said = AiErrors.Describe(error, settings);
+            string said = _session.DescribeFailure(error);
             Post(() =>
             {
                 Finish(generation, turn, user, null, said);

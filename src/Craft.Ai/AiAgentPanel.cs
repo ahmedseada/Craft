@@ -701,7 +701,7 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         {
             Host.Log(EditorLogLevel.Error, "The agent run failed.", error);
             // An out-of-memory failure says what to do (a smaller model at the chip, other GPU programs closed), in words.
-            string said = AiErrors.Describe(error, settings);
+            string said = _session.DescribeFailure(error);                 // the agent's model, its agentWeights and what its copy loaded with
             Log(new ConversationEntry(ConversationRole.Error, said));
             end = "Failed.";
             activity.Fail("the agent run failed: " + said, error, () => Run = StartAsync(task, CancellationToken.None));

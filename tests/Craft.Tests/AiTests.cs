@@ -369,6 +369,8 @@ public static class AiTests
             // The owner, 2026-11-02: the agent's changes applied without asking, the editor's tools offered, completion's format.
             ["agentAutoApply"] = "true", ["agentEditorTools"] = "find_symbol", ["completionFormat"] = "prefix",
             ["agentReadBeforeEdit"] = "false",
+            // The owner, 2026-11-02: the decoding cache's format per role (an empty agent's or completion's is the chat's).
+            ["cacheFormat"] = "bfloat16", ["agentCacheFormat"] = "int8", ["completionCacheFormat"] = "float32",
         };
         Check.Equal(AiSettings.Declared.Count, values.Count, "every declared setting is read");
         var settings = AiSettings.Read(key => values.GetValueOrDefault(key));
@@ -399,6 +401,8 @@ public static class AiTests
                    && settings.ChatRole is { Offload: true, TopK: 20, Seed: 9 } && settings.AgentRole is { Offload: false, TopK: 30, Seed: 11 } && settings.CompletionRole.Offload
                    && Math.Abs(settings.ChatRole.TopP - 0.8f) < 1e-6 && Math.Abs(settings.AgentRole.RepeatPenalty - 1.3f) < 1e-6 && Math.Abs(settings.ChatRole.MinP - 0.05f) < 1e-6,
             "offload, weights auto's room and each role's sampling are read (CRAFT_PLUGIN_AI_OFFLOAD, _CHATTOPK, _AGENTSEED)");
+        Check.True(settings is { CacheFormat: "bfloat16", AgentCacheFormat: "int8", CompletionCacheFormat: "float32", ChatRole.CacheFormat: "bfloat16", AgentRole.CacheFormat: "int8", CompletionRole.CacheFormat: "float32" },
+            "each role's decoding cache format is read (CRAFT_PLUGIN_AI_CACHEFORMAT, _AGENTCACHEFORMAT, _COMPLETIONCACHEFORMAT)");
         var bad = Check.Throws<ArgumentException>(() => AiSettings.Read(key => key == "threads" ? "many" : null), "a bad value");
         Check.True(bad.Message.Contains("CRAFT_PLUGIN_AI_THREADS", StringComparison.Ordinal), "the error names the variable");
     }

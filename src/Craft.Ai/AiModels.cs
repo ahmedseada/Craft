@@ -353,7 +353,7 @@ public sealed class AiModels : IDisposable
         catch (Exception error)
 #pragma warning restore CA1031
         {
-            pair.Off = $"{plan.Name} did not load to draft: {(error is OperationCanceledException ? "cancelled" : AiErrors.Describe(error, settings))}";
+            pair.Off = $"{plan.Name} did not load to draft: {(error is OperationCanceledException ? "cancelled" : AiErrors.Describe(error, settings, role))}";
         }
 
         try
@@ -420,6 +420,7 @@ public sealed class AiModels : IDisposable
             Underlying = Target.Underlying,
             Exclusive = Target.Exclusive,
             Draft = Target.Draft,
+            Memory = Target.Memory,                                            // what the target's copy loaded with (a failure's words name it)
         };
 
         public void Record(GenerationStats stats)
@@ -558,7 +559,7 @@ public sealed class AiModels : IDisposable
             lock (_gate)
             {
                 // Not again on the next pause in typing: until the settings change, or the model is loaded on purpose.
-                _failed[plan.Key] = AiErrors.Describe(error, settings, forCompletion: true);
+                _failed[plan.Key] = AiErrors.Describe(error, settings, ModelRoleKeys.Completion);
             }
 
             throw;
@@ -728,10 +729,45 @@ public sealed class AiModels : IDisposable
             Weights = role.Weights,
             KeepAlive = TimeSpan.FromMinutes(role.KeepAliveMinutes),
             Offload = role.Offload,
+            CacheFormat = role.CacheFormat,
         };
         string key = string.Join('\n', settings.ModelProvider, name, adapter ?? "", role.Device, role.Context.ToString(System.Globalization.CultureInfo.InvariantCulture), role.Weights,
-            role.KeepAliveMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture), role.Offload ? "offload" : "");
+            role.KeepAliveMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture), role.Offload ? "offload" : "", role.CacheFormat);
         return (key, request);
+    }
+
+    /// <summary>
+    /// What the copy the role <paramref name="role"/> holds (or its session <paramref name="session"/>'s own copy) loaded
+    /// with: its weights, its decoding cache's format and the context counted, as the provider measured them before the
+    /// load; null while none is loaded or the provider said none.
+    /// </summary>
+    public ModelMemoryEstimate? MemoryOf(string role, string? session = null)
+    {
+        ArgumentNullException.ThrowIfNull(role);
+        string holder = session is null ? role : SessionHolder(role, session);
+        lock (_gate)
+        {
+            return _roles.TryGetValue(holder, out var key) && _leases.TryGetValue(key, out var lease) && lease.IsCompletedSuccessfully ? lease.Result.Memory : null;
+        }
+    }
+
+    // The role a lease's load is for (the first holder of its key: a role, "role@session" or "role:draft"), for a failure's
+    // words; the chat's when none holds it any more.
+    private string RoleOfKey(string key)
+    {
+        lock (_gate)
+        {
+            foreach (var (holder, held) in _roles)
+            {
+                if (string.Equals(held, key, StringComparison.Ordinal))
+                {
+                    int end = holder.AsSpan().IndexOfAny('@', ':');
+                    return end < 0 ? holder : holder[..end];
+                }
+            }
+        }
+
+        return ModelRoleKeys.Chat;
     }
 
     // Called holding the gate: a role moves to `key`; the lease it held goes when no role holds it any more.
@@ -855,7 +891,7 @@ public sealed class AiModels : IDisposable
             }
 
             var error = done.Exception?.GetBaseException();
-            activity.Fail($"{request.Model} did not load: {(error is null ? "cancelled" : AiErrors.Describe(error, settings))}", error, () => _ = RetryAsync(key, request));
+            activity.Fail($"{request.Model} did not load: {(error is null ? "cancelled" : AiErrors.Describe(error, settings, RoleOfKey(key)))}", error, () => _ = RetryAsync(key, request));
         }
     }
 
@@ -932,28 +968,111 @@ public static class AiErrors
     /// <summary>Whether <paramref name="error"/> is a device or system running out of memory.</summary>
     public static bool IsOutOfMemory(Exception? error) => ModelErrors.IsOutOfMemory(error);
 
+    // Where a load's failure carries what the copy was loading with (its estimate), for the words below.
+    private const string MemoryKey = "Craft.Ai.ModelMemory";
+
     /// <summary>
-    /// <paramref name="error"/>'s message, and for an out-of-memory one what the user can do: pick a smaller model at the
-    /// composer (or a smaller <c>completionModel</c>), smaller weights, or close other programs on the device. Offloading
-    /// to system memory is named as a choice, never set.
+    /// <paramref name="error"/>'s message, and for an out-of-memory one what the user can do, for the role
+    /// <paramref name="role"/> (<see cref="ModelRoleKeys"/>: the chat's, the agent's, completion's; completion without a
+    /// model of its own is the chat model's) as <see cref="Describe(Exception, AiRoleSettings, ModelMemoryEstimate?)"/> says it.
     /// </summary>
-    public static string Describe(Exception error, AiSettings settings, bool forCompletion = false)
+    /// <param name="error">The failure.</param>
+    /// <param name="settings">The settings now.</param>
+    /// <param name="role">The role that failed.</param>
+    /// <param name="loaded">What its copy loaded with (<see cref="AiModels.MemoryOf"/>), or null: a load's failure carries its own.</param>
+    public static string Describe(Exception error, AiSettings settings, string role = ModelRoleKeys.Chat, ModelMemoryEstimate? loaded = null)
     {
         ArgumentNullException.ThrowIfNull(error);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(role);
+        var resolved = role == ModelRoleKeys.Completion && settings.CompletionModel.Length == 0 ? settings.ChatRole : settings.RoleOf(role);
+        return Describe(error, resolved, loaded);
+    }
+
+    /// <summary>
+    /// <paramref name="error"/>'s message, and for an out-of-memory one what the user can do with the role
+    /// <paramref name="role"/>'s copy: pick a smaller model at the composer (or a smaller <c>completionModel</c>), load it
+    /// with the next smaller weights than it loaded with (<paramref name="loaded"/>, else what the load carried on the
+    /// failure, else the role's setting: "auto" without a measure loads float32), and at int4 a shorter context and the
+    /// next smaller decoding cache, each named by the role's own variable (<c>agentWeights</c>, <c>agentContext</c>,
+    /// <c>agentCacheFormat</c>); or close other programs on the device. Offloading to system memory is named as a choice, never set.
+    /// </summary>
+    public static string Describe(Exception error, AiRoleSettings role, ModelMemoryEstimate? loaded = null)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        ArgumentNullException.ThrowIfNull(role);
         if (!IsOutOfMemory(error))
         {
             return error.Message;
         }
 
-        var role = forCompletion && settings.CompletionModel.Length > 0 ? settings.CompletionRole : settings.ChatRole;
-        string model = role.Model;
-        string smaller = forCompletion
+        loaded ??= MemoryIn(error);
+        string weights = (loaded?.Weights ?? (role.Weights.Equals(WeightsAuto.Auto, StringComparison.OrdinalIgnoreCase) ? WeightsAuto.Float32 : role.Weights)).ToLowerInvariant();
+        string cache = (loaded?.CacheFormat ?? (role.CacheFormat.Equals(WeightsAuto.Auto, StringComparison.OrdinalIgnoreCase) ? WeightsAuto.Float32 : role.CacheFormat)).ToLowerInvariant();
+        int context = loaded is { Context: > 0 } ? loaded.Context : role.Context;
+        string model = loaded is { Model.Length: > 0 } ? loaded.Model : role.Model;
+        string prefix = role.Key switch { ModelRoleKeys.Agent => "agent", ModelRoleKeys.Completion => "completion", _ => "" };
+        string Variable(string name) => prefix.Length == 0 ? name : prefix + char.ToUpperInvariant(name[0]) + name[1..];
+
+        string smaller = role.Key == ModelRoleKeys.Completion
             ? "set a smaller completionModel on the settings page"
             : "pick a smaller model at the composer's model chip";
-        string variable = role.Key == ModelRoleKeys.Completion ? "completionWeights" : "weights";
-        string weights = role.Weights is "int4" ? "" : $", load it with smaller weights ({variable} {(role.Weights is "int8" ? "int4" : "int8")})";
-        return $"The device ran out of memory for {model}: {smaller}{weights}, or close other programs that use the GPU, then try again. "
+        string advice;
+        if (SmallerOf(WeightsAuto.Formats, weights, unknown: "int4") is { } next)
+        {
+            advice = $", load it with smaller weights ({Variable("weights")} {next})";
+        }
+        else
+        {
+            string shorter = context > 0
+                ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Variable("context")} {Math.Max(256, context / 2)}")
+                : Variable("context") + ", in tokens";
+            advice = $", give it a shorter context ({shorter})"
+                     + (SmallerOf(WeightsAuto.CacheFormats, cache, unknown: null) is { } smallerCache ? $" and a smaller decoding cache ({Variable("cacheFormat")} {smallerCache})" : "");
+        }
+
+        string took = string.Create(System.Globalization.CultureInfo.InvariantCulture, $" ({weights} weights, {cache} cache{(context > 0 ? $", context {context}" : "")})");
+        return $"The device ran out of memory for {model}{took}: {smaller}{advice}, or close other programs that use the GPU, then try again. "
                + "(To keep what does not fit in system memory, slower, set IDRAK_OFFLOAD=1 yourself.) " + error.Message;
+    }
+
+    // The format after `format` in `formats` (largest first); null at the last; `unknown` for a name not listed (a packed
+    // weights format counts as int8, so int4 is smaller; a cache layout of one's own has none known smaller).
+    private static string? SmallerOf(IReadOnlyList<string> formats, string format, string? unknown)
+    {
+        for (int i = 0; i < formats.Count; i++)
+        {
+            if (formats[i].Equals(format, StringComparison.OrdinalIgnoreCase) || (format == "bf16" && formats[i] == "bfloat16") || (format == "f32" && formats[i] == WeightsAuto.Float32))
+            {
+                return i + 1 < formats.Count ? formats[i + 1] : null;
+            }
+        }
+
+        return unknown;
+    }
+
+    // What the failed load was loading with, when its failure carries it (LocalModelProvider notes it).
+    private static ModelMemoryEstimate? MemoryIn(Exception error)
+    {
+        for (Exception? at = error; at is not null; at = at.InnerException)
+        {
+            if (at.Data[MemoryKey] is ModelMemoryEstimate memory)
+            {
+                return memory;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Notes on <paramref name="error"/> what the failed load was loading with (<paramref name="memory"/>), for its words; always false (an exception filter).</summary>
+    internal static bool Remember(Exception error, ModelMemoryEstimate? memory)
+    {
+        if (memory is not null && !error.Data.Contains(MemoryKey))
+        {
+            error.Data[MemoryKey] = memory;
+        }
+
+        return false;
     }
 }

@@ -486,7 +486,7 @@ public sealed class AiSession : IDisposable
         }
         catch (Exception error)
         {
-            _modelState = "failed: " + AiErrors.Describe(error, settings);
+            _modelState = "failed: " + AiErrors.Describe(error, settings, role);
             AiPlugin.Local.SetState(_modelState, isProblem: true);
             _host.Log(EditorLogLevel.Error, $"The model {resolved.Model} did not load.", error);
         }

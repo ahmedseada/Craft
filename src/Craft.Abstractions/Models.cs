@@ -19,6 +19,12 @@ public sealed record ModelRequest(string Model)
     public string? Weights { get; init; }
 
     /// <summary>
+    /// The decoding cache's format ("auto", "float32", "bfloat16", "int8", or a key/value layout registered with Idrak's
+    /// <c>KeyValueLayouts</c>); null for the provider's setting.
+    /// </summary>
+    public string? CacheFormat { get; init; }
+
+    /// <summary>
     /// An adapter folder (PEFT layout: adapter_config.json, adapter_model.safetensors) attached to the model once loaded, or
     /// null for none: what <see cref="ModelAdapters.For"/> names for the model (the learning plug-in's promoted adapter).
     /// </summary>
@@ -64,9 +70,18 @@ public sealed record ModelMemoryEstimate(string Model, string Device, string Wei
     /// <summary>Why it cannot load as set (even the smallest format does not fit, offload off), with what to do; null when it can.</summary>
     public string? Refusal { get; init; }
 
-    /// <summary>The choice in a line, as the chip and the Models page say it: "int4 (auto): 4.1 GB of 6.6 GB free".</summary>
+    /// <summary>The decoding cache's format the working memory was counted with ("float32", "bfloat16", "int8", or a registered layout's name).</summary>
+    public string CacheFormat { get; init; } = "float32";
+
+    /// <summary>The context in tokens the working memory was counted for (the decoding caches' most positions); 0 when not known.</summary>
+    public int Context { get; init; }
+
+    /// <summary>
+    /// The choice in a line, as the chip and the Models page say it: "int4 (auto): 4.1 GB of 6.6 GB free", with the cache's
+    /// format when it is not float32 ("int8 (auto), bfloat16 cache: 9.6 GB of 14.0 GB free").
+    /// </summary>
     public string Text => string.Create(System.Globalization.CultureInfo.InvariantCulture,
-        $"{Weights}{(Auto ? " (auto)" : "")}: {Gigabytes(NeededBytes)}{(FreeBytes is { } free ? $" of {Gigabytes(free)} free" : "")}{(Offload ? " · offload" : "")}");
+        $"{Weights}{(Auto ? " (auto)" : "")}{(CacheFormat.Equals("float32", StringComparison.OrdinalIgnoreCase) ? "" : $", {CacheFormat} cache")}: {Gigabytes(NeededBytes)}{(FreeBytes is { } free ? $" of {Gigabytes(free)} free" : "")}{(Offload ? " · offload" : "")}");
 
     /// <summary>Bytes in gigabytes, one decimal ("4.1 GB").</summary>
     public static string Gigabytes(long bytes) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{bytes / 1e9:0.0} GB");

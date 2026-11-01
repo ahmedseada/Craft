@@ -298,6 +298,13 @@ public static class ModelRoleSettingsTests
             Check.True(declared[set.MaxTokens].Shape is { Kind: SettingKind.Whole, Unit: "tokens", Min: 1 }, $"{set.MaxTokens} is a number of tokens");
         }
 
+        foreach (var (section, key) in (ReadOnlySpan<(string, string)>)[(SettingSections.Completion, "completionCacheFormat"), (SettingSections.Chat, "cacheFormat"), (SettingSections.Agent, "agentCacheFormat")])
+        {
+            Check.True(declared.TryGetValue(key, out var cache) && cache.Shape is { Kind: SettingKind.Choice } shape && shape.Section == section && shape.Choices.Contains("auto")
+                       && shape.Choices.Contains("bfloat16") && shape.Choices.Contains("int8") && (key == "cacheFormat") != shape.Choices.Contains(""),
+                $"{key} is a choice in the {section} section (empty: the chat's, for the agent and completion)");
+        }
+
         Check.True(declared["completionDelayMs"].Shape is { Kind: SettingKind.Whole, Unit: "ms" }, "the completion delay is in ms");
         Check.True(SettingSections.All.Any(s => s.Id == SettingSections.Chat), "the Chat section is on the page");
         Check.Equal("craft.settings.agent", SettingSections.CommandOf(SettingSections.Agent), "each section has a command a plug-in links to");

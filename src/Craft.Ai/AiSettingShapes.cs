@@ -24,6 +24,10 @@ public static class AiSettingShapes
 
     // A role that takes the chat's when empty: "" (the chat's) first, then float32 named, then the smaller ones.
     private static readonly string[] InheritedWeights = ["", WeightsAuto.Auto, WeightsAuto.Float32, "bfloat16", "int8", "int4"];
+
+    // The decoding cache's formats (a layout registered by name is typed in .craft/settings.json or its variable).
+    private static readonly string[] CacheFormats = [WeightsAuto.Auto, .. WeightsAuto.CacheFormats];
+    private static readonly string[] InheritedCacheFormats = ["", WeightsAuto.Auto, .. WeightsAuto.CacheFormats];
     private const string SamplingGroup = "Sampling";
 
     /// <summary>The declared settings with their sections and shapes.</summary>
@@ -38,7 +42,7 @@ public static class AiSettingShapes
             : setting.Key.StartsWith("completion", StringComparison.Ordinal) ? SettingSections.Completion
             : setting.Key.StartsWith("agent", StringComparison.Ordinal) ? SettingSections.Agent
             : setting.Key.StartsWith("chat", StringComparison.Ordinal) || setting.Key.StartsWith("draft", StringComparison.Ordinal)
-              || setting.Key is "model" or "device" or "weights" or "context" or "keepAliveMinutes" or "offload" ? SettingSections.Chat
+              || setting.Key is "model" or "device" or "weights" or "cacheFormat" or "context" or "keepAliveMinutes" or "offload" ? SettingSections.Chat
             : SettingSections.Models;
     }
 
@@ -49,6 +53,7 @@ public static class AiSettingShapes
         "model" => SettingShape.Text(SettingSections.Chat, "Model", ModelGroup),
         "device" => Device(SettingSections.Chat, Devices),
         "weights" => SettingShape.Choice(SettingSections.Chat, "Weights once loaded", Weights, ModelGroup),
+        "cacheFormat" => SettingShape.Choice(SettingSections.Chat, "Decoding cache format", CacheFormats, ModelGroup),
         "context" => Context(SettingSections.Chat),
         "keepAliveMinutes" => KeepAlive(SettingSections.Chat),
         "chatTemperature" => Temperature(SettingSections.Chat),
@@ -69,6 +74,7 @@ public static class AiSettingShapes
         "completionModel" => SettingShape.Text(SettingSections.Completion, "Model", ModelGroup),
         "completionDevice" => Device(SettingSections.Completion, ["", .. Devices]),
         "completionWeights" => SettingShape.Choice(SettingSections.Completion, "Weights once loaded", InheritedWeights, ModelGroup),
+        "completionCacheFormat" => SettingShape.Choice(SettingSections.Completion, "Decoding cache format (empty: the chat's)", InheritedCacheFormats, ModelGroup),
         "completionContext" => Context(SettingSections.Completion),
         "completionOffload" => SettingShape.Choice(SettingSections.Completion, "Offload (empty: the chat's)", ["", "true", "false"], ModelGroup),
         "completionKeepAliveMinutes" => KeepAlive(SettingSections.Completion),
@@ -81,6 +87,7 @@ public static class AiSettingShapes
         "agentModel" => SettingShape.Text(SettingSections.Agent, "Model (empty: the chat's)", ModelGroup),
         "agentDevice" => Device(SettingSections.Agent, ["", .. Devices]),
         "agentWeights" => SettingShape.Choice(SettingSections.Agent, "Weights once loaded", InheritedWeights, ModelGroup),
+        "agentCacheFormat" => SettingShape.Choice(SettingSections.Agent, "Decoding cache format (empty: the chat's)", InheritedCacheFormats, ModelGroup),
         "agentContext" => Context(SettingSections.Agent),
         "agentOffload" => SettingShape.Choice(SettingSections.Agent, "Offload (empty: the chat's)", ["", "true", "false"], ModelGroup),
         "agentTopK" => SettingShape.Text(SettingSections.Agent, "Top-k (empty: the chat's)", SamplingGroup),

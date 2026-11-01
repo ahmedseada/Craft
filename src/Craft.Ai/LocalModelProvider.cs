@@ -148,9 +148,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
         foreach (var model in loaded)
         {
-            var key = LoadKey.Parse(model.Name);
-            if (key.Model.Equals(role.Model, StringComparison.OrdinalIgnoreCase) && key.Device.Equals(role.Device, StringComparison.OrdinalIgnoreCase)
-                && key.Context == role.Context && string.Equals(key.Weights, role.Weights, StringComparison.OrdinalIgnoreCase) && key.Offload == role.Offload)
+            if (LoadKey.Parse(model.Name).Matches(role))
             {
                 return _deviceOf.TryGetValue(model.Name, out var device) ? device : role.Device;
             }
@@ -164,16 +162,14 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     {
         foreach (var model in loaded)
         {
-            var key = LoadKey.Parse(model.Name);
-            if (key.Model.Equals(role.Model, StringComparison.OrdinalIgnoreCase) && key.Device.Equals(role.Device, StringComparison.OrdinalIgnoreCase)
-                && key.Context == role.Context && string.Equals(key.Weights, role.Weights, StringComparison.OrdinalIgnoreCase) && key.Offload == role.Offload
-                && _memoryOf.TryGetValue(model.Name, out var memory))
+            if (LoadKey.Parse(model.Name).Matches(role) && _memoryOf.TryGetValue(model.Name, out var memory))
             {
                 return memory.Text;
             }
         }
 
-        return role.Offload ? role.Weights + " · offload" : role.Weights;
+        string weights = role.CacheFormat.Equals(WeightsAuto.Auto, StringComparison.OrdinalIgnoreCase) ? role.Weights : $"{role.Weights}, {role.CacheFormat} cache";
+        return role.Offload ? weights + " · offload" : weights;
     }
 
     private ModelRole ChatRole(AiSettings settings, IReadOnlyList<LoadedModel> loaded)
@@ -360,7 +356,8 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
         var settings = Settings;
         var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
-            request.Adapter is { Length: > 0 } adapter ? Path.GetFullPath(adapter) : "", request.Offload ?? settings.Offload);
+            request.Adapter is { Length: > 0 } adapter ? Path.GetFullPath(adapter) : "", request.Offload ?? settings.Offload,
+            AiSettings.CacheFormatOf(request.CacheFormat ?? settings.CacheFormat));
         return Task.Run(() => Acquire(key, request.KeepAlive, settings, progress, cancellationToken), cancellationToken);
     }
 
@@ -381,7 +378,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
         var settings = Settings;
         var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
-            "", request.Offload ?? settings.Offload);
+            "", request.Offload ?? settings.Offload, AiSettings.CacheFormatOf(request.CacheFormat ?? settings.CacheFormat));
         return Task.Run(() =>
         {
             IdrakLibraries.EnsureIncluded();
@@ -391,7 +388,10 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         }, cancellationToken);
     }
 
-    /// <summary>The weights the role's settings load with, measured before the load ("int4 (auto): 4.1 GB of 6.6 GB free"); null when it has none.</summary>
+    /// <summary>
+    /// The weights and the decoding cache the role's settings load with, measured before the load ("int8 (auto), bfloat16
+    /// cache: 12.3 GB of 14.4 GB free"); null when it has none.
+    /// </summary>
     private static ModelMemoryEstimate? Estimate(LoadKey key, string folder, AiSettings settings)
     {
         if (WeightsAuto.ShapeOf(folder) is not { } shape)
@@ -401,7 +401,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
 
         int context = WeightsAuto.BudgetContext(shape, key.Context, settings.WeightsAutoContext);
         string device = key.Device;
-        return WeightsAuto.Choose(key.Model, device, shape, key.Weights, context, WeightsAuto.FreeMemory(device), key.Offload, settings.WeightsAutoHeadroom);
+        return WeightsAuto.Choose(key.Model, device, shape, key.Weights, context, WeightsAuto.FreeMemory(device), key.Offload, settings.WeightsAutoHeadroom, key.CacheFormat);
     }
 
     /// <inheritdoc />
@@ -561,7 +561,23 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             Idrak.Abstraction.ComputeResources.OffloadToHostMemory = true;   // Idrak's offload is the process's: on once a copy asks for it
         }
 
+        try
+        {
+            return LoadCopy(key, settings, folder, device, memory, report);
+        }
+        catch (Exception error) when (AiErrors.Remember(error, memory))
+        {
+            throw;                                                        // never reached: the filter only notes what the load took on the failure
+        }
+    }
+
+    // The copy's weights read and its generators made, with the weights and the cache the estimate chose (float32 of each
+    // when there is none: the model's size is not known here) and the caches' capacity the estimate counted.
+    private static LocalModel LoadCopy(LoadKey key, AiSettings settings, string folder, Device device, ModelMemoryEstimate? memory, Action<ModelLoadStatus>? report)
+    {
         string weights = (memory?.Weights ?? (key.Weights.Equals(WeightsAuto.Auto, StringComparison.OrdinalIgnoreCase) ? WeightsAuto.Float32 : key.Weights)).ToLowerInvariant();
+        string cacheFormat = memory?.CacheFormat ?? (key.CacheFormat.Equals(WeightsAuto.Auto, StringComparison.OrdinalIgnoreCase) ? WeightsAuto.Float32 : key.CacheFormat);
+        var layout = KeyValueLayouts.Get(cacheFormat);                    // a name no layout is registered under fails here, named
         var model = PretrainedModel.Load(folder, new PretrainedOptions
         {
             // The checkpoint's values read of all of them (Idrak's PretrainedOptions.Progress).
@@ -580,8 +596,9 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
                 model.LoadAdapter(key.Adapter);                           // the promoted adapter (ModelRequest.Adapter), never the base weights changed
             }
 
-            int context = key.Context > 0 ? Math.Min(key.Context, model.MaxPositions) : model.MaxPositions;
-            var layout = KeyValueLayouts.Get("float32");
+            // The caches grow on demand up to what the estimate counted (the role's context, else the model's own up to
+            // weightsAutoContext), never past it: a 16k model whose estimate kept room for 8k tokens does not run out at 9k.
+            int context = WeightsAuto.BudgetContext(model.MaxPositions, key.Context, settings.WeightsAutoContext);
             IChatModel? chat = model.ChatTemplate is null ? null : model.CreateChat(layout, context);
             var generator = model.CreateGenerator(layout, context);
             // Every generation passes the copy's gate, so a training round on the copy (ModelLease.Exclusive) has it alone;
@@ -660,16 +677,23 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
         }
     }
 
-    /// <summary>What one loaded model is kept under: its name, device, context, weights and adapter ("" for none).</summary>
-    private readonly record struct LoadKey(string Model, string Device, int Context, string Weights, string Adapter, bool Offload = false)
+    /// <summary>What one loaded model is kept under: its name, device, context, weights, adapter ("" for none), offload and cache format.</summary>
+    private readonly record struct LoadKey(string Model, string Device, int Context, string Weights, string Adapter, bool Offload = false, string CacheFormat = WeightsAuto.Auto)
     {
-        public string Text => string.Join('\n', Model, Device, Context.ToString(CultureInfo.InvariantCulture), Weights, Adapter, Offload ? "offload" : "");
+        public string Text => string.Join('\n', Model, Device, Context.ToString(CultureInfo.InvariantCulture), Weights, Adapter, Offload ? "offload" : "", CacheFormat);
 
         public static LoadKey Parse(string text)
         {
             var parts = text.Split('\n');
-            return new LoadKey(parts[0], parts[1], int.Parse(parts[2], CultureInfo.InvariantCulture), parts[3], parts.Length > 4 ? parts[4] : "", parts.Length > 5 && parts[5] == "offload");
+            return new LoadKey(parts[0], parts[1], int.Parse(parts[2], CultureInfo.InvariantCulture), parts[3], parts.Length > 4 ? parts[4] : "", parts.Length > 5 && parts[5] == "offload",
+                parts.Length > 6 ? parts[6] : WeightsAuto.Auto);
         }
+
+        // Whether this copy is the one the role's settings load (any adapter).
+        public bool Matches(AiRoleSettings role) =>
+            Model.Equals(role.Model, StringComparison.OrdinalIgnoreCase) && Device.Equals(role.Device, StringComparison.OrdinalIgnoreCase) && Context == role.Context
+            && string.Equals(Weights, role.Weights, StringComparison.OrdinalIgnoreCase) && Offload == role.Offload
+            && string.Equals(CacheFormat, role.CacheFormat, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>A loaded model: the weights and its chat and text generators.</summary>

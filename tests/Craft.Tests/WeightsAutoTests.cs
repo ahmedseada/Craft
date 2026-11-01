@@ -5,6 +5,7 @@ using Craft.Abstractions;
 using Craft.Ai;
 using Craft.Editor.Shell;
 using Craft.Tests.Runner;
+using Idrak.Abstraction;
 
 namespace Craft.Tests;
 
@@ -76,13 +77,41 @@ public static class WeightsAutoTests
                     $"the chip, its tooltip and the Models page say it ({chat.Weights})");
             }
 
-            // Less free: the measure moves the choice down (int8 fits, bfloat16 does not).
+            // Less free: the measure moves the choice down (int8 fits, bfloat16 does not), the cache named float32 (as before cacheFormat).
             free = WeightsAuto.Choose("tiny", "cpu", shape, "int8", WeightsAuto.BudgetContext(shape, 0, settings.WeightsAutoContext), null, false, settings.WeightsAutoHeadroom).NeededBytes;
             using (var provider = new LocalModelProvider { Settings = settings })
             {
-                using var lease = await provider.AcquireAsync(new ModelRequest(folder) { Device = "cpu", Weights = "auto" });
-                Check.True(lease.Memory is { Weights: "int8", Auto: true, Fits: true }, $"{free} bytes free: int8 ({lease.Memory?.Text})");
+                using var lease = await provider.AcquireAsync(new ModelRequest(folder) { Device = "cpu", Weights = "auto", CacheFormat = "float32" });
+                Check.True(lease.Memory is { Weights: "int8", Auto: true, Fits: true, CacheFormat: "float32" }, $"{free} bytes free: int8 ({lease.Memory?.Text})");
             }
+
+            // The cache's format loads as chosen, and the copy's caches grow to no more than the estimate counted.
+            free = long.MaxValue / 4;
+            using (var provider = new LocalModelProvider { Settings = settings })
+            {
+                using var auto = await provider.AcquireAsync(new ModelRequest(folder) { Device = "cpu", Weights = "auto", CacheFormat = "auto", Context = 0 });
+                Check.True(auto.Memory is { Weights: "float32", CacheFormat: "float32" } memory && auto.ContextLength == memory.Context && memory.Context == WeightsAuto.BudgetContext(shape, 0, settings.WeightsAutoContext),
+                    $"plenty free with cacheFormat auto: float32 and a float32 cache, as before; the context the estimate counted ({auto.Memory?.Text}, context {auto.ContextLength} of {auto.Memory?.Context})");
+                using var named = await provider.AcquireAsync(new ModelRequest(folder) { Device = "cpu", Weights = "float32", CacheFormat = "bfloat16", Context = 128 });
+                Check.True(named.Memory is { CacheFormat: "bfloat16", Context: 128 } && named.ContextLength == 128 && named.Memory.Text.Contains(", bfloat16 cache: ", StringComparison.Ordinal),
+                    $"a named cache format loads, said beside the weights; a named context is the role's ({named.Memory?.Text}, context {named.ContextLength})");
+                Exception? unknown = null;
+                try
+                {
+                    using var never = await provider.AcquireAsync(new ModelRequest(folder) { Device = "cpu", Weights = "float32", CacheFormat = "no-such-layout" });
+                }
+#pragma warning disable CA1031 // The failure is the expected outcome, its message checked.
+                catch (Exception error)
+#pragma warning restore CA1031
+                {
+                    unknown = error;
+                }
+
+                Check.True(unknown is not null && unknown.ToString().Contains("no-such-layout", StringComparison.Ordinal) && unknown.ToString().Contains("KeyValueLayouts", StringComparison.Ordinal),
+                    $"an unknown cache format fails loudly, named ({unknown?.Message})");
+            }
+
+            free = WeightsAuto.Choose("tiny", "cpu", shape, "int8", WeightsAuto.BudgetContext(shape, 0, settings.WeightsAutoContext), null, false, settings.WeightsAutoHeadroom).NeededBytes;
 
             // A named format wins over the measure; nothing fitting is refused before the load.
             free = 1;
@@ -112,5 +141,93 @@ public static class WeightsAutoTests
         {
             WeightsAuto.FreeMemoryProbe = before;
         }
+    }
+
+    // DeepSeek-Coder 6.7B's sizes (32 layers, 32 key and value heads of 128: no grouped-query attention, so a float32 cache
+    // takes 1 MiB a token), and Qwen2.5-Coder 7B's (28 layers, 4 key and value heads of 128: grouped-query).
+    private static readonly ModelShape DeepSeek = new(6_740_512_768, 32_256, 4096, 32, 32, 128, 16_384, false);
+    private static readonly ModelShape Qwen7B = new(7_615_616_512, 152_064, 3584, 28, 4, 128, 32_768, false);
+
+    [Test]
+    public static void CacheAutoTakesTheFirstWeightsAndCachePairThatFitsTheFakeDevice()
+    {
+        Check.Equal(1L << 20, WeightsAuto.CacheBytes(DeepSeek, 1, "float32"), "a float32 cache of DeepSeek 6.7B takes 1 MiB a token");
+        Check.Equal(1L << 19, WeightsAuto.CacheBytes(DeepSeek, 1, "bfloat16"), "bfloat16: 2 bytes a value");
+        Check.Equal(2L * 32 * 32 * (128 + 4), WeightsAuto.CacheBytes(DeepSeek, 1, "int8"), "int8: a byte a value and a four-byte scale a row");
+        Check.Equal(WeightsAuto.WorkingBytes(DeepSeek, 8192, 1000, 0.1), WeightsAuto.WorkingBytes(DeepSeek, 8192, 1000, 0.1, "float32"), "the working memory counts a float32 cache unless told");
+
+        // The owner's run: a 16 GB card with 14.4 GB free. Before cacheFormat (a float32 cache) "auto" took int4; with the pair
+        // chosen, int8 weights with a bfloat16 cache (int8 with float32 does not fit, bfloat16 weights do with no cache).
+        var fake = WeightsAuto.FreeMemoryProbe;
+        try
+        {
+            WeightsAuto.FreeMemoryProbe = device => device == "cuda:0" ? 14_400_000_000 : null;
+            long? free = WeightsAuto.FreeMemory("cuda:0");
+            var before = WeightsAuto.Choose("deepseek", "cuda:0", DeepSeek, "auto", 8192, free, false, 0.1, "float32");
+            Check.True(before is { Weights: "int4", CacheFormat: "float32", Fits: true }, $"a float32 cache named: int4, as the run took ({before.Text})");
+            var pair = WeightsAuto.Choose("deepseek", "cuda:0", DeepSeek, "auto", 8192, free, false, 0.1, "auto");
+            Check.True(pair is { Weights: "int8", CacheFormat: "bfloat16", Auto: true, Fits: true, Refusal: null, Context: 8192 }, $"cacheFormat auto: int8 weights with a bfloat16 cache ({pair.Text})");
+            Check.True(pair.Text.StartsWith("int8 (auto), bfloat16 cache: ", StringComparison.Ordinal) && pair.Text.EndsWith(" of 14.4 GB free", StringComparison.Ordinal), $"the pair is said where the weights are ({pair.Text})");
+            Check.True(WeightsAuto.Choose("deepseek", "cuda:0", DeepSeek, "int8", 8192, free, false, 0.1, "auto") is { Weights: "int8", Auto: false, CacheFormat: "bfloat16" },
+                "named weights take the first cache that fits beside them");
+            Check.True(WeightsAuto.Choose("deepseek", "cuda:0", DeepSeek, "auto", 8192, free, false, 0.1, "int8") is { CacheFormat: "int8" }, "a named cache format always wins");
+            var none = WeightsAuto.Choose("deepseek", "cuda:0", DeepSeek, "auto", 8192, 1_000_000_000, false, 0.1, "auto");
+            Check.True(none is { Weights: "int4", CacheFormat: "int8", Fits: false } && none.Refusal!.Contains("even int4 with an int8 cache", StringComparison.Ordinal),
+                $"nothing fits: the smallest pair is refused, said ({none.Refusal})");
+            Check.Throws<NotRegisteredException>(() => WeightsAuto.Choose("deepseek", "cuda:0", DeepSeek, "auto", 8192, free, false, 0.1, "no-such-layout"), "an unknown cache format fails loudly");
+
+            // A grouped-query model that fits with a float32 cache keeps it: the choice is the one it was.
+            var qwen = WeightsAuto.Choose("qwen", "cuda:0", Qwen7B, "auto", 8192, 16_000_000_000, false, 0.1, "auto");
+            Check.True(qwen is { Weights: "int8", CacheFormat: "float32" } && qwen.Text.StartsWith("int8 (auto): ", StringComparison.Ordinal)
+                       && qwen.NeededBytes == WeightsAuto.Choose("qwen", "cuda:0", Qwen7B, "auto", 8192, 16_000_000_000, false, 0.1).NeededBytes,
+                $"a GQA 7B on 16 GB: int8 with a float32 cache, as before ({qwen.Text})");
+            long all = WeightsAuto.Choose("coder", "cuda:0", Coder, "float32", 8192, null, false, 0.1).NeededBytes;
+            Check.True(WeightsAuto.Choose("coder", "cuda:0", Coder, "auto", 8192, all, false, 0.1, "auto") is { Weights: "float32", CacheFormat: "float32" },
+                "a 1.5B that fits whole stays float32 with a float32 cache");
+            Check.True(WeightsAuto.Choose("coder", "cuda:0", Coder, "auto", 8192, null, false, 0.1, "auto") is { Weights: "float32", CacheFormat: "float32" },
+                "a device that reports no free memory: float32 and a float32 cache");
+        }
+        finally
+        {
+            WeightsAuto.FreeMemoryProbe = fake;
+        }
+
+        var settings = AiSettings.Read(_ => null);
+        Check.True(settings is { CacheFormat: "auto", AgentCacheFormat: "", CompletionCacheFormat: "" } && settings.ChatRole.CacheFormat == "auto" && settings.AgentRole.CacheFormat == "auto"
+                   && settings.CompletionRole.CacheFormat == "auto", "cacheFormat auto is the default; the agent's and completion's empty ones are the chat's");
+        Check.True(AiSettings.Read(k => k switch { "cacheFormat" => "BF16", "agentCacheFormat" => "int8", _ => null }) is { ChatRole.CacheFormat: "bfloat16", AgentRole.CacheFormat: "int8", CompletionRole.CacheFormat: "bfloat16" },
+            "a named one is kept per role, under one name");
+    }
+
+    [Test]
+    public static void AnOutOfMemoryFailureNamesTheFailedRolesModelAndTheNextSmallerOfWhatItLoaded()
+    {
+        var oom = new ResourceLimitExceededException("The device ran out of memory: 117,440,512 more bytes needed, in use 13.40 GiB");
+        var settings = new AiSettings { Model = "Qwen/Qwen2.5-Coder-7B-Instruct", AgentModel = "deepseek-ai/deepseek-coder-6.7b-instruct" };
+        ModelMemoryEstimate Loaded(string weights, string cache = "float32", int context = 16_384) =>
+            new("deepseek-ai/deepseek-coder-6.7b-instruct", "cuda:0", weights, true, 4_000_000_000, 9_000_000_000, 14_400_000_000) { CacheFormat = cache, Context = context };
+
+        string atInt4 = AiErrors.Describe(oom, settings, ModelRoleKeys.Agent, Loaded("int4"));
+        Check.True(atInt4.Contains("for deepseek-ai/deepseek-coder-6.7b-instruct (int4 weights, float32 cache, context 16384)", StringComparison.Ordinal)
+                   && atInt4.Contains("agentContext 8192", StringComparison.Ordinal) && atInt4.Contains("agentCacheFormat bfloat16", StringComparison.Ordinal)
+                   && !atInt4.Contains("Weights", StringComparison.Ordinal) && !atInt4.Contains("int8)", StringComparison.Ordinal),
+            $"at int4: the agent's model named, a shorter context and the smaller cache by the agent's variables, no larger weights ({atInt4})");
+        string atInt8 = AiErrors.Describe(oom, settings, ModelRoleKeys.Agent, Loaded("int8", "bfloat16"));
+        Check.True(atInt8.Contains("agentWeights int4", StringComparison.Ordinal) && atInt8.Contains("(int8 weights, bfloat16 cache", StringComparison.Ordinal), $"int8 loaded: int4 next ({atInt8})");
+        Check.True(AiErrors.Describe(oom, settings, ModelRoleKeys.Agent, Loaded("bfloat16")).Contains("agentWeights int8", StringComparison.Ordinal), "bfloat16 loaded: int8 next");
+        string lastCache = AiErrors.Describe(oom, settings, ModelRoleKeys.Agent, Loaded("int4", "int8"));
+        Check.True(lastCache.Contains("agentContext 8192", StringComparison.Ordinal) && !lastCache.Contains("agentCacheFormat", StringComparison.Ordinal), $"int4 with an int8 cache: only a shorter context ({lastCache})");
+        string unmeasured = AiErrors.Describe(oom, settings, ModelRoleKeys.Agent);
+        Check.True(unmeasured.Contains("for deepseek-ai/deepseek-coder-6.7b-instruct (float32 weights", StringComparison.Ordinal) && unmeasured.Contains("agentWeights bfloat16", StringComparison.Ordinal),
+            $"nothing measured, weights auto: what the load takes then (float32), bfloat16 next ({unmeasured})");
+        string chat = AiErrors.Describe(oom, settings);
+        Check.True(chat.Contains("for Qwen/Qwen2.5-Coder-7B-Instruct", StringComparison.Ordinal) && chat.Contains("(weights bfloat16)", StringComparison.Ordinal), $"the chat's by default, its own variable ({chat})");
+        string completion = AiErrors.Describe(oom, new AiSettings { CompletionModel = "small", CompletionWeights = "int8" }, ModelRoleKeys.Completion);
+        Check.True(completion.Contains("set a smaller completionModel", StringComparison.Ordinal) && completion.Contains("completionWeights int4", StringComparison.Ordinal), $"completion's own ({completion})");
+
+        // A load's failure carries what it was loading with (the provider notes the estimate on it in an exception filter).
+        Check.True(!AiErrors.Remember(oom, Loaded("int8")), "the note is an exception filter's: it never catches");
+        Check.True(AiErrors.Describe(oom, settings, ModelRoleKeys.Agent).Contains("agentWeights int4", StringComparison.Ordinal),
+            "an out-of-memory error noted by the load is described by what the load took");
     }
 }

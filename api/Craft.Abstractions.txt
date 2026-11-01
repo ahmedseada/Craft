@@ -2343,11 +2343,13 @@ sealed class Craft.Abstractions.ModelMemoryEstimate : System.IEquatable<Craft.Ab
   System.Boolean Equals(System.Object obj)
   System.Boolean Fits { get; }
   System.Boolean Offload { get; init; }
+  System.Int32 Context { get; init; }
   System.Int32 GetHashCode()
   System.Int64 NeededBytes { get; }
   System.Int64 WeightBytes { get; init; }
   System.Int64 WorkingBytes { get; init; }
   System.Int64? FreeBytes { get; init; }
+  System.String CacheFormat { get; init; }
   System.String Device { get; init; }
   System.String Model { get; init; }
   System.String Refusal { get; init; }
@@ -2399,6 +2401,7 @@ sealed class Craft.Abstractions.ModelRequest : System.IEquatable<Craft.Abstracti
   System.Int32 GetHashCode()
   System.Int32? Context { get; init; }
   System.String Adapter { get; init; }
+  System.String CacheFormat { get; init; }
   System.String Device { get; init; }
   System.String Model { get; init; }
   System.String ToString()

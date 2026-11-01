@@ -248,7 +248,7 @@ public sealed class AiInlineCompletion : IInlineCompletionProvider
                 }
                 catch (Exception error) when (error is not OperationCanceledException && AiErrors.IsOutOfMemory(error))
                 {
-                    _generationFailure = (FailureKey(settings), "Completion stopped: " + AiErrors.Describe(error, settings, forCompletion: true));
+                    _generationFailure = (FailureKey(settings), "Completion stopped: " + AiErrors.Describe(error, settings, ModelRoleKeys.Completion, _models.MemoryOf(ModelRoleKeys.Completion)));
                     throw;
                 }
 

@@ -19,10 +19,14 @@ namespace Craft.Benches;
 /// an editor host, Craft's MCP server started, the agent given a task on a copy of the owner's test project, its changes
 /// applied automatically (agentAutoApply) or each accepted as a diff ("ask"). Measured: the time to the first step and to
 /// the end, the turns and tool calls, whether the run ended by itself, whether the model repeated itself after it was
-/// done, the changes, and whether the project builds afterwards. Settings: CRAFT_BENCH_AGENT_MODEL (the agent's model:
+/// done, the changes, whether the project builds afterwards, and whether the built program prints what the task asks
+/// (run with <c>dotnet run --no-build</c> in the workspace: any correct Program.cs passes, <c>Calculator.Multiply(6, 7)</c>
+/// or <c>using static Calculator;</c> and <c>Multiply(6, 7)</c> alike). Settings: CRAFT_BENCH_AGENT_MODEL (the agent's model:
 /// "Claude Code (default)", a Hugging Face id or a folder), CRAFT_BENCH_AGENT_APPLY (auto or ask), CRAFT_BENCH_AGENT_TASK
 /// (the task; a calculator by default), CRAFT_BENCH_AGENT_RUNS (1), CRAFT_BENCH_AGENT_SOURCE (the project copied, the
-/// owner's test project by default), CRAFT_BENCH_AGENT_MINUTES (the limit of one run, 15). Every other CRAFT_* variable
+/// owner's test project by default), CRAFT_BENCH_AGENT_MINUTES (the limit of one run, 15), CRAFT_BENCH_AGENT_EXPECT (the
+/// text the program's output must hold, "42" for the default task), CRAFT_BENCH_AGENT_RUN_SECONDS (the program's time
+/// limit, 60). Every other CRAFT_* variable
 /// reaches the plug-ins as the app's do.
 /// </summary>
 internal static class AgentBench
@@ -185,17 +189,26 @@ internal static class AgentBench
         int repeated = assistant.Count - assistant.Distinct(StringComparer.Ordinal).Count();
         var (built, buildOutput) = await BuildAsync(workspace).ConfigureAwait(false);
         bool calculator = File.Exists(Path.Combine(workspace, "Calculator.cs"));
-        string program = await File.ReadAllTextAsync(Path.Combine(workspace, "Program.cs")).ConfigureAwait(false);
-        bool uses = program.Contains("Calculator.", StringComparison.Ordinal);
+        // The program run as built (any correct Program.cs: Calculator.Multiply(6, 7), or using static Calculator and
+        // Multiply(6, 7)), its output holding what the task asks; never run when it did not build.
+        string expect = Variable("CRAFT_BENCH_AGENT_EXPECT") ?? "42";
+        int runSeconds = int.TryParse(Variable("CRAFT_BENCH_AGENT_RUN_SECONDS"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int limit) && limit > 0 ? limit : 60;
+        var (ran, runOutput) = built ? await RunProgramAsync(workspace, TimeSpan.FromSeconds(runSeconds)).ConfigureAwait(false) : (false, "");
+        bool prints = ran && runOutput.Contains(expect, StringComparison.Ordinal);
 
         text.AppendLine(CultureInfo.InvariantCulture, $"  ended by itself: {ended}; time {seconds:F1} s; first step {(firstStep < 0 ? "none" : firstStep.ToString("F1", CultureInfo.InvariantCulture) + " s")}");
         text.AppendLine(CultureInfo.InvariantCulture, $"  timeline: {entries.Count} entries, {assistant.Count} assistant messages ({repeated} repeated), {tools} tool calls ({toolsFailed} failed), {errors} errors");
         int applied = entries.Count(e => e.Role == ConversationRole.Note && e.Text.Contains("applied automatically", StringComparison.Ordinal));
         text.AppendLine(CultureInfo.InvariantCulture, $"  changes: {(auto ? $"{applied} applied automatically" : $"{beforeReview} listed, reviewed in {reviewMs:F0} ms, {presenter.Proposals.Count} diffs accepted")}, {panel.Changes.Count} left; {presenter.Questions.Count} questions answered ({string.Join("; ", presenter.Questions.Distinct())}), {inlineAnswers} inline approvals");
-        text.AppendLine(CultureInfo.InvariantCulture, $"  result: Calculator.cs {(calculator ? "made" : "missing")}, Program.cs {(uses ? "uses it" : "unchanged")}, dotnet build {(built ? "succeeded" : "FAILED")}");
+        text.AppendLine(CultureInfo.InvariantCulture,
+            $"  result: Calculator.cs {(calculator ? "made" : "missing")}, dotnet build {(built ? "succeeded" : "FAILED")}, the program {(!built ? "not run" : prints ? $"prints {expect}" : ran ? $"does NOT print {expect}" : "FAILED or ran past its limit")}");
         if (!built)
         {
             text.AppendLine("  build output (end):").AppendLine(Tail(buildOutput, 1500));
+        }
+        else if (!prints)
+        {
+            text.AppendLine("  program output (end):").AppendLine(Tail(runOutput, 1500));
         }
 
         string timeline = string.Join("\n", entries.Select(e => $"[{e.Role}] {e.Text}{(e.Detail is { Length: > 0 } d ? " · " + d : "")}{(e.Succeeded is { } ok ? (ok ? " ✓" : " ✗") : "")}"));
@@ -209,7 +222,7 @@ internal static class AgentBench
         await File.WriteAllLinesAsync(Path.Combine(folder, "host-log.txt"), lines).ConfigureAwait(false);
 
         text.AppendLine(CultureInfo.InvariantCulture, $"  timeline and log: {folder}");
-        bool passed = ended && built && calculator && uses && repeated == 0 && errors == 0;
+        bool passed = ended && built && calculator && prints && repeated == 0 && errors == 0;
         text.AppendLine(CultureInfo.InvariantCulture, $"  {(passed ? "PASS" : "FAIL")}");
         panel.DiscardAll();
         await AiAgentPanel.DiscardsDone().ConfigureAwait(false);
@@ -398,6 +411,39 @@ internal static class AgentBench
         var error = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync().ConfigureAwait(false);
         return (process.ExitCode == 0, await output.ConfigureAwait(false) + await error.ConfigureAwait(false));
+    }
+
+    // The built program run in the workspace (dotnet run --no-build), its input closed (a ReadLine reads the end), within
+    // `limit`: whether it exited with 0 in time, and what it wrote. One past its limit is ended with its process tree.
+    private static async Task<(bool Ran, string Output)> RunProgramAsync(string folder, TimeSpan limit)
+    {
+        var info = new ProcessStartInfo("dotnet", "run --no-build")
+        {
+            WorkingDirectory = folder,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        using var process = Process.Start(info)!;
+        process.StandardInput.Close();
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(limit);
+        bool exited = true;
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            exited = false;
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().ConfigureAwait(false);
+        }
+
+        string said = await output.ConfigureAwait(false) + await error.ConfigureAwait(false);
+        return (exited && process.ExitCode == 0, exited ? said : said + string.Create(CultureInfo.InvariantCulture, $"\n(ended after {limit.TotalSeconds:F0} s)"));
     }
 
     private static void Copy(string from, string to)

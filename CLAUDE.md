@@ -85,7 +85,12 @@ file is corrected, except where the owner set a rule for Craft itself (such as t
   failure messages that name the cause in the tests the work touches). 4. Build once, then run those tests once with
   `--no-build`. 5. If tests fail: fix all of them, build once, and run only the failed tests again; repeat until they
   pass. 6. When they pass, run the agent's full filter once (every `CRAFT_FILTER` group its work touches) to check
-  nothing else broke, then push; a merge without conflicts gets no build and no tests. 7. Hand the owner one targeted
+  nothing else broke, then push; a merge without conflicts gets no build and no tests. **Builds are counted (the owner,
+  2026-11-01: "you are abusing the build command"):** a slot builds only (a) until its work compiles, (b) once before its
+  one test run, (c) once per batch of fixes; never after a clean rebase (even one that brought API changes from another
+  slot: the next slot's or the owner's build catches it), never for a side fix on its own (it joins the slot's one
+  cycle), never the Windows target in the cloud container, never "just to check"; a rebase with a text conflict in code
+  the slot then edits gets one build and its own filter once. 7. Hand the owner one targeted
   command list for only what changed: the
   pull of the working branch first, then one `dotnet build -c Release tests\Craft.Tests`, then every test and run it
   needs with `--no-build`, and no second pull. At most three agents at a time (the owner's limit for Craft and every phase of its plan, including the phases that change Idrak, such as S0 and A0; Idrak's own work outside this plan keeps Idrak's limit of two), so builds do not compete for the machine.

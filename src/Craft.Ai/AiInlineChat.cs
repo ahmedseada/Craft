@@ -161,6 +161,7 @@ public sealed class AiInlineChat(Func<AiSettings> settings, AiModels models, Fun
     private sealed class LineFilter
     {
         private readonly StringBuilder _partial = new();
+        private readonly StringBuilder _held = new();
         private bool _opened;
         private bool _any;
 
@@ -192,6 +193,12 @@ public sealed class AiInlineChat(Func<AiSettings> settings, AiModels models, Fun
             }
 
             _partial.Clear();
+            if (!_opened && _held.Length > 0)
+            {
+                ready.Insert(0, _held.ToString());           // no block came: the text held back is the answer
+                _held.Clear();
+            }
+
             return ready.ToString();
         }
 
@@ -203,12 +210,13 @@ public sealed class AiInlineChat(Func<AiSettings> settings, AiModels models, Fun
                 {
                     Closed = true;                            // the block's end
                 }
-                else if (!_any)
+                else
                 {
-                    _opened = true;                           // the block's start: what follows is the code
+                    _opened = true;                           // the block's start: the prose held before it is dropped
+                    _held.Clear();
                 }
 
-                return;                                       // a fence after unfenced text is left out
+                return;
             }
 
             if (!_opened && !_any && line.Trim().Length == 0)
@@ -217,6 +225,12 @@ public sealed class AiInlineChat(Func<AiSettings> settings, AiModels models, Fun
             }
 
             _any = true;
+            if (!_opened)
+            {
+                _held.Append(line);                           // before any fence: prose, or an answer with no block (held to the end)
+                return;
+            }
+
             ready.Append(line);
         }
     }

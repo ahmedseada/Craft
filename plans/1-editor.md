@@ -4730,6 +4730,91 @@ Item 1, slot s1. Idrak `main` 2ab9c3a, then Craft `main` (this commit and the on
   ```
   In the app: send a chat message; once the completion model has loaded the chip reads "draft: …, NN% accepted".
 
+#### Inline chat, AI review and the build fix as built (2026-11-01)
+X part 9 item 23 and X part 11 items 4 and 5, slot s2 (`slot/x-ai`). Craft only; nothing was missing in Idrak (the chat
+and the agent run on its `FakeChatModel`, `CodingAgent` and `CommandSandboxes` as they are; no cause was in the library).
+- **Contracts** (`Craft.Abstractions`, additions to contract 1.1): `IInlineChatProvider : IKind` in `InlineChatProviders`
+  (`InlineChatRequest` with the lines, the instruction, the problems on them and the earlier `InlineChatTurn`s;
+  `InlineChatPlan` with the model, or why none and `LoadAsync`); `ICodeReviewProvider : IKind` in `CodeReviewProviders`
+  (`CodeReviewRequest`, `CodeReviewPlan`, `ReviewFinding`); `IBuildFixProvider : IKind` in `BuildFixProviders`
+  (`BuildFixRequest`, `BuildFixResult`, `For` = the first that offers); `LineMarkKind.Note`; `DiffNote` with
+  `IEditorHost.ShowDiffAsync(…, notes)` (and `IEditorPresenter`'s, the diff page's note rows); `IEditorHost.CopyText`
+  (the shell's clipboard through `EditorHost.ClipboardWriter`).
+- **Inline chat** (`Craft.Editor.InlineChatController`, `InlineChatRenderer`, `EditorModel.InlineChat`): Ctrl+I (both
+  keymaps, Edit menu, the editor's context menu; `craft.editor.inlineChat`) opens a box under the caret's line or over the
+  selection's whole lines, with the keyboard; Enter sends to the first registered provider; the answer streams line by
+  line as a ghost diff drawn over the lines (kept plain, removed struck on the removed fill, added on the added fill,
+  lines the stream has not reached faded); Ctrl+Enter or Accept applies it as one undo step (the original's line breaks
+  kept), Escape or Discard leaves the text, Retry asks again without the answer it replaces, a follow-up typed in the
+  box sends the earlier exchanges and refines the same edit against the original lines; Up and Down walk the box's
+  history; a change to the lines meanwhile is said on Accept. The AI plug-in's "ai" (`AiInlineChat`): the chat role's
+  model only once loaded, its temperature and reply limit; none loaded, the box says so and its button loads it, the
+  instruction then sent. Settings `inlineChat` (`CRAFT_PLUGIN_AI_INLINECHAT`, on), `inlineChatContextLines` (40),
+  `inlineChatMaxTokens` (0: the chat's), Settings › Chat › Inline chat.
+- **Review changes** (git plug-in `GitSession.Review.cs`, `CodeReviews`; the AI plug-in's `AiCodeReview`): a checked-box
+  button beside Generate in the commit box and the palette's "Source Control: Review changes" (`git.reviewChanges`); the
+  staged diff (else every change, said so), each kept and added line numbered in the new text, trimmed by file to
+  `CRAFT_PLUGIN_GIT_REVIEWDIFFTOKENS` (6000) within the model's context (the files left out named); the model writes one
+  finding a line, read as each line ends; findings stream into the view (by file: line, severity, one line, the reason;
+  Apply fix, Dismiss; Copy all, Clear), as notes in the open files' gutters (a click or a row shows the card: Apply fix,
+  Dismiss, Copy all) and under their lines in the diff view; Apply fix runs the registered code actions' Fix on the
+  finding's line (a diff the user accepts); Stop keeps what was found; nothing loaded: said, with the load offered.
+  Settings `reviewModel` (`CRAFT_PLUGIN_AI_REVIEWMODEL`, chat; loaded, agent, completion or a name), `reviewPrompt`,
+  `reviewMaxTokens`, under Source Control › Review changes.
+- **Fix with AI** (`RunView.Fix.cs`, the AI plug-in's `AiBuildFix`): a Run-view build or test that fails with errors
+  shows a card ("Build: App failed", its errors) with Fix with AI and Run again; a build's Problems row says "Fix with
+  AI"; one error goes to the chat's model through the code action Fix (its lines rewritten, a diff), several to the agent
+  as one task with each error and `buildFixContextLines` (8) of numbered code around it, its changes then proposed file
+  by file; Run again saves the documents the accepted fix changed and runs the same configuration (asked as any run);
+  the fix is an activity with Stop. Settings `buildFix` (`CRAFT_PLUGIN_AI_BUILDFIX`, on), `buildFixContextLines`.
+- **Decisions on the recommendation (one line each):**
+  - The inline chat answers through a registry beside the code actions (the same shape, "ai" its provider); the ghost diff is the review, so Accept applies in place without the diff page.
+  - The box and the ghost diff are an overlay over the lines below (as the ghost text), not inserted rows: the text moves only on Accept.
+  - The range is whole lines (the selection's, else the caret's line); the model answers their full replacement.
+  - The first registered provider answers (as the commit message's); its on and off is the AI plug-in's setting.
+  - The answer streams by whole lines; prose before a fenced block is dropped, an answer with no block is taken whole at its end.
+  - While it streams, the removed lines past those the answer has replaced so far are pending, not removed.
+  - Retry has no key of its own (its button): Ctrl+R and Alt chords belong to the keymaps and the menu.
+  - The box's history is shared by the editors of the process, the newest 50.
+  - Pressing the box's load button is the user's asking (note 23): the model loads, then the waiting instruction goes.
+  - A review's model is the review's own choice (`reviewModel`, chat by default), read like the commit message's.
+  - The review's lines are numbered in the new text in the diff given to the model, so a finding names a line of the file.
+  - The review's budget is a git setting (it trims the diff) bounded by the model's context; large files are named, not reviewed.
+  - Apply fix reuses the code actions' Fix (the AI plug-in's rewrite), so a finding's fix is the same diff path as a problem's.
+  - Findings show in the gutter as one new mark kind (`Note`, the accent colour) whose card holds the actions.
+  - One error goes to the chat's Fix, several to the agent; pressing Fix with AI is the user's asking, so the model may load then.
+  - Run again is a button, never automatic, and saves only what the accepted fix changed before it runs.
+  - Only a build or test that failed with errors keeps a failure; the same configuration's success clears it.
+- **Tests**: `InlineChat` (4: the ghost diff drawn and one undo step on accept; discard, retry, a follow-up refining the
+  same edit and the history; no model said and the load only on the press, no provider said, read-only refused, Ctrl+I;
+  the streaming rows, the replacement's line breaks and the request's context), `CommitReview` (4: the parser, the
+  numbering and the budget; a real repository reviewed into the view, the gutter, the card, the diff view's notes, Copy
+  all and Apply fix as one undo step; Stop and no model; the AI provider on a loaded lease, never loading), `BuildFix`
+  (2: two errors to the agent, both fixes accepted as diffs, Run again succeeding; one error to the chat's fix, the
+  Problems row's "Fix with AI", Run again saving it, turned off offering nothing); `Ai.TheSettingsReadEveryVariable` and
+  a `SourceControl` expectation (two buttons in the box) updated. First run: 27 of 31; the four (two expectations, prose
+  before a fence leaking into the answer, a replaced line shown pending while streaming) fixed. The filter
+  `InlineChat|CommitReview|BuildFix|AiPlugins|Ai.|Conversation|SourceControl|RunView|ProblemsPanel|DraftModel|ModelLoading|Editor|Settings|Keys|Paint|ApiGuard|Inventory`:
+  143 passed, 0 failed. API dumps (`Craft.Abstractions` and its contract list, `Craft.Ai`, `Craft.Editor`,
+  `Craft.Plugins.Git`) and `plans/inventory.md` regenerated: lines added only.
+- **Windows only (not run here; Craft.Maui compiled on net10.0):** the box's keys through WinUI (Ctrl+I, Ctrl+Enter,
+  Escape, Up and Down reaching the editor), the overlay's look, the diff page's note rows, the Problems row's wider button.
+- **Left, for later:** the ghost rows are not syntax-coloured and not wrapped; the Run view does not redraw its card when
+  `buildFix` changes until the next run; findings are not kept across sessions.
+- **The owner's commands:**
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="InlineChat|CommitReview|BuildFix|AiPlugins|Ai.|Conversation|SourceControl|RunView|ProblemsPanel|Editor|Settings|Keys|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app, with the chat model loaded: in `Program.cs` select a method, Ctrl+I, "add a null check", Enter (the ghost
+  diff), type a follow-up, Ctrl+Enter, then Ctrl+Z once; Ctrl+I with no model loaded (the box's load button); in Source
+  Control (after `git init` in the test project and a change) the checked-box button beside the sparkle (findings,
+  a note in the gutter, its card's Apply fix, Copy all, Open changes); make two errors, Ctrl+Shift+B, the Run view's Fix
+  with AI (the agent), accept, Run again; with one error, the Problems row's "Fix with AI".
+
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 10 (the chat
   and the agent redesigned); then X part 8 (Source Control); 1c (last) the interaction times.

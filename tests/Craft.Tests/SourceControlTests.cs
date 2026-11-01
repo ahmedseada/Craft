@@ -205,7 +205,7 @@ public static class SourceControlTests
         Check.True(lists[1].Actions.Any(a => a.ActionId == SourceControlView.StageAll) && lists[0].Actions.Any(a => a.ActionId == SourceControlView.UnstageAll), "stage all and unstage all on the groups");
         var box = blocks.OfType<PanelMessageBox>().Single();
         Check.True(box is { SubmitActionId: SourceControlView.Commit, SubmitKeys: "Ctrl+Enter" } && box.Placeholder!.Contains("on main", StringComparison.Ordinal), "the commit box commits on Ctrl+Enter");
-        Check.True(box.Actions is [{ ActionId: SourceControlView.Generate, Icon: SourceControlView.SparkleIcon }], "the sparkle button in the box");
+        Check.True(box.Actions is [{ ActionId: SourceControlView.Generate, Icon: SourceControlView.SparkleIcon }, { ActionId: SourceControlView.Review, Icon: SourceControlView.ReviewIcon }], "the sparkle button in the box");
         var picker = blocks.OfType<PanelPicker>().Single();
         Check.True(picker is { Selected: "main" } && picker.Options.Count == 2 && picker.Options[0].Detail!.Contains("↑1", StringComparison.Ordinal), "the branch with ahead and behind");
         var sync = blocks.OfType<PanelButtons>().SelectMany(b => b.Buttons).ToList();

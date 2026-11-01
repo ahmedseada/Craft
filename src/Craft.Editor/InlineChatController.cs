@@ -974,11 +974,21 @@ public sealed class InlineChatController : IDisposable
 
         if (streaming)
         {
-            // The trailing removed lines are the ones the answer has not reached yet.
-            for (int i = rows.Count - 1; i >= 0 && rows[i].Kind == InlineChatRowKind.Removed; i--)
+            // After the last kept line, the answer's lines so far replace as many removed lines; the removed lines past
+            // those are the ones the answer has not reached yet (pending, drawn after the added ones).
+            int tail = rows.FindLastIndex(r => r.Kind == InlineChatRowKind.Same) + 1;
+            var gone = new List<InlineChatRow>();
+            var made = new List<InlineChatRow>();
+            for (int i = tail; i < rows.Count; i++)
             {
-                rows[i] = rows[i] with { Kind = InlineChatRowKind.Pending };
+                (rows[i].Kind == InlineChatRowKind.Added ? made : gone).Add(rows[i]);
             }
+
+            int replaced = Math.Min(made.Count, gone.Count);
+            rows.RemoveRange(tail, rows.Count - tail);
+            rows.AddRange(gone.Take(replaced));
+            rows.AddRange(made);
+            rows.AddRange(gone.Skip(replaced).Select(r => r with { Kind = InlineChatRowKind.Pending }));
         }
 
         added = 0;

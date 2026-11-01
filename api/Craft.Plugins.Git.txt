@@ -1,3 +1,9 @@
+static class Craft.Plugins.Git.CodeReviews
+  static System.String CardText(System.Collections.Generic.IEnumerable<Craft.Plugins.Git.ReviewItem> items)
+  static System.String CopyText(System.Collections.Generic.IEnumerable<Craft.Plugins.Git.ReviewItem> items)
+  static System.String Mark(Craft.Abstractions.DiagnosticSeverity severity)
+  static System.String Number(System.ReadOnlySpan<System.Byte> diff)
+  static System.ValueTuple<Craft.Plugins.Git.TrimmedDiff, System.Collections.Generic.IReadOnlyList<System.String>> Prepare(System.ReadOnlySpan<System.Byte> diff, System.Int32 budgetTokens)
 static class Craft.Plugins.Git.CommitMessages
   const System.Int32 BytesPerToken = 4
   const System.String DefaultPrompt = You write git commit messages. Write one for the changes below: a subject line of at most 72 characters in the imperative mood ("Add", "Fix", "Remove"), then, only when the change needs it, a blank line and a short body that says why. Reply with the message only: no quotes, no code fences, no preamble.
@@ -57,6 +63,7 @@ sealed class Craft.Plugins.Git.GitPlugin : Craft.Abstractions.IEditorPlugin, Idr
   const System.String PushCommand = git.push
   const System.String RefreshCommand = git.refresh
   const System.String RevealCommand = git.reveal
+  const System.String ReviewCommand = git.reviewChanges
   const System.String SideViewCommand = craft.sideView.scm.view
   const System.String StageFileCommand = git.stageFile
   const System.String SyncCommand = git.sync
@@ -126,6 +133,8 @@ sealed class Craft.Plugins.Git.GitSession : System.IDisposable
   Craft.Plugins.Git.GitSettings Settings { get; }
   Craft.Plugins.Git.SourceControlViewState State { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> MarksOf(Craft.Abstractions.IEditorDocument document)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.LineMark> ReviewMarksOf(Craft.Abstractions.IEditorDocument document)
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.Git.ReviewItem> Findings { get; }
   System.String Draft { get; }
   System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task DiscardPathAsync(System.String path)
@@ -133,11 +142,13 @@ sealed class Craft.Plugins.Git.GitSession : System.IDisposable
   System.Threading.Tasks.Task OpenChangesAsync(System.String path)
   System.Threading.Tasks.Task Opened { get; }
   System.Threading.Tasks.Task PickBranchAsync()
+  System.Threading.Tasks.Task ReviewAsync()
   System.Threading.Tasks.Task StagePathAsync(System.String path)
   System.Threading.Tasks.Task UnstagePathAsync(System.String path)
   System.Void Dispose()
   System.Void Show()
   const System.String MarkSource = git
+  const System.String ReviewMarkSource = review
   ctor(Craft.Abstractions.IEditorHost host)
 sealed class Craft.Plugins.Git.GitSettings : System.IEquatable<Craft.Plugins.Git.GitSettings>
   Craft.Plugins.Git.GitSettings <Clone>$()
@@ -153,6 +164,7 @@ sealed class Craft.Plugins.Git.GitSettings : System.IEquatable<Craft.Plugins.Git
   System.Int32 GetHashCode()
   System.Int32 GutterDelayMilliseconds { get; init; }
   System.Int32 RefreshMilliseconds { get; init; }
+  System.Int32 ReviewDiffTokens { get; init; }
   System.String CommitModel { get; init; }
   System.String CommitPrompt { get; init; }
   System.String CommitStyle { get; init; }
@@ -162,29 +174,46 @@ sealed class Craft.Plugins.Git.GitSettings : System.IEquatable<Craft.Plugins.Git
   ctor()
   static Craft.Plugins.Git.GitSettings Read(Craft.Abstractions.IPluginSettings settings)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+sealed class Craft.Plugins.Git.ReviewItem : System.IEquatable<Craft.Plugins.Git.ReviewItem>
+  Craft.Abstractions.ReviewFinding Finding { get; init; }
+  Craft.Plugins.Git.ReviewItem <Clone>$()
+  System.Boolean Equals(Craft.Plugins.Git.ReviewItem other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String FullPath { get; init; }
+  System.String Id { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Id, out Craft.Abstractions.ReviewFinding Finding, out System.String FullPath)
+  ctor(System.String Id, Craft.Abstractions.ReviewFinding Finding, System.String FullPath)
 static class Craft.Plugins.Git.SourceControlView
   const System.String AcceptBoth = acceptBoth
   const System.String AcceptCurrent = acceptCurrent
   const System.String AcceptIncoming = acceptIncoming
   const System.String Amend = amend
+  const System.String ApplyFix = applyFix
   const System.String BothIcon = M8 5v14M16 5v14
   const System.String Branch = branch
   const System.String CheckIcon = M5 12.5l4.5 4.5L19 7.5
+  const System.String ClearFindings = clearFindings
   const System.String Commit = commit
+  const System.String CopyFindings = copyFindings
   const System.String CurrentIcon = M12 19V5M6 11l6-6 6 6
   const System.String Discard = discard
   const System.String DiscardAll = discardAll
   const System.String DiscardIcon = M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3
   const System.String Dismiss = dismiss
+  const System.String DismissFinding = dismissFinding
   const System.String Fetch = fetch
   const System.String Generate = generate
   const System.String IncomingIcon = M12 5v14M6 13l6 6 6-6
   const System.String Init = init
   const System.String LoadModel = loadModel
+  const System.String LoadReviewModel = loadReviewModel
   const System.String Message = message
   const System.String NewBranch = newBranch
   const System.String Open = open
   const System.String OpenFile = openFile
+  const System.String OpenFinding = openFinding
   const System.String OpenFolder = openFolder
   const System.String OpenIcon = M14 3h7v7M10 14L21 3M19 14v6H4V5h6
   const System.String PanelId = scm.view
@@ -194,6 +223,8 @@ static class Craft.Plugins.Git.SourceControlView
   const System.String Push = push
   const System.String Resolved = resolved
   const System.String Retry = retry
+  const System.String Review = review
+  const System.String ReviewIcon = M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11
   const System.String Settings = settings
   const System.String SparkleIcon = M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z
   const System.String Stage = stage
@@ -202,6 +233,7 @@ static class Craft.Plugins.Git.SourceControlView
   const System.String Stash = stash
   const System.String Stop = stop
   const System.String StopIcon = M7 7h10v10H7z
+  const System.String StopReview = stopReview
   const System.String Sync = sync
   const System.String Unstage = unstage
   const System.String UnstageAll = unstageAll
@@ -210,17 +242,22 @@ static class Craft.Plugins.Git.SourceControlView
   static System.String Badge(Craft.Plugins.Git.SourceControlViewState state)
 sealed class Craft.Plugins.Git.SourceControlViewState : System.IEquatable<Craft.Plugins.Git.SourceControlViewState>
   Craft.Abstractions.PanelTone MessageTone { get; init; }
+  Craft.Abstractions.PanelTone ReviewTone { get; init; }
   Craft.Abstractions.SourceControlStatus Status { get; init; }
   Craft.Plugins.Git.SourceControlViewState <Clone>$()
   System.Boolean Amend { get; init; }
   System.Boolean CanGenerate { get; init; }
+  System.Boolean CanReview { get; init; }
   System.Boolean Equals(Craft.Plugins.Git.SourceControlViewState other)
   System.Boolean Equals(System.Object obj)
   System.Boolean Generating { get; init; }
   System.Boolean NoFolder { get; init; }
   System.Boolean Opening { get; init; }
+  System.Boolean Reviewed { get; init; }
+  System.Boolean Reviewing { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CommitModelChoice> Models { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Plugins.Git.GitBranchInfo> Branches { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Plugins.Git.ReviewItem> Findings { get; init; }
   System.Int32 GetHashCode()
   System.Int32 MessageVersion { get; init; }
   System.String Error { get; init; }
@@ -229,6 +266,9 @@ sealed class Craft.Plugins.Git.SourceControlViewState : System.IEquatable<Craft.
   System.String Message { get; init; }
   System.String MessageStatus { get; init; }
   System.String NotRepository { get; init; }
+  System.String ReviewLoadCommand { get; init; }
+  System.String ReviewStatus { get; init; }
+  System.String ReviewTooltip { get; init; }
   System.String ToString()
   System.String Unavailable { get; init; }
   System.String Working { get; init; }

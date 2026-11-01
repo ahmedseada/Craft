@@ -217,7 +217,7 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             ModelSetting = new ModelSettingField(Variable("agentModel"), "Agent model (empty: the chat's)"),
             DeviceSetting = new ModelSettingField(Variable("agentDevice"), "Agent runs on", "the chat's device"),
             EnabledSetting = new ModelSettingField(Variable("agentEnabled"), "Agent on", "true"),
-            LoadCommand = AiPlugin.LoadAgentModelCommand,
+            LoadCommand = engine ? null : AiPlugin.LoadAgentModelCommand,   // the engine runs its model: no Load offered
             SettingsCommand = SettingSections.CommandOf(SettingSections.Agent),
             Inherits = "Chat",
             InheritsModel = role.InheritsModel,
@@ -352,6 +352,12 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Model);
+        if (AiModels.EngineRuns(request.Model) is { } engine)
+        {
+            // An agent engine's model (Claude Code) is no name Idrak's model sources resolve: refused, never a load.
+            return Task.FromException<ModelLease>(new InvalidOperationException(engine));
+        }
+
         var settings = Settings;
         var key = new LoadKey(request.Model.Trim(), request.Device ?? settings.Device, request.Context ?? settings.Context, request.Weights ?? settings.Weights,
             request.Adapter is { Length: > 0 } adapter ? Path.GetFullPath(adapter) : "", request.Offload ?? settings.Offload);

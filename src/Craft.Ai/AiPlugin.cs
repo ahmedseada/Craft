@@ -278,14 +278,29 @@ public sealed class AiSession : IDisposable
         if (settings.LoadOnStart && settings.ChatEnabled && settings.Model.Length > 0)
         {
             // Only when the user asked for it (loadOnStart); off by default: the model loads when it is picked or used.
-            _host.Dispatch("ai: load the model on start (loadOnStart)", () => _ = LoadModelAsync(CancellationToken.None));
+            _host.Dispatch("ai: load the model on start (loadOnStart)", () => Forget(LoadModelAsync(CancellationToken.None), "The model's load on start failed."));
         }
 
         if (settings.McpOnStart)
         {
-            _ = StartMcpAsync(CancellationToken.None);
+            Forget(StartMcpAsync(CancellationToken.None), "The MCP server's start failed.");
         }
     }
+
+    // A task nobody awaits (started on its own): its failure goes to the log, never to a "background task nobody awaited" report.
+    private void Forget(Task task, string what) => _ = task.ContinueWith(done =>
+    {
+        var error = done.Exception?.GetBaseException();
+        try
+        {
+            _host.Log(EditorLogLevel.Error, what, error);
+        }
+#pragma warning disable CA1031 // A closed host's log: nothing more to say, and nothing may leave this continuation.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+    }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
     /// <summary>The MCP server while it runs, else null.</summary>
     public EditorMcpServer? Mcp { get; private set; }
@@ -444,6 +459,13 @@ public sealed class AiSession : IDisposable
             return;
         }
 
+        if (AiModels.EngineRuns(resolved.Model) is { } engine)
+        {
+            // An agent engine's model (Claude Code) never goes to the model provider: said, nothing loaded.
+            _host.Notify("AI: nothing to load", engine);
+            return;
+        }
+
         Models.ForgetFailures();
         try
         {
@@ -502,7 +524,7 @@ public sealed class AiSession : IDisposable
         {
             Mcp = null;
             AiMcpServer.Instance.RaiseChanged();
-            _ = server.DisposeAsync().AsTask();
+            Forget(server.DisposeAsync().AsTask(), "The MCP server did not stop cleanly.");
         }
 
         _closed();

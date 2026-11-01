@@ -202,6 +202,166 @@ public static class ModelLoadingTests
         }
     }
 
+    [Test]
+    public static async Task AnAgentEnginesModelNeverReachesAModelProvider()
+    {
+        // The owner's run (2026-11-01, callback-20261101-182224-292): the agent's load sent "Claude Code (default)" to the
+        // local provider, whose model sources threw DirectoryNotFoundException.
+        const string engineModel = "Claude Code (default)";
+        var provider = new CountingProvider();
+        var engine = new EngineOfModels(engineModel);
+        ModelProviders.Register(provider);
+        AgentEngines.Register(engine);
+        bool registered = EditorPlugins.Find(AiSettings.PluginName) is null;
+        if (registered)
+        {
+            EditorPlugins.Register(AiPlugin.Instance);
+        }
+
+        var source = AiPlugin.Local.SettingsSource;
+        try
+        {
+            var settings = new AiSettings { ModelProvider = ProviderName, Model = "big", CompletionModel = "", AgentModel = engineModel };
+            using var models = new AiModels(() => settings);
+            var refused = await Failure(models.AgentAsync(CancellationToken.None));
+            Check.True(refused is InvalidOperationException && refused.Message.Contains("nothing to load", StringComparison.Ordinal) && refused.Message.Contains(engine.Name, StringComparison.Ordinal),
+                $"the agent's lease is refused in words: the engine runs it ({refused?.GetType().Name}: {refused?.Message})");
+            var session = await Failure(models.SessionAsync(ModelRoleKeys.Agent, "s1", new ModelSessionSettings { Context = 2048 }, CancellationToken.None));
+            Check.True(session is InvalidOperationException, $"a session's own copy of it too ({session?.GetType().Name})");
+            Check.True(await models.EstimateAsync(ModelRoleKeys.Agent, new ModelSessionSettings { Context = 2048 }, CancellationToken.None) is null, "and no memory is measured for it");
+            Check.True(models.DraftOf(ModelRoleKeys.Agent) is null, "nor a draft planned for it");
+            Check.Equal(0, provider.Acquired.Count, $"the provider was never asked ({string.Join(", ", provider.Acquired)})");
+
+            var local = await Failure(AiPlugin.Local.AcquireAsync(new ModelRequest(engineModel)));
+            Check.True(local is InvalidOperationException && local.Message.Contains("nothing to load", StringComparison.Ordinal),
+                $"the local provider refuses it itself (the learning and voice plug-ins acquire through it), never a DirectoryNotFoundException ({local?.GetType().Name}: {local?.Message})");
+
+            AiPlugin.Local.SettingsSource = () => settings;
+            var agent = AiPlugin.Local.Status.Roles.Single(r => r.Key == ModelRoleKeys.Agent);
+            Check.True(agent.LoadCommand is null, $"the agent's row offers no Load for an engine's model ({agent.LoadCommand})");
+            AiPlugin.Local.SettingsSource = () => settings with { AgentModel = "" };
+            Check.Equal(AiPlugin.LoadAgentModelCommand, AiPlugin.Local.Status.Roles.Single(r => r.Key == ModelRoleKeys.Agent).LoadCommand, "a local agent model keeps its Load");
+
+            // The load command (the chip, the palette) through the plug-in's session: said, nothing loaded.
+            var variables = new Dictionary<string, string>
+            {
+                ["CRAFT_PLUGIN_AI_MODEL"] = "big",
+                ["CRAFT_PLUGIN_AI_MODELPROVIDER"] = ProviderName,
+                ["CRAFT_PLUGIN_AI_AGENTMODEL"] = engineModel,
+                ["CRAFT_PLUGIN_AI_COMPLETIONMODEL"] = " ",
+            };
+            using var host = new EditorHost(dispatch: _ => { }, readVariable: name => variables.GetValueOrDefault(name));
+            using (AiPlugin.Instance.Activate(host))
+            {
+                await AiPlugin.Current!.LoadModelAsync(ModelRoleKeys.Agent, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+            }
+
+            Check.Equal(0, provider.Acquired.Count, "the agent's load command asked the provider nothing");
+        }
+        finally
+        {
+            AiPlugin.Local.SettingsSource = source;
+            AgentEngines.Unregister(engine.Name);
+            ModelProviders.Unregister(ProviderName);
+            if (registered)
+            {
+                EditorPlugins.Unregister(AiSettings.PluginName);
+            }
+        }
+    }
+
+    [Test]
+    public static async Task AFailedLoadLeavesNoTaskNobodyObserved()
+    {
+        // The owner's run: a failed load came back later as "a background task nobody awaited". Craft's own tasks of a load
+        // (the load, the lease, the waiter that stopped waiting) are all observed, whoever was waiting.
+        string marker = "test load failed " + Guid.NewGuid().ToString("N");
+        var unobserved = new ConcurrentQueue<string>();
+        void OnUnobserved(object? sender, UnobservedTaskExceptionEventArgs e)
+        {
+            if (e.Exception.InnerExceptions.Any(x => x.GetBaseException().Message == marker))
+            {
+                unobserved.Enqueue(e.Exception.GetBaseException().StackTrace ?? "");
+            }
+        }
+
+        TaskScheduler.UnobservedTaskException += OnUnobserved;
+        try
+        {
+            await FailTwice(marker);
+            for (int i = 0; i < 3; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            Check.Equal(0, unobserved.Count, $"no task of a failed load is left unobserved ({string.Join(" | ", unobserved)})");
+        }
+        finally
+        {
+            TaskScheduler.UnobservedTaskException -= OnUnobserved;
+        }
+    }
+
+    // A load that fails while its caller waits, and one that fails after its only waiter stopped waiting (its token
+    // cancelled first); nothing of either is kept by the caller.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static async Task FailTwice(string marker)
+    {
+        var late = new TaskCompletionSource<ModelLease>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new CountingProvider
+        {
+            Fails = name => name == "now" ? new ResourceLimitExceededException(marker) : null,
+            Pending = name => name == "late" ? late.Task : null,
+        };
+        ModelProviders.Register(provider);
+        try
+        {
+            var settings = new AiSettings { ModelProvider = ProviderName, Model = "now", CompletionModel = "" };
+            using var models = new AiModels(() => settings);
+            Check.True(await Failure(models.ChatAsync(CancellationToken.None)) is ResourceLimitExceededException, "the load fails while waited for");
+
+            settings = settings with { Model = "late" };
+            using var stop = new CancellationTokenSource();
+            var waiting = models.ChatAsync(stop.Token);
+            await stop.CancelAsync();
+            Check.True(await Failure(waiting) is OperationCanceledException, "the waiter stops waiting");
+            late.SetException(new ResourceLimitExceededException(marker));     // then the load fails, nobody waiting
+            await Task.Delay(50);
+        }
+        finally
+        {
+            ModelProviders.Unregister(ProviderName);
+        }
+    }
+
+    private static async Task<Exception?> Failure(Task task)
+    {
+        try
+        {
+            await task.WaitAsync(TimeSpan.FromSeconds(30));
+            return null;
+        }
+#pragma warning disable CA1031 // The test reads what failed.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            return error;
+        }
+    }
+
+    private sealed class EngineOfModels(params string[] models) : IAgentEngine
+    {
+        public string Name => "test-loading-engine";
+
+        public string Summary => "an agent engine's models";
+
+        public IReadOnlyList<string> Models { get; } = models;
+
+        public Task<AgentEngineResult> RunAsync(AgentEngineRequest request, Action<AgentEngineEvent> report, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new AgentEngineResult("", null));
+    }
+
     private static InlineCompletionRequest Request() => new(new PieceTableBuffer("int x = ").Current, 8, null, "csharp", null);
 
     /// <summary>A provider that counts its loads (by name), the requests' settings, and the leases given back.</summary>
@@ -215,6 +375,8 @@ public static class ModelLoadingTests
 
         public Func<string, Exception?> Fails { get; init; } = _ => null;
 
+        public Func<string, Task<ModelLease>?> Pending { get; init; } = _ => null;
+
         public string Name => ProviderName;
 
         public string Summary => "the model loading tests' provider";
@@ -226,6 +388,11 @@ public static class ModelLoadingTests
             if (Fails(request.Model) is { } error)
             {
                 return Task.FromException<ModelLease>(error);
+            }
+
+            if (Pending(request.Model) is { } pending)
+            {
+                return pending;
             }
 
             string held = $"{request.Model} {request.Device}";

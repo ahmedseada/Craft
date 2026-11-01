@@ -79,6 +79,12 @@ public sealed class AiModels : IDisposable
             return Task.FromException<ModelLease>(new InvalidOperationException(Off(role)));
         }
 
+        if (EngineRuns(resolved.Model) is { } engine)
+        {
+            LetGo(role);                                                 // the role's old local copy goes: the engine runs its model
+            return Task.FromException<ModelLease>(new InvalidOperationException(engine));
+        }
+
         var (key, request) = KeyOf(settings, resolved, resolved.Model);
         lock (_gate)
         {
@@ -107,6 +113,11 @@ public sealed class AiModels : IDisposable
         }
 
         var own = resolved.With(overrides);
+        if (EngineRuns(own.Model) is { } engine)
+        {
+            return Task.FromException<ModelLease>(new InvalidOperationException(engine));
+        }
+
         var (key, request) = KeyOf(settings, own, own.Model);
         string holder = SessionHolder(role, session);
         lock (_gate)
@@ -148,9 +159,9 @@ public sealed class AiModels : IDisposable
         ArgumentNullException.ThrowIfNull(overrides);
         var settings = _settings();
         var own = settings.RoleOf(role).With(overrides);
-        if (own.Model.Length == 0)
+        if (own.Model.Length == 0 || EngineRuns(own.Model) is not null)
         {
-            return Task.FromResult<ModelMemoryEstimate?>(null);
+            return Task.FromResult<ModelMemoryEstimate?>(null);         // an agent engine's model takes no memory of a provider
         }
 
         var (_, request) = KeyOf(settings, own, own.Model);
@@ -192,7 +203,7 @@ public sealed class AiModels : IDisposable
         }
 
         var resolved = settings.RoleOf(role);
-        if (!resolved.Enabled || resolved.Model.Length == 0)
+        if (!resolved.Enabled || resolved.Model.Length == 0 || EngineRuns(resolved.Model) is not null)
         {
             return null;
         }
@@ -345,12 +356,21 @@ public sealed class AiModels : IDisposable
             pair.Off = $"{plan.Name} did not load to draft: {(error is OperationCanceledException ? "cancelled" : AiErrors.Describe(error, settings))}";
         }
 
-        if (pair.Off is not null)
+        try
         {
-            LetGo(DraftRole(role));
-        }
+            if (pair.Off is not null)
+            {
+                LetGo(DraftRole(role));
+            }
 
-        DraftChanged?.Invoke(this, EventArgs.Empty);
+            DraftChanged?.Invoke(this, EventArgs.Empty);
+        }
+#pragma warning disable CA1031 // Nobody awaits this task: a handler's failure is traced, never a crash report.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            System.Diagnostics.Trace.TraceError($"AI: the draft's state change failed: {error}");
+        }
     }
 
     /// <summary>The draft a role's replies use, as the shell shows it.</summary>
@@ -451,6 +471,15 @@ public sealed class AiModels : IDisposable
         ModelRoleKeys.Agent => "The agent is turned off (agentEnabled, CRAFT_PLUGIN_AI_AGENTENABLED): turn it on in Settings › Agent and sandbox.",
         _ => "Inline completion is turned off (completion, CRAFT_PLUGIN_AI_COMPLETION): turn it on in Settings › Completion.",
     };
+
+    /// <summary>
+    /// What an agent engine's model (Claude Code's, <see cref="AgentEngines.FindModel"/>) says when a load is asked of it:
+    /// the engine runs it as its own program when the agent is given a task, and nothing loads in a model provider; null
+    /// for a local model's name.
+    /// </summary>
+    internal static string? EngineRuns(string? model) => AgentEngines.FindModel(model) is { } engine
+        ? $"{model!.Trim()} is an outside agent ({engine.Name}): it runs as its own program on this machine when the agent is given a task, so there is nothing to load."
+        : null;
 
     /// <summary>Whether the chat model of the settings now is loaded (its lease is ready).</summary>
     public bool IsChatLoaded => IsLoaded(ModelRoleKeys.Chat);
@@ -720,13 +749,28 @@ public sealed class AiModels : IDisposable
         }
     }
 
+    // A load let go (cancelled, the settings moved on) may still fail after nobody waits for it: its failure is observed
+    // here, so it never comes back as a "background task nobody awaited" report.
     private static void DisposeWhenLoaded(Task<ModelLease> lease) => _ = lease.ContinueWith(static t =>
     {
         if (t.IsCompletedSuccessfully)
         {
             t.Result.Dispose();
         }
+        else
+        {
+            _ = t.Exception;
+        }
     }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+    // A load's task whose every waiter may have stopped waiting (their tokens cancelled first): its failure observed once
+    // it ends, whoever awaits it.
+    private static Task<ModelLease> Observed(Task<ModelLease> task)
+    {
+        _ = task.ContinueWith(static t => _ = t.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return task;
+    }
 
     // A promoted or rolled-back adapter (the learning plug-in): the next request leases the model with it.
     private void OnAdaptersChanged(object? sender, EventArgs e) => Release();
@@ -756,7 +800,8 @@ public sealed class AiModels : IDisposable
             IdrakLibraries.EnsureIncluded();
             return provider.AcquireAsync(request, progress, token);
         }, token);
-        var lease = load.WaitAsync(token);
+        Observed(load);
+        var lease = Observed(load.WaitAsync(token));
         _ = token.Register(() =>
         {
             lock (_gate)
@@ -770,6 +815,21 @@ public sealed class AiModels : IDisposable
             DisposeWhenLoaded(load);
         });
         _ = lease.ContinueWith(done =>
+        {
+            try
+            {
+                Ended(done);
+            }
+#pragma warning disable CA1031 // Nothing may leave this continuation: nobody awaits it (never a crash report).
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                System.Diagnostics.Trace.TraceError($"AI: reporting the end of {request.Model}'s load failed: {error}");
+            }
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return lease;
+
+        void Ended(Task<ModelLease> done)
         {
             if (done.IsCompletedSuccessfully)
             {
@@ -796,8 +856,7 @@ public sealed class AiModels : IDisposable
 
             var error = done.Exception?.GetBaseException();
             activity.Fail($"{request.Model} did not load: {(error is null ? "cancelled" : AiErrors.Describe(error, settings))}", error, () => _ = RetryAsync(key, request));
-        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-        return lease;
+        }
     }
 
     // Retry of a failed load (the user's, from the notification): that model again, its failure forgotten.
@@ -814,7 +873,8 @@ public sealed class AiModels : IDisposable
 
         try
         {
-            await LeaseAsync(_settings(), key, request, CancellationToken.None).ConfigureAwait(false);
+            var settings = _settings();                                   // inside the try: a setting that no longer parses is no crash report
+            await LeaseAsync(settings, key, request, CancellationToken.None).ConfigureAwait(false);
         }
 #pragma warning disable CA1031 // A retry's failure shows as its own activity's.
         catch (Exception)
@@ -829,6 +889,11 @@ public sealed class AiModels : IDisposable
         if (request.Model.Length == 0)
         {
             throw new InvalidOperationException("No model is set: pick one at the composer's model chip, or set the model (CRAFT_PLUGIN_AI_MODEL) on the settings page: a folder, a .gguf file, store:NAME or a Hugging Face id.");
+        }
+
+        if (EngineRuns(request.Model) is { } engine)
+        {
+            throw new InvalidOperationException(engine);                 // never sent to a model provider (a draft, completion, a retry)
         }
 
         Task<ModelLease> lease;

@@ -7388,3 +7388,29 @@ the gains.
 - `slot/decode` (Idrak): a dense 7B's decoding speed and memory on this card, offloading (layers on the CPU computed
   there, overlapped), the fit measured before a load and a model that does not fit refused or offloaded, never an
   out-of-memory crash; mixture-of-experts models, if Idrak lacks them, recorded for the owner's word.
+
+### AI fixes as built (2026-11-01)
+
+Scope as the owner narrowed it: items 1 and 2, and only crashes found on the agent with MCP, the chat and inline
+completion.
+- **Item 1, an engine's model never reaches a provider.** `AiModels.EngineRuns` (internal) names the engine
+  (`AgentEngines.FindModel`) and says it runs as its own program, nothing to load. `RoleAsync` refuses with it (and lets
+  the role's old local copy go), as do `SessionAsync` and `LeaseAsync` (the last gate: drafts, completion, a retry);
+  `EstimateAsync` and `DraftOf` give nothing for it. `LocalModelProvider.AcquireAsync` refuses it itself (the learning and
+  voice plug-ins acquire through it). The agent's row offers no Load (`LoadCommand` null), and `AiSession.LoadModelAsync`
+  says "AI: nothing to load" in a notification.
+- **Item 2, no unobserved task of a load.** In `AiModels.Load` the load and its lease are observed whoever waits (a load let
+  go after Cancel used to fault unobserved through `DisposeWhenLoaded`); the end-of-load continuation and
+  `LoadDraftAsync`'s state change can no longer fault unobserved; `RetryAsync` reads the settings inside its try; the
+  session's `loadOnStart` load, `mcpOnStart` start and the MCP server's dispose on close are observed and logged.
+- **The owner's report itself is Idrak's.** `callback-20261101-182224-292` came from
+  `Idrak.Abstraction.Serving.ModelHost<T>.Acquire`: a failed first load calls `mine.Done.TrySetException(error)` on its
+  `Pending` TaskCompletionSource, and with no second caller waiting nobody reads `Done.Task`, so every failed local load
+  (missing model, out of memory) later fires `UnobservedTaskException`. To be fixed in Idrak, not in Craft.
+- **Chat, completion, agent with MCP, read through:** each catches every failure in its own task (out of memory said
+  with what to do, `AiErrors.Describe`; completion stops asking until its settings change); no other crash found.
+- **Tests:** `ModelLoading` gained `AnAgentEnginesModelNeverReachesAModelProvider` and
+  `AFailedLoadLeavesNoTaskNobodyObserved`. Filter `AiPlugins|ModelRoles|ModelLoading|Mcp|ClaudeCodePlugin|ApiGuard|
+  Inventory|DraftModel|SessionModel|Learning|InlineChat`: 82 passed, 0 failed. No public API changed.
+- **Left:** Idrak's `ModelHost` fix; a role on device "auto" and another on the device auto picks are two load keys (two
+  copies), as are weights "auto" and the format it picked: named, not changed here.

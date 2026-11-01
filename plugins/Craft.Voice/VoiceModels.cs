@@ -27,7 +27,7 @@ internal sealed class VoiceModels : IDisposable
     private int _inUse;
     private bool _disposed;
 
-    public VoiceModels() => _idle = new Timer(_ => Unload(), null, Timeout.Infinite, Timeout.Infinite);
+    public VoiceModels() => _idle = new Timer(_ => Guarded(Unload), null, Timeout.Infinite, Timeout.Infinite);
 
     /// <summary>How a recognizer is made from its name (the tests' fake); null: Idrak's model sources and speech families.</summary>
     internal static Func<string, VoiceSettings, ISpeechRecognizer>? RecognizerLoader { get; set; }
@@ -110,8 +110,8 @@ internal sealed class VoiceModels : IDisposable
             try
             {
                 var watch = Stopwatch.StartNew();
-                using var ticker = progress is null ? null : new Timer(_ => progress.Report(string.Create(CultureInfo.InvariantCulture,
-                    $"loading {name} on {settings.ComputeDevice}, {watch.Elapsed.TotalSeconds:F1} s")), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
+                using var ticker = progress is null ? null : new Timer(_ => Guarded(() => progress.Report(string.Create(CultureInfo.InvariantCulture,
+                    $"loading {name} on {settings.ComputeDevice}, {watch.Elapsed.TotalSeconds:F1} s"))), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
                 var model = load(name, settings);
                 T? old;
                 lock (_gate)
@@ -135,6 +135,22 @@ internal sealed class VoiceModels : IDisposable
 
                 throw;
             }
+        }
+    }
+
+    // A timer's callback runs on a pool thread, where a throw ends the process (the owner, 2026-11-01: never end the app):
+    // what it throws is traced instead (the next load says what is wrong).
+    private static void Guarded(Action action)
+    {
+        try
+        {
+            action();
+        }
+#pragma warning disable CA1031 // Nothing may leave a timer's callback.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            System.Diagnostics.Trace.TraceError($"Voice: a timer's callback failed: {error}");
         }
     }
 

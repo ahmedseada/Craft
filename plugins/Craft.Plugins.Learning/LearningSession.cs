@@ -66,7 +66,19 @@ public sealed class LearningSession : IDisposable
         _host.DocumentClosed += OnDocumentClosed;
         _host.SelectionChanged += OnSelectionChanged;
         _host.ActiveDocumentChanged += OnActiveDocumentChanged;
-        _timer = new Timer(_ => Post(s => s.Tick(DateTimeOffset.UtcNow)), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        _timer = new Timer(_ =>
+        {
+            try
+            {
+                Post(s => s.Tick(DateTimeOffset.UtcNow));
+            }
+#pragma warning disable CA1031 // A timer's callback runs on a pool thread, where a throw ends the process (the owner: never end the app).
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                _host.Log(EditorLogLevel.Error, "learning: the timer failed.", error);
+            }
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         _consents.ContinueWith(_ => Post(s => s.Refresh()), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 

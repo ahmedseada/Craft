@@ -472,6 +472,7 @@ public static class UiTests
         ("src/Craft.Editor/EditorModel.Semantic.cs", "apply(done.Result);", "a continuation of the completed request (IsCompletedSuccessfully checked)"),
         ("plugins/Craft.Plugins.Sandbox/SandboxSession.cs", "asked.TrySetResult(t.Result);", "a continuation of the completed question (neither cancelled nor faulted)"),
         ("plugins/Craft.Plugins.Learning/LearningSession.cs", "_consents.IsCompletedSuccessfully ? _consents.Result", "the consents' task, read only once it completed"),
+        ("src/Craft.Editor/Outline/OutlineView.cs", "_index = request.Result;", "the symbols' request, read only when IsCompletedSuccessfully (else awaited)"),
         ("plugins/Craft.Plugins.Learning/LearningTrainer.cs", ".AsTask().GetAwaiter().GetResult();", "the training's own thread (the session runs every round in Task.Run), never the UI's"),
         ("plugins/Craft.Plugins.Learning/LearningTrainer.cs", "PlayTasksAsync(policy, heldOutSuite, settings, 2, null, cancellationToken).GetAwaiter().GetResult()", "the training's own thread (the session runs every round in Task.Run), never the UI's"),
         ("src/Craft.Editor/Activities/UiWatchdog.cs", "if (_stop.Wait(_tick))", "the watchdog's own thread sleeps on its stop signal"),

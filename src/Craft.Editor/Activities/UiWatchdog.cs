@@ -196,6 +196,21 @@ public sealed class UiWatchdog : IDisposable
     // The watchdog's own thread: it sleeps on its stop signal (never on the UI) between looks.
     private void Loop()
     {
+        // The watchdog's own thread: a throw here would end the process (the owner, 2026-11-01: never end the app), so any
+        // failure ends the watchdog alone.
+        try
+        {
+            Watch();
+        }
+#pragma warning disable CA1031 // Nothing may leave a thread of its own.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+    }
+
+    private void Watch()
+    {
         while (!_stop.IsSet)
         {
             Volatile.Write(ref _ran, 0);

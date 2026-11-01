@@ -357,8 +357,20 @@ public sealed class LocalModelProvider : IModelProvider, IDisposable
             SetState(status.Message, isProblem: false);
         }
 
-        using var ticker = new Timer(_ => Report(new ModelLoadStatus("loading", null,
-            string.Create(CultureInfo.InvariantCulture, $"loading {key.Model} on {key.Device}, {watch.Elapsed.TotalSeconds:F1} s"))), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+        // A timer's callback that throws would end the process: guarded (reported, the load goes on).
+        using var ticker = new Timer(_ =>
+        {
+            try
+            {
+                Report(new ModelLoadStatus("loading", null, string.Create(CultureInfo.InvariantCulture, $"loading {key.Model} on {key.Device}, {watch.Elapsed.TotalSeconds:F1} s")));
+            }
+#pragma warning disable CA1031 // Nothing may leave a timer's callback (the owner, 2026-11-01: never end the app).
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                System.Diagnostics.Trace.TraceError($"AI: the load's progress failed: {error}");
+            }
+        }, null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
         lock (_picked)
         {
             if (!_picked.Contains(key.Model, StringComparer.OrdinalIgnoreCase))

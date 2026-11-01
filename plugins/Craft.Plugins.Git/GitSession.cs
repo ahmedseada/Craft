@@ -257,6 +257,21 @@ public sealed partial class GitSession : IDisposable
     /// <summary>Reveals the Source Control view.</summary>
     public void Show() => _host.ShowPanel(SourceControlView.PanelId);
 
+    // A timer's callback runs on a pool thread, where a throw ends the process: what it throws goes to the log instead.
+    private void Guarded(string where, Action action)
+    {
+        try
+        {
+            action();
+        }
+#pragma warning disable CA1031 // Nothing may leave a timer's callback (the owner, 2026-11-01: never end the app).
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            _host.Log(EditorLogLevel.Error, $"{where} failed.", error);
+        }
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -352,7 +367,7 @@ public sealed partial class GitSession : IDisposable
         if (settings.AutofetchMinutes > 0)
         {
             var every = TimeSpan.FromMinutes(settings.AutofetchMinutes);
-            _autofetch = new Timer(_ => _host.Dispatch("git: fetch in the background", () => _ = Run("Fetching", (r, t) => r.RunAsync(["fetch", "--all", "--prune"], t), network: true, quiet: true)), null, every, every);
+            _autofetch = new Timer(_ => Guarded("git: the background fetch's timer", () => _host.Dispatch("git: fetch in the background", () => _ = Run("Fetching", (r, t) => r.RunAsync(["fetch", "--all", "--prune"], t), network: true, quiet: true))), null, every, every);
         }
 
         Update(_state with { Opening = false, Status = repository.Status });

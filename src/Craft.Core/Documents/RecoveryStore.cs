@@ -48,7 +48,7 @@ public sealed class RecoveryStore : IDisposable
         if (_options.AutosaveSeconds > 0)
         {
             var period = TimeSpan.FromSeconds(_options.AutosaveSeconds);
-            _timer = new Timer(static state => ((RecoveryStore)state!).Tick(), this, period, period);
+            _timer = new Timer(static state => Diagnostics.CallbackGuard.Run("recovery: the timed save", ((RecoveryStore)state!).Tick), this, period, period);  // a timer's throw would end the process
         }
     }
 

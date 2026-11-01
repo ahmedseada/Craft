@@ -3358,6 +3358,18 @@ The owner: "the search icon on the left side bar only opens the search command; 
   `.craft/run.json` round trip).
 - Slot: X part 6 runs in slot 3 right after the split editor (3a), before 3b.
 
+### X part 6b: input to a running program (found 2026-11-01 by X part 6)
+Idrak's "process" sandbox closes standard input, so a console program run from the Run view (the owner's test project is
+a console app) cannot read the keyboard. Idrak gap, fixed in Idrak on its `main` by its rules: the sandbox contract gains
+an interactive start (`ICommandSandbox.Start` returning the process's input and output streams, additive, refused with
+the reason by a sandbox that cannot), the "process" sandbox implements it, and "approve-each" asks once as before; the
+same contract serves W's npm scripts that read input and W-semantic's language servers later. Craft: a run whose target
+reads input (a console project, or `CRAFT_RUN_INTERACTIVE` per configuration, default auto) runs in a terminal tab
+that takes the keyboard (B9's terminal over the streams), Ctrl+C sent to the program, Stop as now. Tests: Idrak
+`sandbox` (a child echoing its input through the streams, the tree killed on stop, memory flat); Craft `RunView` (a
+fixture console program reads two lines typed into its tab). Decision (recommended, noted): the "process" sandbox
+first; "container" later. Slot: the next free slot after part 7 starts (Idrak part first).
+
 ### X part 7: rich context menus in the explorer and on the open tabs (the owner, 2026-11-01)
 The owner: "I want a rich context menu both in the file explorer and the opened file item". Today (X slice 1) the tree's
 menu has New file, New folder, Reveal in File Explorer, Open in terminal, Copy path, Copy relative path, Rename, Delete,

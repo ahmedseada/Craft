@@ -54,12 +54,16 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Boolean PaintLineLayouts { get; init; }
   System.Boolean ReducedMotion { get; init; }
   System.Boolean SourceGenerators { get; init; }
+  System.Boolean SplitterSnap { get; init; }
   System.Boolean TerminalCtrlCCopies { get; init; }
+  System.Boolean TerminalCursorBlink { get; init; }
   System.Boolean WelcomeAtStart { get; init; }
   System.Boolean WordHighlight { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.KeyBinding> KeyBindings { get; init; }
   System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<System.String, System.String>> TerminalEnvironment { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<System.String, System.String>> TerminalProfiles { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> DisabledPlugins { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.String> LoaderKinds { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> PluginFolders { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> TerminalEditorCommands { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> WorkspaceIgnore { get; init; }
@@ -89,6 +93,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 GutterPaddingCells { get; init; }
   System.Int32 HostLogLines { get; init; }
   System.Int32 HoverDelayMilliseconds { get; init; }
+  System.Int32 LoaderCycleMilliseconds { get; init; }
+  System.Int32 LoaderDelayMilliseconds { get; init; }
   System.Int32 MaxCarets { get; init; }
   System.Int32 MotionMilliseconds { get; init; }
   System.Int32 NotificationsKeep { get; init; }
@@ -109,9 +115,13 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 SearchDelayMilliseconds { get; init; }
   System.Int32 SemanticColorsDelayMilliseconds { get; init; }
   System.Int32 SemanticMaxCharacters { get; init; }
+  System.Int32 SplitterHoverMilliseconds { get; init; }
   System.Int32 TabSize { get; init; }
   System.Int32 TelemetrySamples { get; init; }
   System.Int32 TelemetrySlowMilliseconds { get; init; }
+  System.Int32 TerminalBusyAfterMilliseconds { get; init; }
+  System.Int32 TerminalBusyQuietMilliseconds { get; init; }
+  System.Int32 TerminalListFrom { get; init; }
   System.Int32 TerminalScrollback { get; init; }
   System.Int32 ToastMilliseconds { get; init; }
   System.Int32 UiStallMilliseconds { get; init; }
@@ -129,7 +139,10 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Single LineSpacing { get; init; }
   System.Single NarrowWidth { get; init; }
   System.Single PanelMinimumSize { get; init; }
+  System.Single SplitterGrip { get; init; }
+  System.Single SplitterKeyStep { get; init; }
   System.Single TerminalLineSpacing { get; init; }
+  System.Single TerminalPadding { get; init; }
   System.Single TouchTarget { get; init; }
   System.Single TreeIndent { get; init; }
   System.Single TreeWidth { get; init; }
@@ -147,8 +160,11 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String RecoveryFolder { get; init; }
   System.String ResolveDataFolder()
   System.String TerminalArguments { get; init; }
+  System.String TerminalCursor { get; init; }
+  System.String TerminalDefaultProfile { get; init; }
   System.String TerminalHost { get; init; }
   System.String TerminalShell { get; init; }
+  System.String TerminalTabs { get; init; }
   System.String TerminalWorkingDirectory { get; init; }
   System.String Theme { get; init; }
   System.String TitleBar { get; init; }
@@ -160,6 +176,8 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   static Craft.Core.CraftOptions FromEnvironment(Craft.Core.CraftOptions baseline = null)
   static Craft.Core.CraftOptions FromVariables(System.Func<System.String, System.String> read, Craft.Core.CraftOptions baseline = null)
   static System.Collections.Generic.IReadOnlyList<Craft.Core.CraftVariable> Variables { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> DefaultLoaderKinds { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> DefaultTerminalEditorCommands { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceIgnore { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> DefaultWorkspaceReaders { get; }
 sealed class Craft.Core.CraftVariable : System.IEquatable<Craft.Core.CraftVariable>

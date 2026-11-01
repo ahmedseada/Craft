@@ -262,6 +262,9 @@ public static class SettingChoiceSources
     /// <summary>The terminal hosts.</summary>
     public const string TerminalHosts = "terminalHosts";
 
+    /// <summary>The terminal's profiles (B9: the shells found on the machine and the user's own), by name.</summary>
+    public const string TerminalProfiles = "terminalProfiles";
+
     /// <summary>The keymaps.</summary>
     public const string KeyMaps = "keymaps";
 
@@ -300,6 +303,7 @@ public static class SettingChoiceSources
         table.RegisterDefault(new SettingChoices(MemoryMonitors, () => MemoryPressureMonitors.Names, "the memory-pressure monitors"));
         table.RegisterDefault(new SettingChoices(InlineCompletion, () => InlineCompletionProviders.Names, "the inline completion providers"));
         table.RegisterDefault(new SettingChoices(TerminalHosts, () => Craft.Abstractions.TerminalHosts.Names, "the terminal hosts"));
+        table.RegisterDefault(new SettingChoices(TerminalProfiles, () => Craft.Abstractions.TerminalProfiles.LastFound, "the terminal profiles found"));
         table.RegisterDefault(new SettingChoices(KeyMaps, () => EditorKeyMaps.Names, "the keymaps"));
         table.RegisterDefault(new SettingChoices(Fonts, () => ["JetBrains Mono", "Inter"], "the bundled font families"));
         return table;

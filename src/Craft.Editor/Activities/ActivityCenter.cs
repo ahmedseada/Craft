@@ -215,6 +215,7 @@ public sealed class ActivityCenter : IEditorActivities
         private string? _text;
         private ActivityRate? _rate;
         private int _ended;
+        private int _global;
 
         public Activity(ActivityCenter center, long id, string title, string kind, string source, bool cancellable, CancellationToken token, bool keep, long startedTicks, DateTimeOffset started)
         {
@@ -259,6 +260,18 @@ public sealed class ActivityCenter : IEditorActivities
         public CancellationToken CancellationToken { get; }
 
         public bool IsEnded => Volatile.Read(ref _ended) != 0;
+
+        public bool Global
+        {
+            get => Volatile.Read(ref _global) != 0;
+            set
+            {
+                if (Interlocked.Exchange(ref _global, value ? 1 : 0) != (value ? 1 : 0) && !IsEnded)
+                {
+                    _center.Changed_();                       // the loader takes it in (or lets it go) at the next frame
+                }
+            }
+        }
 
         public void Report(double? fraction, string? text = null, ActivityRate? rate = null)
         {
@@ -385,6 +398,7 @@ public sealed class ActivityCenter : IEditorActivities
             {
                 Left = left,
                 Keep = KeepWhenEnded,
+                Global = Global,
             };
         }
     }

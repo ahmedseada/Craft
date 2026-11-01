@@ -49,6 +49,7 @@ internal sealed class CSharpWorkspace
     private long _referenceBytes;
     private long _heapBytes;
     private TimeSpan _buildTime;
+    private string? _failure;
     private IEditorActivities _activities = NoActivities.Instance;
 
     private CSharpWorkspace(string key, string? root, LanguageSettings settings)
@@ -276,7 +277,7 @@ internal sealed class CSharpWorkspace
         var solution = Solution;
         if (solution is null)
         {
-            return SemanticTelemetry.None with { WorkspaceRoot = _root, LastDiagnosticsTime = lastDiagnostics, Generation = Generation };
+            return SemanticTelemetry.None with { WorkspaceRoot = _root, LastDiagnosticsTime = lastDiagnostics, Generation = Generation, Failure = Volatile.Read(ref _failure) };
         }
 
         int documents = 0;
@@ -288,7 +289,10 @@ internal sealed class CSharpWorkspace
         }
 
         return new SemanticTelemetry(_root, _reader, solution.ProjectIds.Count, documents, references.Count, Volatile.Read(ref _referenceBytes),
-            Volatile.Read(ref _heapBytes), _buildTime, lastDiagnostics, Generation);
+            Volatile.Read(ref _heapBytes), _buildTime, lastDiagnostics, Generation)
+        {
+            Failure = Volatile.Read(ref _failure),
+        };
     }
 
     /// <summary>
@@ -401,9 +405,11 @@ internal sealed class CSharpWorkspace
 
     private void Build(string? path)
     {
-        // Phase U: the build shows in the status bar (the readers, the projects, the references), however it ends.
+        // Phase U: the build shows in the status bar (the readers, the projects, the references), however it ends. B10: as
+        // workspace work (the window's loader shows it); its outcome is the language's one notification (ready, or failed in
+        // plain words), so the activity itself is not kept.
         string name = _root is null ? "loose files" : Path.GetFileName(_root);
-        using var activity = _activities.Start($"C#: building the workspace of {name}", ActivityKinds.Build);
+        using var activity = _activities.Start($"C#: building the workspace of {name}", ActivityKinds.Workspace, keep: false);
         activity.Report(null, "reading the projects (" + string.Join(", ", _settings.WorkspaceReaders) + ")");
         try
         {
@@ -418,11 +424,13 @@ internal sealed class CSharpWorkspace
             _buildTime = Stopwatch.GetElapsedTime(start);
             Volatile.Write(ref _heapBytes, Math.Max(0, GC.GetTotalMemory(false) - heap));
             var built = Volatile.Read(ref _solution);
+            Volatile.Write(ref _failure, null);
             activity.Complete(string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"{built?.ProjectIds.Count ?? 0} projects, {_referenced.Count} references, by {_reader ?? "no reader"}"));
         }
         catch (Exception error)
         {
+            Volatile.Write(ref _failure, string.IsNullOrWhiteSpace(error.Message) ? error.GetType().Name : error.Message.Trim());
             activity.Fail("the workspace could not be built: " + error.Message, error);
             throw;
         }

@@ -156,6 +156,15 @@ public static class EditorContextMenus
     /// </summary>
     public const string ReadOnlyText = "context:readonly-text";
 
+    /// <summary>
+    /// A terminal's menu (B9: copy, paste, select all, clear, split, rename, kill), acting on the terminal it was opened on
+    /// (the target's <see cref="ContextMenuTarget.Item"/>), else the active one.
+    /// </summary>
+    public const string Terminal = "context:terminal";
+
+    /// <summary>The terminal's new-terminal menu (B9: the "+" button's chevron): one row per profile, then "Set default profile…".</summary>
+    public const string TerminalProfiles = "context:terminal-profiles";
+
     private static ContextMenuTarget? _target;
 
     /// <summary>What the context menu whose item is starting was opened on, or null (the command acts on the active document).</summary>

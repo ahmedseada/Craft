@@ -18,6 +18,7 @@ static class Craft.Abstractions.ActivityKinds
   const System.String Save = save
   const System.String Training = training
   const System.String Voice = voice
+  const System.String Workspace = workspace
 struct Craft.Abstractions.ActivityRate : System.IEquatable<Craft.Abstractions.ActivityRate>
   System.Boolean Equals(Craft.Abstractions.ActivityRate other)
   System.Boolean Equals(System.Object obj)
@@ -35,6 +36,7 @@ sealed class Craft.Abstractions.ActivitySnapshot : System.IEquatable<Craft.Abstr
   System.Boolean Cancellable { get; init; }
   System.Boolean Equals(Craft.Abstractions.ActivitySnapshot other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean Global { get; init; }
   System.Boolean Keep { get; init; }
   System.DateTimeOffset Started { get; init; }
   System.Double? Fraction { get; init; }
@@ -421,6 +423,8 @@ static class Craft.Abstractions.EditorContextMenus
   const System.String Prefix = context:
   const System.String ReadOnlyText = context:readonly-text
   const System.String Tab = context:tab
+  const System.String Terminal = context:terminal
+  const System.String TerminalProfiles = context:terminal-profiles
   const System.String Tree = context:tree
   static Craft.Abstractions.ContextMenuTarget Target { get; set; }
   static System.Boolean IsContextMenu(System.String menu)
@@ -739,6 +743,7 @@ sealed class Craft.Abstractions.HoverInfo : System.IEquatable<Craft.Abstractions
   System.Void Deconstruct(out System.String Text, out System.Int32 Start, out System.Int32 Length)
   ctor(System.String Text, System.Int32 Start, System.Int32 Length)
 interface Craft.Abstractions.IActivity : System.IDisposable
+  System.Boolean Global { get; set; }
   System.Boolean IsEnded { get; }
   System.Int64 Id { get; }
   System.String Kind { get; }
@@ -936,6 +941,8 @@ interface Craft.Abstractions.ITerminalHost : Idrak.Abstraction.IKind
   Craft.Abstractions.ITerminalSession Start(Craft.Abstractions.TerminalStartInfo start)
   Craft.Abstractions.TerminalShell DefaultShell()
   System.String Unavailable { get; }
+interface Craft.Abstractions.ITerminalProfileSource : Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> Find(System.Threading.CancellationToken cancellationToken = null)
 interface Craft.Abstractions.ITerminalSession : System.IDisposable
   System.Int32 ProcessId { get; }
   System.Threading.Tasks.Task<System.Int32> Exited { get; }
@@ -1120,6 +1127,12 @@ sealed class Craft.Abstractions.ListPanel : Craft.Abstractions.IEditorPanel
   System.Void SetItems(System.Collections.Generic.IEnumerable<Craft.Abstractions.PanelItem> items)
   ctor(System.String id, System.String title)
   event System.EventHandler Changed
+sealed class Craft.Abstractions.MachineTerminalProfiles : Craft.Abstractions.ITerminalProfileSource, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> Find(System.Threading.CancellationToken cancellationToken = null)
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor(System.String name, Craft.Abstractions.TerminalMachine machine)
+  static System.String Describe(System.Collections.Generic.IEnumerable<Craft.Abstractions.TerminalProfile> profiles)
 enum Craft.Abstractions.MemoryPressureLevel : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Critical = 1
   High = 0
@@ -1439,6 +1452,7 @@ sealed class Craft.Abstractions.SemanticTelemetry : System.IEquatable<Craft.Abst
   System.Int64 MemoryBytes { get; }
   System.Int64 ReferenceBytes { get; init; }
   System.String Engine { get; init; }
+  System.String Failure { get; init; }
   System.String Reader { get; init; }
   System.String ToString()
   System.String WorkspaceRoot { get; init; }
@@ -1455,6 +1469,7 @@ static class Craft.Abstractions.SettingChoiceSources
   const System.String KeyMaps = keymaps
   const System.String MemoryMonitors = memoryMonitors
   const System.String TerminalHosts = terminalHosts
+  const System.String TerminalProfiles = terminalProfiles
   const System.String Themes = themes
   static Craft.Abstractions.ISettingChoices Find(System.ReadOnlySpan<System.Char> name)
   static Craft.Abstractions.ISettingChoices Get(System.ReadOnlySpan<System.Char> name)
@@ -1670,6 +1685,56 @@ static class Craft.Abstractions.TerminalHosts
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ITerminalHost> All { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.ITerminalHost host)
+static class Craft.Abstractions.TerminalIcons
+  const System.String Bash = M3 5h18v14H3zM14 9h-3a1.5 1.5 0 0 0 0 3h2a1.5 1.5 0 0 1 0 3h-3M12 8v1M12 15v1
+  const System.String CommandPrompt = M3 5h18v14H3zM6 10l3 2-3 2M11 15h5
+  const System.String DeveloperShell = M17 3l4 2v14l-4 2-10-9zM3 9l4 3-4 3z
+  const System.String Linux = M12 3a4 4 0 0 0-4 4v4l-3 6c2 2 12 2 14 0l-3-6V7a4 4 0 0 0-4-4zM10 8h.01M14 8h.01M11 10.5h2
+  const System.String PowerShell = M4 19L8 5h13l-4 14zM9 9l4 3-4 3M13 15h3
+  const System.String Prompt = M5 7l5 5-5 5M12 17h7
+sealed class Craft.Abstractions.TerminalMachine
+  System.Boolean IsWindows { get; init; }
+  System.Func<System.Collections.Generic.IReadOnlyList<System.String>> WslDistributions { get; init; }
+  System.Func<System.String, System.Boolean> FileExists { get; init; }
+  System.Func<System.String, System.Collections.Generic.IReadOnlyList<System.String>> Folders { get; init; }
+  System.Func<System.String, System.String> Variable { get; init; }
+  System.Func<System.String> GitFolder { get; init; }
+  System.String OnPath(System.String program)
+  ctor()
+  static Craft.Abstractions.TerminalMachine Local { get; }
+sealed class Craft.Abstractions.TerminalProfile : System.IEquatable<Craft.Abstractions.TerminalProfile>
+  Craft.Abstractions.TerminalProfile <Clone>$()
+  Craft.Abstractions.TerminalShell Shell { get; init; }
+  System.Boolean Equals(Craft.Abstractions.TerminalProfile other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Is(System.String nameOrId)
+  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
+  System.Int32 GetHashCode()
+  System.String Folder { get; init; }
+  System.String Icon { get; init; }
+  System.String Id { get; init; }
+  System.String Name { get; init; }
+  System.String Short { get; }
+  System.String ShortName { get; init; }
+  System.String Source { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Id, out System.String Name, out Craft.Abstractions.TerminalShell Shell)
+  ctor(System.String Id, System.String Name, Craft.Abstractions.TerminalShell Shell)
+static class Craft.Abstractions.TerminalProfiles
+  const System.String Machine = machine
+  static Craft.Abstractions.ITerminalProfileSource Find(System.ReadOnlySpan<System.Char> name)
+  static Craft.Abstractions.ITerminalProfileSource Get(System.ReadOnlySpan<System.Char> name)
+  static System.Boolean Unregister(System.String name)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ITerminalProfileSource> All { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> LastFound { get; }
+  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+  static System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile>> DiscoverAsync(System.Action<System.String, System.Exception> failed = null, System.Threading.CancellationToken cancellationToken = null)
+  static System.Void Register(Craft.Abstractions.ITerminalProfileSource source)
+static class Craft.Abstractions.TerminalProgram
+  static Craft.Abstractions.TerminalShell Split(System.String commandLine)
+  static System.String FileName(System.String program)
+  static System.String FindOnPath(System.String program, System.String path, System.Char separator, System.String extensions = null, System.Func<System.String, System.Boolean> exists = null)
+  static System.String Slug(System.String text)
 sealed class Craft.Abstractions.TerminalShell : System.IEquatable<Craft.Abstractions.TerminalShell>
   Craft.Abstractions.TerminalShell <Clone>$()
   System.Boolean Equals(Craft.Abstractions.TerminalShell other)

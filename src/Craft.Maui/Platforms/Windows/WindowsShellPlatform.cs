@@ -52,6 +52,12 @@ public sealed class WindowsShellPlatform : IShellPlatform
     public IShellFiles? ShellFiles { get; } = new WindowsShellFiles();
 
     /// <inheritdoc />
+    public IPointerCursor? PointerCursor { get; } = new WindowsPointerCursor();
+
+    /// <inheritdoc />
+    public ITerminalProfileSource? TerminalProfiles { get; } = WindowsTerminalProfiles.Create();
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<string>> DroppedPathsAsync(Microsoft.Maui.Controls.DropEventArgs drop)
     {
         ArgumentNullException.ThrowIfNull(drop);

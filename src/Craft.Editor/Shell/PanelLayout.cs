@@ -75,6 +75,18 @@ public sealed class PanelLayout
         _ => "CRAFT_PANEL_BOTTOM_OPEN",
     };
 
+    /// <summary>The size a splitter's double-click restores for <paramref name="panel"/> (B8): the option's default.</summary>
+    public static double DefaultSizeOf(ShellPanel panel)
+    {
+        var defaults = new CraftOptions();
+        return panel switch
+        {
+            ShellPanel.Explorer => defaults.TreeWidth,
+            ShellPanel.Chat => defaults.ChatWidth,
+            _ => defaults.BottomPanelHeight,
+        };
+    }
+
     /// <summary><paramref name="panel"/>'s width (the explorer, the chat) or height (the bottom panel).</summary>
     public double SizeOf(ShellPanel panel) => _sizes[(int)panel];
 

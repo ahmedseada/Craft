@@ -517,53 +517,27 @@ public sealed class RailView : ContentView
 }
 
 /// <summary>
-/// The explorer (docs/design/Main.dc.html): the folder's name in capitals, its tree, and the semantic layer's card at the
-/// foot (the engine, its state, its projects and memory, from <see cref="SemanticTelemetry"/> through the language's
-/// contract; hidden when the active file's language has none).
+/// The explorer (docs/design/Main.dc.html): the folder's name in capitals and its tree. B10: the semantic layer's card
+/// that sat at its foot is gone; its facts are the workspace's notification and the language item's tooltip.
 /// </summary>
 public sealed class ExplorerView : ContentView
 {
     private readonly Label _header;
-    private readonly Border _card;
-    private readonly Label _engine;
-    private readonly Label _workspace;
-    private readonly Label _state;
-    private readonly Label _projects;
-    private readonly Label _memory;
-    private ShellPalette _palette;
-    private SemanticCard? _shown;
 
     /// <summary>The explorer over <paramref name="tree"/>.</summary>
     public ExplorerView(FolderTreeView tree, ShellPalette palette)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(palette);
-        _palette = palette;
         Tree = tree;
         _header = palette.Label("", palette.Secondary, palette.CaptionSize, FontWeight.SemiBold);
         _header.CharacterSpacing = 0.6;
         _header.Margin = new Thickness(14, 10, 14, 8);
-        _engine = palette.Label("", palette.Secondary, palette.CaptionSize, FontWeight.SemiBold);
-        _engine.CharacterSpacing = 0.6;
-        _workspace = palette.Label("Workspace");
-        _state = palette.Label("");
-        _projects = palette.Label("", palette.Secondary);
-        _memory = palette.Label("", palette.Secondary);
-        var rowState = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)] };
-        rowState.Add(_workspace, 0, 0);
-        rowState.Add(_state, 1, 0);
-        var rowSize = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)] };
-        rowSize.Add(_projects, 0, 0);
-        rowSize.Add(_memory, 1, 0);
-        _card = palette.Box(new VerticalStackLayout { Spacing = 6, Children = { _engine, rowState, rowSize } }, 8, new Thickness(10));
-        _card.Margin = new Thickness(10, 6, 10, 10);
-        _card.IsVisible = false;
         Empty = new EmptyStateView(palette) { IsVisible = false };
-        var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto)] };
+        var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
         grid.Add(_header, 0, 0);
         grid.Add(tree, 0, 1);
         grid.Add(new ScrollView { Content = Empty, IsVisible = false }, 0, 1);
-        grid.Add(_card, 0, 2);
         Content = grid;
         Apply(palette);
     }
@@ -597,48 +571,17 @@ public sealed class ExplorerView : ContentView
         _header.Text = root is null ? "NO FOLDER" : Path.GetFileName(Path.TrimEndingDirectorySeparator(root)).ToUpperInvariant();
     }
 
-    /// <summary>The card, or null to hide it; nothing is redrawn when it is the one shown.</summary>
-    public void SetSemantic(SemanticCard? card)
-    {
-        if (card == _shown)
-        {
-            return;
-        }
-
-        _shown = card;
-        _card.IsVisible = card is not null;
-        if (card is null)
-        {
-            return;
-        }
-
-        _engine.Text = card.Engine.ToUpperInvariant();
-        _state.Text = card.State;
-        _state.TextColor = card.IsReady ? _palette.Success : _palette.Secondary;
-        _projects.Text = card.Projects;
-        _memory.Text = card.Memory;
-    }
-
     /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
     public void Apply(ShellPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
-        _palette = palette;
         BackgroundColor = palette.Surface;
         _header.TextColor = palette.Secondary;
-        _engine.TextColor = palette.Secondary;
-        _workspace.TextColor = palette.Text;
-        _projects.TextColor = palette.Secondary;
-        _memory.TextColor = palette.Secondary;
-        _card.Stroke = palette.Border;
         Tree.Palette = palette;
         Tree.TextColor = palette.Text;
         Tree.SelectedColor = palette.Selection;
         Empty.Apply(palette);
         Tree.FontFamily = palette.Font();
-        var shown = _shown;
-        _shown = null;
-        SetSemantic(shown);
     }
 }
 

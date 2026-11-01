@@ -147,11 +147,34 @@ public sealed class TerminalView : ContentView, IDisposable
         _graphics.DragInteraction += OnDragInteraction;
         _graphics.EndInteraction += OnEndInteraction;
         _graphics.HandlerChanged += OnGraphicsHandlerChanged;
-        _graphics.Focused += (_, _) => SetFocused(true);
+        _graphics.Focused += (_, _) =>
+        {
+            SetFocused(true);
+            if (_terminal is { } focused)
+            {
+                Activated?.Invoke(this, focused);           // B9: a click on a split's pane makes it the active terminal
+            }
+        };
         _graphics.Unfocused += (_, _) => SetFocused(false);
+        // B9: the terminal's context menu (Copy, Paste, Select all, Clear, Split, Rename, Kill).
+        var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
+        context.Tapped += (_, e) =>
+        {
+            if (_terminal is { } target)
+            {
+                ContextRequested?.Invoke(this, (target, e));
+            }
+        };
+        _graphics.GestureRecognizers.Add(context);
         Unloaded += (_, _) => _blink?.Stop();
         Loaded += (_, _) => RestartBlink();
     }
+
+    /// <summary>Raised when the view took the keyboard, with its terminal (B9: the split pane clicked becomes the active one).</summary>
+    public event EventHandler<TerminalInstance>? Activated;
+
+    /// <summary>Raised on a right-click, with its terminal and where (B9: the page opens the terminal's context menu).</summary>
+    public event EventHandler<(TerminalInstance Terminal, TappedEventArgs Where)>? ContextRequested;
 
     /// <summary>The terminal shown, or null.</summary>
     public TerminalInstance? Terminal
@@ -191,6 +214,8 @@ public sealed class TerminalView : ContentView, IDisposable
         _drawable.Palette = new TerminalPalette(theme);
         _drawable.Options = options;
         BackgroundColor = ThemeColors.Of(_drawable.Palette.Background);
+        // B9: room around the text, as an inset of the view (the ground's colour fills it; the paint is unchanged).
+        Padding = new Thickness(options.TerminalPadding);
         RestartBlink();
         UpdateSize();
         _graphics.Invalidate();
@@ -427,7 +452,7 @@ public sealed class TerminalView : ContentView, IDisposable
     private void RestartBlink()
     {
         int ms = _drawable.Options.CaretBlinkMilliseconds;
-        if (ms <= 0)
+        if (ms <= 0 || !_drawable.Options.TerminalCursorBlink)
         {
             _blink?.Stop();
             _drawable.CursorOn = true;
@@ -447,113 +472,5 @@ public sealed class TerminalView : ContentView, IDisposable
         _blink.Stop();
         _blink.Interval = TimeSpan.FromMilliseconds(ms);
         _blink.Start();
-    }
-}
-
-/// <summary>
-/// The bottom panel's Terminal tab (phase T): a strip of the open terminals (each its title, ✕ to kill it, the active one
-/// over the accent's line), "+" for a new one, and the active terminal's <see cref="TerminalView"/>; with none open, where
-/// the next one starts and how to open it. A plug-in's read-only output tab (phase U2: "Agent sandbox") is marked so.
-/// </summary>
-public sealed class TerminalPanelView : ContentView, IDisposable
-{
-    private readonly TerminalManager _manager;
-    private readonly TerminalView _view;
-    private readonly HorizontalStackLayout _tabs = new() { Spacing = 14, Padding = new Thickness(16, 0) };
-    private readonly ContentView _body = new();
-    private readonly Label _none;
-    private ShellPalette _palette;
-
-    /// <summary>The tab over <paramref name="manager"/>.</summary>
-    public TerminalPanelView(TerminalManager manager, ShellPalette palette)
-    {
-        ArgumentNullException.ThrowIfNull(manager);
-        ArgumentNullException.ThrowIfNull(palette);
-        _manager = manager;
-        _palette = palette;
-        _view = new TerminalView(manager);
-        _none = palette.Label("", palette.Secondary);
-        _none.Margin = new Thickness(16, 8);
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += (_, _) => _ = _manager.ExecuteNewAsync();
-        _none.GestureRecognizers.Add(tap);
-        var grid = new Grid { RowDefinitions = [new RowDefinition(new GridLength(26)), new RowDefinition(GridLength.Star)] };
-        grid.Add(new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _tabs }, 0, 0);
-        grid.Add(_body, 0, 1);
-        Content = grid;
-        manager.Changed += OnChanged;
-        Apply(palette);
-    }
-
-    /// <summary>Gives the active terminal the keyboard.</summary>
-    public void FocusTerminal() => _view.FocusTerminal();
-
-    /// <summary>Takes <paramref name="palette"/>'s colours.</summary>
-    public void Apply(ShellPalette palette)
-    {
-        ArgumentNullException.ThrowIfNull(palette);
-        _palette = palette;
-        _view.Apply(palette.Theme, palette.Options);
-        _none.TextColor = palette.Secondary;
-        Rebuild();
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        _manager.Changed -= OnChanged;
-        _view.Dispose();
-    }
-
-    private void OnChanged(object? sender, EventArgs e) => Rebuild();
-
-    private void Rebuild()
-    {
-        _view.Terminal = _manager.ActiveTerminal;
-        _tabs.Children.Clear();
-        foreach (var terminal in _manager.Terminals)
-        {
-            bool active = ReferenceEquals(terminal, _manager.ActiveTerminal);
-            string title = terminal.IsReadOnly ? terminal.Title + " · read-only" : terminal.HasExited ? $"{terminal.Title} (ended {terminal.ExitCode})" : terminal.Title;
-            var label = _palette.Label(title, active ? _palette.Text : _palette.Secondary, _palette.CaptionSize);
-            if (terminal.IsReadOnly)
-            {
-                ToolTipProperties.SetText(label, "A plug-in's output: nothing typed here runs (✕ closes it; it opens again with the next output)");
-            }
-            var close = _palette.Label("✕", _palette.Secondary, _palette.CaptionSize);
-            var row = new HorizontalStackLayout { Spacing = 6, Children = { label, close } };
-            var cell = new Grid { RowDefinitions = [new RowDefinition(GridLength.Star), new RowDefinition(new GridLength(1))] };
-            cell.Add(row, 0, 0);
-            cell.Add(new BoxView { Color = active ? _palette.Accent : Colors.Transparent, HeightRequest = 1 }, 0, 1);
-            var chosen = terminal;
-            var pick = new TapGestureRecognizer();
-            pick.Tapped += (_, _) =>
-            {
-                _manager.Activate(chosen);
-                _view.FocusTerminal();
-            };
-            label.GestureRecognizers.Add(pick);
-            var kill = new TapGestureRecognizer();
-            kill.Tapped += (_, _) => _manager.Close(chosen);
-            close.GestureRecognizers.Add(kill);
-            _tabs.Children.Add(cell);
-        }
-
-        var add = _palette.Label("+", _palette.Secondary, _palette.FontSize);
-        var addTap = new TapGestureRecognizer();
-        addTap.Tapped += (_, _) => _ = _manager.ExecuteNewAsync();
-        add.GestureRecognizers.Add(addTap);
-        _tabs.Children.Add(add);
-        if (_manager.ActiveTerminal is null)
-        {
-            var options = _palette.Options;
-            var start = TerminalLaunch.StartFolder(null, options.TerminalWorkingDirectory, _manager.WorkspaceFolder, _manager.HomeFolder);
-            _none.Text = $"No terminal is open. Ctrl+Shift+` (or + above, or a click here) opens your shell in {start.Folder} ({start.Reason}).";
-            _body.Content = _none;
-        }
-        else
-        {
-            _body.Content = _view;
-        }
     }
 }

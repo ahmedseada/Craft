@@ -589,6 +589,8 @@ public sealed partial class ShellModel : IDisposable
             // The folder's checks and files (its .craft/settings.json, its git branch) are read on the thread pool: the
             // UI thread only takes what they say (the owner's start-up stalls).
             var options = Options;
+            // B10: opening a folder is workspace work, so the window's loader shows it when it takes a while.
+            using var activity = Host.Activities.Start($"Opening {Path.GetFileName(Path.TrimEndingDirectorySeparator(path))}", ActivityKinds.Workspace, keep: false);
             (workspace, workspaceSettings, branch) = await Task.Run(() =>
             {
                 var opened = new Workspace(path, options);

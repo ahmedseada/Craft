@@ -37,7 +37,40 @@ public static class TerminalCommandIds
 
     /// <summary>Sends the editor's selection (or its caret's line) to the active terminal and runs it.</summary>
     public const string RunSelection = "terminal.runSelection";
+
+    /// <summary>Picks a profile and opens a terminal of it (B9).</summary>
+    public const string NewWithProfile = "terminal.newWithProfile";
+
+    /// <summary>Picks the default profile (B9: "Set default profile…"), written to the workspace's settings.</summary>
+    public const string SelectDefaultProfile = "terminal.selectDefaultProfile";
+
+    /// <summary>A second terminal beside the active one (or the context menu's), in the same split group (B9).</summary>
+    public const string Split = "terminal.split";
+
+    /// <summary>Renames the active terminal's tab (or the context menu's).</summary>
+    public const string Rename = "terminal.rename";
+
+    /// <summary>Selects everything the terminal keeps.</summary>
+    public const string SelectAll = "terminal.selectAll";
+
+    /// <summary>The prefix of the per-profile commands ("terminal.new.pwsh": "Terminal: New PowerShell 7").</summary>
+    public const string NewProfilePrefix = "terminal.new.";
+
+    /// <summary>The command that opens a terminal of the profile <paramref name="id"/>.</summary>
+    public static string NewProfile(string id) => NewProfilePrefix + id;
 }
+
+/// <summary>A row of the terminals' tabs or list (B9): one split group, its terminals, how it shows.</summary>
+/// <param name="Group">The group's id.</param>
+/// <param name="Terminals">Its terminals, side by side in this order.</param>
+/// <param name="Label">The short names ("pwsh", "pwsh | cmd" for a split).</param>
+/// <param name="Icon">The first terminal's profile icon (SVG path data).</param>
+/// <param name="Tooltip">The full titles, the profile, the folder, how it ended.</param>
+/// <param name="Active">Whether it is the group shown.</param>
+/// <param name="Busy">Whether a command runs in one of them (the busy dot).</param>
+/// <param name="Ended">Whether every shell of it ended.</param>
+/// <param name="ReadOnly">Whether it is a plug-in's output tab.</param>
+public sealed record TerminalTabRow(int Group, IReadOnlyList<TerminalInstance> Terminals, string Label, string Icon, string Tooltip, bool Active, bool Busy, bool Ended, bool ReadOnly);
 
 /// <summary>What the Terminal tab is asked to do (<see cref="TerminalManager.ViewRequested"/>).</summary>
 public enum TerminalViewRequest
@@ -73,6 +106,10 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
     private readonly List<string> _commandIds = [];
     private readonly List<KeyBinding> _bindings = [];
     private readonly List<(string Menu, string Command)> _menuItems = [];
+    private readonly List<string> _profileCommands = [];
+    private readonly List<(string Menu, string Command)> _profileMenuItems = [];
+    private IReadOnlyList<TerminalProfile> _found = [];
+    private string _profileSignature = "";
     private int _nextId = 1;
     private bool _disposed;
 
@@ -92,6 +129,254 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         _workspaceFolder = workspaceFolder ?? (() => host.WorkspaceFolder);
         Input = new KeyRouter(this);
         RegisterCommands();
+        SettingChoiceSources.Register(new SettingChoices(SettingChoiceSources.TerminalProfiles, () => [.. Profiles.Select(p => p.Name)], "the terminal profiles: found on this machine and your own"));
+        RegisterProfileCommands();
+        ProfilesReady = RefreshProfilesAsync();
+    }
+
+    /// <summary>Completes when the profiles of the machine have been found (off the UI thread) and their commands registered.</summary>
+    public Task ProfilesReady { get; private set; }
+
+    /// <summary>Asks, prompts and tells (the default profile's picker, Rename); null: those commands do nothing.</summary>
+    public IShellUi? Ui { get; set; }
+
+    /// <summary>Writes the default profile's name to the settings (the workspace's when a folder is open): null when done, else why not.</summary>
+    public Func<string, string?>? StoreDefaultProfile { get; set; }
+
+    /// <summary>Every profile: the machine's found ones, the user's (<c>CRAFT_TERMINAL_PROFILES</c>), <c>CRAFT_TERMINAL_SHELL</c>'s.</summary>
+    public IReadOnlyList<TerminalProfile> Profiles => TerminalLaunch.AllProfiles(_found, _options());
+
+    /// <summary>The profile "+" and New terminal open (<see cref="TerminalLaunch.DefaultProfile"/>).</summary>
+    public TerminalProfile DefaultProfile => TerminalLaunch.DefaultProfile(Profiles, _options(), Host());
+
+    /// <summary>Finds the machine's profiles again (off the UI thread), then registers their commands on the UI thread.</summary>
+    public Task RefreshProfilesAsync()
+    {
+        ProfilesReady = DiscoverAsync();
+        return ProfilesReady;
+    }
+
+    /// <summary>The options changed: the profiles' commands follow the user's profiles.</summary>
+    public void ApplyOptions() => RegisterProfileCommands();
+
+    /// <summary>Whether a command runs in <paramref name="terminal"/> now (the tab's busy dot).</summary>
+    public bool IsBusy(TerminalInstance terminal)
+    {
+        ArgumentNullException.ThrowIfNull(terminal);
+        var options = _options();
+        return terminal.IsBusy(terminal.Clock, terminal.Clock.GetTimestamp(), TimeSpan.FromMilliseconds(options.TerminalBusyAfterMilliseconds),
+            TimeSpan.FromMilliseconds(options.TerminalBusyQuietMilliseconds));
+    }
+
+    /// <summary>The terminals of <paramref name="terminal"/>'s split group, in their order.</summary>
+    public IReadOnlyList<TerminalInstance> GroupOf(TerminalInstance? terminal) =>
+        terminal is null ? [] : [.. _terminals.Where(t => t.Group == terminal.Group)];
+
+    /// <summary>The tabs (or the list's rows): one per split group, in the order of their first terminal.</summary>
+    public IReadOnlyList<TerminalTabRow> Rows()
+    {
+        var rows = new List<TerminalTabRow>();
+        var seen = new HashSet<int>();
+        foreach (var first in _terminals)
+        {
+            if (!seen.Add(first.Group))
+            {
+                continue;
+            }
+
+            var group = GroupOf(first);
+            var label = string.Join(" | ", group.Select(t => t.ShortTitle));
+            var tip = string.Join("\n", group.Select(Describe));
+            rows.Add(new TerminalTabRow(first.Group, group, label, first.Profile?.Icon ?? TerminalLaunch.IconOf(first.Shell.Program), tip,
+                ActiveTerminal is { } active && active.Group == first.Group, group.Any(IsBusy), group.All(t => t.HasExited), group.All(t => t.IsReadOnly)));
+        }
+
+        return rows;
+    }
+
+    private static string Describe(TerminalInstance terminal)
+    {
+        if (terminal.IsReadOnly)
+        {
+            return terminal.Title + ": a plug-in's output; nothing typed here runs (✕ closes it; it opens again with the next output)";
+        }
+
+        var text = terminal.Title + (terminal.Profile is { } profile ? $" · {profile.Name}" : "") + " · " + terminal.WorkingDirectory;
+        return terminal.ExitCode is { } code ? text + $" · ended with exit code {code}" : text;
+    }
+
+    private ITerminalHost Host()
+    {
+        try
+        {
+            return TerminalHosts.Resolve(_options().TerminalHost);
+        }
+        catch (NotRegisteredException)
+        {
+            return TerminalHosts.Get(TerminalHosts.Pipe);
+        }
+    }
+
+    private async Task DiscoverAsync()
+    {
+        IReadOnlyList<TerminalProfile> found;
+        try
+        {
+            found = await TerminalProfiles.DiscoverAsync((source, error) => _host.Dispatch(() =>
+                _host.Log(EditorLogLevel.Warning, $"Terminal: the profile source '{source}' failed: {error.Message}", error))).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _host.Dispatch(() =>
+        {
+            try
+            {
+                if (!_disposed)
+                {
+                    _found = found;
+                    _host.Log(EditorLogLevel.Information, $"Terminal: profiles found: {MachineTerminalProfiles.Describe(found)}.");
+                    RegisterProfileCommands();
+                    Changed?.Invoke(this, EventArgs.Empty);
+                }
+            }
+            finally
+            {
+                done.TrySetResult();
+            }
+        });
+        await done.Task.ConfigureAwait(false);
+    }
+
+    // One command a profile ("Terminal: New PowerShell 7"), and its row in the "+" chevron's menu; taken back and made
+    // again when the profiles change.
+    private void RegisterProfileCommands()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var profiles = Profiles;
+        var signature = string.Join("|", profiles.Select(p => p.Id + "=" + p.Name));
+        if (signature == _profileSignature)
+        {
+            return;
+        }
+
+        _profileSignature = signature;
+        foreach (var (menu, command) in _profileMenuItems)
+        {
+            EditorMenus.Unregister(menu, command);
+        }
+
+        foreach (var id in _profileCommands)
+        {
+            EditorCommands.Unregister(id);
+        }
+
+        _profileMenuItems.Clear();
+        _profileCommands.Clear();
+        int order = 0;
+        foreach (var profile in profiles)
+        {
+            var chosen = profile;
+            var id = TerminalCommandIds.NewProfile(profile.Id);
+            EditorCommands.Register(new EditorCommand(id, "Terminal: New " + profile.Name, (_, _) =>
+            {
+                OpenShown(chosen);
+                return Task.CompletedTask;
+            }));
+            _profileCommands.Add(id);
+            EditorMenus.Register(new MenuItem(EditorContextMenus.TerminalProfiles, id, null, order++, 0));
+            _profileMenuItems.Add((EditorContextMenus.TerminalProfiles, id));
+        }
+    }
+
+    private void OpenShown(TerminalProfile profile, string? folder = null, int? group = null)
+    {
+        try
+        {
+            Open(profile, folder, group);
+            ViewRequested?.Invoke(this, TerminalViewRequest.Show);
+        }
+        catch (InvalidOperationException error)
+        {
+            _host.Log(EditorLogLevel.Error, $"Terminal: {error.Message}", error);
+            _ = _host.ShowMessageAsync("Craft: the terminal did not start", error.Message);
+        }
+    }
+
+    /// <summary>Opens a terminal of <paramref name="profile"/> (in <paramref name="folder"/>, else by the rule; in split group <paramref name="group"/>, else its own).</summary>
+    /// <exception cref="InvalidOperationException">The shell could not be started.</exception>
+    public TerminalInstance Open(TerminalProfile profile, string? folder = null, int? group = null)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return OpenCore(folder ?? profile.Folder, null, profile, group);
+    }
+
+    /// <summary>Makes <paramref name="profile"/> the default (written to the settings through <see cref="StoreDefaultProfile"/>): null when done, else why not.</summary>
+    public string? SetDefaultProfile(TerminalProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (StoreDefaultProfile is not { } store)
+        {
+            return "This window cannot write settings.";
+        }
+
+        var problem = store(profile.Name);
+        if (problem is null)
+        {
+            _host.Log(EditorLogLevel.Information, $"Terminal: the default profile is {profile.Name}.");
+            RegisterProfileCommands();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        return problem;
+    }
+
+    /// <summary>Splits <paramref name="terminal"/>'s group: a terminal of its profile, in its folder, beside it.</summary>
+    public TerminalInstance? Split(TerminalInstance? terminal = null)
+    {
+        terminal ??= ActiveTerminal;
+        if (terminal is null || terminal.IsReadOnly)
+        {
+            return OpenDefaultShown();
+        }
+
+        var profile = terminal.Profile ?? DefaultProfile;
+        string folder;
+        lock (terminal.Screen.Sync)
+        {
+            folder = terminal.Screen.WorkingDirectory is { } current && Directory.Exists(current) ? current : terminal.WorkingDirectory;
+        }
+
+        try
+        {
+            var split = Open(profile, folder, terminal.Group);
+            ViewRequested?.Invoke(this, TerminalViewRequest.Show);
+            return split;
+        }
+        catch (InvalidOperationException error)
+        {
+            _host.Log(EditorLogLevel.Error, $"Terminal: {error.Message}", error);
+            _ = _host.ShowMessageAsync("Craft: the terminal did not start", error.Message);
+            return null;
+        }
+    }
+
+    private TerminalInstance? OpenDefaultShown()
+    {
+        if (!TryOpen())
+        {
+            return null;
+        }
+
+        ViewRequested?.Invoke(this, TerminalViewRequest.Show);
+        return ActiveTerminal;
     }
 
     /// <summary>The open terminals, in their tabs' order.</summary>
@@ -135,7 +420,10 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
     /// (<c>CRAFT_TERMINAL_CWD</c>, the open folder, the home folder); it becomes the active one.
     /// </summary>
     /// <exception cref="InvalidOperationException">No shell could be started (the host, the program or the folder; the message says which).</exception>
-    public TerminalInstance Open(string? folder = null, EditorTerminalRequest? request = null)
+    public TerminalInstance Open(string? folder = null, EditorTerminalRequest? request = null) =>
+        OpenCore(folder, request, request?.Shell is null ? DefaultProfile : null, null);
+
+    private TerminalInstance OpenCore(string? folder, EditorTerminalRequest? request, TerminalProfile? profile, int? group)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var options = _options();
@@ -155,15 +443,28 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
             _host.Log(EditorLogLevel.Warning, $"Terminal: {note}; it starts in {start.Reason}, {start.Folder}.");
         }
 
-        var shell = request?.Shell ?? TerminalLaunch.Shell(options, host);
-        var environment = TerminalLaunch.Environment(ParentEnvironment(), options.TerminalEnvironment, request?.Environment, OperatingSystem.IsWindows());
+        var shell = request?.Shell ?? profile?.Shell ?? TerminalLaunch.Shell(options, host);
+        var environment = TerminalLaunch.Environment(ParentEnvironment(), options.TerminalEnvironment, request?.Environment ?? profile?.Environment, OperatingSystem.IsWindows());
         var terminal = TerminalInstance.Start(_nextId, host, new TerminalStartInfo(shell, start.Folder, LastSize, environment), options.TerminalScrollback, _host.Dispatch, request?.Name);
         _nextId++;
+        terminal.Profile = profile;
+        lock (terminal.Screen.Sync)
+        {
+            terminal.Screen.DefaultCursorStyle = TerminalLaunch.CursorStyle(options.TerminalCursor);
+        }
+
         terminal.TitleChanged += OnTerminalChanged;
         terminal.ExitedChanged += OnTerminalChanged;
-        _terminals.Add(terminal);
+        int at = _terminals.Count;
+        if (group is { } splitOf && _terminals.FindLastIndex(t => t.Group == splitOf) is >= 0 and var last)
+        {
+            terminal.Group = splitOf;
+            at = last + 1;                                   // beside the group's last terminal
+        }
+
+        _terminals.Insert(at, terminal);
         ActiveTerminal = terminal;
-        _host.Log(EditorLogLevel.Information, $"Terminal {terminal.Id}: {shell.Program} {shell.Arguments} in {start.Folder} ({start.Reason}, host {host.Name}).");
+        _host.Log(EditorLogLevel.Information, $"Terminal {terminal.Id}: {(profile is null ? "" : profile.Name + ", ")}{shell.Program} {shell.Arguments} in {start.Folder} ({start.Reason}, host {host.Name}).");
         Changed?.Invoke(this, EventArgs.Empty);
         return terminal;
     }
@@ -307,6 +608,20 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         {
             EditorCommands.Unregister(id);
         }
+
+        foreach (var (menu, command) in _profileMenuItems)
+        {
+            EditorMenus.Unregister(menu, command);
+        }
+
+        foreach (var id in _profileCommands)
+        {
+            EditorCommands.Unregister(id);
+        }
+
+        _profileMenuItems.Clear();
+        _profileCommands.Clear();
+        SettingChoiceSources.Unregister(SettingChoiceSources.TerminalProfiles);
     }
 
     private void OnTerminalChanged(object? sender, EventArgs e) => Changed?.Invoke(this, EventArgs.Empty);
@@ -362,7 +677,7 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
 
     private async Task CopyAsync()
     {
-        if (ActiveTerminal?.SelectedText() is { Length: > 0 } text)
+        if (Target()?.SelectedText() is { Length: > 0 } text)
         {
             await CopyTextAsync(text);
         }
@@ -401,7 +716,7 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
 
     private async Task PasteAsync()
     {
-        if (ActiveTerminal is { } terminal && await _clipboard.GetTextAsync() is { Length: > 0 } text)
+        if (Target() is { } terminal && await _clipboard.GetTextAsync() is { Length: > 0 } text)
         {
             terminal.Paste(text);
         }
@@ -471,15 +786,21 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         Command(TerminalCommandIds.Previous, "Terminal: Previous terminal", () => Step(-1), () => _terminals.Count > 1, null);
         Command(TerminalCommandIds.Kill, "Terminal: Kill the active terminal", () =>
         {
-            if (ActiveTerminal is { } terminal)
+            if (Target() is { } terminal)
             {
                 Close(terminal);
             }
-        }, () => ActiveTerminal is not null, null);
-        Command(TerminalCommandIds.Clear, "Terminal: Clear", () => ActiveTerminal?.Clear(), () => ActiveTerminal is not null, null);
-        CommandAsync(TerminalCommandIds.Copy, "Terminal: Copy the selection", CopyAsync, () => ActiveTerminal?.Selection is { IsEmpty: false }, "Ctrl+Shift+C");
+        }, () => Target() is not null, null);
+        Command(TerminalCommandIds.Clear, "Terminal: Clear", () => Target()?.Clear(), () => Target() is not null, null);
+        CommandAsync(TerminalCommandIds.Copy, "Terminal: Copy the selection", CopyAsync, () => Target()?.Selection is { IsEmpty: false }, "Ctrl+Shift+C");
         CommandAsync(TerminalCommandIds.Paste, "Terminal: Paste", PasteAsync, () => ActiveTerminal is { HasExited: false }, "Ctrl+Shift+V");
         Command(TerminalCommandIds.RunSelection, "Terminal: Run the selection in the terminal", RunSelection, () => _host.ActiveDocument is not null, null);
+
+        CommandAsync(TerminalCommandIds.NewWithProfile, "Terminal: New terminal with a profile…", NewWithProfileAsync, null, null);
+        CommandAsync(TerminalCommandIds.SelectDefaultProfile, "Terminal: Select the default profile…", SelectDefaultProfileAsync, null, null);
+        Command(TerminalCommandIds.Split, "Terminal: Split the terminal", () => Split(Target()), null, null);
+        CommandAsync(TerminalCommandIds.Rename, "Terminal: Rename…", RenameAsync, () => Target() is { IsReadOnly: false }, null);
+        Command(TerminalCommandIds.SelectAll, "Terminal: Select all", () => Target()?.SelectAll(), () => Target() is not null, null);
 
         Menu(EditorMenus.View, TerminalCommandIds.Toggle, 5, 0);
         Menu(EditorMenus.View, TerminalCommandIds.New, 5, 1);
@@ -488,6 +809,67 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
         Menu(EditorMenus.Run, TerminalCommandIds.RunSelection, 0, 0);
         Menu(EditorMenus.Run, TerminalCommandIds.Clear, 1, 0);
         Menu(EditorMenus.Run, TerminalCommandIds.Kill, 1, 1);
+        Menu(EditorMenus.View, TerminalCommandIds.Split, 5, 4);
+
+        // B9: the terminal's context menu, and the chevron's rows after the profiles.
+        Menu(EditorContextMenus.Terminal, TerminalCommandIds.Copy, 0, 0);
+        Menu(EditorContextMenus.Terminal, TerminalCommandIds.Paste, 0, 1);
+        Menu(EditorContextMenus.Terminal, TerminalCommandIds.SelectAll, 0, 2);
+        Menu(EditorContextMenus.Terminal, TerminalCommandIds.Clear, 1, 0);
+        Menu(EditorContextMenus.Terminal, TerminalCommandIds.Split, 2, 0);
+        Menu(EditorContextMenus.Terminal, TerminalCommandIds.Rename, 2, 1);
+        Menu(EditorContextMenus.Terminal, TerminalCommandIds.Kill, 2, 2);
+        Menu(EditorContextMenus.TerminalProfiles, TerminalCommandIds.SelectDefaultProfile, 1, 0);
+    }
+
+    // The context menu's terminal (its target), else the active one.
+    private TerminalInstance? Target() =>
+        EditorContextMenus.Target is { Menu: EditorContextMenus.Terminal, Item: TerminalInstance target } && _terminals.Contains(target) ? target : ActiveTerminal;
+
+    private async Task NewWithProfileAsync()
+    {
+        var profiles = Profiles;
+        if (Ui is not { } ui || profiles.Count == 0)
+        {
+            OpenShown(DefaultProfile);
+            return;
+        }
+
+        int picked = await ui.PickAsync("New terminal with a profile", [.. profiles.Select(p => p.Name)]);
+        if (picked >= 0 && picked < profiles.Count)
+        {
+            OpenShown(profiles[picked]);
+        }
+    }
+
+    private async Task SelectDefaultProfileAsync()
+    {
+        var profiles = Profiles;
+        if (Ui is not { } ui || profiles.Count == 0)
+        {
+            return;
+        }
+
+        var current = DefaultProfile;
+        int picked = await ui.PickAsync("Default terminal profile (now " + current.Name + ")", [.. profiles.Select(p => p.Name)]);
+        if (picked >= 0 && picked < profiles.Count && SetDefaultProfile(profiles[picked]) is { } problem)
+        {
+            await ui.ShowMessageAsync("Craft: the default profile was not written", problem);
+        }
+    }
+
+    private async Task RenameAsync()
+    {
+        if (Target() is not { IsReadOnly: false } terminal || Ui is not { } ui)
+        {
+            return;
+        }
+
+        var name = await ui.PromptAsync("Rename the terminal", "A name for its tab; empty gives it back the shell's own.", "Name", terminal.UserName ?? terminal.ShortTitle, "Rename");
+        if (name is not null && _terminals.Contains(terminal))
+        {
+            terminal.Rename(name);
+        }
     }
 
     private void Command(string id, string title, Action execute, Func<bool>? canExecute, string? chord) =>

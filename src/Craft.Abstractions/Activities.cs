@@ -32,8 +32,15 @@ public static class ActivityKinds
     /// <summary>An index being built (code search, phase P6).</summary>
     public const string Indexing = "indexing";
 
-    /// <summary>A workspace's build (Roslyn's projects, source generators, a compilation).</summary>
+    /// <summary>A build or a compilation pass (source generators, a diagnostics pass).</summary>
     public const string Build = "build";
+
+    /// <summary>
+    /// A workspace being made ready (B10): a folder opening, its projects read, a language building its workspace. The
+    /// window's global loader (the thin line under the title bar) shows this kind, and any activity marked
+    /// <see cref="IActivity.Global"/>.
+    /// </summary>
+    public const string Workspace = "workspace";
 
     /// <summary>A save of a file.</summary>
     public const string Save = "save";
@@ -98,6 +105,17 @@ public interface IActivity : IDisposable
     bool IsEnded { get; }
 
     /// <summary>
+    /// Whether the window's global loader shows it, whatever its kind (B10; the loader always shows
+    /// <see cref="ActivityKinds.Workspace"/>): a plug-in sets it for work the whole window waits on. A host without a
+    /// loader ignores it.
+    /// </summary>
+    bool Global
+    {
+        get => false;
+        set { }
+    }
+
+    /// <summary>
     /// How far it is: <paramref name="fraction"/> from 0 to 1 (null: not known, a spinner shows), what it does now
     /// (<paramref name="text"/>, null keeps the last), and how fast (<paramref name="rate"/>, null keeps the last). Any
     /// thread; ignored once it ended.
@@ -141,6 +159,9 @@ public sealed record ActivitySnapshot(long Id, string Title, string Kind, string
 
     /// <summary>Whether it is kept in the notification centre once it ends (false: shown while it runs only).</summary>
     public bool Keep { get; init; } = true;
+
+    /// <summary>Whether it was marked for the window's global loader (<see cref="IActivity.Global"/>).</summary>
+    public bool Global { get; init; }
 }
 
 /// <summary>

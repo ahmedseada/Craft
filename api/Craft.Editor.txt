@@ -51,6 +51,24 @@ static class Craft.Editor.Activities.ActivityText
   static System.String Progress(Craft.Abstractions.ActivitySnapshot activity)
   static System.String Stall(System.TimeSpan duration, System.String label)
   static System.String StatusLine(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running)
+static class Craft.Editor.Activities.GlobalLoader
+  static Craft.Editor.Activities.LoaderState Of(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running, Craft.Core.CraftOptions options)
+  static System.Boolean Counts(Craft.Abstractions.ActivitySnapshot activity, Craft.Core.CraftOptions options)
+  static System.TimeSpan? DueIn(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ActivitySnapshot> running, Craft.Core.CraftOptions options)
+sealed class Craft.Editor.Activities.LoaderState : System.IEquatable<Craft.Editor.Activities.LoaderState>
+  Craft.Editor.Activities.LoaderState <Clone>$()
+  System.Boolean Equals(Craft.Editor.Activities.LoaderState other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Visible { get; init; }
+  System.Double? Fraction { get; init; }
+  System.Int32 Count { get; init; }
+  System.Int32 GetHashCode()
+  System.String Title { get; init; }
+  System.String ToString()
+  System.String Tooltip { get; }
+  System.Void Deconstruct(out System.Boolean Visible, out System.Double? Fraction, out System.String Title, out System.Int32 Count)
+  ctor(System.Boolean Visible, System.Double? Fraction, System.String Title, System.Int32 Count)
+  static Craft.Editor.Activities.LoaderState Hidden { get; }
 sealed class Craft.Editor.Activities.NotificationCenter : System.IDisposable
   Craft.Abstractions.IEditorNotification Post(System.String source, System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
   Craft.Abstractions.IEditorNotification ShowStatus(System.String source, System.String title, System.String text, Craft.Abstractions.NotificationSeverity severity = Information, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction> actions = null)
@@ -828,6 +846,8 @@ sealed class Craft.Editor.Shell.EmptyState : System.IEquatable<Craft.Editor.Shel
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Recent { get; init; }
   System.Int32 GetHashCode()
+  System.String Icon { get; init; }
+  System.String ListTitle { get; init; }
   System.String Text { get; init; }
   System.String Title { get; init; }
   System.String ToString()
@@ -1116,6 +1136,7 @@ sealed class Craft.Editor.Shell.PanelLayout
   const System.String ExplorerView = explorer
   ctor(Craft.Core.Settings.CraftSettings settings, Craft.Core.CraftOptions options, System.Action<System.String, System.Exception> failed = null)
   event System.EventHandler Changed
+  static System.Double DefaultSizeOf(Craft.Editor.Shell.ShellPanel panel)
   static System.String OpenVariable(Craft.Editor.Shell.ShellPanel panel)
   static System.String SizeVariable(Craft.Editor.Shell.ShellPanel panel)
 abstract class Craft.Editor.Shell.PanelList
@@ -1306,14 +1327,19 @@ sealed class Craft.Editor.Shell.SemanticCard : System.IEquatable<Craft.Editor.Sh
   Craft.Editor.Shell.SemanticCard <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.SemanticCard other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean IsFailed { get; }
   System.Boolean IsReady { get; init; }
   System.Int32 GetHashCode()
+  System.String BuildTime { get; init; }
   System.String Engine { get; init; }
+  System.String Failure { get; init; }
   System.String Memory { get; init; }
   System.String Projects { get; init; }
   System.String State { get; init; }
+  System.String StatusBarText { get; }
   System.String StatusText { get; }
   System.String ToString()
+  System.String Tooltip { get; }
   System.Void Deconstruct(out System.String Engine, out System.String State, out System.String Projects, out System.String Memory, out System.Boolean IsReady)
   ctor(System.String Engine, System.String State, System.String Projects, System.String Memory, System.Boolean IsReady)
 sealed class Craft.Editor.Shell.SettingEntry : System.IEquatable<Craft.Editor.Shell.SettingEntry>
@@ -1442,6 +1468,7 @@ static class Craft.Editor.Shell.ShellEmptyStates
   static Craft.Editor.Shell.EmptyState Notifications()
   static Craft.Editor.Shell.EmptyState Problems(Craft.Editor.EditorModel model, System.String fileName)
   static Craft.Editor.Shell.EmptyState Search(Craft.Editor.EditorHost host, System.String query, System.Boolean hasFolder, System.Boolean hasEditor, System.Boolean indexing)
+  static Craft.Editor.Shell.EmptyState Terminal(Craft.Editor.EditorHost host, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> profiles, System.String defaultName, System.String startFolder, System.String reason)
 sealed class Craft.Editor.Shell.ShellLayout
   Craft.Core.CraftOptions Options { get; set; }
   Craft.Editor.Shell.ShellLayoutKind Kind { get; }
@@ -1548,6 +1575,7 @@ static class Craft.Editor.Shell.ShellText
   static System.String PlannedDevice(Craft.Abstractions.ModelProviderStatus status, System.String role = null)
   static System.String Position(System.Int32 line, System.Int32 column)
   static System.String Problems(System.Int32 errors, System.Int32 warnings)
+  static System.String Seconds(System.TimeSpan time)
   static System.ValueTuple<Craft.Abstractions.IModelProvider, Craft.Abstractions.ModelProviderStatus>? ModelStatus()
 static class Craft.Editor.Shell.ShellTooltips
   static System.String For(Craft.Editor.EditorHost host, System.String title, System.String commandId)
@@ -1590,6 +1618,34 @@ enum Craft.Editor.Shell.ShortcutSource : System.IComparable, System.IConvertible
   Editor = 3
   KeyMap = 1
   User = 2
+sealed class Craft.Editor.Shell.SplitterModel
+  Craft.Editor.Shell.SplitterState Cancel()
+  Craft.Editor.Shell.SplitterState End()
+  Craft.Editor.Shell.SplitterState Move(System.Double pointer)
+  Craft.Editor.Shell.SplitterState Reset()
+  Craft.Editor.Shell.SplitterState State { get; }
+  Craft.Editor.Shell.SplitterState? Key(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
+  System.Boolean Dragging { get; }
+  System.Boolean Snap { get; set; }
+  System.Boolean Vertical { get; }
+  System.Double DefaultSize { get; set; }
+  System.Double KeyStep { get; set; }
+  System.Double Minimum { get; set; }
+  System.Func<System.Double, System.Double> Clamp { get; set; }
+  System.Int32 Grows { get; }
+  System.Void Begin(System.Double pointer)
+  System.Void SetSize(System.Double size)
+  ctor(System.Int32 grows, System.Boolean vertical)
+struct Craft.Editor.Shell.SplitterState : System.IEquatable<Craft.Editor.Shell.SplitterState>
+  System.Boolean Collapsed { get; init; }
+  System.Boolean Equals(Craft.Editor.Shell.SplitterState other)
+  System.Boolean Equals(System.Object obj)
+  System.Double Shown { get; }
+  System.Double Size { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out System.Double Size, out System.Boolean Collapsed)
+  ctor(System.Double Size, System.Boolean Collapsed)
 static class Craft.Editor.Shell.StandardShortcuts
   const System.String AddCaretAbove = craft.editor.addCaretAbove
   const System.String AddCaretBelow = craft.editor.addCaretBelow
@@ -1684,6 +1740,14 @@ sealed class Craft.Editor.Shell.WelcomeShortcut : System.IEquatable<Craft.Editor
   System.String ToString()
   System.Void Deconstruct(out System.String Title, out System.String CommandId, out System.String Keys)
   ctor(System.String Title, System.String CommandId, System.String Keys)
+sealed class Craft.Editor.Shell.WorkspaceNotices
+  System.Int32 Posted { get; }
+  System.Void Observe(Craft.Editor.EditorModel model)
+  System.Void Observe(System.String language, Craft.Abstractions.ISemanticLanguageSession session)
+  System.Void Observe(System.String language, Craft.Abstractions.SemanticTelemetry telemetry, System.Action retry)
+  ctor(System.Func<System.String, System.String, System.String, Craft.Abstractions.NotificationSeverity, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.NotificationAction>, Craft.Abstractions.IEditorNotification> post)
+  static System.String Plain(System.String failure, System.String folder)
+  static System.String ReadyText(Craft.Abstractions.SemanticTelemetry telemetry, System.String folder)
 sealed class Craft.Editor.SmoothScroll
   System.Boolean IsMoving { get; }
   System.Boolean Step(System.Int64 now, System.Int32 milliseconds, System.TimeProvider time)
@@ -1745,39 +1809,54 @@ static class Craft.Editor.Terminal.TerminalCommandIds
   const System.String Copy = terminal.copy
   const System.String Kill = terminal.kill
   const System.String New = terminal.new
+  const System.String NewProfilePrefix = terminal.new.
+  const System.String NewWithProfile = terminal.newWithProfile
   const System.String Next = terminal.next
   const System.String Paste = terminal.paste
   const System.String Previous = terminal.previous
+  const System.String Rename = terminal.rename
   const System.String RunSelection = terminal.runSelection
+  const System.String SelectAll = terminal.selectAll
+  const System.String SelectDefaultProfile = terminal.selectDefaultProfile
+  const System.String Split = terminal.split
   const System.String Toggle = terminal.toggle
+  static System.String NewProfile(System.String id)
 enum Craft.Editor.Terminal.TerminalCursorStyle : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Bar = 2
   Block = 0
   Underline = 1
 sealed class Craft.Editor.Terminal.TerminalInstance : System.IDisposable
   Craft.Abstractions.ITerminalSession Session { get; }
+  Craft.Abstractions.TerminalProfile Profile { get; }
   Craft.Abstractions.TerminalShell Shell { get; }
   Craft.Editor.Terminal.TerminalScreen Screen { get; }
   Craft.Editor.Terminal.TerminalSelection? Selection { get; set; }
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Boolean HasExited { get; }
+  System.Boolean IsBusy(System.TimeProvider time, System.Int64 now, System.TimeSpan after, System.TimeSpan quiet)
   System.Boolean IsReadOnly { get; }
+  System.Int32 Group { get; }
   System.Int32 Id { get; }
   System.Int32 ScrollBack { get; set; }
   System.Int32? ExitCode { get; }
   System.Int64 BytesRead { get; }
   System.String HostName { get; }
   System.String SelectedText()
+  System.String ShortTitle { get; }
   System.String Title { get; }
+  System.String UserName { get; }
   System.String WorkingDirectory { get; }
   System.Threading.Tasks.Task Completion { get; }
   System.Threading.Tasks.Task Writes { get; }
   System.Threading.Tasks.Task<System.Int32> Exited { get; }
+  System.TimeProvider Clock { get; set; }
   System.Void Clear()
   System.Void ClearSelection()
   System.Void Dispose()
   System.Void Paste(System.String text)
+  System.Void Rename(System.String name)
   System.Void Resize(Craft.Abstractions.TerminalSize size)
+  System.Void SelectAll()
   System.Void SendText(System.String text)
   System.Void Write(System.ReadOnlySpan<System.Byte> input)
   event System.EventHandler ExitedChanged
@@ -1791,26 +1870,47 @@ static class Craft.Editor.Terminal.TerminalKeys
   static System.Byte[] EncodeText(System.String text)
   static System.Int32 Encode(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers, System.Boolean applicationCursorKeys, System.Span<System.Byte> destination)
 static class Craft.Editor.Terminal.TerminalLaunch
+  static Craft.Abstractions.TerminalProfile DefaultProfile(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> profiles, Craft.Core.CraftOptions options, Craft.Abstractions.ITerminalHost host)
+  static Craft.Abstractions.TerminalProfile SettingProfile(Craft.Core.CraftOptions options)
   static Craft.Abstractions.TerminalShell Shell(Craft.Core.CraftOptions options, Craft.Abstractions.ITerminalHost host)
+  static Craft.Editor.Terminal.TerminalCursorStyle CursorStyle(System.String setting)
   static Craft.Editor.Terminal.TerminalStartFolder StartFolder(System.String chosen, System.String overrideFolder, System.String workspaceFolder, System.String home, System.Func<System.String, System.Boolean> exists = null)
+  static System.Boolean ListsTerminals(Craft.Core.CraftOptions options, System.Int32 count)
   static System.Collections.Generic.Dictionary<System.String, System.String> Environment(System.Collections.IDictionary parent, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<System.String, System.String>> extra, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> request = null, System.Boolean ignoreCase = false)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> AllProfiles(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> found, Craft.Core.CraftOptions options)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> UserProfiles(Craft.Core.CraftOptions options)
   static System.String FindOnPath(System.String program, System.String path, System.Char separator, System.String extensions = null, System.Func<System.String, System.Boolean> exists = null)
   static System.String HomeFolder()
+  static System.String IconOf(System.String program)
+  static System.String ShortTitle(System.String title, System.String fallback)
   static System.String TitleOf(Craft.Abstractions.TerminalShell shell, System.String folder)
 sealed class Craft.Editor.Terminal.TerminalManager : Craft.Abstractions.IEditorTerminals, System.IDisposable
   Craft.Abstractions.IEditorInputSink Input { get; }
   Craft.Abstractions.IEditorTerminalOutput OpenOutput(System.String name)
+  Craft.Abstractions.TerminalProfile DefaultProfile { get; }
   Craft.Abstractions.TerminalSize LastSize { get; set; }
+  Craft.Editor.Abstractions.IShellUi Ui { get; set; }
   Craft.Editor.Terminal.TerminalInstance ActiveTerminal { get; }
+  Craft.Editor.Terminal.TerminalInstance Open(Craft.Abstractions.TerminalProfile profile, System.String folder = null, System.Int32? group = null)
   Craft.Editor.Terminal.TerminalInstance Open(System.String folder = null, Craft.Abstractions.EditorTerminalRequest request = null)
+  Craft.Editor.Terminal.TerminalInstance Split(Craft.Editor.Terminal.TerminalInstance terminal = null)
+  System.Boolean IsBusy(Craft.Editor.Terminal.TerminalInstance terminal)
   System.Boolean KeepsChord(Craft.Abstractions.KeyChord chord)
   System.Boolean TryCopyOnCtrlC()
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TerminalProfile> Profiles { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Terminal.TerminalInstance> GroupOf(Craft.Editor.Terminal.TerminalInstance terminal)
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Terminal.TerminalInstance> Terminals { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Terminal.TerminalTabRow> Rows()
   System.Func<System.Collections.IDictionary> ParentEnvironment { get; set; }
+  System.Func<System.String, System.String> StoreDefaultProfile { get; set; }
   System.String HomeFolder { get; set; }
+  System.String SetDefaultProfile(Craft.Abstractions.TerminalProfile profile)
   System.String WorkspaceFolder { get; }
+  System.Threading.Tasks.Task ProfilesReady { get; }
+  System.Threading.Tasks.Task RefreshProfilesAsync()
   System.Threading.Tasks.Task<System.Boolean> ExecuteNewAsync()
   System.Void Activate(Craft.Editor.Terminal.TerminalInstance terminal)
+  System.Void ApplyOptions()
   System.Void Close(Craft.Editor.Terminal.TerminalInstance terminal)
   System.Void Dispose()
   System.Void OpenInFolder(System.String folder)
@@ -1847,6 +1947,7 @@ sealed class Craft.Editor.Terminal.TerminalRow
 sealed class Craft.Editor.Terminal.TerminalScreen
   Craft.Editor.Terminal.TerminalCell CellAt(System.Int32 row, System.Int32 column)
   Craft.Editor.Terminal.TerminalCursorStyle CursorStyle { get; }
+  Craft.Editor.Terminal.TerminalCursorStyle DefaultCursorStyle { get; set; }
   Craft.Editor.Terminal.TerminalResponder Respond { get; set; }
   Craft.Editor.Terminal.TerminalRow LineAt(System.Int64 line)
   Craft.Editor.Terminal.TerminalRow ScreenRow(System.Int32 row)
@@ -1856,6 +1957,7 @@ sealed class Craft.Editor.Terminal.TerminalScreen
   System.Boolean BracketedPaste { get; }
   System.Boolean CursorVisible { get; }
   System.Boolean IsAlternate { get; }
+  System.Boolean? CommandRunning { get; }
   System.Int32 Bells { get; }
   System.Int32 Columns { get; }
   System.Int32 CursorColumn { get; }
@@ -1903,6 +2005,23 @@ sealed class Craft.Editor.Terminal.TerminalStartFolder : System.IEquatable<Craft
   System.String ToString()
   System.Void Deconstruct(out System.String Folder, out System.String Reason, out System.String Note)
   ctor(System.String Folder, System.String Reason, System.String Note)
+sealed class Craft.Editor.Terminal.TerminalTabRow : System.IEquatable<Craft.Editor.Terminal.TerminalTabRow>
+  Craft.Editor.Terminal.TerminalTabRow <Clone>$()
+  System.Boolean Active { get; init; }
+  System.Boolean Busy { get; init; }
+  System.Boolean Ended { get; init; }
+  System.Boolean Equals(Craft.Editor.Terminal.TerminalTabRow other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean ReadOnly { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Terminal.TerminalInstance> Terminals { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Group { get; init; }
+  System.String Icon { get; init; }
+  System.String Label { get; init; }
+  System.String ToString()
+  System.String Tooltip { get; init; }
+  System.Void Deconstruct(out System.Int32 Group, out System.Collections.Generic.IReadOnlyList<Craft.Editor.Terminal.TerminalInstance> Terminals, out System.String Label, out System.String Icon, out System.String Tooltip, out System.Boolean Active, out System.Boolean Busy, out System.Boolean Ended, out System.Boolean ReadOnly)
+  ctor(System.Int32 Group, System.Collections.Generic.IReadOnlyList<Craft.Editor.Terminal.TerminalInstance> Terminals, System.String Label, System.String Icon, System.String Tooltip, System.Boolean Active, System.Boolean Busy, System.Boolean Ended, System.Boolean ReadOnly)
 enum Craft.Editor.Terminal.TerminalViewRequest : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Reveal = 2
   Show = 0

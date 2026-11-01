@@ -109,6 +109,11 @@ public static class InventoryTests
             ["CRAFT_QUICK_OPEN_BACKGROUND_FILES"] = "50", ["CRAFT_QUICK_OPEN_RECENT"] = "5",
             // The owner's note 26: the telemetry table.
             ["CRAFT_TELEMETRY_SAMPLES"] = "30", ["CRAFT_TELEMETRY_SLOW_MS"] = "250",
+            // B8-B10: the splitters, the terminal's profiles and design, the global loader.
+            ["CRAFT_SPLITTER_GRIP"] = "12", ["CRAFT_SPLITTER_HOVER_MS"] = "50", ["CRAFT_SPLITTER_KEY_STEP"] = "20", ["CRAFT_SPLITTER_SNAP"] = "false",
+            ["CRAFT_TERMINAL_DEFAULT_PROFILE"] = "Git Bash", ["CRAFT_TERMINAL_PROFILES"] = "Node=node -i", ["CRAFT_TERMINAL_TABS"] = "tabs", ["CRAFT_TERMINAL_LIST_FROM"] = "5",
+            ["CRAFT_TERMINAL_PADDING"] = "4", ["CRAFT_TERMINAL_CURSOR"] = "bar", ["CRAFT_TERMINAL_CURSOR_BLINK"] = "false", ["CRAFT_TERMINAL_BUSY_AFTER_MS"] = "250",
+            ["CRAFT_TERMINAL_BUSY_QUIET_MS"] = "300", ["CRAFT_LOADER_DELAY_MS"] = "100", ["CRAFT_LOADER_KINDS"] = "workspace, indexing", ["CRAFT_LOADER_CYCLE_MS"] = "900",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -142,7 +147,13 @@ public static class InventoryTests
             WelcomeAtStart = false, UndoBarMilliseconds = 3000, FindBackgroundCharacters = 1000, FindRegexTimeoutMilliseconds = 100,
             QuickOpenBackgroundFiles = 50, QuickOpenRecent = 5,
             TelemetrySamples = 30, TelemetrySlowMilliseconds = 250,
+            SplitterGrip = 12, SplitterHoverMilliseconds = 50, SplitterKeyStep = 20, SplitterSnap = false,
+            TerminalDefaultProfile = "Git Bash", TerminalProfiles = options.TerminalProfiles, TerminalTabs = "tabs", TerminalListFrom = 5, TerminalPadding = 4,
+            TerminalCursor = "bar", TerminalCursorBlink = false, TerminalBusyAfterMilliseconds = 250, TerminalBusyQuietMilliseconds = 300,
+            LoaderDelayMilliseconds = 100, LoaderKinds = options.LoaderKinds, LoaderCycleMilliseconds = 900,
         }, options, "options read from every variable");
+        Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");
+        Check.True(Equals(new CraftOptions(), new CraftOptions()), "two default options compare equal (no list made per instance)");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");
         Check.SequenceEqual(["craft.quickOpen", "craft.settings"], options.TerminalEditorCommands, "CRAFT_TERMINAL_EDITOR_COMMANDS split at ','");
         Check.SequenceEqual(["loose", "csproj"], options.WorkspaceReaders, "CRAFT_WORKSPACE_READERS split at ','");

@@ -129,40 +129,8 @@ public static class TerminalLaunch
     /// trying each of <paramref name="extensions"/> (";"-separated, Windows' PATHEXT) when it has none; null when it is not
     /// there. A rooted program is returned when it exists.
     /// </summary>
-    public static string? FindOnPath(string program, string? path, char separator, string? extensions = null, Func<string, bool>? exists = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(program);
-        exists ??= File.Exists;
-        var suffixes = Path.HasExtension(program) || string.IsNullOrEmpty(extensions)
-            ? [""]
-            : extensions.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (Path.IsPathRooted(program))
-        {
-            foreach (var suffix in suffixes)
-            {
-                if (exists(program + suffix))
-                {
-                    return program + suffix;
-                }
-            }
-
-            return null;
-        }
-
-        foreach (var folder in (path ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            foreach (var suffix in suffixes)
-            {
-                var candidate = Path.Combine(folder.Trim('"'), program + suffix);
-                if (exists(candidate))
-                {
-                    return candidate;
-                }
-            }
-        }
-
-        return null;
-    }
+    public static string? FindOnPath(string program, string? path, char separator, string? extensions = null, Func<string, bool>? exists = null) =>
+        TerminalProgram.FindOnPath(program, path, separator, extensions, exists);
 
     /// <summary>A tab's title: the shell's file name without its extension, and the folder's name ("pwsh — Craft").</summary>
     public static string TitleOf(TerminalShell shell, string folder)
@@ -171,6 +139,164 @@ public static class TerminalLaunch
         var name = Path.GetFileNameWithoutExtension(shell.Program.Replace('\\', '/').Split('/')[^1]);
         var place = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
         return string.IsNullOrEmpty(place) ? name : $"{name} — {place}";
+    }
+
+    /// <summary>
+    /// The short name a tab shows for a shell's <paramref name="title"/> (B9): the running program of "C:\…\cmd.exe -
+    /// ping localhost" ("ping"), a program's path as its file name ("pwsh"), else the title itself, cut to 28 characters;
+    /// <paramref name="fallback"/> for an empty title.
+    /// </summary>
+    public static string ShortTitle(string? title, string fallback)
+    {
+        ArgumentNullException.ThrowIfNull(fallback);
+        var text = title?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            return fallback;
+        }
+
+        if (text.StartsWith("Administrator: ", StringComparison.Ordinal))
+        {
+            text = text["Administrator: ".Length..];
+        }
+
+        int dash = text.LastIndexOf(" - ", StringComparison.Ordinal);
+        if (dash > 0 && dash + 3 < text.Length)
+        {
+            var command = text[(dash + 3)..].Trim();
+            int space = command.IndexOf(' ');
+            var program = TerminalProgram.FileName(space > 0 ? command[..space] : command);
+            if (program.Length > 0)
+            {
+                return program;
+            }
+        }
+
+        if (text.IndexOfAny(['\\', '/']) >= 0 && !text.Contains(": ", StringComparison.Ordinal))
+        {
+            // A program's path ("C:\Program Files\PowerShell\7\pwsh.exe"); "user@host: ~/src" keeps its words.
+            return TerminalProgram.FileName(text);
+        }
+
+        return text.Length <= 28 ? text : string.Concat(text.AsSpan(0, 27), "…");
+    }
+
+    /// <summary>The user's profiles (<c>CRAFT_TERMINAL_PROFILES</c>), in their order: "Name=command line" each.</summary>
+    public static IReadOnlyList<TerminalProfile> UserProfiles(CraftOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var profiles = new List<TerminalProfile>(options.TerminalProfiles.Count);
+        foreach (var (name, command) in options.TerminalProfiles)
+        {
+            if (string.IsNullOrWhiteSpace(command))
+            {
+                continue;
+            }
+
+            var shell = TerminalProgram.Split(command);
+            profiles.Add(new TerminalProfile("user-" + TerminalProgram.Slug(name), name.Trim(), shell)
+            {
+                Icon = IconOf(shell.Program),
+                Source = "user",
+            });
+        }
+
+        return profiles;
+    }
+
+    /// <summary>The profile <c>CRAFT_TERMINAL_SHELL</c> makes (named by its path, B9), or null when it is not set.</summary>
+    public static TerminalProfile? SettingProfile(CraftOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return options.TerminalShell is { Length: > 0 } program
+            ? new TerminalProfile("setting", program, new TerminalShell(program, options.TerminalArguments ?? "")) { Icon = IconOf(program), Source = "setting" }
+            : null;
+    }
+
+    /// <summary>Every profile, in the order the menu lists them: the found ones, the user's, then <c>CRAFT_TERMINAL_SHELL</c>'s (an id taken once).</summary>
+    public static IReadOnlyList<TerminalProfile> AllProfiles(IReadOnlyList<TerminalProfile> found, CraftOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+        ArgumentNullException.ThrowIfNull(options);
+        var all = new List<TerminalProfile>(found.Count + 4);
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in found.Concat(UserProfiles(options)))
+        {
+            if (ids.Add(profile.Id))
+            {
+                all.Add(profile);
+            }
+        }
+
+        if (SettingProfile(options) is { } setting && ids.Add(setting.Id))
+        {
+            all.Add(setting);
+        }
+
+        return all;
+    }
+
+    /// <summary>
+    /// The profile "+" and New terminal open (B9): <c>CRAFT_TERMINAL_DEFAULT_PROFILE</c> when it names one of
+    /// <paramref name="profiles"/> (by name or id); else <c>CRAFT_TERMINAL_SHELL</c>'s; else the profile of
+    /// <paramref name="host"/>'s default program, else that program as a profile of its own. Its shell is then exactly
+    /// what phase T started (<c>CRAFT_TERMINAL_ARGS</c> applies to the setting's and the host's shell).
+    /// </summary>
+    public static TerminalProfile DefaultProfile(IReadOnlyList<TerminalProfile> profiles, CraftOptions options, ITerminalHost host)
+    {
+        ArgumentNullException.ThrowIfNull(profiles);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(host);
+        if (options.TerminalDefaultProfile.Length > 0 && profiles.FirstOrDefault(p => p.Is(options.TerminalDefaultProfile)) is { } chosen)
+        {
+            return chosen;
+        }
+
+        if (SettingProfile(options) is { } setting)
+        {
+            return setting;
+        }
+
+        var shell = Shell(options, host);
+        var match = profiles.FirstOrDefault(p => string.Equals(p.Shell.Program, shell.Program, StringComparison.OrdinalIgnoreCase))
+            ?? profiles.FirstOrDefault(p => string.Equals(TerminalProgram.FileName(p.Shell.Program), TerminalProgram.FileName(shell.Program), StringComparison.OrdinalIgnoreCase));
+        return match is not null
+            ? match with { Shell = shell }
+            : new TerminalProfile("default", TerminalProgram.FileName(shell.Program), shell) { Icon = IconOf(shell.Program), Source = "host" };
+    }
+
+    /// <summary>The icon of a program by its name (PowerShell, cmd, bash, WSL), else a prompt.</summary>
+    public static string IconOf(string program)
+    {
+        var name = TerminalProgram.FileName(program ?? "").ToLowerInvariant();
+        return name switch
+        {
+            "pwsh" or "powershell" => TerminalIcons.PowerShell,
+            "cmd" => TerminalIcons.CommandPrompt,
+            "bash" or "zsh" or "sh" or "fish" => TerminalIcons.Bash,
+            "wsl" => TerminalIcons.Linux,
+            _ => TerminalIcons.Prompt,
+        };
+    }
+
+    /// <summary>The cursor's shape of <c>CRAFT_TERMINAL_CURSOR</c> (block, underline, bar).</summary>
+    public static TerminalCursorStyle CursorStyle(string? setting) => setting?.Trim().ToLowerInvariant() switch
+    {
+        "underline" => TerminalCursorStyle.Underline,
+        "bar" => TerminalCursorStyle.Bar,
+        _ => TerminalCursorStyle.Block,
+    };
+
+    /// <summary>Whether <paramref name="count"/> terminals (tab groups) are listed at the panel's right rather than as tabs (<c>CRAFT_TERMINAL_TABS</c>).</summary>
+    public static bool ListsTerminals(CraftOptions options, int count)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return options.TerminalTabs switch
+        {
+            "list" => count > 0,
+            "tabs" => false,
+            _ => count >= options.TerminalListFrom,
+        };
     }
 
     private static string Expand(string value, Dictionary<string, string> variables)

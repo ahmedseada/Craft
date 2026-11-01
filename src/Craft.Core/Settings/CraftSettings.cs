@@ -45,7 +45,8 @@ public sealed record SettingRow(CraftVariable Variable, string? Value, SettingSo
 /// variables are refused from files that could not or should not set them, said so: <c>CRAFT_DATA_FOLDER</c> (where the
 /// user's file lives) is read from the environment only, and a workspace (a folder someone else may have written) sets
 /// neither <c>CRAFT_PLUGIN_FOLDERS</c> (code to load) nor <c>CRAFT_PLUGINS_DISABLED</c>, nor what the terminal runs
-/// (<c>CRAFT_TERMINAL_SHELL</c>, <c>CRAFT_TERMINAL_ARGS</c>, <c>CRAFT_TERMINAL_ENV</c>, <c>CRAFT_TERMINAL_HOST</c>). <see cref="Read"/> is what
+/// (<c>CRAFT_TERMINAL_SHELL</c>, <c>CRAFT_TERMINAL_ARGS</c>, <c>CRAFT_TERMINAL_ENV</c>, <c>CRAFT_TERMINAL_HOST</c>,
+/// <c>CRAFT_TERMINAL_PROFILES</c>). <see cref="Read"/> is what
 /// <see cref="CraftOptions.FromVariables"/> and the plug-ins' settings read through. Used on the UI thread.
 /// </summary>
 public sealed class CraftSettings
@@ -58,7 +59,7 @@ public sealed class CraftSettings
 
     private static readonly HashSet<string> EnvironmentOnly = new(StringComparer.Ordinal) { "CRAFT_DATA_FOLDER" };
     private static readonly HashSet<string> NotFromWorkspace = new(StringComparer.Ordinal) { "CRAFT_DATA_FOLDER", "CRAFT_PLUGIN_FOLDERS", "CRAFT_PLUGINS_DISABLED",
-        "CRAFT_TERMINAL_SHELL", "CRAFT_TERMINAL_ARGS", "CRAFT_TERMINAL_ENV", "CRAFT_TERMINAL_HOST",
+        "CRAFT_TERMINAL_SHELL", "CRAFT_TERMINAL_ARGS", "CRAFT_TERMINAL_ENV", "CRAFT_TERMINAL_HOST", "CRAFT_TERMINAL_PROFILES",
         // The crash watch starts before a workspace is read (the owner's note 21).
         "CRAFT_CRASH_TRAIL", "CRAFT_CRASH_TRAIL_KB", "CRAFT_CRASH_TRAIL_EXCEPTIONS", "CRAFT_CRASH_RUNS_KEPT", "CRAFT_CRASH_TICKET_OFFER" };
 

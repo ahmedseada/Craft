@@ -30,6 +30,9 @@ public sealed class TerminalInstance : IDisposable
     private long _bytesRead;
     private int _disposed;
     private int _scrollBack;
+    private string? _userName;
+    private long _lastEnterTicks;
+    private long _lastOutputTicks;
 
     private TerminalInstance(int id, ITerminalSession session, TerminalScreen screen, TerminalShell shell, string folder, string hostName, string? name, Action<Action> dispatch, bool readOnly = false)
     {
@@ -41,6 +44,7 @@ public sealed class TerminalInstance : IDisposable
         WorkingDirectory = folder;
         HostName = hostName;
         _name = name;
+        Group = id;
         _dispatch = dispatch;
         screen.Respond = Write;
         screen.TitleChanged += (_, _) => _dispatch(() => TitleChanged?.Invoke(this, EventArgs.Empty));
@@ -69,11 +73,108 @@ public sealed class TerminalInstance : IDisposable
     /// <summary>The terminal host that started it ("conpty", "pipe").</summary>
     public string HostName { get; }
 
+    /// <summary>The profile it was started from (B9: its icon and short name), or null (a plug-in's program, an output tab).</summary>
+    public TerminalProfile? Profile { get; internal set; }
+
+    /// <summary>The split group it shows in (B9: terminals of one group show side by side); its own id unless it was split from another.</summary>
+    public int Group { get; internal set; }
+
+    /// <summary>The name the user gave it (Rename), or null.</summary>
+    public string? UserName => _userName;
+
+    /// <summary>Gives it the user's name (empty or null: back to the shell's), raising <see cref="TitleChanged"/>.</summary>
+    public void Rename(string? name)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        if (trimmed != _userName)
+        {
+            _userName = trimmed;
+            TitleChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// The short name its tab shows (B9): the user's name, else a plug-in's, else the running program's as the shell's
+    /// title tells it ("ping"), else the profile's short name ("pwsh"), else the program's file name.
+    /// </summary>
+    public string ShortTitle
+    {
+        get
+        {
+            if (_userName is not null)
+            {
+                return _userName;
+            }
+
+            if (_name is not null)
+            {
+                return _name;
+            }
+
+            string? title;
+            lock (Screen.Sync)
+            {
+                title = Screen.Title;
+            }
+
+            var fallback = Profile?.Short ?? TerminalProgram.FileName(Shell.Program);
+            return title is null ? fallback : TerminalLaunch.ShortTitle(title, fallback);
+        }
+    }
+
+    /// <summary>
+    /// Whether a command runs (B9's busy dot): as the shell marks it (OSC 133) when it does; else once a line sent to it
+    /// has run <paramref name="after"/> and its output came within <paramref name="quiet"/>, at <paramref name="now"/>
+    /// (a timestamp of <paramref name="time"/>).
+    /// </summary>
+    public bool IsBusy(TimeProvider time, long now, TimeSpan after, TimeSpan quiet)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+        if (HasExited || IsReadOnly)
+        {
+            return false;
+        }
+
+        bool? marked;
+        lock (Screen.Sync)
+        {
+            marked = Screen.CommandRunning;
+        }
+
+        if (marked is { } running)
+        {
+            return running;
+        }
+
+        long enter = Interlocked.Read(ref _lastEnterTicks);
+        long output = Interlocked.Read(ref _lastOutputTicks);
+        return enter != 0 && output >= enter && time.GetElapsedTime(enter, now) >= after && time.GetElapsedTime(output, now) < quiet;
+    }
+
+    /// <summary>The clock the busy dot reads (the tests set their own).</summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+    /// <summary>Selects everything it keeps: the scrollback and the screen.</summary>
+    public void SelectAll()
+    {
+        lock (Screen.Sync)
+        {
+            Selection = new TerminalSelection(Screen.FirstLine, 0, Screen.ScreenTop + Screen.Rows - 1, Screen.Columns);
+        }
+
+        RequestInvalidate();
+    }
+
     /// <summary>The tab's title: a name it was given, else the shell's own title, else the shell and the folder ("pwsh — Craft").</summary>
     public string Title
     {
         get
         {
+            if (_userName is not null)
+            {
+                return _userName;
+            }
+
             if (_name is not null)
             {
                 return _name;
@@ -172,6 +273,11 @@ public sealed class TerminalInstance : IDisposable
     {
         if (Volatile.Read(ref _disposed) == 0 && !input.IsEmpty)
         {
+            if (input.IndexOf((byte)'\r') >= 0)
+            {
+                Interlocked.Exchange(ref _lastEnterTicks, Clock.GetTimestamp());   // a line sent: the busy dot may follow its output
+            }
+
             _input.Writer.TryWrite(input.ToArray());
         }
     }
@@ -399,6 +505,7 @@ public sealed class TerminalInstance : IDisposable
     private void Feed(ReadOnlySpan<byte> data)
     {
         Interlocked.Add(ref _bytesRead, data.Length);
+        Interlocked.Exchange(ref _lastOutputTicks, Clock.GetTimestamp());
         while (!data.IsEmpty)
         {
             var slice = data[..Math.Min(SliceBytes, data.Length)];

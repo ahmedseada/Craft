@@ -237,8 +237,31 @@ public sealed partial class TerminalScreen
     /// <summary>Whether the cursor shows (DECTCEM, mode 25).</summary>
     public bool CursorVisible { get; private set; } = true;
 
-    /// <summary>The cursor's shape (DECSCUSR).</summary>
+    /// <summary>The cursor's shape (DECSCUSR; <see cref="DefaultCursorStyle"/> until the shell asks for one).</summary>
     public TerminalCursorStyle CursorStyle { get; private set; }
+
+    /// <summary>
+    /// The cursor's shape when the shell asks for none, or for its default (DECSCUSR 0) or resets (B9: <c>CRAFT_TERMINAL_CURSOR</c>).
+    /// Setting it changes the cursor now unless the shell chose a shape.
+    /// </summary>
+    public TerminalCursorStyle DefaultCursorStyle
+    {
+        get => _defaultCursorStyle;
+        set
+        {
+            _defaultCursorStyle = value;
+            if (!_cursorStyleChosen)
+            {
+                CursorStyle = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a command runs, as a shell that marks its prompts and commands says (OSC 133: C starts a command, D or A
+    /// ends it); null while the shell has marked none (the tab's busy dot then follows the output, B9).
+    /// </summary>
+    public bool? CommandRunning { get; private set; }
 
     /// <summary>Whether the alternate screen is shown (mode 1049, 1047 or 47).</summary>
     public bool IsAlternate => _altActive;
@@ -450,7 +473,8 @@ public sealed partial class TerminalScreen
         _originMode = false;
         AutoWrap = true;
         CursorVisible = true;
-        CursorStyle = TerminalCursorStyle.Block;
+        CursorStyle = _defaultCursorStyle;
+        _cursorStyleChosen = false;
         ApplicationCursorKeys = false;
         ApplicationKeypad = false;
         BracketedPaste = false;

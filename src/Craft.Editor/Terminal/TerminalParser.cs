@@ -23,6 +23,8 @@ public sealed partial class TerminalScreen
     private const int MaxParameters = 32;
     private const int MaxParameter = 65_535;
     private const int MaxOsc = 4096;
+    private TerminalCursorStyle _defaultCursorStyle;
+    private bool _cursorStyleChosen;
     private const int MaxTitle = 256;
 
     // Every byte that is not printable ASCII: the ground state's fast path stops at the first of them.
@@ -501,8 +503,11 @@ public sealed partial class TerminalScreen
         {
             if (final == (byte)'q')
             {
-                CursorStyle = Raw(0) switch
+                int shape = Raw(0);
+                _cursorStyleChosen = shape != 0;
+                CursorStyle = shape switch
                 {
+                    0 => _defaultCursorStyle,
                     3 or 4 => TerminalCursorStyle.Underline,
                     5 or 6 => TerminalCursorStyle.Bar,
                     _ => TerminalCursorStyle.Block,
@@ -927,6 +932,15 @@ public sealed partial class TerminalScreen
                 break;
             case 9 when value.StartsWith("9;"u8):
                 SetWorkingDirectory(Encoding.UTF8.GetString(value[2..]).Trim('"'));
+                break;
+            case 133 when value.Length > 0:
+                // FinalTerm's shell integration: A a prompt starts, B its input, C a command runs, D it ended.
+                CommandRunning = value[0] switch
+                {
+                    (byte)'C' => true,
+                    (byte)'A' or (byte)'D' => false,
+                    _ => CommandRunning,
+                };
                 break;
         }
     }

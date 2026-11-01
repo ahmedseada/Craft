@@ -21,6 +21,12 @@ public sealed record EmptyState(string Title, string Text, IReadOnlyList<EmptyAc
 {
     /// <summary>A second list under the actions (the recent folders), with its caption; empty for none.</summary>
     public IReadOnlyList<EmptyAction> Recent { get; init; } = [];
+
+    /// <summary>The second list's caption ("RECENT", "PROFILES").</summary>
+    public string ListTitle { get; init; } = "RECENT";
+
+    /// <summary>An icon over the title (SVG path data on a 24 by 24 box), or null.</summary>
+    public string? Icon { get; init; }
 }
 
 /// <summary>
@@ -31,6 +37,29 @@ public sealed record EmptyState(string Title, string Text, IReadOnlyList<EmptyAc
 /// </summary>
 public static class ShellEmptyStates
 {
+    /// <summary>
+    /// The terminal with none open (B9): an icon, "No terminal open", where the next one starts and why, a primary "New
+    /// terminal" with its keys, and the profiles found under it (each opens its shell).
+    /// </summary>
+    public static EmptyState Terminal(EditorHost host, IReadOnlyList<TerminalProfile> profiles, string defaultName, string startFolder, string reason)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(profiles);
+        var rows = new List<EmptyAction>(profiles.Count);
+        foreach (var profile in profiles)
+        {
+            rows.Add(new EmptyAction("New " + profile.Name, Craft.Editor.Terminal.TerminalCommandIds.NewProfile(profile.Id)));
+        }
+
+        return new EmptyState("No terminal open", $"A new terminal runs {defaultName} in {startFolder} ({reason}).",
+            [new EmptyAction(Label(host, "New terminal", Craft.Editor.Terminal.TerminalCommandIds.New), Craft.Editor.Terminal.TerminalCommandIds.New, Primary: true)])
+        {
+            Recent = rows,
+            ListTitle = "PROFILES",
+            Icon = TerminalIcons.Prompt,
+        };
+    }
+
     /// <summary>The explorer with no folder: Open folder, Open a file, and up to <paramref name="recentLimit"/> recent folders.</summary>
     public static EmptyState Explorer(EditorHost host, RecentList recent, int recentLimit = 5)
     {

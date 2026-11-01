@@ -107,6 +107,9 @@ public sealed class ShellPage : ContentPage, IDisposable
     private readonly BoxView _railLine;
     private readonly BoxView _statusLine;
     private readonly BoxView _titleLine;
+    private readonly LoaderView _loader;
+    private readonly WorkspaceNotices _workspaceNotices;
+    private int _workspaceWork;
     private readonly List<IDisposable> _platformHooks = [];
     private readonly List<IModelProvider> _watchedProviders = [];
     private ShellPalette _palette;
@@ -295,9 +298,21 @@ public sealed class ShellPage : ContentPage, IDisposable
             TerminalHosts.Register(terminalHost);
         }
 
-        _terminals = new TerminalManager(_host, () => _shell.Options, MauiEditorClipboard.Shared);
+        // B9: the platform's profiles (Windows: the registry's WSL distributions and Git for Windows) over the library's.
+        if (startup.Platform.TerminalProfiles is { } profileSource)
+        {
+            TerminalProfiles.Register(profileSource);
+        }
+
+        _terminals = new TerminalManager(_host, () => _shell.Options, MauiEditorClipboard.Shared)
+        {
+            Ui = new MauiShellUi(_dialog),
+            // "Set default profile…": per workspace when a folder is open, else the user's.
+            StoreDefaultProfile = name => _shell.ApplySetting(_shell.Workspace is not null ? SettingLayer.Workspace : SettingLayer.User, "CRAFT_TERMINAL_DEFAULT_PROFILE", name),
+        };
         _host.Terminals = _terminals;
-        _terminalPanel = new TerminalPanelView(_terminals, _palette);
+        _terminalPanel = new TerminalPanelView(_terminals, _palette, _host);
+        _terminalPanel.MenuRequested += (_, e) => OpenContextMenu(e.Menu, e.Target, e.Where);
         _bottom.TerminalContent = _terminalPanel;
         _terminals.ViewRequested += (_, request) => OnTerminalView(request);
         // Phase U: the running operations in the status bar, the bell, the notification centre and its toasts.
@@ -314,6 +329,15 @@ public sealed class ShellPage : ContentPage, IDisposable
         _host.Notifications.Changed += OnNotificationsChanged;
         _host.Notifications.Toast += OnToast;
         _status = new StatusBarView(_palette, _pluginStatus, _activity, _bell);
+        // B10: a workspace ready or failed is one notification; the status bar names it only while it loads or failed.
+        _workspaceNotices = new WorkspaceNotices((source, title, text, severity, actions) => _host.Notifications.Post(source, title, text, severity, actions));
+        var semanticTap = new TapGestureRecognizer();
+        semanticTap.Tapped += (_, _) => ToggleCentre(true);
+        _status.Semantic.GestureRecognizers.Add(semanticTap);
+        // B10: the global loader, a thin line under the title bar while a workspace's work runs; a click opens the activities.
+        _loader = new LoaderView(_host.ActivityCenter, _shell.Options) { ZIndex = 20 };
+        _loader.Tapped += (_, _) => ToggleCentre(true);
+        _host.ActivityCenter.Changed += OnActivitiesChanged;
         _status.ProblemsTapped += (_, _) => ShowBottom(BottomTab.Problems);
         var goToLine = new TapGestureRecognizer();
         goToLine.Tapped += (_, _) => _ = _host.ExecuteCommandAsync(ShellCommandIds.GoToLine);
@@ -360,6 +384,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         root.Add(_titleRow, 0, 0);
         root.Add(_titleLine, 0, 1);
         root.Add(_body, 0, 2);
+        root.Add(_loader, 0, 2);
         root.Add(_statusLine, 0, 3);
         root.Add(_status, 0, 4);
         root.Add(_toast, 0, 2);
@@ -456,6 +481,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
         _noticeTimer?.Stop();
         _host.Notifications.Changed -= OnNotificationsChanged;
+        _host.ActivityCenter.Changed -= OnActivitiesChanged;
         _host.Notifications.Toast -= OnToast;
         _activity.Dispose();
         _centre.Dispose();
@@ -835,15 +861,44 @@ public sealed class ShellPage : ContentPage, IDisposable
         _shown?.Focus();
     }
 
-    // A splitter's drag: within the room the panel and the editor share; its end written to the settings once.
+    // A splitter's drag: within the room the panel and the editor share; its end written to the settings once. B8: the
+    // platform's pointer (the resize arrows, a captured drag), a double-click back to the option's default, a drag below
+    // the smallest size closing the panel, and the grip above its neighbours (it reaches over them).
     private void Wire(SplitPanel split, ShellPanel panel, Func<double> room)
     {
         split.Clamp = size => _shell.Panels.Clamp(size, room());
+        split.DefaultSize = PanelLayout.DefaultSizeOf(panel);
+        split.Minimum = _shell.Panels.MinimumSize;
+        split.Apply(_shell.Options);
+        split.Pointer = _startup.Platform.PointerCursor;
+        split.ZIndex = 10;
         split.Resized += (_, size) =>
         {
             _shell.Panels.Resize(panel, size);
             _ = _shell.Panels.CommitAsync(panel);
         };
+        split.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(panel, false);
+    }
+
+    // B10: the loader follows the activities; when the last workspace work ends, the language's state is read again (its
+    // notification, the status bar's text), since a build that failed changes no diagnostics.
+    private void OnActivitiesChanged(object? sender, EventArgs e)
+    {
+        int running = 0;
+        foreach (var activity in _host.ActivityCenter.Running)
+        {
+            if (activity.Kind == ActivityKinds.Workspace)
+            {
+                running++;
+            }
+        }
+
+        bool ended = running < _workspaceWork;
+        _workspaceWork = running;
+        if (ended)
+        {
+            UpdateProblems();
+        }
     }
 
     // A plug-in panel as the rail's side view, made when first shown and kept while the panel is the host's.
@@ -1060,7 +1115,6 @@ public sealed class ShellPage : ContentPage, IDisposable
         ToolTipProperties.SetText(_status.Problems, Tip("Show the problems", ShellCommandIds.ShowProblems));
         ToolTipProperties.SetText(_status.Position, Tip("Go to line", ShellCommandIds.GoToLine));
         ToolTipProperties.SetText(_status.Branch, "The folder's git branch");
-        ToolTipProperties.SetText(_status.Semantic, "The language's semantic layer: its state, projects and memory (the explorer's card)");
         ToolTipProperties.SetText(_status.Indentation, "Indentation: CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES (Settings, Editor)");
         ToolTipProperties.SetText(_status.Encoding, "The file's encoding (kept when it is saved)");
         ToolTipProperties.SetText(_status.LineEnding, "The file's line breaks (kept when it is saved; CRAFT_LINE_ENDING for new files)");
@@ -1438,8 +1492,11 @@ public sealed class ShellPage : ContentPage, IDisposable
         _status.Problems.Text = model?.SemanticSession is null ? "" : ShellText.Problems(model.ErrorCount, model.WarningCount);
         _status.Problems.TextColor = model is { ErrorCount: > 0 } ? _palette.Error : _palette.Warning;
         var card = ShellText.Semantic(model);
-        _explorer.SetSemantic(card);
-        _status.Semantic.Text = card?.StatusText ?? "";
+        _workspaceNotices.Observe(model);
+        _status.Semantic.Text = card?.StatusBarText ?? "";
+        _status.Semantic.TextColor = card is { IsFailed: true } ? _palette.Error : _palette.Secondary;
+        ToolTipProperties.SetText(_status.Semantic, card is { IsFailed: true } ? card.Tooltip + " (a click shows the notification)" : card?.Tooltip ?? "");
+        ToolTipProperties.SetText(_status.Language, card is null ? "The file's language and the plug-in that brings it" : "The file's language and the plug-in that brings it · " + card.Tooltip);
     }
 
     private void OnProblemChosen(ProblemItem item)
@@ -1551,6 +1608,13 @@ public sealed class ShellPage : ContentPage, IDisposable
         _quickOpen.RecentLimit = options.QuickOpenRecent;
         _overlay.VisibleRows = options.QuickOpenRows;
         _tree.Indent = options.TreeIndent;
+        _terminals.ApplyOptions();
+        foreach (var split in (ReadOnlySpan<SplitPanel>)[_sideSplit, _chatSplit, _bottomSplit])
+        {
+            split.Apply(options);
+            split.Minimum = _shell.Panels.MinimumSize;
+        }
+
         ApplyTheme();
         ApplyLayout();
     }
@@ -1662,6 +1726,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bottom.Apply(p);
         _terminalPanel.Apply(p);
         _status.Apply(p);
+        _loader.Apply(_shell.Options, p.Accent);
         _activity.Apply(p);
         _bell.Apply(p);
         _centre.Apply(p);

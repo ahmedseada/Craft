@@ -341,6 +341,12 @@ public sealed record SemanticTelemetry(string? WorkspaceRoot, string? Reader, in
     /// <summary>Whether a workspace has been built (its projects are known).</summary>
     public bool IsBuilt => Projects > 0;
 
+    /// <summary>
+    /// Why the last build of the workspace failed, in the words its error gave (B10: the shell words it and offers the fix),
+    /// or null when it did not fail (a later build that succeeds clears it).
+    /// </summary>
+    public string? Failure { get; init; }
+
     /// <summary>The memory it holds, as measured: the heap its build added and the referenced files' bytes.</summary>
     public long MemoryBytes => HeapBytes + ReferenceBytes;
 }

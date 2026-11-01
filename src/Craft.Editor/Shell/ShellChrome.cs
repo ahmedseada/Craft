@@ -81,16 +81,46 @@ public static class ShellMenus
     }
 }
 
-/// <summary>The state of a language's semantic layer as the shell shows it (the explorer's card, the status bar).</summary>
+/// <summary>The state of a language's semantic layer as the shell shows it (the status bar while it loads or failed, the language item's tooltip, B10's notification).</summary>
 /// <param name="Engine">What computes it ("Roslyn"), or the language's name.</param>
-/// <param name="State">"Ready", "Loading", "Waiting" (a large file waits for the command) or "Off" (no semantic layer).</param>
+/// <param name="State">"Ready", "Loading", "Waiting" (a large file waits for the command), or "Failed" (its workspace could not be built).</param>
 /// <param name="Projects">"7 projects", or "".</param>
 /// <param name="Memory">"412 MB", or "".</param>
 /// <param name="IsReady">Whether it is ready.</param>
 public sealed record SemanticCard(string Engine, string State, string Projects, string Memory, bool IsReady)
 {
-    /// <summary>The status bar's text: "Roslyn ready".</summary>
+    /// <summary>The state as one phrase: "Roslyn ready".</summary>
     public string StatusText => $"{Engine} {State.ToLowerInvariant()}";
+
+    /// <summary>What the build of its workspace took ("2.3 s"), or "".</summary>
+    public string BuildTime { get; init; } = "";
+
+    /// <summary>Why its workspace failed (the error's words), or null.</summary>
+    public string? Failure { get; init; }
+
+    /// <summary>Whether its workspace failed to build.</summary>
+    public bool IsFailed => State == "Failed";
+
+    /// <summary>
+    /// The status bar's text (B10): only while the workspace loads ("Roslyn loading…") or when it failed ("Roslyn
+    /// failed"); nothing once it is ready (the notification centre said so) or while a large file waits.
+    /// </summary>
+    public string StatusBarText => State switch
+    {
+        "Loading" => $"{Engine} loading…",
+        "Failed" => $"{Engine} failed",
+        _ => "",
+    };
+
+    /// <summary>The language item's tooltip: the facts the explorer's card held ("Roslyn: 1 project, 6 MB, built in 2.3 s").</summary>
+    public string Tooltip => State switch
+    {
+        "Ready" => string.Join(", ", new[] { Projects, Memory, BuildTime.Length > 0 ? "built in " + BuildTime : "" }.Where(p => p.Length > 0)) is { Length: > 0 } facts
+            ? $"{Engine}: {facts}" : $"{Engine}: ready",
+        "Failed" => $"{Engine}: the workspace could not be built: {Failure}",
+        "Waiting" => $"{Engine}: {Projects}",
+        _ => $"{Engine}: loading the workspace",
+    };
 }
 
 /// <summary>The texts of the shell's chrome, made from what the editor holds (testable without a UI).</summary>
@@ -143,11 +173,27 @@ public static class ShellText
 
         if (!telemetry.IsBuilt)
         {
-            return new SemanticCard(engine, "Loading", "", "", false);
+            return telemetry.Failure is { } failure
+                ? new SemanticCard(engine, "Failed", "", "", false) { Failure = failure }
+                : new SemanticCard(engine, "Loading", "", "", false);
         }
 
         string projects = string.Create(CultureInfo.InvariantCulture, $"{telemetry.Projects} {(telemetry.Projects == 1 ? "project" : "projects")}");
-        return new SemanticCard(engine, "Ready", projects, Bytes(telemetry.MemoryBytes), true);
+        return new SemanticCard(engine, "Ready", projects, Bytes(telemetry.MemoryBytes), true) { BuildTime = Seconds(telemetry.BuildTime) };
+    }
+
+    /// <summary>A duration as the shell writes it: "2.3 s", "41 s", "1 min 4 s", "120 ms".</summary>
+    public static string Seconds(TimeSpan time)
+    {
+        if (time <= TimeSpan.Zero)
+        {
+            return "";
+        }
+
+        return time.TotalSeconds < 1 ? string.Create(CultureInfo.InvariantCulture, $"{time.TotalMilliseconds:0} ms")
+            : time.TotalSeconds < 10 ? string.Create(CultureInfo.InvariantCulture, $"{time.TotalSeconds:0.0} s")
+            : time.TotalMinutes < 1 ? string.Create(CultureInfo.InvariantCulture, $"{time.TotalSeconds:0} s")
+            : string.Create(CultureInfo.InvariantCulture, $"{(int)time.TotalMinutes} min {time.Seconds} s");
     }
 
     /// <summary>

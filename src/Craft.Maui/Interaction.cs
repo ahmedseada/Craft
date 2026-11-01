@@ -277,7 +277,8 @@ public sealed class EmptyStateView : ContentView
     public void Show(EmptyState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if (state == _shown || (_shown is not null && state.Title == _shown.Title && state.Text == _shown.Text && state.Actions.SequenceEqual(_shown.Actions) && state.Recent.SequenceEqual(_shown.Recent)))
+        if (state == _shown || (_shown is not null && state.Title == _shown.Title && state.Text == _shown.Text && state.Icon == _shown.Icon && state.ListTitle == _shown.ListTitle
+            && state.Actions.SequenceEqual(_shown.Actions) && state.Recent.SequenceEqual(_shown.Recent)))
         {
             return;
         }
@@ -302,6 +303,11 @@ public sealed class EmptyStateView : ContentView
         }
 
         var p = _palette;
+        if (state.Icon is { } icon)
+        {
+            _stack.Children.Add(new StrokeIcon(icon, 28, 1.5) { Color = p.Secondary, HorizontalOptions = LayoutOptions.Start });
+        }
+
         var title = p.Label(state.Title, p.Text, p.FontSize, FontWeight.SemiBold);
         title.LineBreakMode = LineBreakMode.WordWrap;
         var text = p.Label(state.Text, p.Secondary, p.SmallSize);
@@ -326,7 +332,7 @@ public sealed class EmptyStateView : ContentView
 
         if (state.Recent.Count > 0)
         {
-            var caption = p.Label("RECENT", p.Secondary, p.CaptionSize, FontWeight.SemiBold);
+            var caption = p.Label(state.ListTitle, p.Secondary, p.CaptionSize, FontWeight.SemiBold);
             caption.CharacterSpacing = 0.6;
             caption.Margin = new Thickness(0, 6, 0, 0);
             _stack.Children.Add(caption);

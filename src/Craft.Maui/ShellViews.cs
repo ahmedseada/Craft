@@ -681,6 +681,15 @@ public interface IShellPlatform
     /// <summary>The system's file manager and trash (phase X's Reveal and Delete: File Explorer and the Recycle Bin on Windows), or null.</summary>
     IShellFiles? ShellFiles => null;
 
+    /// <summary>The pointer's shape and captured drags (B8: the splitters' resize arrows), or null (MAUI's pan gesture serves).</summary>
+    IPointerCursor? PointerCursor => null;
+
+    /// <summary>
+    /// The platform's terminal profiles (B9: Windows reads the registry for WSL and Git for Windows), registered in
+    /// <see cref="TerminalProfiles"/> over the library's "machine" source while the shell runs; null keeps the library's.
+    /// </summary>
+    ITerminalProfileSource? TerminalProfiles => null;
+
     /// <summary>
     /// The paths of the files and folders a drop from outside the app carries (the system's file manager), read from the
     /// platform's drop data while the drop lasts; none when it carries none, or on a platform without the mapping.

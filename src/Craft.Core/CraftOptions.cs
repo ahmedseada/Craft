@@ -414,7 +414,10 @@ public sealed record CraftOptions
     /// The commands whose key bindings still run while a terminal has the keyboard (<c>CRAFT_TERMINAL_EDITOR_COMMANDS</c>,
     /// separated by ','); every other chord goes to the shell. The terminal's own commands always keep theirs.
     /// </summary>
-    public IReadOnlyList<string> TerminalEditorCommands { get; init; } = ["craft.commandPalette", "craft.quickOpen", "craft.togglePanel", "craft.settings"];
+    public IReadOnlyList<string> TerminalEditorCommands { get; init; } = DefaultTerminalEditorCommands;
+
+    /// <summary>The commands kept from the shell by default (one list, so options compare equal: the shell's "nothing changed" check).</summary>
+    public static IReadOnlyList<string> DefaultTerminalEditorCommands { get; } = ["craft.commandPalette", "craft.quickOpen", "craft.togglePanel", "craft.settings"];
 
     /// <summary>
     /// Milliseconds between the UI watchdog's ticks through the dispatcher (<c>CRAFT_UI_WATCHDOG_MS</c>, phase U); 0
@@ -470,6 +473,72 @@ public sealed record CraftOptions
 
     /// <summary>Whether Ctrl+C in a terminal copies its selection when there is one (else it is the shell's interrupt) (<c>CRAFT_TERMINAL_CTRL_C_COPIES</c>).</summary>
     public bool TerminalCtrlCCopies { get; init; } = true;
+
+    // B9: the terminal's profiles and design.
+
+    /// <summary>
+    /// The profile "+" and New terminal open (<c>CRAFT_TERMINAL_DEFAULT_PROFILE</c>): a profile's name or id ("PowerShell
+    /// 7", "git-bash"); empty: <c>CRAFT_TERMINAL_SHELL</c> when set, else the host's default shell. A workspace may set it.
+    /// </summary>
+    public string TerminalDefaultProfile { get; init; } = "";
+
+    /// <summary>
+    /// The user's own profiles (<c>CRAFT_TERMINAL_PROFILES</c>: <c>Name=command line</c> entries separated by '|', a program
+    /// with spaces in double quotes), listed after the ones found on the machine. A workspace cannot set it.
+    /// </summary>
+    public IReadOnlyList<KeyValuePair<string, string>> TerminalProfiles { get; init; } = [];
+
+    /// <summary>How the open terminals are listed (<c>CRAFT_TERMINAL_TABS</c>): auto (tabs, a list at the panel's right from <see cref="TerminalListFrom"/> terminals), tabs, or list.</summary>
+    public string TerminalTabs { get; init; } = "auto";
+
+    /// <summary>From how many terminals "auto" lists them at the panel's right instead of as tabs (<c>CRAFT_TERMINAL_LIST_FROM</c>).</summary>
+    public int TerminalListFrom { get; init; } = 3;
+
+    /// <summary>The room around a terminal's text, device-independent units (<c>CRAFT_TERMINAL_PADDING</c>).</summary>
+    public float TerminalPadding { get; init; } = 8;
+
+    /// <summary>The cursor's shape until the shell asks for another (<c>CRAFT_TERMINAL_CURSOR</c>): block, underline or bar.</summary>
+    public string TerminalCursor { get; init; } = "block";
+
+    /// <summary>Whether the terminal's cursor blinks (<c>CRAFT_TERMINAL_CURSOR_BLINK</c>; at <c>CRAFT_CARET_BLINK_MS</c>).</summary>
+    public bool TerminalCursorBlink { get; init; } = true;
+
+    /// <summary>
+    /// A tab's busy dot (B9) shows once a command has run this many milliseconds and still writes (<c>CRAFT_TERMINAL_BUSY_AFTER_MS</c>);
+    /// a shell that marks its commands (OSC 133) shows it exactly.
+    /// </summary>
+    public int TerminalBusyAfterMilliseconds { get; init; } = 500;
+
+    /// <summary>The busy dot goes once the command's output has been quiet this many milliseconds (<c>CRAFT_TERMINAL_BUSY_QUIET_MS</c>).</summary>
+    public int TerminalBusyQuietMilliseconds { get; init; } = 400;
+
+    // B8: the splitters.
+
+    /// <summary>The width of a splitter's grab area, centred on its one-unit line and over both neighbours, device-independent units (<c>CRAFT_SPLITTER_GRIP</c>).</summary>
+    public float SplitterGrip { get; init; } = 10;
+
+    /// <summary>Milliseconds the pointer rests on a splitter before its line takes the accent (<c>CRAFT_SPLITTER_HOVER_MS</c>).</summary>
+    public int SplitterHoverMilliseconds { get; init; } = 100;
+
+    /// <summary>What an arrow key moves a focused splitter, device-independent units; Shift moves five times as far (<c>CRAFT_SPLITTER_KEY_STEP</c>).</summary>
+    public float SplitterKeyStep { get; init; } = 10;
+
+    /// <summary>Whether a splitter dragged below the panel's smallest size snaps the panel closed (and open again past it) (<c>CRAFT_SPLITTER_SNAP</c>).</summary>
+    public bool SplitterSnap { get; init; } = true;
+
+    // B10: the global loader.
+
+    /// <summary>Milliseconds a workspace's work runs before the loader under the title bar shows, so quick work does not flash (<c>CRAFT_LOADER_DELAY_MS</c>).</summary>
+    public int LoaderDelayMilliseconds { get; init; } = 300;
+
+    /// <summary>The activity kinds the loader shows besides the ones marked global (<c>CRAFT_LOADER_KINDS</c>, separated by ','; empty: the marked ones only).</summary>
+    public IReadOnlyList<string> LoaderKinds { get; init; } = DefaultLoaderKinds;
+
+    /// <summary>The loader's kinds by default: workspace work (one list, so options compare equal).</summary>
+    public static IReadOnlyList<string> DefaultLoaderKinds { get; } = ["workspace"];
+
+    /// <summary>Milliseconds the loader's moving segment takes to cross the window when no fraction is known (<c>CRAFT_LOADER_CYCLE_MS</c>).</summary>
+    public int LoaderCycleMilliseconds { get; init; } = 1400;
 
     // Phase X slice 3: inline, not modal; the welcome page.
 
@@ -544,6 +613,10 @@ public sealed record CraftOptions
         new("CRAFT_PANEL_EXPLORER_OPEN", "true", "Whether the explorer (the rail's side view) is open in the wide layout; Ctrl+B and the rail write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Explorer open", "Layout") },
         new("CRAFT_PANEL_CHAT_OPEN", "true", "Whether the chat and agent column is open in the wide layout; its close button and Ctrl+Alt+I write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Chat and agent column open", "Layout") },
         new("CRAFT_PANEL_BOTTOM_OPEN", "true", "Whether the bottom panel is open; its chevron, Ctrl+J and a click on its active tab write it to the workspace's settings.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Bottom panel open", "Layout") },
+        new("CRAFT_SPLITTER_GRIP", "10", "The width of a splitter's grab area, centred on its one-unit line and over both neighbours (device-independent units).") { Shape = SettingShape.Number(SettingSections.Appearance, "Splitter grab area", 2, 40, 1, "units", "Layout") },
+        new("CRAFT_SPLITTER_HOVER_MS", "100", "Milliseconds the pointer rests on a splitter before its line takes the accent.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Splitter highlight after", 0, 5000, "ms", "Layout", step: 50) },
+        new("CRAFT_SPLITTER_KEY_STEP", "10", "What an arrow key moves a focused splitter (device-independent units); Shift moves five times as far.") { Shape = SettingShape.Number(SettingSections.Appearance, "Splitter key step", 1, 1000, 1, "units", "Layout") },
+        new("CRAFT_SPLITTER_SNAP", "true", "Whether a splitter dragged below the panel's smallest size snaps the panel closed, and open again past it.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Splitters snap panels closed", "Layout") },
         new("CRAFT_PANEL_MIN_SIZE", "120", "The smallest size a splitter drag leaves a panel, and the least it leaves the editor (device-independent units).") { Shape = SettingShape.Number(SettingSections.Appearance, "Smallest panel", 0, 10_000, 10, "units", "Layout") },
         new("CRAFT_PANEL_BOTTOM_HEIGHT", "132", "The bottom panel's height (Problems, Terminal, Output, Idrak telemetry), device-independent units; a splitter drag writes it to the workspace's settings.") { Shape = SettingShape.Number(SettingSections.Appearance, "Bottom panel height", 40, 10_000, 10, "units", "Layout") },
         new("CRAFT_WORKSPACE_WATCHER", "system", "What tells the folder tree a file or folder was made, removed or renamed: system (the platform's file watcher), none, or a registered watcher.") { Shape = SettingShape.From(SettingSections.Files, "Watch the disk with", SettingChoiceSources.FolderWatchers, null, true, "Tree") },
@@ -580,6 +653,9 @@ public sealed record CraftOptions
         new("CRAFT_NOTIFICATIONS_KEEP", "200", "The notifications the centre keeps for the session (running operations and status entries aside).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Notifications kept", 0, 100_000, null, "Notifications", step: 10) },
         new("CRAFT_TOAST_MS", "6000", "Milliseconds a toast (a failure, a question) shows before it waits in the centre; 0 shows none.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Toasts show for", 0, 600_000, "ms", "Notifications", step: 500) },
         new("CRAFT_ACTIVITY_MIN_MS", "300", "An operation that ends within this many milliseconds shows neither in the status bar nor in the centre (a failure always does).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Operations show after", 0, 600_000, "ms", "Notifications", step: 50) },
+        new("CRAFT_LOADER_DELAY_MS", "300", "Milliseconds a workspace's work (a folder opening, a language building its workspace) runs before the thin loader under the title bar shows.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Loader shows after", 0, 60_000, "ms", "Notifications", step: 50) },
+        new("CRAFT_LOADER_KINDS", "workspace", "The activity kinds the loader under the title bar shows besides the ones a plug-in marks global, separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Appearance, "Loader shows", "Notifications") },
+        new("CRAFT_LOADER_CYCLE_MS", "1400", "Milliseconds the loader's moving segment takes to cross the window when the work reports no fraction.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Loader cycle", 200, 20_000, "ms", "Notifications", step: 100) },
         new("CRAFT_ACTIVITY_FRAME_MS", "16", "The fewest milliseconds between two updates of the running operations and notifications on screen.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Activity updates at most every", 1, 1000, "ms", "Notifications") },
         new("CRAFT_KEYMAP", "vscode", "The default shortcuts: vscode (VS Code's), visualstudio (Visual Studio's where the two differ), or a registered keymap; your own bindings come first.") { Shape = SettingShape.From(SettingSections.Keyboard, "Keymap", SettingChoiceSources.KeyMaps, null, false, null) },
         new("CRAFT_ZOOM_STEP", "1", "What Ctrl+= and Ctrl+- add to or take from the code font's size (written to your settings; Ctrl+0 takes it back).") { Shape = SettingShape.Number(SettingSections.Appearance, "Zoom step (Ctrl+= and Ctrl+-)", 0.5, 10, 0.5, "units", "Fonts") },
@@ -591,6 +667,15 @@ public sealed record CraftOptions
         new("CRAFT_CRASH_TICKET_OFFER", "true", "Whether the start after a run that did not close cleanly offers to write a problem report (Help › Report a problem always can).") { Shape = SettingShape.Toggle(SettingSections.Files, "Offer a report after a crash", "Crash reports") },
         new("CRAFT_CRASH_RUNS_KEPT", "5", "The runs that did not close cleanly kept with their trails for a report; older ones are removed.") { Shape = SettingShape.Whole(SettingSections.Files, "Crashed runs kept", 0, 1000, null, "Crash reports") },
         new("CRAFT_CRASH_RECORDS", "auto", "What reads the platform's own record of a crash for the report: auto (Windows' Application event log on Windows), none, or a registered source.") { Shape = SettingShape.Text(SettingSections.Files, "Read the platform's crash record with", "Crash reports") },
+        new("CRAFT_TERMINAL_DEFAULT_PROFILE", "", "The profile + and New terminal open: a profile's name or id; empty: CRAFT_TERMINAL_SHELL when set, else the host's default shell. A workspace may set it.") { Shape = SettingShape.From(SettingSections.Terminal, "Default profile", SettingChoiceSources.TerminalProfiles, [""], true, "Shell") },
+        new("CRAFT_TERMINAL_PROFILES", "", "Your own profiles: Name=command line entries separated by '|' (a program with spaces in double quotes). A workspace cannot set it.") { Shape = SettingShape.Text(SettingSections.Terminal, "Your profiles", "Shell") },
+        new("CRAFT_TERMINAL_TABS", "auto", "How the open terminals are listed: auto (tabs, a list at the panel's right from CRAFT_TERMINAL_LIST_FROM terminals), tabs, or list.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Terminals listed as", ["auto", "tabs", "list"], "Screen") },
+        new("CRAFT_TERMINAL_LIST_FROM", "3", "From how many terminals 'auto' lists them at the panel's right instead of as tabs.") { Shape = SettingShape.Whole(SettingSections.Terminal, "List from", 2, 100, "terminals", "Screen") },
+        new("CRAFT_TERMINAL_PADDING", "8", "The room around a terminal's text (device-independent units).") { Shape = SettingShape.Number(SettingSections.Terminal, "Padding", 0, 64, 1, "units", "Screen") },
+        new("CRAFT_TERMINAL_CURSOR", "block", "The terminal cursor's shape until the shell asks for another: block, underline or bar.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Cursor", ["block", "underline", "bar"], "Screen") },
+        new("CRAFT_TERMINAL_CURSOR_BLINK", "true", "Whether the terminal's cursor blinks (at CRAFT_CARET_BLINK_MS).") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Cursor blinks", "Screen") },
+        new("CRAFT_TERMINAL_BUSY_AFTER_MS", "500", "A tab's busy dot shows once a command has run this many milliseconds and still writes (a shell that marks its commands, OSC 133, shows it exactly).") { Shape = SettingShape.Whole(SettingSections.Terminal, "Busy dot after", 0, 60_000, "ms", "Screen", step: 50) },
+        new("CRAFT_TERMINAL_BUSY_QUIET_MS", "400", "The busy dot goes once the command's output has been quiet this many milliseconds.") { Shape = SettingShape.Whole(SettingSections.Terminal, "Busy dot goes after quiet", 50, 60_000, "ms", "Screen", step: 50) },
         new("CRAFT_TERMINAL_CTRL_C_COPIES", "true", "Whether Ctrl+C in a terminal copies the selection when there is one (with none it is the shell's interrupt, ^C).") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Ctrl+C copies the selection", "Keys") },
         new("CRAFT_REDUCED_MOTION", "false", "Whether the interface moves without transitions (panels, the notification centre, toasts, menus, the completion list) and the editor scrolls in jumps.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Reduce motion", "Motion") },
         new("CRAFT_MOTION_MS", "160", "How long a transition lasts (a panel opening, the notification centre, a toast, a menu, the completion list); 0 turns them off.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Transitions last", 0, 1000, "ms", "Motion", step: 10) },
@@ -1184,6 +1269,86 @@ public sealed record CraftOptions
             options = options with { TerminalCtrlCCopies = Flag(ctrlC, "CRAFT_TERMINAL_CTRL_C_COPIES") };
         }
 
+        if (Text(read, "CRAFT_TERMINAL_DEFAULT_PROFILE") is { } defaultProfile)
+        {
+            options = options with { TerminalDefaultProfile = defaultProfile };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_PROFILES") is { } profiles)
+        {
+            options = options with { TerminalProfiles = ParseEnvironment(profiles, "CRAFT_TERMINAL_PROFILES") };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_TABS") is { } tabs)
+        {
+            options = options with { TerminalTabs = OneOf(tabs, "CRAFT_TERMINAL_TABS", "auto", "tabs", "list") };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_LIST_FROM") is { } listFrom)
+        {
+            options = options with { TerminalListFrom = Whole(listFrom, "CRAFT_TERMINAL_LIST_FROM", 2, 100) };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_PADDING") is { } padding)
+        {
+            options = options with { TerminalPadding = Positive(padding, "CRAFT_TERMINAL_PADDING", 0, 64) };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_CURSOR") is { } cursor)
+        {
+            options = options with { TerminalCursor = OneOf(cursor, "CRAFT_TERMINAL_CURSOR", "block", "underline", "bar") };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_CURSOR_BLINK") is { } cursorBlink)
+        {
+            options = options with { TerminalCursorBlink = Flag(cursorBlink, "CRAFT_TERMINAL_CURSOR_BLINK") };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_BUSY_AFTER_MS") is { } busyAfter)
+        {
+            options = options with { TerminalBusyAfterMilliseconds = Whole(busyAfter, "CRAFT_TERMINAL_BUSY_AFTER_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_TERMINAL_BUSY_QUIET_MS") is { } busyQuiet)
+        {
+            options = options with { TerminalBusyQuietMilliseconds = Whole(busyQuiet, "CRAFT_TERMINAL_BUSY_QUIET_MS", 50, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_SPLITTER_GRIP") is { } grip)
+        {
+            options = options with { SplitterGrip = Positive(grip, "CRAFT_SPLITTER_GRIP", 2, 40) };
+        }
+
+        if (Text(read, "CRAFT_SPLITTER_HOVER_MS") is { } splitterHover)
+        {
+            options = options with { SplitterHoverMilliseconds = Whole(splitterHover, "CRAFT_SPLITTER_HOVER_MS", 0, 5000) };
+        }
+
+        if (Text(read, "CRAFT_SPLITTER_KEY_STEP") is { } keyStep)
+        {
+            options = options with { SplitterKeyStep = Positive(keyStep, "CRAFT_SPLITTER_KEY_STEP", 1, 1000) };
+        }
+
+        if (Text(read, "CRAFT_SPLITTER_SNAP") is { } snap)
+        {
+            options = options with { SplitterSnap = Flag(snap, "CRAFT_SPLITTER_SNAP") };
+        }
+
+        if (Text(read, "CRAFT_LOADER_DELAY_MS") is { } loaderDelay)
+        {
+            options = options with { LoaderDelayMilliseconds = Whole(loaderDelay, "CRAFT_LOADER_DELAY_MS", 0, 60_000) };
+        }
+
+        if (read("CRAFT_LOADER_KINDS") is { } loaderKinds)
+        {
+            options = options with { LoaderKinds = loaderKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
+        }
+
+        if (Text(read, "CRAFT_LOADER_CYCLE_MS") is { } loaderCycle)
+        {
+            options = options with { LoaderCycleMilliseconds = Whole(loaderCycle, "CRAFT_LOADER_CYCLE_MS", 200, 20_000) };
+        }
+
         if (Text(read, "CRAFT_WELCOME_AT_START") is { } welcome)
         {
             options = options with { WelcomeAtStart = Flag(welcome, "CRAFT_WELCOME_AT_START") };
@@ -1249,6 +1414,19 @@ public sealed record CraftOptions
         }
 
         return [.. entries];
+    }
+
+    private static string OneOf(string value, string name, params ReadOnlySpan<string> choices)
+    {
+        foreach (var choice in choices)
+        {
+            if (value.Equals(choice, StringComparison.OrdinalIgnoreCase))
+            {
+                return choice;
+            }
+        }
+
+        throw new ArgumentException($"{name} is '{value}': it takes {string.Join(", ", choices.ToArray())}.", name);
     }
 
     private static string? Text(Func<string, string?> read, string name) => read(name) is { Length: > 0 } value ? value.Trim() : null;

@@ -20,7 +20,7 @@ Windows run (2026-11-01)" at the end.
 | 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test) | Built (46d6e17) |
 | 8b | The recovery prompt at start, X part 9's look group 24-26 | Stopped for W, just begun; for later, after W |
 | 9 | Phase W, the web languages | Running: W0, W-files and W-npm first (the owner, 2026-11-01: "start Web now", "stop all") |
-| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
+| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); W-script's "Left, for later" line (re-reading a project on WorkspaceChanged, a contextual word split across lines, generics in a JSX tag, Prettier-style layout) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan |
 | 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned; starts only on the owner's word |
 | 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
 | 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
@@ -4938,6 +4938,130 @@ closed (open one: its files dimmed); the tabs', quick open's (Ctrl+P, and a fold
 page's and Problems' icons; the light theme (Settings › Appearance › Theme) for the light variants; Settings ›
 Appearance › File icon theme lists "craft"; Settings › Files › "Show skipped folders in the explorer, dimmed" off hides them.
 With W's web project (`test-output\WebTestPOC`), node_modules dimmed, package.json, angular.json, the component parts.
+
+### W-script as built (2026-11-01)
+
+Slot w2, on Craft `main` dff114e and Idrak `main` e3d656c. Craft only: no cause was found in Idrak (the kit, `LineStates`,
+the registries and `Utf8JsonReader` did all that was needed).
+- **Main's failing test first**: `LookAndFeel.NoPlatformMessageBoxIsLeft` matched Craft's own `PanelMessageBox` block
+  (`MessageBox(box)`). Its pattern now catches only the platform's boxes: MAUI's `DisplayAlert`/`DisplayActionSheet`/
+  `DisplayPrompt`, WinUI's `ContentDialog` and `MessageDialog`, `MessageBox.Show`, Win32's `MessageBoxW`/`MessageBoxA` and a
+  `MessageBox` P/Invoke declaration (`extern`, a `LibraryImport` partial, an `EntryPoint`); a new fixture test
+  (`LookAndFeel.ThePlatformDialogPatternCatchesOnlyThePlatformsBoxes`) proves both sides.
+- **The lexer** (`src/Craft.Web/Script/ScriptTokenizer.cs`, public `ScriptTokenizer : LineTokenizer`): one incremental lexer
+  with five dialects (`ScriptDialect`: JavaScript, Jsx, TypeScript, Tsx and the AngularExpression stub W-markup builds on),
+  one state per line, a stack of frames (code, a template's `${ }`, a JSX `{ }`, a template's text, a JSX tag, a JSX
+  element's children) to any depth across lines, more than one frame interned in its `LineStates` table. The token before
+  (carried in the state across lines) decides a `/` (regex or division), a `{` (block or object), a `<` (JSX or less-than)
+  and the class of the next name. Keywords from a `FrozenDictionary` by span (rule 15), specials in `SearchValues` (rule
+  17), no generic range search and no boxing (rules 88, 89), nothing allocated per token. Covers: hashbang, `/// <reference>`,
+  JSDoc and its `@tags`, standard decorators (`@a.b(...)`), private names and `#x in obj`, numeric separators, BigInt,
+  `using`/`await using`, `accessor`, `async *m()`, import attributes (`with { type: "json" }`), `import defer`/`import source`
+  (confirm), regexes with classes (nested in the v flag's), escapes (`\p{L}`, `\k<n>`, `\u{...}`), named groups and the
+  ES2025 modifiers `(?i:...)`, flags `d` `v`; templates nested across lines; JSX elements, fragments, attributes, spreads,
+  entities, children and `{expr}` as frames; TypeScript's `satisfies`, `accessor`, `const` and `in`/`out` type parameters,
+  `declare`, `declare global`, `namespace`, `module`, `abstract`, `override`, `readonly`, `keyof`, `infer`, `unique symbol`,
+  `asserts x is T`, `import type`, `export type *`, `import x = require()`, template literal types, `enum`, the predefined
+  types; `<T,>`, `<T extends U>` and `<const T,>` generics in .tsx; .ts never lexes JSX.
+- **Colours** through the theme's existing classes: decorators `PreprocessorKeyword`, a regex's body `String` with escapes and
+  group openers `StringEscape` and flags `Keyword`, `${` `}` `Punctuation`, private names `FieldName`, `class`/`new`/`extends`
+  names `ClassName`, `interface`/`implements` names `InterfaceName`, `enum` names `EnumName`, `type` alias names `ClassName`,
+  `namespace` names `NamespaceName`, a name before `(` `MethodName`, a member after `.` `PropertyName`, `/// <reference>` and
+  the hashbang `PreprocessorText`, JSDoc `DocComment`/`DocCommentTag`, JSX tags `Keyword`, components (capitalised or dotted)
+  `ClassName`, attributes `PropertyName`, entities `StringEscape`.
+- **Versions** (`ScriptVersion`, `ScriptProjects`): per language `version` (latest) and `projectVersion` (true); read from
+  `jsconfig.json`/`tsconfig.json` (`compilerOptions.target`, `extends` followed as a path or a package's config in
+  `node_modules`, arrays too, 8 deep, cycles cut) and `node_modules/typescript/package.json`, else `devDependencies`/
+  `dependencies`, as UTF-8 bytes with `Utf8JsonReader` (comments and trailing commas allowed, a BOM taken off), off the UI
+  thread, once per folder (bounded cache of 4,096 folders). A file whose project was not read opens at once at the latest;
+  the read switches its session through `ChangeDialect`, so `Reclassified` repaints it. An older version reads a newer word
+  as a name.
+- **The formatter** (`ScriptFormatter`, JS, TS, JSX, TSX): only white space between tokens changes; lines indented by brackets
+  and JSX nesting (several brackets opened on a line indent the next once), a continued expression one step more; one space
+  after keywords and around binary operators, none inside `()`/`[]`, one inside `{ }`, after `,` and `;`; trailing spaces
+  off, at most one empty line kept; a template's text, a continued string and JSX text kept; JSDoc's ` * ` lines under their
+  `/**`; no line broken unless `CRAFT_PLUGIN_TYPESCRIPT_FORMATLINEWIDTH`/`CRAFT_PLUGIN_JAVASCRIPT_FORMATLINEWIDTH` is set
+  (then after commas, greedy and idempotent); a malformed file unchanged with "line, column: what" (a bracket, template,
+  comment, string or regex not closed, `</span>` closing `<div>`); Format Selection through the kit; the caret kept.
+- **Folding** (`ScriptFolding : IFoldingRangeProvider`): `{}` `[]` `()` over several lines, JSX elements (from `<` to the
+  closing tag), multi-line templates, `//#region`/`/* #region */` to `#endregion` (Marked), block comments and runs of `//`
+  lines (Comment), a run of imports (Imports). Inside JSX, `RulesAt` gives `{/* */}` (toggle comment wraps lines in it).
+- **The plug-ins** (contract 1.1, pre-installed and removable, each carrying `Craft.Web` as a copied reference):
+  `plugins/Craft.Plugins.JavaScript` ("javascript": .js .mjs .cjs .jsx; jsconfig.json stays JSON) and
+  `plugins/Craft.Plugins.TypeScript` ("typescript": .ts .mts .cts .tsx .d.ts): the language (`ScriptLanguage`, a
+  `LineStateLanguage`), folding, a project selector (`ScriptProjectSelector`), the icons (W-files' drawn shapes), and an
+  editor part declaring the settings (`ScriptEditorPlugin`), Settings › Editor under "JavaScript" and "TypeScript":
+  `CRAFT_PLUGIN_JAVASCRIPT_{VERSION,PROJECTVERSION,JSX,FORMATLINEWIDTH,STATECAPACITY,STATEDEPTH}` and
+  `CRAFT_PLUGIN_TYPESCRIPT_{VERSION,PROJECTVERSION,FORMATLINEWIDTH,STATECAPACITY,STATEDEPTH}`, each also in `.craft/settings.json`.
+  `ScriptRules`: `//` and `/* */`, `{}` `[]` `()`, strings `" ' \``.
+- **Android and AOT**: `Craft.Web` (Script/) and both plug-ins are pure C#, no reflection, nothing native, `Utf8JsonReader`
+  only (`IsAotCompatible`, trim-safe); the working stack is stack-allocated and bounded (at most 128 frames, rule 45).
+
+**Decisions on the recommendation (the owner away; one line each).**
+- One `ScriptTokenizer` per (dialect, version, table capacity, depth), shared by its sessions, each with its own `LineStates` table.
+- A frame is 64 bits (kind, what continues, the token before, 255 braces with 24 kinds, 31 parens with 12 kinds); the lexer's stack holds the table's depth plus one, so a deeper stack reaches the table, gets its fallback and is counted in `Overflows`.
+- A regex follows `)` of if/while/for/with, a block's `}`, an operator, `(` `,` `[` `;`, `=>`, return/typeof/case/yield/await/else/do; a name, a literal, `)` `]` and an object's `}` divide; `++`/`--` keep what was before them.
+- A `{` is an object after an operator, a return-like keyword or import/export, else a block.
+- JSX starts only where an expression may start and a name or `>` follows; `<T,>`, `<T extends U>` (not `extends=`) and `<const T>` are generics in .jsx and .tsx alike.
+- Contextual words are read from what follows on the same line (`using x`, `accessor x`, `type X =`, `async *m`, `from "`, `x as T`); a predefined type is a keyword in a type's place (after `:` `|` `&` `<`) or when not followed by `=` `(` `:` `.`.
+- The version gates words only (`satisfies` TS 4.9, `using` TS 5.2 / ES2026, `accessor` TS 4.9 / ESNext, `override` 4.3, `out` 4.7, `infer` 2.8, `keyof` 2.1, `unique` 2.7, `asserts` 3.7, `import type` 3.8, `export type *` 5.0, `import defer` TS 5.9 / ESNext (confirm), `import source` ESNext (confirm)); separators, BigInt, `#x` and regex flags lex alike in every version.
+- In TypeScript the target gates nothing (TypeScript parses and downlevels); JavaScript reads jsconfig.json's target, else tsconfig.json's.
+- TypeScript's version is the installed one (`node_modules/typescript`) before the one package.json asks for; the setting wins over both.
+- `with` after a module's string is the import attributes' keyword (its `{` an object), not the old `with` statement.
+- A regex's flags are their own `Keyword` span; `undefined` is a `Keyword` like `null`.
+- Each session has its own formatter holding its dialect (.tsx vs .ts), switched with the session; `LineStateLanguage.Formatter` stays the default dialect's.
+- `ScriptLanguage` re-implements `ILanguage.Open` to start the project read, so the kit needed no change.
+- The selectors pick no language (the names do) but read a folder's project when it opens, so files opened after start in their dialect.
+- `jsx` = auto|on|off for .js (auto: react or preact in dependencies, devDependencies or peerDependencies); .jsx and .tsx always, .ts never.
+- The formatter keeps `<` `>` `>>` `>>>` `?` and the space before `:` as written (generics or comparisons), and JSX children's spaces.
+- A continued expression indents one more step only inside braces (not inside `()`/`[]`, which already indent); `case x:` bodies indent by it.
+- Line width breaks only after commas, greedily, measuring the formatted text, so a second format changes nothing; no line is ever joined.
+- Folding hides through the closing line, as JSON's does; a comment run needs two `//` lines alone on their lines.
+- Settings go to the Editor section grouped "JavaScript"/"TypeScript" (no new section constant, which another slot may add).
+- The plug-ins register their icons over the library's with its drawn shapes (as JSON's), so removing one leaves the library's.
+- In the tests Craft.Web is shared (a Craft.Web.dll sits beside the runner and the loader shares Craft.* assemblies the host has); in the app each plug-in loads its own copy.
+
+**Tests**: new group `WebScript` (12): the latest JavaScript, TypeScript, JSX and TSX with expected spans; the regex-or-division
+table (36 cases); templates nested across lines, 40 deep, and past the table's depth counted; 4,500 random edits (weighted to
+`` ` `` `${ } / * < >`, quotes, line breaks) equal a fresh session in three dialects; 0 bytes over 200 warm 60-line screens; a
+keystroke settles; the worst flip; the version gate and the parsers; the project read once and the session switched through
+`Reclassified`, the setting's precedence, JSX by project; the formatter (expected output, idempotent on every fixture, only
+white space changed, tabs and CRLF, seven malformed cases with where and what), its line width, the caret kept, one undo
+step, Format Selection; folding (11 ranges of every kind); JSX's rules and the Angular stub. `WebPlugins` extended (2): both
+plug-ins from their folders, their files, colours from the loaded copy, folding, selectors, settings and variables, icons,
+removed and disabled; the settings through the host (`CRAFT_PLUGIN_JAVASCRIPT_JSX=on`, `CRAFT_PLUGIN_TYPESCRIPT_VERSION=4.8`,
+the line width) and back to defaults when the host closes. `LookAndFeel` (+1, the fixture above). First run: 38 of 41 passed;
+the three failures were the tests' expectations (a regex's flags and a comment's continued line are their own spans; in the
+test host Craft.Web is shared, so the plug-in's language is told by its instance, not its assembly). Rerun: two real lexer
+gaps found and fixed (a stack deeper than the table was cut off without reaching its `Overflows`; `async *m()` was a name);
+then all passed, and the full filter
+(`WebScript|WebKit|WebPlugins|WebFiles|WebStyle|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|LookAndFeel|ApiGuard|Inventory`):
+172 of 172. API dumps: `api/Craft.Web.txt` (additions), `api/Craft.Plugins.JavaScript.txt` and `api/Craft.Plugins.TypeScript.txt`
+(new); the inventory and the contract list unchanged (no contract added).
+
+**Measured** (here, 4 cores, Release; `test-output/benches/web-script.txt`): a 100,000-line TypeScript file (5.8 MiB): the
+first screen of 60 lines 0.12 ms (cold for the file; the lexer was already compiled by the group's earlier tests), the rest
+of the file's states on first read 108 ms (off the screen's path), a warm screen of 60 lines 0.075 ms and 0 bytes (target
+0.5 ms); a backtick typed on line 1 then the screen 0.09 ms, only the screen's 60 lines lexed and none below; a letter typed
+in a name: its line, the states below settle at once. A 2,000-line TSX file: Format document 3.7 ms cold, 3.5 ms warm
+(113 edits); folding 1.3 ms (336 ranges).
+
+**Left, for later**: the semantic layer (W-semantic: completion, diagnostics, go to definition); re-reading a project when its
+files change (W-npm's `WorkspaceChanged`); a contextual word whose partner is on the next line reads as a name; generics in a
+JSX tag (`<Foo<T> />`) lex `<T>` plainly; the formatter neither joins lines nor breaks them anywhere but after commas (no
+Prettier-style layout; Prettier waits for W-tools); the Angular dialect is the stub W-markup completes.
+
+**The owner's check** on `test-output\CarftTestPOC`: add `scratch.ts`, `scratch.tsx` and `scratch.js` there (git ignores the
+folder) with a template over several lines, a regex after `if (x)`, a JSX element; check their colours and icons, folding,
+Ctrl+/ inside JSX (`{/* */}`), Shift+Alt+F (and a malformed file's message); Settings › Editor › JavaScript/TypeScript; type
+a backtick at the top of a long .ts and watch the paint.
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebScript|WebKit|WebPlugins|WebFiles|WebStyle|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|LookAndFeel|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
 
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 

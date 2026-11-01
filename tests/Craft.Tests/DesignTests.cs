@@ -94,7 +94,7 @@ public static class DesignTests
         var error = Check.Throws<ArgumentException>(() => CraftOptions.FromVariables(n => n == "CRAFT_ACCENT" ? "purple" : null), "a bad accent");
         Check.True(error.Message.Contains("amber, teal, blue, rose", StringComparison.Ordinal), "the error names what it takes");
         var defaults = new CraftOptions();
-        Check.True(defaults is { FontFamily: "JetBrains Mono", FontSize: 13, InterfaceFont: "Inter", InterfaceFontSize: 13, TouchTarget: 44, Accent: null },
+        Check.True(defaults is { FontFamily: "Cascadia Mono", FontSize: 13, InterfaceFont: "Inter", InterfaceFontSize: 13, TouchTarget: 44, Accent: null },
             "the design's fonts and sizes are the defaults");
         Check.Equal(22f, MathF.Ceiling(defaults.FontSize * defaults.LineSpacing), "13-unit code on 22-unit lines");
     }

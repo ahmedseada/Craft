@@ -158,11 +158,6 @@ public static class CodeFonts
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(family);
         var list = new List<CodeFontFaces>(4);
-        if (bundled is not null && family.Trim().Equals(Bundled.Family, StringComparison.OrdinalIgnoreCase))
-        {
-            list.AddRange(bundled);
-        }
-
         var names = new List<string> { family.Trim() };
         foreach (var name in (fallback ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -172,8 +167,15 @@ public static class CodeFonts
             }
         }
 
+        // The bundled faces stand where their family is named (the default names it last, after the system's own: on
+        // Windows a font read from a file draws about 200 times slower than an installed one, the owner's run 2026-11-01).
         foreach (var name in names)
         {
+            if (bundled is not null && name.Equals(Bundled.Family, StringComparison.OrdinalIgnoreCase))
+            {
+                list.AddRange(bundled);
+            }
+
             list.Add(CodeFontFaces.Named(name));
         }
 

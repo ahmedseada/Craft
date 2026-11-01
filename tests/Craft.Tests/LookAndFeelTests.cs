@@ -246,8 +246,11 @@ public static class LookAndFeelTests
         Check.True(!CodeFonts.Accepts(64 * 7.15, 64 * 7.15, 64, 13, 0.6), "a monospaced substitute is not taken for the file");
         Check.True(!CodeFonts.Accepts(64 * 11.2, 64 * 3.4, 64, 13, null), "a proportional font is not taken");
         Check.True(CodeFonts.Accepts(64 * 7.15, 64 * 7.15, 64, 13, null), "a monospaced fallback by name is");
-        Check.True(new Craft.Core.CraftOptions() is { FontFamily: "JetBrains Mono", FontSize: 13, FontFallback: "Cascadia Mono, Consolas" }
-                   && Math.Ceiling(13 * new Craft.Core.CraftOptions().LineSpacing) == 22, "the design's code type: JetBrains Mono at 13 on 22-unit lines");
+        var defaultOrder = CodeFonts.Candidates("Cascadia Mono", "Consolas, JetBrains Mono", [bundled!]);
+        Check.True(defaultOrder.Select(c => c.Regular).SequenceEqual(["Cascadia Mono", "Consolas", "file:JetBrainsMono-Regular.ttf#JetBrains Mono", "JetBrains Mono"]),
+            $"the default: the system's Cascadia Mono, then Consolas, then the bundled faces where JetBrains Mono is named ({string.Join(", ", defaultOrder.Select(c => c.Regular))})");
+        Check.True(new Craft.Core.CraftOptions() is { FontFamily: "Cascadia Mono", FontSize: 13, FontFallback: "Consolas, JetBrains Mono" }
+                   && Math.Ceiling(13 * new Craft.Core.CraftOptions().LineSpacing) == 22, "the code type: Cascadia Mono (the owner's pick, 2026-11-01) at 13 on 22-unit lines");
     }
 
     [Test]

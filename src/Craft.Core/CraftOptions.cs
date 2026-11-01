@@ -27,7 +27,7 @@ public sealed record CraftOptions
     /// The code font's family (<c>CRAFT_FONT</c>): JetBrains Mono, bundled with the app (phase D); a family that does not
     /// draw monospaced on the platform gives way to <see cref="FontFallback"/>.
     /// </summary>
-    public string FontFamily { get; init; } = "JetBrains Mono";
+    public string FontFamily { get; init; } = "Cascadia Mono";
 
     /// <summary>The code font's size in device-independent units (<c>CRAFT_FONT_SIZE</c>; the design's 13).</summary>
     public float FontSize { get; init; } = 13;
@@ -39,7 +39,7 @@ public sealed record CraftOptions
     /// The code fonts tried, in order, when <see cref="FontFamily"/> does not draw monospaced on the platform
     /// (<c>CRAFT_FONT_FALLBACK</c>, families separated by commas; the first that draws monospaced is taken).
     /// </summary>
-    public string FontFallback { get; init; } = "Cascadia Mono, Consolas";
+    public string FontFallback { get; init; } = "Consolas, JetBrains Mono";
 
     /// <summary>The interface's font family (<c>CRAFT_INTERFACE_FONT</c>): Inter, bundled with the app.</summary>
     public string InterfaceFont { get; init; } = "Inter";
@@ -910,10 +910,10 @@ public sealed record CraftOptions
     /// <summary>The environment variables, with their defaults and meanings, in order.</summary>
     public static IReadOnlyList<CraftVariable> Variables { get; } =
     [
-        new("CRAFT_FONT", "JetBrains Mono", "The code font's family (bundled; one that does not draw monospaced gives way to CRAFT_FONT_FALLBACK).") { Shape = SettingShape.Font(SettingSections.Appearance, "Code font", "Fonts") },
+        new("CRAFT_FONT", "Cascadia Mono", "The code font's family (the system's; one that does not draw monospaced, or is not on this platform, gives way to CRAFT_FONT_FALLBACK, which ends with the bundled JetBrains Mono).") { Shape = SettingShape.Font(SettingSections.Appearance, "Code font", "Fonts") },
         new("CRAFT_FONT_SIZE", "13", "The code font's size, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Appearance, "Code font size", 1, 400, 0.5, "units", "Fonts") },
         new("CRAFT_LINE_SPACING", "1.69", "A line's height as a multiple of the font's height (1.69 at 13: 22-unit lines).") { Shape = SettingShape.Number(SettingSections.Appearance, "Line height", 0.5, 5, 0.01, "× the font", "Fonts") },
-        new("CRAFT_FONT_FALLBACK", "Cascadia Mono, Consolas", "The code fonts tried in order (separated by commas) when CRAFT_FONT does not draw monospaced on this platform.") { Shape = SettingShape.ListOf(SettingSections.Appearance, "Code font fallbacks", "Fonts") },
+        new("CRAFT_FONT_FALLBACK", "Consolas, JetBrains Mono", "The code fonts tried in order (separated by commas) when CRAFT_FONT does not draw monospaced on this platform.") { Shape = SettingShape.ListOf(SettingSections.Appearance, "Code font fallbacks", "Fonts") },
         new("CRAFT_INTERFACE_FONT", "Inter", "The interface's font family (bundled).") { Shape = SettingShape.Font(SettingSections.Appearance, "Interface font", "Fonts") },
         new("CRAFT_INTERFACE_FONT_SIZE", "13", "The interface's text size, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Appearance, "Interface text size", 6, 72, 0.5, "units", "Fonts") },
         new("CRAFT_ACCENT", "(the theme's)", "The accent: amber, teal, blue, rose, or #RRGGBB; moved until it reads at 4.5:1 on the theme.") { Shape = SettingShape.From(SettingSections.Appearance, "Accent", SettingChoiceSources.Accents, [""], true, "Theme") },

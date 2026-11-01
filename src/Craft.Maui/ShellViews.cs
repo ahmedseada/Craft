@@ -47,8 +47,11 @@ public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, 
 /// </summary>
 public sealed class FolderTreeView : ContentView
 {
+    private const double FooterMin = 160;
     private readonly CollectionView _list;
+    private readonly BoxView _footer;
     private readonly System.Collections.ObjectModel.ObservableCollection<FolderTreeItem> _items = [];
+    private double _rowHeight = 26;                       // a row's measured height (its first one made), for the footer's
     private FolderTree? _tree;
     private Color _textColor = Colors.Gray;
     private float _indent = 14;
@@ -63,10 +66,14 @@ public sealed class FolderTreeView : ContentView
     public FolderTreeView()
     {
         // X part 7: the space under the rows takes a right-click too: the workspace's menu (New file, Paste, Collapse all…).
-        var footer = new BoxView { Color = Colors.Transparent, HeightRequest = 160 };
+        // It fills all the space under the last row (at least FooterMin), so a click anywhere below the files reaches it
+        // (the owner's run, 2026-11-01: a fixed 160 left most of a short tree's empty space without the menu).
+        var footer = _footer = new BoxView { Color = Colors.Transparent, HeightRequest = FooterMin };
         var footerMenu = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
         footerMenu.Tapped += (_, e) => ContextRequested?.Invoke(this, (null, e));
         footer.GestureRecognizers.Add(footerMenu);
+        SizeChanged += (_, _) => SizeFooter();
+        _items.CollectionChanged += (_, _) => SizeFooter();
         _list = new CollectionView
         {
             SelectionMode = SelectionMode.None,                     // a row's own tap opens it (below), not the list's selection
@@ -104,6 +111,16 @@ public sealed class FolderTreeView : ContentView
 
     /// <summary>Raised when Escape ends the name in place without a change.</summary>
     public event EventHandler? EditCancelled;
+
+    // The footer takes the view's height under the rows (never less than FooterMin): measured row height times the rows.
+    private void SizeFooter()
+    {
+        double height = Math.Max(FooterMin, Height - (_items.Count * _rowHeight));
+        if (Height > 0 && Math.Abs(_footer.HeightRequest - height) > 1)
+        {
+            _footer.HeightRequest = height;
+        }
+    }
 
     /// <summary>Raises the workspace's menu (the explorer's header was right-clicked).</summary>
     public void RequestRootMenu(TappedEventArgs where) => ContextRequested?.Invoke(this, (null, where));
@@ -323,6 +340,14 @@ public sealed class FolderTreeView : ContentView
         };
         line.Add(field, 1, 0);
         var row = new ContentView { Content = line };
+        row.SizeChanged += (_, _) =>
+        {
+            if (row.Height > 0 && Math.Abs(row.Height - _rowHeight) > 0.5)
+            {
+                _rowHeight = row.Height;
+                SizeFooter();
+            }
+        };
         // Phase X: the row's hover, pressed and active looks from the theme (one mechanism); its text follows them.
         InteractiveStates? states = null;
         row.BindingContextChanged += (_, _) =>

@@ -3430,5 +3430,9 @@ weak points"): a slot that finds the cause in Idrak (an error, a missing contrac
 message that misleads) fixes it in Idrak on its `main` by Idrak's rules (`IDRAK_DEVICES=cpu`, an `IDRAK_FILTER` for the
 code changed, its API dump), pushes it first, then uses it from Craft; never a workaround in Craft.
 
+For the session of 2026-11-01 only, the owner allowed a fourth agent in parallel ("for this session only, if you can
+run a fourth agent in parallel to speed things up, then start"); `CLAUDE.md`'s limit of three stands for every other
+session.
+
 Every slot follows Craft's new build-and-test rule (`CLAUDE.md`): all the work, one build, all the tests, one run,
 fixes as a batch, the full filter once, then push.

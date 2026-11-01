@@ -13,7 +13,8 @@ namespace Craft.Plugins.Sandbox;
 /// plug-in's setting <c>inner</c> names, under the same limits, its output live in the sandbox terminal panel. A denied
 /// command, a dismissed question, or no editor to ask gives a refused result whose output tells the agent why; nothing
 /// runs without the user. It enforces what its inner sandbox enforces: <see cref="Check"/> is the inner one's (a network
-/// turned off needs "container").
+/// turned off needs "container"). An interactive start (<see cref="StartAsync"/>) is asked once the same way and then
+/// passed through to the inner sandbox, whose streams the caller reads and writes.
 /// </summary>
 public sealed class ApproveEachSandbox : ICommandSandbox
 {
@@ -61,6 +62,35 @@ public sealed class ApproveEachSandbox : ICommandSandbox
         }
 
         return await session.RunAsync(command, directory, limits, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public string? CheckStart(CommandLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(limits);
+        if (Session is not { } session)
+        {
+            return Check(limits);
+        }
+
+        return session.Inner() is { } inner ? inner.CheckStart(limits) : session.InnerProblem();
+    }
+
+    /// <summary>
+    /// An interactive start (X part 6b): the user is asked once, as for <see cref="RunAsync"/>; an allowed command is started
+    /// by the inner sandbox (<see cref="ICommandSandbox.StartAsync"/>), its streams handed to the caller as they are.
+    /// </summary>
+    public async ValueTask<CommandStart> StartAsync(IReadOnlyList<string> command, string directory, CommandLimits limits, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(limits);
+        if (Session is not { } session)
+        {
+            return CommandStart.Refused(Check(limits)!);
+        }
+
+        return await session.StartAsync(command, directory, limits, cancellationToken).ConfigureAwait(false);
     }
 
     internal static CommandResult Refused(string why) => new(null, false, why, TimeSpan.Zero, true);

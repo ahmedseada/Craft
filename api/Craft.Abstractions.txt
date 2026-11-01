@@ -689,6 +689,21 @@ static class Craft.Abstractions.EditorPlugins
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPlugin> All { get; }
   static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
   static System.Void Register(Craft.Abstractions.IEditorPlugin plugin)
+sealed class Craft.Abstractions.EditorProgramRequest : System.IEquatable<Craft.Abstractions.EditorProgramRequest>
+  Craft.Abstractions.EditorProgramRequest <Clone>$()
+  System.Action Stop { get; init; }
+  System.Boolean Equals(Craft.Abstractions.EditorProgramRequest other)
+  System.Boolean Equals(System.Object obj)
+  System.IO.Stream Error { get; init; }
+  System.IO.Stream Input { get; init; }
+  System.IO.Stream Output { get; init; }
+  System.Int32 GetHashCode()
+  System.String Folder { get; init; }
+  System.String Header { get; init; }
+  System.String Name { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.IO.Stream Input, out System.IO.Stream Output)
+  ctor(System.String Name, System.IO.Stream Input, System.IO.Stream Output)
 sealed class Craft.Abstractions.EditorQuestion : System.IEquatable<Craft.Abstractions.EditorQuestion>
   Craft.Abstractions.EditorQuestion <Clone>$()
   System.Boolean Equals(Craft.Abstractions.EditorQuestion other)
@@ -1003,10 +1018,14 @@ interface Craft.Abstractions.IEditorTerminalOutput
   System.Boolean IsOpen { get; }
   System.String Title { get; }
   System.Void Show()
+interface Craft.Abstractions.IEditorTerminalProgram : Craft.Abstractions.IEditorTerminalOutput
+  System.Threading.Tasks.Task OutputEnded { get; }
+  System.Void End(System.String text = null, System.Int32 exitCode = 0)
 interface Craft.Abstractions.IEditorTerminals
   Craft.Abstractions.IEditorTerminal Active { get; }
   Craft.Abstractions.IEditorTerminal Open(Craft.Abstractions.EditorTerminalRequest request)
   Craft.Abstractions.IEditorTerminalOutput OpenOutput(System.String name)
+  Craft.Abstractions.IEditorTerminalProgram OpenProgram(Craft.Abstractions.EditorProgramRequest request)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorTerminal> All { get; }
 interface Craft.Abstractions.IEditorToolSet : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder)
@@ -2186,6 +2205,7 @@ static class Craft.Abstractions.RunCommandLine
 sealed class Craft.Abstractions.RunConfiguration : System.IEquatable<Craft.Abstractions.RunConfiguration>
   Craft.Abstractions.RunActions Action { get; init; }
   Craft.Abstractions.RunConfiguration <Clone>$()
+  Craft.Abstractions.RunInteractive Interactive { get; init; }
   System.Boolean BuildFirst { get; init; }
   System.Boolean Equals(Craft.Abstractions.RunConfiguration other)
   System.Boolean Equals(System.Object obj)
@@ -2200,6 +2220,10 @@ sealed class Craft.Abstractions.RunConfiguration : System.IEquatable<Craft.Abstr
   System.Void Deconstruct(out System.String Name, out System.String Provider, out System.String Target)
   ctor(System.String Name, System.String Provider, System.String Target)
   static System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> NoEnvironment { get; }
+enum Craft.Abstractions.RunInteractive : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Auto = 0
+  Off = 2
+  On = 1
 sealed class Craft.Abstractions.RunProblem : System.IEquatable<Craft.Abstractions.RunProblem>
   Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
   Craft.Abstractions.RunProblem <Clone>$()
@@ -2231,6 +2255,7 @@ sealed class Craft.Abstractions.RunTarget : System.IEquatable<Craft.Abstractions
   Craft.Abstractions.RunTarget <Clone>$()
   System.Boolean Equals(Craft.Abstractions.RunTarget other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean ReadsInput { get; init; }
   System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
   System.Int32 GetHashCode()
   System.String Arguments { get; init; }

@@ -51,6 +51,13 @@ public sealed record RunTarget(string Provider, string Id, string Title, string 
     /// <summary>The program it runs itself (a launch profile's executable), or null: the provider's own command.</summary>
     public string? Program { get; init; }
 
+    /// <summary>
+    /// Whether its run may read standard input (a console program, a script): with <c>CRAFT_RUN_INTERACTIVE</c> "auto" (and
+    /// the configuration's <see cref="RunInteractive.Auto"/>) such a run goes to a terminal tab that takes the keyboard (X
+    /// part 6b). False for what serves or shows a window (a web project, a worker, a windowed app).
+    /// </summary>
+    public bool ReadsInput { get; init; }
+
     /// <summary>What F5 does with it: <see cref="RunActions.Run"/> when it runs, else the first action it has.</summary>
     public RunActions DefaultAction => (Actions & RunActions.Run) != 0 ? RunActions.Run
         : (Actions & RunActions.Build) != 0 ? RunActions.Build
@@ -74,6 +81,19 @@ public sealed record RunCommand(IReadOnlyList<string> Command, string Folder)
 
     /// <summary>A command that cannot run, saying why.</summary>
     public static RunCommand Unavailable(string why, string folder) => new([], folder) { Problem = why };
+}
+
+/// <summary>Whether a run takes the keyboard (X part 6b): its program's input, output and error in a terminal tab, or its output only.</summary>
+public enum RunInteractive
+{
+    /// <summary>As <c>CRAFT_RUN_INTERACTIVE</c> says; its "auto": when the target reads input (<see cref="RunTarget.ReadsInput"/>).</summary>
+    Auto,
+
+    /// <summary>Always: a run's tab takes the keyboard.</summary>
+    On,
+
+    /// <summary>Never: the run's output only, its input closed.</summary>
+    Off,
 }
 
 /// <summary>
@@ -103,10 +123,13 @@ public sealed record RunConfiguration(string Name, string Provider, string Targe
     /// <summary>Whether a run builds the target first (stopping there when the build fails).</summary>
     public bool BuildFirst { get; init; }
 
+    /// <summary>Whether its run takes the keyboard (X part 6b; only a run: a build, a test or a publish shows its output only).</summary>
+    public RunInteractive Interactive { get; init; }
+
     /// <inheritdoc />
     public bool Equals(RunConfiguration? other) =>
         other is not null && Name == other.Name && Provider == other.Provider && Target == other.Target && Action == other.Action && Arguments == other.Arguments
-        && Folder == other.Folder && BuildFirst == other.BuildFirst && Environment.Count == other.Environment.Count
+        && Folder == other.Folder && BuildFirst == other.BuildFirst && Interactive == other.Interactive && Environment.Count == other.Environment.Count
         && Environment.All(pair => other.Environment.TryGetValue(pair.Key, out var value) && value == pair.Value);
 
     /// <inheritdoc />
@@ -406,7 +429,7 @@ internal sealed class ScriptRunProvider : IRunProvider
             var folder = slash < 0 ? "" : file[..slash];
             if ((folder.Length == 0 || folder.Equals("scripts", StringComparison.OrdinalIgnoreCase)) && IsScript(file))
             {
-                targets.Add(new RunTarget(Name, file, file[(slash + 1)..], file, RunActions.Run) { Detail = Kind(file) });
+                targets.Add(new RunTarget(Name, file, file[(slash + 1)..], file, RunActions.Run) { Detail = Kind(file), ReadsInput = true });
             }
         }
 

@@ -41,6 +41,10 @@ public static class RunViewTests
         var profile = targets.Single(t => t.Id.EndsWith("#App", StringComparison.Ordinal));
         Check.True(profile is { Url: "https://localhost:5001", Arguments: "--verbose" } && profile.Environment["ASPNETCORE_ENVIRONMENT"] == "Development", "a profile's address, arguments and variables");
         Check.True(targets[0].Detail == "Exe · net10.0" && targets.Single(t => t.Id.Contains("Lib", StringComparison.Ordinal)).Detail == "Library · net10.0, netstandard2.0", "each project's kind and frameworks");
+        Check.True(targets[0].ReadsInput && profile.ReadsInput && !targets.Single(t => t.Id.EndsWith("#Tool", StringComparison.Ordinal)).ReadsInput
+            && !targets.Single(t => t.Id.Contains("Lib", StringComparison.Ordinal)).ReadsInput && !targets.Single(t => t.Id == "App.sln").ReadsInput,
+            "a console project and its Project profile read input (X part 6b); an Executable profile, a library and a solution do not");
+        Check.True(!DotnetRunProvider.ReadProject(Path.Combine(folder.Path, "tests", "App.Tests", "App.Tests.csproj")).Console, "a test project is not a console program");
         Check.True(dotnet.Watches("App.csproj") && dotnet.Watches("launchSettings.json") && dotnet.Watches("x.slnx") && !dotnet.Watches("Program.cs"), "what it watches");
 
         var scripts = RunProviders.Get(RunProviders.Scripts).Find(workspace);
@@ -200,11 +204,15 @@ public static class RunViewTests
         [
             new RunConfiguration("App", "dotnet", "src/App/App.csproj") { Arguments = "--x \"y z\"", Environment = new Dictionary<string, string> { ["B"] = "2", ["A"] = "1" }, Folder = "src", BuildFirst = true },
             new RunConfiguration("Tests", "dotnet", "App.sln") { Action = RunActions.Test },
+            new RunConfiguration("Ask", "scripts", "ask.sh") { Interactive = RunInteractive.On },
+            new RunConfiguration("Quiet", "scripts", "ask.sh") { Interactive = RunInteractive.Off },
         ], "App");
         var back = RunFile.Parse(file.ToJson());
         Check.True(back.Equals(file) && back.Problems.Count == 0, "written and read back the same: " + Encoding.UTF8.GetString(file.ToJson()));
-        var broken = RunFile.Parse("""{ "configurations": [ { "name": "x" }, { "name": "y", "provider": "dotnet", "target": "a", "action": "fly" }, { "name": "z", "provider": "p", "target": "t" } ], }"""u8);
-        Check.True(broken.Configurations is [{ Name: "z" }] && broken.Problems.Count == 2, "an entry without a target or with an unknown action is passed over and said");
+        var broken = RunFile.Parse("""{ "configurations": [ { "name": "x" }, { "name": "y", "provider": "dotnet", "target": "a", "action": "fly" }, { "name": "z", "provider": "p", "target": "t" }, { "name": "w", "provider": "p", "target": "t", "interactive": "sometimes" } ], }"""u8);
+        Check.True(broken.Configurations is [{ Name: "z", Interactive: RunInteractive.Auto }] && broken.Problems.Count == 3, "an entry without a target, with an unknown action or an unknown interactive is passed over and said");
+        Check.True(Encoding.UTF8.GetString(file.ToJson()).Contains("\"interactive\": \"on\"", StringComparison.Ordinal) && !Encoding.UTF8.GetString(file.ToJson()).Contains("\"auto\"", StringComparison.Ordinal),
+            "interactive is written when it is not auto");
         Check.True(RunFile.Parse("{ nope"u8).Problems is [var why] && why.Contains("does not parse", StringComparison.Ordinal), "a file that does not parse says why");
 
         using var folder = new TempFolder();
@@ -282,6 +290,101 @@ public static class RunViewTests
         var layered = new CraftSettings(_ => null, null, workspace);
         Check.True(layered.Read("CRAFT_RUN_SANDBOX") is null && layered.Read("CRAFT_RUN_APPROVAL") is null && layered.Read("CRAFT_SEARCH_MAX_RESULTS") == "10",
             "a workspace cannot say where or how its commands run (what runs is code); it may narrow its search");
+    }
+
+    [Test]
+    public static async Task AConsoleProgramReadsTwoLinesTypedIntoItsTabAndStopEndsIt()
+    {
+        using var folder = new TempFolder();
+        Directory.CreateDirectory(Path.Combine(folder.Path, "scripts"));
+        bool windows = OperatingSystem.IsWindows();
+        string extension = windows ? ".cmd" : ".sh";
+        if (windows)
+        {
+            Disk.Write(Path.Combine(folder.Path, "scripts", "ask.cmd"), "@echo off\r\necho Two lines, please?\r\nset /p FIRST=\r\nset /p SECOND=\r\necho got %FIRST%\r\necho got %SECOND%\r\n");
+            Disk.Write(Path.Combine(folder.Path, "scripts", "wait.cmd"), "@echo off\r\necho waiting\r\nset /p X=\r\necho never\r\n");
+        }
+        else
+        {
+            Disk.Write(Path.Combine(folder.Path, "scripts", "ask.sh"), "echo 'Two lines, please?'\nread first\nread second\necho \"got $first\"\necho \"got $second\"\n");
+            Disk.Write(Path.Combine(folder.Path, "scripts", "wait.sh"), "echo waiting\nread x\necho never\n");
+        }
+
+        if (CommandSandboxes.Find(CommandSandboxes.Process) is null)
+        {
+            CommandSandboxes.Register(new Idrak.Text.Generation.ProcessCommandSandbox());
+        }
+
+        var ui = new ConcurrentQueue<Action>();
+        var presenter = new AskingPresenter();
+        var options = new CraftOptions { WorkspaceWatcher = FolderWatchers.None };
+        using var host = new EditorHost(options, ui.Enqueue, presenter);
+        using var manager = new Craft.Editor.Terminal.TerminalManager(host, () => options, new Craft.Tests.Editor.FakeClipboard());
+        host.Terminals = manager;
+        using var view = new RunView(host, () => folder.Path, () => options);
+        await Refreshed(ui, view);
+        var ask = view.Targets.Single(t => t.Id == "scripts/ask" + extension);
+        var wait = view.Targets.Single(t => t.Id == "scripts/wait" + extension);
+        var auto = new RunConfiguration(ask.Title, ask.Provider, ask.Id);
+        Check.True(ask.ReadsInput && RunView.TakesKeyboard(auto, ask, options), "a script reads input: its run takes the keyboard (CRAFT_RUN_INTERACTIVE auto)");
+        Check.True(!RunView.TakesKeyboard(auto, ask, options with { RunInteractive = "off" }) && !RunView.TakesKeyboard(auto with { Interactive = RunInteractive.Off }, ask, options)
+            && RunView.TakesKeyboard(auto with { Interactive = RunInteractive.On }, ask, options with { RunInteractive = "off" }), "the configuration's own interactive wins over CRAFT_RUN_INTERACTIVE");
+
+        // Two lines typed into its tab (one edited with Backspace) reach the program, which prints them back.
+        presenter.Answers.Enqueue(0);
+        var running = view.RunAsync(auto);
+        Craft.Editor.Terminal.TerminalInstance? tab = null;
+        await WorkspaceSearchTests.PumpUntil(ui, () => (tab = manager.Terminals.FirstOrDefault(t => t.IsProgram)) is not null && Text(tab).Contains("Two lines, please?", StringComparison.Ordinal),
+            "the program asks in a tab of its own");
+        Check.True(presenter.Asked is [var question] && question.Details.Any(d => d.StartsWith("Input: its terminal tab takes the keyboard", StringComparison.Ordinal)),
+            "the approval says the run takes the keyboard");
+        Check.True(tab!.Title == $"Run: {ask.Title}" && ReferenceEquals(manager.ActiveTerminal, tab), "its tab, named for the run, is the active one");
+        manager.Input.OnText("Ada");
+        manager.Input.OnKey(EditorKey.Enter, KeyModifiers.None);
+        manager.Input.OnText("Bobx");
+        manager.Input.OnKey(EditorKey.Backspace, KeyModifiers.None);
+        manager.Input.OnKey(EditorKey.Enter, KeyModifiers.None);
+        var outcome = await Run(ui, running);
+        await WorkspaceSearchTests.PumpUntil(ui, () => Text(tab).Contains("exit code", StringComparison.Ordinal), "its end is shown");
+        string text = Text(tab);
+        Check.True(outcome is { End: RunEnd.Succeeded, ExitCode: 0 }, $"the program ends after its two lines ({outcome.End}, {outcome.Reason})");
+        Check.True(text.Contains("got Ada", StringComparison.Ordinal) && text.Contains("got Bob", StringComparison.Ordinal) && !text.Contains("got Bobx", StringComparison.Ordinal)
+            && text.Contains("exit code 0", StringComparison.Ordinal), $"the two lines typed came back, the edited one as edited, and the end is said: {text.Trim()}");
+        Check.True(text.IndexOf("Ada", StringComparison.Ordinal) < text.IndexOf("got Ada", StringComparison.Ordinal), "what was typed is echoed in the tab before the program's answer");
+        await WorkspaceSearchTests.PumpUntil(ui, () => tab.HasExited, "the tab shows as ended");
+
+        // Stop ends a program waiting for its input; the next run of it replaces its ended tab and is not asked again.
+        var waitConfiguration = new RunConfiguration(wait.Title, wait.Provider, wait.Id);
+        presenter.Answers.Enqueue(0);
+        var waiting = view.RunAsync(waitConfiguration);
+        Craft.Editor.Terminal.TerminalInstance? waitTab = null;
+        await WorkspaceSearchTests.PumpUntil(ui, () => (waitTab = manager.Terminals.FirstOrDefault(t => t.Title == $"Run: {wait.Title}")) is not null && Text(waitTab).Contains("waiting", StringComparison.Ordinal),
+            "the waiting program started");
+        Check.True(view.Stop(), "Stop");
+        var stopped = await Run(ui, waiting);
+        await WorkspaceSearchTests.PumpUntil(ui, () => Text(waitTab!).Contains("stopped", StringComparison.Ordinal), "the stop is said in its tab");
+        Check.True(stopped.End == RunEnd.Stopped && !Text(waitTab!).Contains("never", StringComparison.Ordinal), $"Stop ends it, with its process tree ({stopped.End})");
+        await WorkspaceSearchTests.PumpUntil(ui, () => waitTab!.HasExited, "its tab shows as ended");
+
+        int asked = presenter.Asked.Count;
+        var again = view.RunAsync(waitConfiguration);
+        Craft.Editor.Terminal.TerminalInstance? againTab = null;
+        await WorkspaceSearchTests.PumpUntil(ui, () => (againTab = manager.Terminals.FirstOrDefault(t => t.Title == $"Run: {wait.Title}" && !t.HasExited)) is not null
+            && Text(againTab).Contains("waiting", StringComparison.Ordinal), "the program started again");
+        Check.True(presenter.Asked.Count == asked && manager.Terminals.Count(t => t.Title == $"Run: {wait.Title}") == 1,
+            "the same command line is not asked again this session (CRAFT_RUN_APPROVAL once), and its ended tab was replaced");
+        manager.Input.OnKey(EditorKey.C, KeyModifiers.Control);
+        var interrupted = await Run(ui, again);
+        await WorkspaceSearchTests.PumpUntil(ui, () => Text(againTab!).Contains("stopped", StringComparison.Ordinal), "the stop is said");
+        Check.True(interrupted.End == RunEnd.Stopped && Text(againTab!).Contains("^C", StringComparison.Ordinal), $"Ctrl+C in its tab ends the program ({interrupted.End})");
+    }
+
+    private static string Text(Craft.Editor.Terminal.TerminalInstance terminal)
+    {
+        lock (terminal.Screen.Sync)
+        {
+            return terminal.Screen.TextOf(terminal.Screen.FirstLine, 0, terminal.Screen.ScreenTop + terminal.Screen.Rows - 1, terminal.Screen.Columns);
+        }
     }
 
     // ---- fixture and fakes ----

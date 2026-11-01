@@ -772,6 +772,22 @@ Craft.Abstractions.EditorPlugins  static System.Boolean Unregister(System.String
 Craft.Abstractions.EditorPlugins  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorPlugin> All { get; }
 Craft.Abstractions.EditorPlugins  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.EditorPlugins  static System.Void Register(Craft.Abstractions.IEditorPlugin plugin)
+Craft.Abstractions.EditorProgramRequest
+Craft.Abstractions.EditorProgramRequest  Craft.Abstractions.EditorProgramRequest <Clone>$()
+Craft.Abstractions.EditorProgramRequest  System.Action Stop { get; init; }
+Craft.Abstractions.EditorProgramRequest  System.Boolean Equals(Craft.Abstractions.EditorProgramRequest other)
+Craft.Abstractions.EditorProgramRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.EditorProgramRequest  System.IO.Stream Error { get; init; }
+Craft.Abstractions.EditorProgramRequest  System.IO.Stream Input { get; init; }
+Craft.Abstractions.EditorProgramRequest  System.IO.Stream Output { get; init; }
+Craft.Abstractions.EditorProgramRequest  System.Int32 GetHashCode()
+Craft.Abstractions.EditorProgramRequest  System.String Folder { get; init; }
+Craft.Abstractions.EditorProgramRequest  System.String Header { get; init; }
+Craft.Abstractions.EditorProgramRequest  System.String Name { get; init; }
+Craft.Abstractions.EditorProgramRequest  System.String ToString()
+Craft.Abstractions.EditorProgramRequest  System.Void Deconstruct(out System.String Name, out System.IO.Stream Input, out System.IO.Stream Output)
+Craft.Abstractions.EditorProgramRequest  ctor(System.String Name, System.IO.Stream Input, System.IO.Stream Output)
+Craft.Abstractions.EditorProgramRequest : System.IEquatable<Craft.Abstractions.EditorProgramRequest>
 Craft.Abstractions.EditorQuestion
 Craft.Abstractions.EditorQuestion  Craft.Abstractions.EditorQuestion <Clone>$()
 Craft.Abstractions.EditorQuestion  System.Boolean Equals(Craft.Abstractions.EditorQuestion other)
@@ -1112,10 +1128,15 @@ Craft.Abstractions.IEditorTerminalOutput  System.Boolean Append(System.String te
 Craft.Abstractions.IEditorTerminalOutput  System.Boolean IsOpen { get; }
 Craft.Abstractions.IEditorTerminalOutput  System.String Title { get; }
 Craft.Abstractions.IEditorTerminalOutput  System.Void Show()
+Craft.Abstractions.IEditorTerminalProgram
+Craft.Abstractions.IEditorTerminalProgram  System.Threading.Tasks.Task OutputEnded { get; }
+Craft.Abstractions.IEditorTerminalProgram  System.Void End(System.String text = null, System.Int32 exitCode = 0)
+Craft.Abstractions.IEditorTerminalProgram : Craft.Abstractions.IEditorTerminalOutput
 Craft.Abstractions.IEditorTerminals
 Craft.Abstractions.IEditorTerminals  Craft.Abstractions.IEditorTerminal Active { get; }
 Craft.Abstractions.IEditorTerminals  Craft.Abstractions.IEditorTerminal Open(Craft.Abstractions.EditorTerminalRequest request)
 Craft.Abstractions.IEditorTerminals  Craft.Abstractions.IEditorTerminalOutput OpenOutput(System.String name)
+Craft.Abstractions.IEditorTerminals  Craft.Abstractions.IEditorTerminalProgram OpenProgram(Craft.Abstractions.EditorProgramRequest request)
 Craft.Abstractions.IEditorTerminals  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorTerminal> All { get; }
 Craft.Abstractions.IEditorToolSet
 Craft.Abstractions.IEditorToolSet  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder)
@@ -2469,6 +2490,7 @@ Craft.Abstractions.RunCommandLine  static System.String Join(System.Collections.
 Craft.Abstractions.RunConfiguration
 Craft.Abstractions.RunConfiguration  Craft.Abstractions.RunActions Action { get; init; }
 Craft.Abstractions.RunConfiguration  Craft.Abstractions.RunConfiguration <Clone>$()
+Craft.Abstractions.RunConfiguration  Craft.Abstractions.RunInteractive Interactive { get; init; }
 Craft.Abstractions.RunConfiguration  System.Boolean BuildFirst { get; init; }
 Craft.Abstractions.RunConfiguration  System.Boolean Equals(Craft.Abstractions.RunConfiguration other)
 Craft.Abstractions.RunConfiguration  System.Boolean Equals(System.Object obj)
@@ -2484,6 +2506,14 @@ Craft.Abstractions.RunConfiguration  System.Void Deconstruct(out System.String N
 Craft.Abstractions.RunConfiguration  ctor(System.String Name, System.String Provider, System.String Target)
 Craft.Abstractions.RunConfiguration  static System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> NoEnvironment { get; }
 Craft.Abstractions.RunConfiguration : System.IEquatable<Craft.Abstractions.RunConfiguration>
+Craft.Abstractions.RunInteractive
+Craft.Abstractions.RunInteractive  Auto = 0
+Craft.Abstractions.RunInteractive  Off = 2
+Craft.Abstractions.RunInteractive  On = 1
+Craft.Abstractions.RunInteractive : System.IComparable
+Craft.Abstractions.RunInteractive : System.IConvertible
+Craft.Abstractions.RunInteractive : System.IFormattable
+Craft.Abstractions.RunInteractive : System.ISpanFormattable
 Craft.Abstractions.RunProblem
 Craft.Abstractions.RunProblem  Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
 Craft.Abstractions.RunProblem  Craft.Abstractions.RunProblem <Clone>$()
@@ -2516,6 +2546,7 @@ Craft.Abstractions.RunTarget  Craft.Abstractions.RunActions DefaultAction { get;
 Craft.Abstractions.RunTarget  Craft.Abstractions.RunTarget <Clone>$()
 Craft.Abstractions.RunTarget  System.Boolean Equals(Craft.Abstractions.RunTarget other)
 Craft.Abstractions.RunTarget  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.RunTarget  System.Boolean ReadsInput { get; init; }
 Craft.Abstractions.RunTarget  System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Environment { get; init; }
 Craft.Abstractions.RunTarget  System.Int32 GetHashCode()
 Craft.Abstractions.RunTarget  System.String Arguments { get; init; }

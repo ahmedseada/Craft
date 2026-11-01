@@ -126,71 +126,13 @@ internal sealed class SandboxSession : IDisposable
 
     public async Task<CommandResult> RunAsync(IReadOnlyList<string> command, string directory, CommandLimits limits, CancellationToken cancellationToken)
     {
-        if (command.Count == 0 || command[0].Length == 0)
+        var approved = await ApproveAsync(command, directory, limits, interactive: false, cancellationToken).ConfigureAwait(false);
+        if (approved.Refusal is { } refusal)
         {
-            return ApproveEachSandbox.Refused("Error: empty command.");
+            return ApproveEachSandbox.Refused(refusal);
         }
 
-        // The settings are read on the host's UI thread, where its members are called.
-        var read = new TaskCompletionSource<SandboxSettings>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _host.Dispatch(() =>
-        {
-            try
-            {
-                read.TrySetResult(SandboxSettings.From(_host.Settings));
-            }
-#pragma warning disable CA1031 // A setting that does not parse: the command is not run, and the agent hears why.
-            catch (Exception error)
-#pragma warning restore CA1031
-            {
-                read.TrySetException(error);
-            }
-        });
-        Volatile.Write(ref _settings, await read.Task.WaitAsync(cancellationToken).ConfigureAwait(false));
-        if (Inner() is not { } inner)
-        {
-            return ApproveEachSandbox.Refused(InnerProblem());
-        }
-
-        if (inner.Check(limits) is { } cannot)
-        {
-            throw new NotSupportedException(cannot);
-        }
-
-        var settings = Settings;
-        string program = Path.GetFileNameWithoutExtension(command[0]);
-        string root = limits.Root ?? directory;
-        string key = Path.GetFullPath(root) + "|" + program;
-        string line = CommandLine(command);
-        bool remembered;
-        lock (_gate)
-        {
-            long now = Stopwatch.GetTimestamp();
-            if (_lastCommand != 0 && Stopwatch.GetElapsedTime(_lastCommand, now) > TimeSpan.FromMinutes(settings.RunGapMinutes))
-            {
-                _allowed.Clear();                              // a long gap: a new run
-            }
-
-            _lastCommand = now;
-            remembered = _allowed.Contains(key);
-        }
-
-        var answer = remembered ? CommandApproval.AllowOnce : await AskAsync(line, program, directory, root, limits, cancellationToken).ConfigureAwait(false);
-        if (answer == CommandApproval.Deny)
-        {
-            Append($"$ {line}");
-            Append("  denied by you; the agent was told.");
-            return ApproveEachSandbox.Refused($"The user denied this command ({line}). Do not run it again; ask the user, or do the task another way.");
-        }
-
-        if (answer == CommandApproval.AllowProgramForRun)
-        {
-            lock (_gate)
-            {
-                _allowed.Add(key);
-            }
-        }
-
+        var (inner, line, remembered) = (approved.Inner!, approved.Line, approved.Remembered);
         Append($"$ {line}{(remembered ? "    (allowed for this run)" : "")}");
         var clock = Stopwatch.StartNew();
         // Phase U: the command shows in the status bar with its last line and Cancel (which stops it as the agent's stop does).
@@ -219,6 +161,122 @@ internal sealed class SandboxSession : IDisposable
             _status.Update("$ " + line + " · stopped (cancelled)", NotificationSeverity.Warning);
             throw;
         }
+    }
+
+    /// <summary>
+    /// An interactive start (X part 6b): asked once as <see cref="RunAsync"/> asks, then passed through to the inner
+    /// sandbox's <see cref="ICommandSandbox.StartAsync"/>: the streams are the caller's, the tab shows the command and its end.
+    /// </summary>
+    public async Task<CommandStart> StartAsync(IReadOnlyList<string> command, string directory, CommandLimits limits, CancellationToken cancellationToken)
+    {
+        var approved = await ApproveAsync(command, directory, limits, interactive: true, cancellationToken).ConfigureAwait(false);
+        if (approved.Refusal is { } refusal)
+        {
+            return CommandStart.Refused(refusal);
+        }
+
+        string line = approved.Line;
+        Append($"$ {line}{(approved.Remembered ? "    (allowed for this run)" : "")}    (interactive: its input and output go to the caller)");
+        var start = await approved.Inner!.StartAsync(command, directory, limits, cancellationToken).ConfigureAwait(false);
+        if (start.Refusal is { } refused)
+        {
+            Append($"  refused by the {approved.Inner.Name} sandbox: {refused}");
+            return start;
+        }
+
+        _status.Update("$ " + line + " · running");
+        var clock = Stopwatch.StartNew();
+        _ = SayEndAsync(start.Session!.Completion, line, limits, clock);
+        return start;
+    }
+
+    // An interactive command's end, in the tab and the status line once it comes (never waited for by the caller).
+    private async Task SayEndAsync(Task<CommandResult> completion, string line, CommandLimits limits, Stopwatch clock)
+    {
+        var result = await completion.ConfigureAwait(false);
+        string outcome = result switch
+        {
+            { TimedOut: true } => $"  stopped at its time limit, {ApproveEachSandbox.Seconds(limits.Time)}",
+            { OutOfMemory: true } => "  stopped at its memory limit",
+            { Stopped: true } => "  stopped",
+            _ => string.Create(Culture, $"  exit code {result.ExitCode} · elapsed {clock.Elapsed:hh\\:mm\\:ss\\.ff}"),
+        };
+        Append(outcome);
+        _status.Update("$ " + line + " ·" + outcome, result.Succeeded ? NotificationSeverity.Success : NotificationSeverity.Warning);
+    }
+
+    // What a run and an interactive start share: the settings read on the UI thread, the inner sandbox, the question (unless
+    // the program is allowed for this run). A refusal says why (the inner sandbox missing, the user's no); a limit the inner
+    // sandbox cannot keep throws, as the inner sandbox would.
+    private async Task<(ICommandSandbox? Inner, string Line, bool Remembered, string? Refusal)> ApproveAsync(
+        IReadOnlyList<string> command, string directory, CommandLimits limits, bool interactive, CancellationToken cancellationToken)
+    {
+        if (command.Count == 0 || command[0].Length == 0)
+        {
+            return (null, "", false, "Error: empty command.");
+        }
+
+        // The settings are read on the host's UI thread, where its members are called.
+        var read = new TaskCompletionSource<SandboxSettings>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _host.Dispatch(() =>
+        {
+            try
+            {
+                read.TrySetResult(SandboxSettings.From(_host.Settings));
+            }
+#pragma warning disable CA1031 // A setting that does not parse: the command is not run, and the agent hears why.
+            catch (Exception error)
+#pragma warning restore CA1031
+            {
+                read.TrySetException(error);
+            }
+        });
+        Volatile.Write(ref _settings, await read.Task.WaitAsync(cancellationToken).ConfigureAwait(false));
+        if (Inner() is not { } inner)
+        {
+            return (null, "", false, InnerProblem());
+        }
+
+        if ((interactive ? inner.CheckStart(limits) : inner.Check(limits)) is { } cannot)
+        {
+            throw new NotSupportedException(cannot);
+        }
+
+        var settings = Settings;
+        string program = Path.GetFileNameWithoutExtension(command[0]);
+        string root = limits.Root ?? directory;
+        string key = Path.GetFullPath(root) + "|" + program;
+        string line = CommandLine(command);
+        bool remembered;
+        lock (_gate)
+        {
+            long now = Stopwatch.GetTimestamp();
+            if (_lastCommand != 0 && Stopwatch.GetElapsedTime(_lastCommand, now) > TimeSpan.FromMinutes(settings.RunGapMinutes))
+            {
+                _allowed.Clear();                              // a long gap: a new run
+            }
+
+            _lastCommand = now;
+            remembered = _allowed.Contains(key);
+        }
+
+        var answer = remembered ? CommandApproval.AllowOnce : await AskAsync(line, program, directory, root, limits, cancellationToken).ConfigureAwait(false);
+        if (answer == CommandApproval.Deny)
+        {
+            Append($"$ {line}");
+            Append("  denied by you; the agent was told.");
+            return (inner, line, remembered, $"The user denied this command ({line}). Do not run it again; ask the user, or do the task another way.");
+        }
+
+        if (answer == CommandApproval.AllowProgramForRun)
+        {
+            lock (_gate)
+            {
+                _allowed.Add(key);
+            }
+        }
+
+        return (inner, line, remembered, null);
     }
 
     public void Dispose()

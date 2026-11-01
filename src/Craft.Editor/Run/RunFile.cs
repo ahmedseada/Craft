@@ -14,7 +14,8 @@ namespace Craft.Editor.Run;
 ///   "default": "Craft.App",
 ///   "configurations": [
 ///     { "name": "Craft.App", "provider": "dotnet", "target": "src/Craft.App/Craft.App.csproj", "action": "run",
-///       "arguments": "--verbose", "environment": { "A": "1" }, "folder": "src", "buildFirst": true }
+///       "arguments": "--verbose", "environment": { "A": "1" }, "folder": "src", "buildFirst": true,
+///       "interactive": "auto" }
 ///   ]
 /// }
 /// </code>
@@ -152,6 +153,11 @@ public sealed record RunFile(IReadOnlyList<RunConfiguration> Configurations, str
                     writer.WriteBoolean("buildFirst", true);
                 }
 
+                if (configuration.Interactive != RunInteractive.Auto)
+                {
+                    writer.WriteString("interactive", InteractiveName(configuration.Interactive));
+                }
+
                 writer.WriteEndObject();
             }
 
@@ -196,6 +202,23 @@ public sealed record RunFile(IReadOnlyList<RunConfiguration> Configurations, str
         _ => RunActions.None,
     };
 
+    /// <summary>"auto", "on" or "off".</summary>
+    public static string InteractiveName(RunInteractive interactive) => interactive switch
+    {
+        RunInteractive.On => "on",
+        RunInteractive.Off => "off",
+        _ => "auto",
+    };
+
+    /// <summary>The value of <paramref name="name"/> ("auto", "on", "off", ignoring case), or null for another.</summary>
+    public static RunInteractive? InteractiveOf(string? name) => name?.Trim().ToLowerInvariant() switch
+    {
+        null or "" or "auto" => RunInteractive.Auto,
+        "on" => RunInteractive.On,
+        "off" => RunInteractive.Off,
+        _ => null,
+    };
+
     private static RunConfiguration? Read(JsonElement item, out string? why)
     {
         why = null;
@@ -222,6 +245,12 @@ public sealed record RunFile(IReadOnlyList<RunConfiguration> Configurations, str
             return null;
         }
 
+        if (InteractiveOf(Text("interactive")) is not { } interactive)
+        {
+            why = $"'{name}': its interactive '{Text("interactive")}' is not auto, on or off; it was passed over.";
+            return null;
+        }
+
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
         if (item.TryGetProperty("environment", out var variables) && variables.ValueKind == JsonValueKind.Object)
         {
@@ -238,6 +267,7 @@ public sealed record RunFile(IReadOnlyList<RunConfiguration> Configurations, str
             Environment = environment.Count == 0 ? RunConfiguration.NoEnvironment : environment,
             Folder = Text("folder") is { Length: > 0 } folder ? folder : null,
             BuildFirst = item.TryGetProperty("buildFirst", out var first) && first.ValueKind == JsonValueKind.True,
+            Interactive = interactive,
         };
     }
 

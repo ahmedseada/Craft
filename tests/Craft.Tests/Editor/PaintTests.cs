@@ -135,7 +135,9 @@ public static class PaintTests
         Console.WriteLine($"    after a forced collection, the next frames allocated {string.Join(", ", afterGc)} B");
         long steady = Enumerable.Range(0, frames).Where(i => frameGcs[i] == 0 && (i == 0 || frameGcs[i - 1] == 0)).Sum(i => frameBytes[i]);
         var allocating = Enumerable.Range(0, frames).Where(i => frameBytes[i] != 0).Select(i => $"frame {i}: {frameBytes[i]} B, a collection in it or just before: {frameGcs[i] + (i > 0 ? frameGcs[i - 1] : 0) > 0}").ToList();
-        Check.Equal(0L, steady, $"a warm frame with no collection in or just before it allocates nothing ({bytes} bytes over {frames} frames in all; rule 63): {string.Join("; ", allocating)}");
+        // Rule 90, step 1: a failure names what was allocated (the allocation ticks over more frames).
+        string types = steady == 0 ? "" : "; " + AllocatedTypes.Of(() => renderer.Draw(canvas, model, 0, 2000, 1200, 800, caretVisible: true));
+        Check.Equal(0L, steady, $"a warm frame with no collection in or just before it allocates nothing ({bytes} bytes over {frames} frames in all; rule 63): {string.Join("; ", allocating)}{types}");
         Check.True(afterGc[1] == 0 && afterGc[2] == 0, $"the frames after the first one past a collection allocate nothing again ({string.Join(", ", afterGc)} B)");
         Check.True(afterGc[0] < 4096, $"what the first frame after a collection rebuilds is small ({afterGc[0]} B)");
 

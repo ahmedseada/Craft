@@ -13,7 +13,7 @@ Windows run (2026-11-01)" at the end.
 | 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
+| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
 | 5 | X rest: minimap, completion at several carets, peek (built in piece 3a), measured response times on Windows | After 4 |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
@@ -3487,6 +3487,140 @@ that takes the keyboard (B9's terminal over the streams), Ctrl+C sent to the pro
 fixture console program reads two lines typed into its tab). Decision (recommended, noted): the "process" sandbox
 first; "container" later. Slot: the next free slot after part 7 starts (Idrak part first).
 
+### X part 6b and the paint allocation as built (2026-11-01)
+
+Slot s4. Idrak `main` 9e63a92 first (Idrak's gap fixed in Idrak), then Craft.
+
+**(A) Input to a running program.**
+- **Idrak** (`Idrak.Abstraction/CommandSandboxes.cs`, additive): `ICommandSandbox.CheckStart(limits)` and
+  `ICommandSandbox.StartAsync(command, directory, limits, ct)` (default members: a sandbox without an interactive start
+  says "cannot start a command interactively", naming process, and `StartAsync` throws `NotSupportedException` with it);
+  `CommandStart` (`Session` or `Refusal`, `Started`); `ICommandSession` (`ProcessId`, `Input`, `Output`, `Error`,
+  `Completion` with the `CommandResult`, `Stop` ending the tree; `DisposeAsync` stops a running command);
+  `CommandResult.Stopped`. The "process" sandbox (`ProcessCommandSandbox.StartAsync`, `ProcessCommandSession`) starts it
+  as `RunAsync` does (the programs allowed, found on the PATH, the variables; the shared preparation is one method now),
+  keeps standard input open and hands the process's own three pipes over (.NET's `Process` on every platform, rule 70; the
+  input flushed on every write), watches the time and memory limits and `Stop` (the whole tree killed). "container" keeps
+  the refusal. Test (`command sandboxes: interactive start`, CPU): a child of the test program (`--sandbox-child echo`)
+  echoes two lines (one with non-Latin text) sent through the streams, an error line on its error stream, its variable
+  set, and exits with 3 at the end of its input; **5,000 lines through the streams grew the managed memory by 176 bytes**;
+  Stop kills a child and the grandchild it started; the time limit; a dispose stops; a program not allowed or not found is
+  a refused start; network off throws naming container; a cancelled start throws; a sandbox without it (an app's, container)
+  refuses with the reason. Passed on the first run; `public API` and the inventory regenerated (lines added only); the
+  filter `command sandboxes|public API|abstraction inventory|plugins: coding: CodingPlugin` 10 of 10.
+- **approve-each** (`plugins/Craft.Plugins.Sandbox`): `CheckStart` is the inner sandbox's; `StartAsync` asks the same
+  question once (the same per-run allowance), then passes the inner sandbox's start through as it is; the "Agent sandbox"
+  tab shows the command ("interactive: its input and output go to the caller") and its end. Run and start share one
+  approval method now.
+- **Craft contracts** (`Craft.Abstractions`, additive, contract 1.1): `IEditorTerminals.OpenProgram(EditorProgramRequest)`
+  (a default member, null without terminals) → `IEditorTerminalProgram : IEditorTerminalOutput` (`OutputEnded`,
+  `End(text, exitCode)`); `EditorProgramRequest(Name, Input, Output)` with `Error`, `Stop`, `Folder`, `Header`;
+  `RunTarget.ReadsInput`; `RunInteractive` (Auto, On, Off) and `RunConfiguration.Interactive` (in its equality).
+- **The program tab** (`Craft.Editor.Terminal.ProgramTerminalSession`, `TerminalInstance.Program`/`IsProgram`,
+  `TerminalManager.OpenProgram`, the plug-in scope's `ScopedProgram`): the program's output and error read in pooled 16 KB
+  chunks (at most 64 waiting, then its reads wait), a lone LF drawn as CR LF, parsed by B9's VT parser, the header and the
+  plug-in's notes in order between them. What is typed goes through a terminal's line discipline, since the program reads
+  a pipe and has no terminal: printable text echoed and kept, Backspace (a UTF-8 character whole), Ctrl+U, Enter sends the
+  line with "\n", Ctrl+D sends a started line as it is and at a line's start closes the input, key sequences dropped,
+  Ctrl+C (with nothing selected; with a selection it copies, as before) calls the run's Stop. Closing the tab of a running
+  program stops it. A tab of the same name that ended (or an output tab) is replaced in its place; the new tab is the
+  active one and `Show` gives it the keyboard.
+- **The Run view**: `RunView.TakesKeyboard` (the configuration's on or off, else `CRAFT_RUN_INTERACTIVE`'s on or off, else
+  auto: the target reads input); only the Run action (a build first, a test, a publish show their output as before). The
+  approval lists "Input: its terminal tab takes the keyboard"; asked once a session per command line as before. The run
+  goes through `StartAsync` on the thread pool, its tab "Run: NAME", its output also read on the way (`LineTap`) for
+  Problems (so `dotnet run`'s compile errors still land there) and the activity's last line; its end said in the tab
+  (exit code and time, stopped, the time or memory limit). Stop, the activity's Cancel and Ctrl+C end the tree. A sandbox
+  that cannot start interactively: the run shows its output only (logged); a host without program tabs: the input closed,
+  the output as lines in the old output tab. The configuration editor has "Takes the keyboard" (Auto, On, Off) for a run;
+  `.craft/run.json` keeps `"interactive": "on"|"off"` (auto not written; another value passed over and said). Targets that
+  read input: a console project (`OutputType` Exe of the plain SDK; not web, worker, MAUI, WinExe or a test project) and
+  its "Project" launch profiles (`ProjectFacts.Console`), and every script; an "Executable" profile does not (On sets it).
+- **Option**: `CRAFT_RUN_INTERACTIVE` (auto; auto, on, off) under Terminal › Run.
+
+**(B) The flaky allocation in `Paint.AWarmFrame…`** (88 B in a few frames after Shell, Ui and Experience). Rule 90 in order:
+1. The type: the allocation ticks named nothing of it (88 B is too little for a tick; the ticks that came were other
+   threads'); 88 B is a `TaskCompletionSource` (24) with its `Task` (64). The test's failure message now names the ticks
+   (`Craft.Tests.Runner.AllocatedTypes`, Idrak's helper in Craft's tests), with that caveat.
+2. The step: the renderer's steps measured apart (a temporary counter on `EditorRenderer.Step`, removed): every byte was in
+   "classify the lines on screen" (352 B = 4 × 88), every other step 0.
+3. The JIT: with every method held at its unoptimized tier (`DOTNET_TC_CallCounting=0`) the test alone allocated 0: not a
+   rule 88/89 box. No collection ran during those frames (the background and gen-2 counts unchanged): not Roslyn's weak
+   caches either (B1's other cause).
+4. The site: `CSharpLanguageSession.WantColors` (the C# session's semantic colours) made a new `_colorsIdle`
+   `TaskCompletionSource` on the UI thread each time a frame asked for colours after the last pass had gone idle. The
+   fixture has no workspace document, so each pass ends at once and the next frame asks again: one source every
+   `SemanticColorsDelayMilliseconds`. Alone, the first pass (Roslyn's host still loading) does not end within the 1,000
+   frames; after Shell, Ui and Experience it is warm and cycles (the earlier pass with `DOTNET_TieredCompilation=0` is
+   consistent with that: a slower first pass, not a box).
+   **Fix, at its site** (Craft.CSharp; nothing in Idrak): the idle source is made only when someone waits
+   (`WhenColorsIdle`); a frame's want sets a flag. The test is unchanged (not loosened, not skipped). The reproduction
+   (`Shell|Ui|Experience|Paint.AWarmFrame`) failed 3 times in 4 before and passed 5 times in 5 after; warm frame median
+   172.2 us, p99 320.6 us, 0 B (this container, under the other slots' builds).
+
+**Decisions on the recommendation (the owner asleep; one line each).**
+- The interactive start is two default members on `ICommandSandbox` plus `ICommandSession` and `CommandStart` in `Idrak.Abstraction` (additive; every existing sandbox compiles unchanged and refuses with the reason).
+- A limit the sandbox cannot keep throws `NotSupportedException` (as `RunAsync`); a program not allowed or not found is a refused `CommandStart` (as `RunAsync`'s refused result).
+- The streams are the process's own pipes (nothing kept between them and the caller), the input flushed on each write.
+- The time and memory limits apply to an interactive start; the output cap and `CommandLimits.Output` do not (the caller reads the output).
+- No interrupt in the contract: a pipe carries no signal, so Ctrl+C stops the tree (as an unhandled Ctrl+C ends a program); a container's signal can come with "container"'s start later.
+- `StartAsync`'s token cancels the start only (approve-each's question), never the started command.
+- No telemetry added: the existing runs record none either (the run is an activity in Craft, as before).
+- "process" first; "container" keeps the default refusal (the plan's "container later").
+- approve-each asks once with the same question and allowance, then passes the start through; it shows the command and its end, not the program's streams.
+- A program tab of its own (`OpenProgram`) on B9's screen and VT parser, not a shell host: the run's process is the sandbox's, never the terminal host's.
+- The tab gives a line discipline (echo and line editing) because the program reads a pipe; programs that need a real console (`Console.ReadKey`, cursor moves) are not served (a pseudo-console sandbox would be).
+- `CRAFT_RUN_INTERACTIVE` defaults to auto; a configuration's own value wins; only a Run takes the keyboard.
+- A workspace may set `CRAFT_RUN_INTERACTIVE` (it changes how a run shows, not what runs; the approval still asks).
+- A sandbox without an interactive start makes the run output-only (logged), not refused; a host without program tabs closes the input and shows lines.
+- An ended tab of the same name is replaced in its place, so the next run of the same configuration reuses its spot.
+- The output is read on the way for Problems and the activity (`LineTap`), so a run's build errors still reach Problems.
+- (B) was fixed in Craft.CSharp, where it lives; Idrak's helpers were not on the path.
+
+**Commits**: Idrak 9e63a92; Craft: this commit (contracts, program tab, Run view, approve-each, the colours' idle source,
+the tests, the API dumps of Craft.Abstractions (and its contract list), Craft.Core, Craft.Editor, Craft.CSharp and
+Craft.Plugins.Sandbox, lines added only).
+
+**Tests.** New: `RunView.AConsoleProgramReadsTwoLinesTypedIntoItsTabAndStopEndsIt` (a fixture script, `.sh` here and `.cmd`
+on Windows, asks for two lines; "Ada" and "Bobx" with a Backspace typed through the terminal view's keyboard come back as
+"got Ada" and "got Bob", echoed before the answers, exit code 0 said; Stop ends a program waiting for input; the next run
+is not asked again and replaces its ended tab; Ctrl+C in the tab ends it), `Terminal.AProgramTabEchoesAndEditsTheLine…`,
+`Terminal.TheManagerReplacesAnEndedTab…`; extended: `RunView.TheProvidersFind…` (which targets read input),
+`RunView.RunJsonRoundTrips…` ("interactive"), `PhaseP.P5…` (approve-each's interactive start asked once and passed through,
+a denied one refused), `Inventory.OptionsReadEveryVariable`. First run: 80 of 82 (Ctrl+C after Ctrl+D was dropped; P5's
+loader check expected contract 1.0, fixed upstream meanwhile); then both passed. After the rebase onto X parts 7, 8, 10, 11
+and the health fixes, the full filter `RunView|Terminal|Paint|Editor|Surface|Shell|Ui|Experience|Conversation|Settings|ApiGuard|Inventory|PhaseP`:
+180 of 180.
+
+**Not compiled here**: nothing under `Platforms/` changed. **Not run here** (the owner's): the program tab on WinUI (the
+keyboard in it, the echo after a prompt), a real `dotnet run` of the test project reading input, `.cmd` scripts.
+
+**Left**: programs that need a console (ReadKey, full-screen) need a pseudo-console start (a "conpty" sandbox, not asked);
+"container"'s interactive start; a session without a workspace still asks for a colour pass each delay while frames come
+(no allocation now, but wasted passes); `CSharpLanguageSession._diagnosticsIdle` makes its source the old way on the
+keystroke path (not the paint's; same fix if measured).
+
+**The owner's commands.** Idrak first (Craft builds against it):
+```powershell
+cd D:\Projects\Idrak; git checkout main; git pull origin main
+dotnet build -c Release tests\Idrak.Tests
+$env:IDRAK_DEVICES="cpu"; $env:IDRAK_FILTER="command sandboxes|public API|abstraction inventory"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:IDRAK_FILTER; Remove-Item Env:IDRAK_DEVICES
+```
+Then Craft:
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="RunView|Terminal|Paint|Editor|Surface|Shell|Ui|Experience|Conversation|Settings|ApiGuard|Inventory|PhaseP"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: make CarftTestPOC's `Program.cs` read input (for example `Console.Write("Name? "); var name = Console.ReadLine(); Console.WriteLine($"Hello {name}");`
+and a second `ReadLine`), then the rail's Run, CarftTestPOC, F5: the question says "Input: its terminal tab takes the
+keyboard"; Run; the tab "Run: CarftTestPOC" shows the build, then "Name? " with the keyboard in it: type a name (Backspace
+works) and Enter, then the second line; it answers and ends with its exit code. F5 again (not asked again) and Ctrl+C in the
+tab, or Shift+F5: "[stopped, with its process tree]". Add configuration with "Takes the keyboard: Off" gives the old
+output-only tab.
+
 ### X part 7: rich context menus in the explorer and on the open tabs (the owner, 2026-11-01)
 The owner: "I want a rich context menu both in the file explorer and the opened file item". Today (X slice 1) the tree's
 menu has New file, New folder, Reveal in File Explorer, Open in terminal, Copy path, Copy relative path, Rename, Delete,
@@ -3731,7 +3865,8 @@ headless in `Craft.Editor.Shell`, the MAUI view only draws it.
   `Conversation|AiPlugins|Ai.|ChatDrop|ModelsPage|ModelLoading|Settings|Keys|Layout|Shell|Ui|Experience|LookAndFeel|Paint|ApiGuard|Inventory|TheUiSideHasNoSynchronousWait`:
   159 of 160 passed; the one left, `Paint.AWarmFrame…` (88 B in a few frames), fails only in a long run after the
   `Shell|Ui|Experience` groups, also without this slot's group, and passes with `DOTNET_TieredCompilation=0` (rule 90
-  step 3: unoptimized code's boxing, B1's earlier symptom; not this change's, left for the paint slot to trace). API
+  step 3: unoptimized code's boxing, B1's earlier symptom; not this change's, left for the paint slot to trace; traced by
+  slot s4: the C# colours' idle source, not a box, see "X part 6b and the paint allocation as built"). API
   dumps (`Craft.Abstractions`, its contract list, `Craft.Ai`, `Craft.Core`, `Craft.Editor`) regenerated, lines added only.
 - **Left:** the bubble's corners are square (`IEditorCanvas` has no rounded fill); the transcript's code font is the
   editor's (no proportional text); a conversation's own context menu has no keyboard opening (Shift+F10) yet; the

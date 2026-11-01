@@ -46,7 +46,9 @@ public sealed record RunProblemFile(string Path, ITextSnapshot Snapshot, IReadOn
 /// configurations of <c>.craft/run.json</c>, edited in the view; a default for F5 and Ctrl+F5 (run) and Ctrl+Shift+B
 /// (build), Shift+F5 stopping. Every command is approved by the user (<c>CRAFT_RUN_APPROVAL</c>) and runs through the
 /// registered command sandbox <c>CRAFT_RUN_SANDBOX</c> (Idrak's <see cref="CommandSandboxes"/>), streamed to its own
-/// terminal tab, shown as an activity whose Cancel (and the view's Stop) ends its process tree; MSBuild's and the
+/// terminal tab, shown as an activity whose Cancel (and the view's Stop) ends its process tree (X part 6b: a run whose
+/// target reads input, or as <c>CRAFT_RUN_INTERACTIVE</c> and the configuration say, is started through the sandbox's
+/// interactive start in a program tab that takes the keyboard, Ctrl+C there ending it); MSBuild's and the
 /// compilers' <c>file(line,col): error CODE:</c> lines go to Problems. No debugging. Headless; every member is called on
 /// the UI thread.
 /// </summary>
@@ -453,13 +455,13 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 }
 
                 // The target's own arguments and variables still apply; the configuration adds to them.
-                _draft = new Draft(null, UniqueName(from.Title), KeyOf(from), RunFile.ActionName(from.DefaultAction), "", "", "", false);
+                _draft = new Draft(null, UniqueName(from.Title), KeyOf(from), RunFile.ActionName(from.DefaultAction), "", "", "", false, "auto");
                 _focus++;
                 Publish();
                 break;
             case "run.edit" when value is not null && _file.Configurations.FirstOrDefault(c => c.Name == value) is { } edited:
                 _draft = new Draft(edited.Name, edited.Name, edited.Provider + ":" + edited.Target, RunFile.ActionName(edited.Action), edited.Arguments,
-                    RunCommandLine.FormatEnvironment(edited.Environment), edited.Folder ?? "", edited.BuildFirst);
+                    RunCommandLine.FormatEnvironment(edited.Environment), edited.Folder ?? "", edited.BuildFirst, RunFile.InteractiveName(edited.Interactive));
                 _focus++;
                 Publish();
                 break;
@@ -482,6 +484,10 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 break;
             case "run.draft.folder" when _draft is not null:
                 _draft = _draft with { Folder = value ?? "" };
+                break;
+            case "run.draft.interactive" when _draft is not null && RunFile.InteractiveOf(value) is { } interactive:
+                _draft = _draft with { Interactive = RunFile.InteractiveName(interactive) };
+                Publish();
                 break;
             case "run.draft.buildFirst" when _draft is not null:
                 _draft = _draft with { BuildFirst = value == "on" };
@@ -556,6 +562,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                     environment.Count == 0 ? "Variables: inherited only" : "Variables: " + RunCommandLine.FormatEnvironment(environment),
                     $"Runs in: the {options.RunSandbox} sandbox (CRAFT_RUN_SANDBOX)",
                     options.RunTimeLimitMinutes == 0 ? "Time limit: none (Stop ends it)" : string.Create(Culture, $"Time limit: {options.RunTimeLimitMinutes} min"),
+                    action == RunActions.Run && TakesKeyboard(configuration, target, options) ? "Input: its terminal tab takes the keyboard (CRAFT_RUN_INTERACTIVE)" : "Input: none (its output only)",
                     options.RunApproval == "once" ? "Asked once a session for this command (CRAFT_RUN_APPROVAL)" : "Asked for every run (CRAFT_RUN_APPROVAL)",
                 ],
                 Dismissed = 1,
@@ -618,6 +625,19 @@ public sealed class RunView : IEditorViewPanel, IDisposable
             return NotStarted(refused);
         }
 
+        // X part 6b: a run that reads input takes the keyboard in its terminal tab (CRAFT_RUN_INTERACTIVE, the configuration's own).
+        if (action == RunActions.Run && TakesKeyboard(configuration, target, options) && _host.Terminals is not null)
+        {
+            if (sandbox.CheckStart(limits) is { } noStart)
+            {
+                _host.Log(EditorLogLevel.Information, $"Run: {configuration.Name} shows its output only: {noStart}");
+            }
+            else
+            {
+                return await InteractiveAsync(item, provider, configuration, command, line, root, sandbox, limits with { Output = null }, options).ConfigureAwait(true);
+            }
+        }
+
         output.Start($"$ {line}", Relative(root, command.Folder));
         var activity = _host.Activities.Start($"{Verb(action)}: {configuration.Name}", action == RunActions.Build ? ActivityKinds.Build : ActivityKinds.Command,
             cancellable: true, item.Token);
@@ -677,6 +697,181 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         {
             activity.Dispose();
             item.Activity = null;
+        }
+    }
+
+    /// <summary>
+    /// Whether a run takes the keyboard (X part 6b): the configuration's own "interactive" when it says on or off, else
+    /// <c>CRAFT_RUN_INTERACTIVE</c>'s on or off, else (auto) when its target reads input (a console program, a script).
+    /// </summary>
+    public static bool TakesKeyboard(RunConfiguration configuration, RunTarget target, CraftOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(options);
+        return configuration.Interactive switch
+        {
+            RunInteractive.On => true,
+            RunInteractive.Off => false,
+            _ => RunFile.InteractiveOf(options.RunInteractive) switch
+            {
+                RunInteractive.On => true,
+                RunInteractive.Off => false,
+                _ => target.ReadsInput,
+            },
+        };
+    }
+
+    // A run that takes the keyboard: started through the sandbox's interactive start, its streams in a program tab (what is
+    // typed goes to its input, Ctrl+C and Stop end its tree), its output's lines read on the way for Problems and the
+    // activity, its end said in the tab.
+    private async Task<RunOutcome> InteractiveAsync(RunningItem item, IRunProvider provider, RunConfiguration configuration, RunCommand command, string line, string root,
+        ICommandSandbox sandbox, CommandLimits limits, CraftOptions options)
+    {
+        var problems = new List<RunProblem>();
+        var seen = new HashSet<RunProblem>();
+        var activity = _host.Activities.Start($"Run: {configuration.Name}", ActivityKinds.Command, cancellable: true, item.Token);
+        item.Activity = activity;
+        var clock = Stopwatch.StartNew();
+        CommandStart start;
+        try
+        {
+            start = await Task.Run(() => sandbox.StartAsync(command.Command, command.Folder, limits, activity.CancellationToken).AsTask(), CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            activity.Complete("stopped");
+            activity.Dispose();
+            item.Activity = null;
+            return new RunOutcome(RunEnd.Stopped, null, clock.Elapsed, []);
+        }
+        catch (NotSupportedException e)
+        {
+            Say($"'{configuration.Name}' did not run: the {sandbox.Name} sandbox refuses it: {e.Message}", NotificationSeverity.Error);
+            activity.Fail(e.Message, e);
+            activity.Dispose();
+            item.Activity = null;
+            return NotStarted(e.Message);
+        }
+
+        if (!start.Started)
+        {
+            Say($"'{configuration.Name}' did not start: {start.Refusal}", NotificationSeverity.Error);
+            activity.Fail(start.Refusal);
+            activity.Dispose();
+            item.Activity = null;
+            return new RunOutcome(RunEnd.NotStarted, null, clock.Elapsed, [], start.Refusal);
+        }
+
+        var session = start.Session;
+        void OnLine(string text)
+        {
+            if (provider.TryParseProblem(text, command.Folder, out var problem))
+            {
+                lock (problems)
+                {
+                    if (seen.Add(problem))
+                    {
+                        problems.Add(problem);
+                    }
+                }
+            }
+
+            activity.Report(null, text.Length <= 80 ? text.Trim() : string.Concat(text.AsSpan(0, 79), "…").Trim());
+        }
+
+        string name = $"Run: {configuration.Name}";
+        var output = new LineTap(session.Output, OnLine);
+        var error = new LineTap(session.Error, OnLine);
+        var registration = activity.CancellationToken.Register(session.Stop);
+        IEditorTerminalProgram? tab = null;
+        RunOutput? lines = null;
+        try
+        {
+            tab = _host.Terminals?.OpenProgram(new EditorProgramRequest(name, session.Input, output)
+            {
+                Error = error,
+                Stop = item.Cancel,
+                Folder = command.Folder,
+                Header = $"\e[2m{Relative(root, command.Folder)}\e[0m\n\e[1m$ {line}\e[0m\n",
+            });
+            Task outputEnded;
+            if (tab is not null)
+            {
+                tab.Show();
+                outputEnded = tab.OutputEnded;
+            }
+            else
+            {
+                // A host without program tabs: the input is closed and the output shown as lines, as a run that does not take the keyboard.
+                await session.Input.DisposeAsync().ConfigureAwait(true);
+                lines = new RunOutput(_host, name);
+                lines.Start($"$ {line}", Relative(root, command.Folder));
+                outputEnded = Task.WhenAll(output.DrainAsync(text => lines.Line(text, false)), error.DrainAsync(text => lines.Line(text, true)));
+            }
+
+            var result = await session.Completion.ConfigureAwait(true);
+            try
+            {
+                // A grandchild that outlived the program may hold its output open: its end is not waited for long.
+                await outputEnded.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(true);
+            }
+            catch (TimeoutException)
+            {
+            }
+
+            var found = Snapshot(problems);
+            await ShowProblemsAsync(found).ConfigureAwait(true);
+            int errors = found.Count(p => p.Severity == DiagnosticSeverity.Error);
+            string elapsed = string.Create(Culture, $"{clock.Elapsed.TotalSeconds:0.0} s");
+            void End(string text, bool failed, int code)
+            {
+                string coloured = (failed ? "\e[33m" : "\e[32m") + text + "\e[0m\n";
+                if (tab is not null)
+                {
+                    tab.End("\n" + coloured, code);
+                }
+                else
+                {
+                    lines!.End(text, failed);
+                }
+            }
+
+            if (result.Stopped || item.Token.IsCancellationRequested)
+            {
+                End("[stopped, with its process tree]", failed: true, -1);
+                activity.Complete("stopped");
+                return new RunOutcome(RunEnd.Stopped, null, clock.Elapsed, found);
+            }
+
+            if (result.TimedOut || result.OutOfMemory)
+            {
+                string why = result.TimedOut ? $"stopped at its time limit, {options.RunTimeLimitMinutes} min (CRAFT_RUN_TIME_LIMIT_MINUTES)" : "stopped at its memory limit";
+                End($"[{why}]", failed: true, -1);
+                activity.Fail(why);
+                return new RunOutcome(RunEnd.Failed, null, clock.Elapsed, found, why);
+            }
+
+            bool ok = result.ExitCode == 0;
+            string said = string.Create(Culture, $"exit code {result.ExitCode} · {elapsed}{(errors > 0 ? $" · {errors} {(errors == 1 ? "error" : "errors")} in Problems" : "")}");
+            End($"[{said}]", failed: !ok, result.ExitCode ?? -1);
+            if (ok)
+            {
+                activity.Complete(said);
+            }
+            else
+            {
+                activity.Fail(said);
+            }
+
+            return new RunOutcome(ok ? RunEnd.Succeeded : RunEnd.Failed, result.ExitCode, clock.Elapsed, found);
+        }
+        finally
+        {
+            await registration.DisposeAsync().ConfigureAwait(true);
+            activity.Dispose();
+            item.Activity = null;
+            await session.DisposeAsync().ConfigureAwait(true);
         }
     }
 
@@ -869,6 +1064,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
             Environment = RunCommandLine.ParseEnvironment(draft.Environment),
             Folder = draft.Folder.Trim() is { Length: > 0 } folder ? folder : null,
             BuildFirst = draft.BuildFirst,
+            Interactive = RunFile.InteractiveOf(draft.Interactive) ?? RunInteractive.Auto,
         };
         _draft = null;
         await SaveConfigurationAsync(configuration, draft.Original, makeDefault: _file.Configurations.Count == 0 && _file.Default is null).ConfigureAwait(true);
@@ -1037,6 +1233,17 @@ public sealed class RunView : IEditorViewPanel, IDisposable
             blocks.Add(new PanelSwitch("run.draft.buildFirst", "Build before it runs", draft.BuildFirst) { Detail = "A failed build stops the run there." });
         }
 
+        if (RunFile.ActionOf(draft.Action) == RunActions.Run)
+        {
+            string auto = $"As CRAFT_RUN_INTERACTIVE says ({_options().RunInteractive}){(picked is { ReadsInput: true } ? ": this target reads input" : "")}";
+            blocks.Add(new PanelPicker("run.draft.interactive", "Takes the keyboard",
+            [
+                new PanelOption("auto", "Auto") { Detail = auto },
+                new PanelOption("on", "On") { Detail = "Its terminal tab takes the keyboard: what you type goes to the program." },
+                new PanelOption("off", "Off") { Detail = "Its output only; its input is closed." },
+            ], draft.Interactive));
+        }
+
         var buttons = new List<PanelButton> { new("Save", "run.draft.save", PanelButtonKind.Primary), new("Cancel", "run.draft.cancel", PanelButtonKind.Flat) };
         if (draft.Original is not null)
         {
@@ -1142,7 +1349,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
     }
 
     // A configuration being edited in the view (Original: the name it had, null for a new one).
-    private sealed record Draft(string? Original, string Name, string Target, string Action, string Arguments, string Environment, string Folder, bool BuildFirst);
+    private sealed record Draft(string? Original, string Name, string Target, string Action, string Arguments, string Environment, string Folder, bool BuildFirst, string Interactive);
 
     // A run under way: its stop and its activity.
     private sealed class RunningItem(string name) : IDisposable
@@ -1167,6 +1374,116 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         }
 
         public void Dispose() => _stop.Dispose();
+    }
+
+    // A program's output or error stream as the program tab reads it, its lines (UTF-8, up to a line break) handed to a
+    // watcher on the way (Problems, the activity's last line); a line longer than LineCap is handed in parts.
+    private sealed class LineTap(Stream inner, Action<string> line) : Stream
+    {
+        private const int LineCap = 8 * 1024;
+        private readonly byte[] _line = new byte[LineCap];
+        private int _length;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            int read = inner.Read(buffer);
+            Watch(buffer[..read]);
+            return read;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            int read = await inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            Watch(buffer.Span[..read]);
+            return read;
+        }
+
+        /// <summary>Reads the stream to its end, each line to <paramref name="each"/> (a host without program tabs).</summary>
+        public async Task DrainAsync(Action<string> each)
+        {
+            using var reader = new StreamReader(this, System.Text.Encoding.UTF8);
+            while (await reader.ReadLineAsync().ConfigureAwait(false) is { } text)
+            {
+                each(text);
+            }
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        private void Watch(ReadOnlySpan<byte> bytes)
+        {
+            if (bytes.IsEmpty)
+            {
+                Emit();                                           // the end: the last line without its break
+                return;
+            }
+
+            while (!bytes.IsEmpty)
+            {
+                int at = bytes.IndexOf((byte)'\n');
+                var part = at < 0 ? bytes : bytes[..at];
+                int take = Math.Min(part.Length, LineCap - _length);
+                part[..take].CopyTo(_line.AsSpan(_length));
+                _length += take;
+                if (take < part.Length)
+                {
+                    Emit();                                       // the cap reached inside a line: this part now, the rest next
+                    bytes = bytes[take..];
+                }
+                else if (at >= 0)
+                {
+                    Emit();
+                    bytes = bytes[(at + 1)..];
+                }
+                else
+                {
+                    bytes = default;
+                }
+            }
+        }
+
+        private void Emit()
+        {
+            if (_length == 0)
+            {
+                return;
+            }
+
+            int length = _line[_length - 1] == (byte)'\r' ? _length - 1 : _length;
+            _length = 0;
+            try
+            {
+                line(System.Text.Encoding.UTF8.GetString(_line, 0, length));
+            }
+#pragma warning disable CA1031 // A watcher's failure never stops the program's output.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+            }
+        }
     }
 
     // A run's terminal tab: the lines gathered from the sandbox's reader thread, written once per UI turn.

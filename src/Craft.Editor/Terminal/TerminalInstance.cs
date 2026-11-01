@@ -34,9 +34,10 @@ public sealed class TerminalInstance : IDisposable
     private long _lastEnterTicks;
     private long _lastOutputTicks;
 
-    private TerminalInstance(int id, ITerminalSession session, TerminalScreen screen, TerminalShell shell, string folder, string hostName, string? name, Action<Action> dispatch, bool readOnly = false)
+    private TerminalInstance(int id, ITerminalSession session, TerminalScreen screen, TerminalShell shell, string folder, string hostName, string? name, Action<Action> dispatch, bool readOnly = false, bool program = false)
     {
         IsReadOnly = readOnly;
+        IsProgram = program;
         Id = id;
         Session = session;
         Screen = screen;
@@ -268,6 +269,23 @@ public sealed class TerminalInstance : IDisposable
         return new TerminalInstance(id, session, screen, new TerminalShell(name), folder, OutputTerminalSession.HostName, name, dispatch, readOnly: true);
     }
 
+    /// <summary>
+    /// A terminal over a program a plug-in started (<see cref="IEditorTerminals.OpenProgram"/>, X part 6b): its output drawn
+    /// like a shell's, what is typed going to <paramref name="session"/>'s line discipline; its end is the plug-in's to say.
+    /// </summary>
+    public static TerminalInstance Program(int id, ProgramTerminalSession session, TerminalSize size, int scrollback, Action<Action> dispatch, string name, string folder)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(dispatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        size = size.Clamped();
+        var screen = new TerminalScreen(size.Columns, size.Rows, scrollback);
+        return new TerminalInstance(id, session, screen, new TerminalShell(name), folder, ProgramTerminalSession.HostName, name, dispatch, program: true);
+    }
+
+    /// <summary>Whether it is a plug-in's program (<see cref="Program"/>): typed keys go to the program's input, and it says its own end.</summary>
+    public bool IsProgram { get; }
+
     /// <summary>Sends <paramref name="input"/> to the shell as it is (nothing once it ended).</summary>
     public void Write(ReadOnlySpan<byte> input)
     {
@@ -489,7 +507,7 @@ public sealed class TerminalInstance : IDisposable
             code = -1;
         }
 
-        if (!IsReadOnly)
+        if (!IsReadOnly && !IsProgram)
         {
             Feed(System.Text.Encoding.UTF8.GetBytes(string.Create(CultureInfo.InvariantCulture, $"\r\n\e[0m\e[2m[the shell ended with exit code {code}]\e[0m\r\n")));
         }

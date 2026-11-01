@@ -393,6 +393,25 @@ public static class PhasePTests
             Check.True(presenter.Questions[^1].Message == "dotnet --version" && !ran.Contains("denied", StringComparison.Ordinal) && !ran.Contains("refused", StringComparison.OrdinalIgnoreCase),
                 $"CodingTools runs through the sandbox it names, asked first ({ran})");
 
+            // X part 6b: an interactive start is asked once, as a run is, then passed through to the inner sandbox's streams.
+            Check.True(sandbox.CheckStart(limits) is null, "with an editor, its interactive start is its inner sandbox's (process starts commands interactively)");
+            int beforeStart = presenter.Questions.Count;
+            presenter.Answers.Enqueue(0);                                     // Allow once
+            var started = await sandbox.StartAsync(["dotnet", "--version"], workspace, limits);
+            Check.True(started.Started && presenter.Questions.Count == beforeStart + 1 && presenter.Questions[^1].Message == "dotnet --version",
+                $"an interactive start is asked once, then started ({started.Refusal})");
+            await using (var session = started.Session!)
+            {
+                using var reader = new StreamReader(session.Output);
+                string version = await reader.ReadToEndAsync().WaitAsync(TimeSpan.FromSeconds(60));
+                var end = await session.Completion.WaitAsync(TimeSpan.FromSeconds(60));
+                Check.True(end is { ExitCode: 0, Output.Length: 0 } && version.Trim() == once.Output.Trim(), $"its output is the caller's stream, passed through as it is ({version.Trim()}, exit {end.ExitCode})");
+            }
+
+            presenter.Answers.Enqueue(2);                                     // Deny
+            var deniedStart = await sandbox.StartAsync(["dotnet", "--version"], workspace, limits);
+            Check.True(!deniedStart.Started && deniedStart.Refusal!.Contains("denied", StringComparison.Ordinal), $"a denied interactive start is refused, saying so ({deniedStart.Refusal})");
+
             // What it cannot enforce, its inner sandbox's check says, naming one that can.
             Check.True(sandbox.Check(limits with { Network = false }) is { } network && network.Contains("container", StringComparison.Ordinal), "network off needs the container sandbox");
         }

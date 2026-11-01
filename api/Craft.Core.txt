@@ -188,6 +188,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.String RecoveryFolder { get; init; }
   System.String ResolveDataFolder()
   System.String RunApproval { get; init; }
+  System.String RunInteractive { get; init; }
   System.String RunSandbox { get; init; }
   System.String SearchProvider { get; init; }
   System.String TerminalArguments { get; init; }

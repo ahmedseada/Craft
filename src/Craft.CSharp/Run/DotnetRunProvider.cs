@@ -62,10 +62,10 @@ public sealed class DotnetRunProvider : IRunProvider
                 var actions = RunActions.Build | (project.Runs ? RunActions.Run | RunActions.Publish : RunActions.None) | (project.Tests ? RunActions.Test : RunActions.None);
                 string kind = project.Tests ? "Tests" : project.Runs ? project.OutputType ?? "Exe" : project.OutputType ?? "Library";
                 string frameworks = project.Frameworks.Count == 0 ? "" : " · " + string.Join(", ", project.Frameworks);
-                projects.Add(new RunTarget(Name, file, title, file, actions) { Detail = kind + frameworks });
+                projects.Add(new RunTarget(Name, file, title, file, actions) { Detail = kind + frameworks, ReadsInput = project.Console });
                 if (project.Runs)
                 {
-                    projects.AddRange(Profiles(workspace.Root, file, title));
+                    projects.AddRange(Profiles(workspace.Root, file, title, project.Console));
                 }
             }
         }
@@ -163,7 +163,11 @@ public sealed class DotnetRunProvider : IRunProvider
     /// <param name="Frameworks">Its target frameworks.</param>
     /// <param name="Runs">Whether it is a program (Exe, WinExe, a web or worker SDK, a MAUI app).</param>
     /// <param name="Tests">Whether it is a test project.</param>
-    public sealed record ProjectFacts(string? OutputType, IReadOnlyList<string> Frameworks, bool Runs, bool Tests);
+    public sealed record ProjectFacts(string? OutputType, IReadOnlyList<string> Frameworks, bool Runs, bool Tests)
+    {
+        /// <summary>Whether it is a console program (an Exe of the plain SDK, not a web, worker or MAUI app): its run may read input (X part 6b).</summary>
+        public bool Console { get; init; }
+    }
 
     /// <summary>Reads <paramref name="path"/> (a .csproj) as an XML stream: its SDK, output type, frameworks and packages; a file that does not read is a library.</summary>
     public static ProjectFacts ReadProject(string path)
@@ -231,11 +235,12 @@ public sealed class DotnetRunProvider : IRunProvider
         bool exe = outputType is not null
             ? outputType.Equals("Exe", StringComparison.OrdinalIgnoreCase) || outputType.Equals("WinExe", StringComparison.OrdinalIgnoreCase)
             : programSdk || maui;
-        return new ProjectFacts(outputType, frameworks.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), exe && !testProject, testProject);
+        bool console = !testProject && !programSdk && !maui && outputType is not null && outputType.Equals("Exe", StringComparison.OrdinalIgnoreCase);
+        return new ProjectFacts(outputType, frameworks.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), exe && !testProject, testProject) { Console = console };
     }
 
     // The launch profiles of a project that runs: "Project" ones through dotnet run, "Executable" ones as their program.
-    private IEnumerable<RunTarget> Profiles(string root, string project, string title)
+    private IEnumerable<RunTarget> Profiles(string root, string project, string title, bool console)
     {
         string folder = Path.GetDirectoryName(project.Replace('/', Path.DirectorySeparatorChar)) ?? "";
         string file = Path.Combine(root, folder, "Properties", "launchSettings.json");
@@ -254,7 +259,7 @@ public sealed class DotnetRunProvider : IRunProvider
             {
                 foreach (var profile in all.EnumerateObject())
                 {
-                    if (Profile(profile, project, title, root, folder) is { } target)
+                    if (Profile(profile, project, title, root, folder, console) is { } target)
                     {
                         profiles.Add(target);
                     }
@@ -272,7 +277,7 @@ public sealed class DotnetRunProvider : IRunProvider
         }
     }
 
-    private RunTarget? Profile(JsonProperty profile, string project, string title, string root, string folder)
+    private RunTarget? Profile(JsonProperty profile, string project, string title, string root, string folder, bool console)
     {
         var value = profile.Value;
         if (value.ValueKind != JsonValueKind.Object)
@@ -302,6 +307,7 @@ public sealed class DotnetRunProvider : IRunProvider
                     Arguments = Text("commandLineArgs"),
                     Environment = environment,
                     Url = url,
+                    ReadsInput = console,
                 };
             case "Executable" when Text("executablePath") is { Length: > 0 } executable:
                 string program = Path.GetFullPath(Environment.ExpandEnvironmentVariables(executable), Path.Combine(root, folder));

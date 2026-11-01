@@ -29,7 +29,11 @@ public sealed partial class CSharpLanguageSession
     private TextChangeRange? _colorsRunChange;
     private bool _colorsRunUnknown;
     private CancellationTokenSource? _colorsStop;
-    private TaskCompletionSource _colorsIdle = Completed();
+    // Made only when someone waits (WhenColorsIdle), never on the frame's path: a pass asked for by a frame marks
+    // _colorsDue and allocates nothing (the paint's 0 B a warm frame; before, a new source and its task, 88 B, each time a
+    // finished pass was asked for again).
+    private TaskCompletionSource? _colorsIdle;
+    private bool _colorsDue;
     private TokenSpanBuffer? _colorScratch;
     private int _colorsPasses;
     private long _lastColorsTicks;
@@ -48,7 +52,7 @@ public sealed partial class CSharpLanguageSession
     {
         lock (_gate)
         {
-            return _colorsIdle.Task;
+            return !_colorsDue ? Task.CompletedTask : (_colorsIdle ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
         }
     }
 
@@ -271,10 +275,7 @@ public sealed partial class CSharpLanguageSession
         int from = Math.Max(0, start - margin);
         int to = (int)Math.Min(snapshot.Length, (long)start + length + margin);
         _colorsWant = new ColorsWant(snapshot.Version, from, to);
-        if (_colorsIdle.Task.IsCompleted)
-        {
-            _colorsIdle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        }
+        _colorsDue = true;
 
         if (_colorsRunning)
         {
@@ -295,7 +296,7 @@ public sealed partial class CSharpLanguageSession
         {
             if (_disposed || _colorsWant is not { } wanted)
             {
-                _colorsIdle.TrySetResult();
+                ColorsIdle();
                 return;
             }
 
@@ -383,7 +384,7 @@ public sealed partial class CSharpLanguageSession
             }
             else
             {
-                _colorsIdle.TrySetResult();
+                ColorsIdle();
             }
         }
     }
@@ -451,8 +452,17 @@ public sealed partial class CSharpLanguageSession
         _colorsWant = null;
         if (!_colorsRunning)
         {
-            _colorsIdle.TrySetResult();
+            ColorsIdle();
         }
+    }
+
+    /// <summary>Called holding the gate: no colour pass is due or running; whoever waits for it is let go.</summary>
+    private void ColorsIdle()
+    {
+        _colorsDue = false;
+        var waiting = _colorsIdle;
+        _colorsIdle = null;
+        waiting?.TrySetResult();
     }
 
     /// <summary>Roslyn's spans of a range of one version: <paramref name="Start"/> to <paramref name="End"/>, in that version's positions.</summary>

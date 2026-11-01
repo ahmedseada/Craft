@@ -134,6 +134,7 @@ sealed class Craft.CSharp.Run.DotnetRunProvider : Craft.Abstractions.IRunProvide
   static System.String FrameworkFor(System.Collections.Generic.IReadOnlyList<System.String> frameworks)
 sealed class Craft.CSharp.Run.DotnetRunProvider.ProjectFacts : System.IEquatable<Craft.CSharp.Run.DotnetRunProvider.ProjectFacts>
   Craft.CSharp.Run.DotnetRunProvider.ProjectFacts <Clone>$()
+  System.Boolean Console { get; init; }
   System.Boolean Equals(Craft.CSharp.Run.DotnetRunProvider.ProjectFacts other)
   System.Boolean Equals(System.Object obj)
   System.Boolean Runs { get; init; }

@@ -674,6 +674,13 @@ public sealed record CraftOptions
     /// <summary>Milliseconds the pointer rests on a menu's row before its submenu opens (or another closes) (<c>CRAFT_MENU_SUBMENU_DELAY_MS</c>).</summary>
     public int MenuSubmenuDelayMilliseconds { get; init; } = 200;
 
+    /// <summary>
+    /// Whether a run takes the keyboard in a terminal tab (<c>CRAFT_RUN_INTERACTIVE</c>, X part 6b): "auto" (when its target
+    /// reads input: a console program, a script), "on" (every run) or "off" (output only, its input closed); a configuration's
+    /// own "interactive" in <c>.craft/run.json</c> wins over it.
+    /// </summary>
+    public string RunInteractive { get; init; } = "auto";
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -849,6 +856,7 @@ public sealed record CraftOptions
         new("CRAFT_DELETE_UNDO_MAX_MB", "64", "A file or folder up to this size is kept aside when deleted from the explorer, so Undo brings it back; a larger one is asked about first; 0 always asks.") { Shape = SettingShape.Whole(SettingSections.Files, "Keep deleted files for Undo up to", 0, 4096, "MB", "Tree") },
         new("CRAFT_MENU_TYPE_AHEAD_MS", "700", "Milliseconds within which letters typed in an open menu add up to jump to the row they start.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Menu typing joins letters within", 100, 5000, "ms", "Menus", step: 50) },
         new("CRAFT_MENU_SUBMENU_DELAY_MS", "200", "Milliseconds the pointer rests on a menu's row before its submenu opens (or an open one closes).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Submenus open after", 0, 2000, "ms", "Menus", step: 50) },
+        new("CRAFT_RUN_INTERACTIVE", "auto", "Whether a run takes the keyboard in its terminal tab (its program reads what you type): auto (when it reads input: a console program, a script), on (every run) or off (output only); a configuration's own interactive wins.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Runs take the keyboard", ["auto", "on", "off"], "Run") },
     ];
 
     /// <summary>
@@ -1681,6 +1689,11 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_MENU_SUBMENU_DELAY_MS") is { } submenuDelay)
         {
             options = options with { MenuSubmenuDelayMilliseconds = Whole(submenuDelay, "CRAFT_MENU_SUBMENU_DELAY_MS", 0, 2000) };
+        }
+
+        if (Text(read, "CRAFT_RUN_INTERACTIVE") is { } runInteractive)
+        {
+            options = options with { RunInteractive = OneOf(runInteractive, "CRAFT_RUN_INTERACTIVE", "auto", "on", "off") };
         }
 
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)

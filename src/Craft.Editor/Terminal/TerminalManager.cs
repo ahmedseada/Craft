@@ -501,6 +501,46 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
     /// <inheritdoc />
     IEditorTerminalOutput? IEditorTerminals.OpenOutput(string name) => OpenOutput(name);
 
+    /// <summary>
+    /// A tab over a program a plug-in started (X part 6b: a run that reads input): its output drawn, what the user types sent
+    /// to its input through <see cref="ProgramTerminalSession"/>'s line discipline. A tab of the same name that ended or is an
+    /// output tab is replaced in its place; the new tab becomes the active one.
+    /// </summary>
+    public IEditorTerminalProgram OpenProgram(EditorProgramRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        int at = _terminals.FindIndex(t => (t.IsReadOnly || (t.IsProgram && t.HasExited)) && string.Equals(t.Title, request.Name, StringComparison.Ordinal));
+        if (at >= 0)
+        {
+            var old = _terminals[at];
+            _terminals.RemoveAt(at);
+            _outputs.Remove(old);
+            old.TitleChanged -= OnTerminalChanged;
+            old.ExitedChanged -= OnTerminalChanged;
+            old.Dispose();
+        }
+        else
+        {
+            at = _terminals.Count;
+        }
+
+        var session = new ProgramTerminalSession(request);
+        var terminal = TerminalInstance.Program(_nextId, session, LastSize, _options().TerminalScrollback, _host.Dispatch, request.Name, request.Folder ?? _workspaceFolder() ?? HomeFolder);
+        _nextId++;
+        terminal.TitleChanged += OnTerminalChanged;
+        terminal.ExitedChanged += OnTerminalChanged;
+        _terminals.Insert(at, terminal);
+        ActiveTerminal = terminal;
+        var program = new ProgramTab(this, terminal, session);
+        Changed?.Invoke(this, EventArgs.Empty);
+        return program;
+    }
+
+    /// <inheritdoc />
+    IEditorTerminalProgram? IEditorTerminals.OpenProgram(EditorProgramRequest request) => OpenProgram(request);
+
     /// <inheritdoc />
     IEditorTerminal IEditorTerminals.Open(EditorTerminalRequest request)
     {
@@ -943,6 +983,29 @@ public sealed class TerminalManager : IEditorTerminals, IDisposable
             {
                 owner.Activate(terminal);
                 owner.ViewRequested?.Invoke(owner, TerminalViewRequest.Reveal);
+            }
+        }
+    }
+
+    /// <summary>A plug-in's hold on its program's tab: notes and the end (any thread); Show gives the tab the keyboard.</summary>
+    private sealed class ProgramTab(TerminalManager owner, TerminalInstance terminal, ProgramTerminalSession session) : IEditorTerminalProgram
+    {
+        public string Title => terminal.Title;
+
+        public bool IsOpen => session.IsOpen;
+
+        public Task OutputEnded => session.OutputEnded;
+
+        public bool Append(string text) => session.Append(text);
+
+        public void End(string? text = null, int exitCode = 0) => session.End(text, exitCode);
+
+        public void Show()
+        {
+            if (owner._terminals.Contains(terminal))
+            {
+                owner.Activate(terminal);
+                owner.ViewRequested?.Invoke(owner, TerminalViewRequest.Show);
             }
         }
     }

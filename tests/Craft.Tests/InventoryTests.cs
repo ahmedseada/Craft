@@ -122,7 +122,7 @@ public static class InventoryTests
             ["CRAFT_TERMINAL_BUSY_QUIET_MS"] = "300", ["CRAFT_LOADER_DELAY_MS"] = "100", ["CRAFT_LOADER_KINDS"] = "workspace, indexing", ["CRAFT_LOADER_CYCLE_MS"] = "900",
             // X part 6: the Search view and the Run view.
             ["CRAFT_SEARCH_MAX_RESULTS"] = "500", ["CRAFT_SEARCH_MAX_FILE_MB"] = "3", ["CRAFT_SEARCH_THREADS"] = "2", ["CRAFT_SEARCH_IGNORE_FILES"] = "false",
-            ["CRAFT_SEARCH_PROVIDER"] = "code", ["CRAFT_RUN_SANDBOX"] = "approve-each", ["CRAFT_RUN_TIME_LIMIT_MINUTES"] = "30", ["CRAFT_RUN_APPROVAL"] = "each",
+            ["CRAFT_SEARCH_PROVIDER"] = "code", ["CRAFT_RUN_SANDBOX"] = "approve-each", ["CRAFT_RUN_TIME_LIMIT_MINUTES"] = "30", ["CRAFT_RUN_APPROVAL"] = "each", ["CRAFT_RUN_INTERACTIVE"] = "off",
             // X part 10: the chat and the agent redesigned.
             ["CRAFT_CHAT_EXPANDED"] = "true", ["CRAFT_COMPOSER_MAX_LINES"] = "6", ["CRAFT_CHAT_COPY_FORMAT"] = "plain", ["CRAFT_CHAT_FOLD_CODE_LINES"] = "10",
             ["CRAFT_CHAT_SHOW_METRICS"] = "false",
@@ -169,7 +169,7 @@ public static class InventoryTests
             TerminalCursor = "bar", TerminalCursorBlink = false, TerminalBusyAfterMilliseconds = 250, TerminalBusyQuietMilliseconds = 300,
             LoaderDelayMilliseconds = 100, LoaderKinds = options.LoaderKinds, LoaderCycleMilliseconds = 900,
             SearchMaxResults = 500, SearchMaxFileMegabytes = 3, SearchThreads = 2, SearchIgnoreFiles = false, SearchProvider = "code",
-            RunSandbox = "approve-each", RunTimeLimitMinutes = 30, RunApproval = "each",
+            RunSandbox = "approve-each", RunTimeLimitMinutes = 30, RunApproval = "each", RunInteractive = "off",
             ChatExpanded = true, ComposerMaxLines = 6, ChatCopyFormat = "plain", ChatFoldCodeLines = 10, ChatShowMetrics = false,
             TabsReopenLimit = 7, DeleteUndoMaxMegabytes = 2, MenuTypeAheadMilliseconds = 400, MenuSubmenuDelayMilliseconds = 0,
         }, options, "options read from every variable");

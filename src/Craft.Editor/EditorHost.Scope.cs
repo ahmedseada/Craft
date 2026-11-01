@@ -271,6 +271,31 @@ public sealed partial class EditorHost
 
         public IEditorTerminalOutput? OpenOutput(string name) =>
             scope.IsClosed ? null : terminals.OpenOutput(name) is { } output ? new ScopedOutput(output, scope) : null;
+
+        public IEditorTerminalProgram? OpenProgram(EditorProgramRequest request) =>
+            scope.IsClosed ? null : terminals.OpenProgram(request) is { } program ? new ScopedProgram(program, scope) : null;
+    }
+
+    /// <summary>A plug-in's program tab: its notes and its Show stop once the plug-in is deactivated; its end always lands (the program is the plug-in's to end).</summary>
+    private sealed class ScopedProgram(IEditorTerminalProgram program, PluginScope scope) : IEditorTerminalProgram
+    {
+        public string Title => program.Title;
+
+        public bool IsOpen => !scope.IsClosed && program.IsOpen;
+
+        public Task OutputEnded => program.OutputEnded;
+
+        public bool Append(string text) => !scope.IsClosed && program.Append(text);
+
+        public void End(string? text = null, int exitCode = 0) => program.End(scope.IsClosed ? null : text, exitCode);
+
+        public void Show()
+        {
+            if (!scope.IsClosed)
+            {
+                program.Show();
+            }
+        }
     }
 
     private sealed class ScopedOutput(IEditorTerminalOutput output, PluginScope scope) : IEditorTerminalOutput

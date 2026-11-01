@@ -828,10 +828,12 @@ sealed class Craft.Editor.Run.RunFile : System.IEquatable<Craft.Editor.Run.RunFi
   const System.String FileName = run.json
   ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunConfiguration> Configurations, System.String Default)
   static Craft.Abstractions.RunActions ActionOf(System.String name)
+  static Craft.Abstractions.RunInteractive? InteractiveOf(System.String name)
   static Craft.Editor.Run.RunFile Empty { get; }
   static Craft.Editor.Run.RunFile Load(System.String root)
   static Craft.Editor.Run.RunFile Parse(System.ReadOnlySpan<System.Byte> json)
   static System.String ActionName(Craft.Abstractions.RunActions action)
+  static System.String InteractiveName(Craft.Abstractions.RunInteractive interactive)
   static System.String PathOf(System.String root)
 sealed class Craft.Editor.Run.RunOutcome : System.IEquatable<Craft.Editor.Run.RunOutcome>
   Craft.Editor.Run.RunEnd End { get; init; }
@@ -884,6 +886,7 @@ sealed class Craft.Editor.Run.RunView : Craft.Abstractions.IEditorPanel, Craft.A
   ctor(Craft.Editor.EditorHost host, System.Func<System.String> root, System.Func<Craft.Core.CraftOptions> options)
   event System.EventHandler Changed
   event System.EventHandler ProblemsChanged
+  static System.Boolean TakesKeyboard(Craft.Abstractions.RunConfiguration configuration, Craft.Abstractions.RunTarget target, Craft.Core.CraftOptions options)
   static System.String KeyOf(Craft.Abstractions.RunTarget target)
 static class Craft.Editor.Search.SearchCommands
   const System.String Replace = craft.search.replaceInFiles
@@ -2528,6 +2531,20 @@ sealed class Craft.Editor.Terminal.OutputTerminalSession : Craft.Abstractions.IT
   System.Void Write(System.ReadOnlySpan<System.Byte> input)
   const System.String HostName = output
   ctor()
+sealed class Craft.Editor.Terminal.ProgramTerminalSession : Craft.Abstractions.ITerminalSession, System.IDisposable
+  System.Boolean Append(System.String text)
+  System.Boolean IsOpen { get; }
+  System.Int32 ProcessId { get; }
+  System.Threading.Tasks.Task OutputEnded { get; }
+  System.Threading.Tasks.Task<System.Int32> Exited { get; }
+  System.Threading.Tasks.ValueTask<System.Int32> ReadAsync(System.Memory<System.Byte> buffer, System.Threading.CancellationToken cancellationToken = null)
+  System.Void Dispose()
+  System.Void End(System.String text, System.Int32 exitCode)
+  System.Void Resize(Craft.Abstractions.TerminalSize size)
+  System.Void Write(System.ReadOnlySpan<System.Byte> input)
+  const System.Int32 MaxChunks = 64
+  const System.String HostName = program
+  ctor(Craft.Abstractions.EditorProgramRequest request)
 enum Craft.Editor.Terminal.TerminalAttributes : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Blink = 16
   Bold = 1
@@ -2591,6 +2608,7 @@ sealed class Craft.Editor.Terminal.TerminalInstance : System.IDisposable
   System.Boolean HandleKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Boolean HasExited { get; }
   System.Boolean IsBusy(System.TimeProvider time, System.Int64 now, System.TimeSpan after, System.TimeSpan quiet)
+  System.Boolean IsProgram { get; }
   System.Boolean IsReadOnly { get; }
   System.Int32 Group { get; }
   System.Int32 Id { get; }
@@ -2620,6 +2638,7 @@ sealed class Craft.Editor.Terminal.TerminalInstance : System.IDisposable
   event System.EventHandler Invalidated
   event System.EventHandler TitleChanged
   static Craft.Editor.Terminal.TerminalInstance Output(System.Int32 id, Craft.Abstractions.ITerminalSession session, Craft.Abstractions.TerminalSize size, System.Int32 scrollback, System.Action<System.Action> dispatch, System.String name, System.String folder)
+  static Craft.Editor.Terminal.TerminalInstance Program(System.Int32 id, Craft.Editor.Terminal.ProgramTerminalSession session, Craft.Abstractions.TerminalSize size, System.Int32 scrollback, System.Action<System.Action> dispatch, System.String name, System.String folder)
   static Craft.Editor.Terminal.TerminalInstance Start(System.Int32 id, Craft.Abstractions.ITerminalHost host, Craft.Abstractions.TerminalStartInfo start, System.Int32 scrollback, System.Action<System.Action> dispatch, System.String name = null)
 static class Craft.Editor.Terminal.TerminalKeys
   const System.Int32 MaxLength = 16
@@ -2644,6 +2663,7 @@ static class Craft.Editor.Terminal.TerminalLaunch
 sealed class Craft.Editor.Terminal.TerminalManager : Craft.Abstractions.IEditorTerminals, System.IDisposable
   Craft.Abstractions.IEditorInputSink Input { get; }
   Craft.Abstractions.IEditorTerminalOutput OpenOutput(System.String name)
+  Craft.Abstractions.IEditorTerminalProgram OpenProgram(Craft.Abstractions.EditorProgramRequest request)
   Craft.Abstractions.TerminalProfile DefaultProfile { get; }
   Craft.Abstractions.TerminalSize LastSize { get; set; }
   Craft.Editor.Abstractions.IShellUi Ui { get; set; }

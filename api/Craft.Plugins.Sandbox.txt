@@ -1,8 +1,10 @@
 sealed class Craft.Plugins.Sandbox.ApproveEachSandbox : Idrak.Abstraction.ICommandSandbox
   System.String Check(Idrak.Abstraction.CommandLimits limits)
+  System.String CheckStart(Idrak.Abstraction.CommandLimits limits)
   System.String Name { get; }
   System.String Summary { get; }
   System.Threading.Tasks.ValueTask<Idrak.Abstraction.CommandResult> RunAsync(System.Collections.Generic.IReadOnlyList<System.String> command, System.String directory, Idrak.Abstraction.CommandLimits limits, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.ValueTask<Idrak.Abstraction.CommandStart> StartAsync(System.Collections.Generic.IReadOnlyList<System.String> command, System.String directory, Idrak.Abstraction.CommandLimits limits, System.Threading.CancellationToken cancellationToken = null)
   const System.String SandboxName = approve-each
   static Craft.Plugins.Sandbox.ApproveEachSandbox Instance { get; }
 enum Craft.Plugins.Sandbox.CommandApproval : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable

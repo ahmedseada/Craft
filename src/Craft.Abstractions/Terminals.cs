@@ -206,6 +206,52 @@ public interface IEditorTerminals
     /// Terminal tab shows it with its scrollback, selection and copy. One tab per name; null when the host has none.
     /// </summary>
     IEditorTerminalOutput? OpenOutput(string name) => null;
+
+    /// <summary>
+    /// A terminal tab over a program the plug-in started itself (X part 6b: a run that reads input; its standard streams,
+    /// such as Idrak's <c>ICommandSession</c>'s): its output and error are drawn as a shell's (colours, the VT parser), and
+    /// what the user types goes to its input as a terminal's line discipline gives it to a program reading a pipe (the
+    /// line echoed and edited in the tab, Enter sending it, Ctrl+D at a line's start closing the input). Ctrl+C with nothing
+    /// selected, and closing the tab while it runs, call <see cref="EditorProgramRequest.Stop"/> (a pipe carries no signal).
+    /// A tab of the same name that ended or is an output tab is replaced in its place. Null when the host has no terminals.
+    /// </summary>
+    IEditorTerminalProgram? OpenProgram(EditorProgramRequest request) => null;
+}
+
+/// <summary>A program's tab to open (<see cref="IEditorTerminals.OpenProgram"/>).</summary>
+/// <param name="Name">The tab's name ("Run: App").</param>
+/// <param name="Input">The program's standard input: what the user types is written to it (and flushed).</param>
+/// <param name="Output">The program's standard output, read to its end.</param>
+public sealed record EditorProgramRequest(string Name, Stream Input, Stream Output)
+{
+    /// <summary>The program's standard error, read to its end beside <see cref="Output"/>; null: none.</summary>
+    public Stream? Error { get; init; }
+
+    /// <summary>What Ctrl+C (with nothing selected) and closing the tab do while the program runs: the caller stops it.</summary>
+    public Action? Stop { get; init; }
+
+    /// <summary>The folder it runs in (the tab's tooltip), or null.</summary>
+    public string? Folder { get; init; }
+
+    /// <summary>Text shown before the program's output (the command line; VT colours allowed, "\n" a line break), or null.</summary>
+    public string? Header { get; init; }
+}
+
+/// <summary>
+/// A program's terminal tab (<see cref="IEditorTerminals.OpenProgram"/>). <see cref="IEditorTerminalOutput.Append"/> adds a
+/// note of the plug-in's between the program's output; <see cref="IEditorTerminalOutput.Show"/> shows the tab and gives it
+/// the keyboard. May be called from any thread.
+/// </summary>
+public interface IEditorTerminalProgram : IEditorTerminalOutput
+{
+    /// <summary>Completes once the program's output and error were read to their end (it closed them, as it does when it exits).</summary>
+    Task OutputEnded { get; }
+
+    /// <summary>
+    /// Ends the tab: <paramref name="text"/> (the run's end, its exit code) is shown last, nothing typed goes anywhere after
+    /// it, and the tab shows as ended with <paramref name="exitCode"/>; it stays open to be read.
+    /// </summary>
+    void End(string? text = null, int exitCode = 0);
 }
 
 /// <summary>

@@ -7341,3 +7341,50 @@ The branch to delete once merged:
 ```powershell
 git push origin --delete slot/claude-code
 ```
+
+## Speed and the AI without crashes (the owner, 2026-11-01, evening)
+
+**The ask.** "Install trace to solve speed issues and then fix all AI functionality": the agent with MCP, the chat and
+inline completion run without crashing and without running out of memory, ready for the learning process (the owner
+starts learning). Offloading is slow: Ollama runs `ornith:35b` at 69-78 tok/s on this machine, Idrak's best for a
+Qwen 7B is 45 tok/s, and a model that does not fit crashes with out-of-memory; that is Idrak's, fixed in Idrak.
+
+**The owner's machine** (measured 2026-11-01): Intel Core Ultra 9 285 (24 cores), 64 GB, RTX 5070 Ti 16 GB (compute
+12.0, driver 610.88), NVMe SSD; Windows 11, .NET SDK 10.0.401. An incremental `dotnet build -c Release tests\Craft.Tests`
+takes about 40 s here (2-3 min in the cloud container); the app's build 29 s. Sessions now build, run and use the GPU on
+this machine (the owner, 2026-11-01).
+
+**The crashes and stalls, read and reproduced (main c9c101a).** No crash on main: the owner's window ran from 18:26 and a
+second run closed cleanly. Found:
+1. The agent's model load sends an agent engine's model ("Claude Code (default)") to the local provider:
+   `AiSession.LoadModelAsync(role)` → `AiModels.RoleAsync` → `LocalModelProvider.Acquire` → `ModelSource.Resolve` throws
+   (report `callback-20261101-182224-292.txt`). The chip and `EstimateAsync` skip engine models; the agent row still
+   offers `LoadCommand` (`LocalModelProvider.cs:220`) and the load path has no engine check.
+2. A failed load also makes a "background task nobody awaited" report later: `AiModels.LeaseAsync` awaits
+   `lease.WaitAsync(token)` and never observes the cached `lease` task itself, so its exception is unobserved when it is
+   collected.
+3. The terminal's busy dots blocked the window 618 ms: the 500 ms tick calls `TerminalManager.Rows()` → `IsBusy`, which
+   takes `lock (Screen.Sync)` on the UI thread (`TerminalInstance.cs:140`) while the output thread holds it to parse.
+4. Start-up, traced (`dotnet-trace`, `test-output\traces\startup.nettrace`): plug-in loading takes **2.6 s on the main
+   thread before the window shows** (`CraftPlugins.LoadInstalled`; about 60% in Idrak's `IdrakPlugin.Register` →
+   `Overrides.AsRegisteredBy` → `IdrakPlugin.Part`, the rest assembly loading); then the window's construction 255 ms
+   (`ShellPage..ctor`) and, every start, one unlabelled stall of 290-460 ms after "the plug-ins' rail, menus and models"
+   and one after "the window resized" (framework layout and JIT, 1-2 full collections; no Craft call over 130 ms).
+5. The 02:28 death (run 45356, c3cfaed: a WinUI stowed exception after the Learning view drew) is the Learning icon's
+   double `BeginFigure`, fixed since.
+
+**Why 45 against 70 tok/s.** `ornith:35b` is a mixture of experts (`qwen35moe`, 34.7B parameters, hidden size 2048,
+Q4_K_M, 21 GB): each token reads a few billion parameters (about 2 GB), while a dense 7B reads all of its weights (about
+7.6 GB in int8, 4 GB in int4), so the two are not the same work. Idrak's decoding runs at about 31% of the card's
+memory bandwidth (`docs/performance-notes.md`, next step 3), so a dense 7B int8 at 45 tok/s is that 31% of its ~115 tok/s
+ceiling; int4 and decoding nearer the bandwidth, and offloaded layers computed where they live (Ollama's way), are
+the gains.
+
+**The slots** (at most three, each its own worktree, `-p:IdrakFromSource=` for its Idrak):
+- `slot/ai-fixes` (Craft): items 1 and 2; then the agent with MCP, the chat and inline completion end to end, every
+  out-of-memory and load failure said and survived (never a crash, never a second copy of a model it does not need).
+- `slot/startup` (Craft and Idrak): item 3 (no lock on the UI thread); item 4: plug-ins loaded off the main thread or
+  later, Idrak's registration made cheap (in Idrak), every UI dispatch labelled so a stall names its work.
+- `slot/decode` (Idrak): a dense 7B's decoding speed and memory on this card, offloading (layers on the CPU computed
+  there, overlapped), the fit measured before a load and a model that does not fit refused or offloaded, never an
+  out-of-memory crash; mixture-of-experts models, if Idrak lacks them, recorded for the owner's word.

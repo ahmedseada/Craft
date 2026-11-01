@@ -70,6 +70,22 @@ public static class AiPluginTests
     }
 
     [Test]
+    public static async Task EnterAfterACommentAsksForTheCodeOnTheNewLine()
+    {
+        var text = new FakeTextModel(["static double Sigmoid(double x) => 1 / (1 + Math.Exp(-x));"], stepMilliseconds: 2);
+        using var fixture = new CompletionFixture(text, withFormat: true);
+        var (model, document, ui) = fixture.Editor("// a sigmoid function\n", caretLine: 0);
+        Check.True(model.OnKey(EditorKey.Enter, KeyModifiers.None), "Enter makes the new line");
+        await PumpUntil(ui, () => model.InlineCompletion.IsShown && !model.InlineCompletion.IsRequesting,
+            $"Enter asks for ghost text on the new line (requests {model.InlineCompletion.Requests}, error {model.InlineCompletion.LastError?.Message})");
+        string prompt = text.Prompts.Single();
+        Check.True(prompt.Contains("// a sigmoid function\n", StringComparison.Ordinal) && prompt.Contains("<SUF>", StringComparison.Ordinal),
+            $"the prefix holds the comment and the new line ({prompt})");
+        Check.True(model.OnKey(EditorKey.Tab, KeyModifiers.None), "Tab accepts");
+        Check.True(Text(document).Contains("// a sigmoid function\nstatic double Sigmoid(double x)", StringComparison.Ordinal), $"the code under the comment ({Text(document)})");
+    }
+
+    [Test]
     public static async Task AKeystrokeCancelsTheRequestWithinAToken()
     {
         var text = new FakeTextModel([.. Enumerable.Range(0, 200).Select(i => i % 2 == 0 ? "x" : "y")], stepMilliseconds: 15);

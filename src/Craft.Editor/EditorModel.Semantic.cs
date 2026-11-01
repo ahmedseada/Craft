@@ -981,6 +981,12 @@ public sealed partial class EditorModel
         else
         {
             Completion.OnCaretMoved();
+            if (key == EditorKey.Enter)
+            {
+                // A new line asks too (the owner's run, 2026-11-01): the code a comment describes is written on the line
+                // under it, which only Enter reaches; before, Enter never asked and that line stayed empty.
+                InlineCompletion.OnEdited();
+            }
         }
 
         if (SignatureHelp is not null)

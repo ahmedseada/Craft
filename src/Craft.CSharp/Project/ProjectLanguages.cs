@@ -15,7 +15,7 @@ namespace Craft.CSharp;
 /// <see cref="EditorLanguages"/> only, as any plug-in's language is. JSON moved to its own plug-in, Craft.Plugins.Json
 /// (phase W), so a web project's JSON keeps its colours without C#.
 /// </summary>
-public static class ProjectLanguages
+public static partial class ProjectLanguages
 {
     /// <summary>MSBuild's project files: .csproj, .props, .targets.</summary>
     public const string MsBuild = "msbuild";

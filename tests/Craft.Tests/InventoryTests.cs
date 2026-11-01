@@ -131,6 +131,10 @@ public static class InventoryTests
             ["CRAFT_CHAT_SHOW_METRICS"] = "false",
             // X part 7: rich context menus.
             ["CRAFT_TABS_REOPEN_LIMIT"] = "7", ["CRAFT_DELETE_UNDO_MAX_MB"] = "2", ["CRAFT_MENU_TYPE_AHEAD_MS"] = "400", ["CRAFT_MENU_SUBMENU_DELAY_MS"] = "0",
+            // X part 9: the tools.
+            ["CRAFT_TEST_GUTTER"] = "false", ["CRAFT_TEST_PROBLEMS"] = "false", ["CRAFT_MARKDOWN_PREVIEW_DELAY_MS"] = "50", ["CRAFT_MARKDOWN_PREVIEW_FOLLOW"] = "false",
+            ["CRAFT_IMAGE_PREVIEW_MAX_MB"] = "8", ["CRAFT_TODO_TAGS"] = "TODO,BUG", ["CRAFT_TODO_MAX_RESULTS"] = "100", ["CRAFT_SPELL_CHECK"] = "false",
+            ["CRAFT_SPELL_LANGUAGE"] = "de", ["CRAFT_SPELL_SUGGESTIONS"] = "3", ["CRAFT_SPELL_MIN_LENGTH"] = "2",
             // X part 9: the editing helpers.
             ["CRAFT_WORD_WRAP"] = "column", ["CRAFT_WORD_WRAP_COLUMN"] = "100", ["CRAFT_BRACKET_COLORS"] = "false", ["CRAFT_BRACKET_COLORS_SCAN_LINES"] = "5000",
             ["CRAFT_INLINE_DIAGNOSTICS"] = "all", ["CRAFT_LIGHTBULB"] = "false", ["CRAFT_LIGHTBULB_DELAY_MS"] = "100", ["CRAFT_RENDER_WHITESPACE"] = "boundary",
@@ -185,11 +189,14 @@ public static class InventoryTests
             RunSandbox = "approve-each", RunTimeLimitMinutes = 30, RunApproval = "each", RunInteractive = "off",
             ChatExpanded = true, ComposerMaxLines = 6, ChatCopyFormat = "plain", ChatFoldCodeLines = 10, ChatShowMetrics = false,
             TabsReopenLimit = 7, DeleteUndoMaxMegabytes = 2, MenuTypeAheadMilliseconds = 400, MenuSubmenuDelayMilliseconds = 0,
+            TestGutter = false, TestProblems = false, MarkdownPreviewDelayMilliseconds = 50, MarkdownPreviewFollow = false, ImagePreviewMaxMegabytes = 8,
+            TodoTags = options.TodoTags, TodoMaxResults = 100, SpellCheck = false, SpellLanguage = "de", SpellSuggestions = 3, SpellMinLength = 2,
             WordWrap = "column", WordWrapColumn = 100, BracketColors = false, BracketColorsScanLines = 5000, InlineDiagnostics = "all", Lightbulb = false,
             LightbulbDelayMilliseconds = 100, RenderWhitespace = "boundary", Rulers = "80,120", TrimTrailingWhitespace = true, InsertFinalNewline = true, EditorConfig = false,
             BookmarksWrap = false, PreviewTabs = false, RestoreSession = false, LocalHistoryMaxMegabytes = 64, LocalHistoryDays = 7, LocalHistoryFileMegabytes = 2,
             LinksUnderline = "always", IconTheme = "mono", WorkspaceShowIgnored = false,
         }, options, "options read from every variable");
+        Check.SequenceEqual(["TODO", "BUG"], options.TodoTags, "CRAFT_TODO_TAGS split at ','");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");
         Check.True(Equals(new CraftOptions(), new CraftOptions()), "two default options compare equal (no list made per instance)");
         Check.True(options.TerminalEnvironment is [{ Key: "A", Value: "1" }, { Key: "B", Value: "2" }], "CRAFT_TERMINAL_ENV split at '|'");

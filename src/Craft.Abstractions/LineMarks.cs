@@ -20,6 +20,18 @@ public enum LineMarkKind
 
     /// <summary>A bookmark on <see cref="LineMark.Line"/> (X part 9: the accent's tag at the gutter's left edge; not clickable).</summary>
     Bookmark,
+
+    /// <summary>A test that can run (X part 9): a ▶ in the gutter's left; a click runs it.</summary>
+    TestReady,
+
+    /// <summary>A test that passed its last run: a ✓ in the success colour.</summary>
+    TestPassed,
+
+    /// <summary>A test that failed its last run: a ✗ in the error colour.</summary>
+    TestFailed,
+
+    /// <summary>A test skipped in its last run: a ○ in the warning colour.</summary>
+    TestSkipped,
 }
 
 /// <summary>A mark in an editor's gutter and on its overview ruler: lines and what they are.</summary>
@@ -28,6 +40,9 @@ public enum LineMarkKind
 /// <param name="Kind">What it is.</param>
 public readonly record struct LineMark(int Line, int Count, LineMarkKind Kind)
 {
+    /// <summary>Whether it is drawn as a glyph at the gutter's left (a test's ▶, ✓, ✗ or ○) rather than a bar in the marks' strip.</summary>
+    public bool IsGlyph => Kind is LineMarkKind.TestReady or LineMarkKind.TestPassed or LineMarkKind.TestFailed or LineMarkKind.TestSkipped;
+
     /// <summary>The last line it covers (its <see cref="Line"/> for a deletion).</summary>
     public int LastLine => Kind == LineMarkKind.Deleted ? Line : Line + Math.Max(1, Count) - 1;
 }

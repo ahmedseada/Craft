@@ -229,6 +229,7 @@ internal struct TranscriptLine
     public int BoxLeft;        // a bubble's or code block's fill: its first column and its width (0: none)
     public int BoxWidth;
     public bool Continuation;  // a wrapped line's next part (joined to the line before by a space when copied)
+    public int SourceLine;     // the Markdown source's line it was written from (X part 9's preview follows the scroll with it), or -1
 }
 
 /// <summary>A span of a line, by column within the line.</summary>
@@ -357,7 +358,7 @@ internal sealed class ChatCodeBlock(string language, string code, bool colour) :
 /// </summary>
 internal sealed class TranscriptWriter
 {
-    private static readonly SearchValues<char> InlineMarks = SearchValues.Create("`*_[\\h");
+    private static readonly SearchValues<char> InlineMarks = SearchValues.Create("`*_[\\h!");
 
     public StringBuilder Text { get; } = new();
 
@@ -373,6 +374,18 @@ internal sealed class TranscriptWriter
 
     public int FoldLines { get; set; } = 30;
 
+    /// <summary>The source line of a code block's first line while <see cref="Markdown"/> writes one, else -1.</summary>
+    public int CodeSourceStart { get; set; } = -1;
+
+    /// <summary>The Markdown source's line being written (each line written takes it), or -1.</summary>
+    public int SourceLine { get; set; } = -1;
+
+    /// <summary>
+    /// Whether it writes a document's preview (X part 9) rather than a chat message: a code block offers Copy only (no
+    /// Insert, no Run), and an image is a link to its file.
+    /// </summary>
+    public bool Preview { get; set; }
+
     public void Clear()
     {
         Text.Clear();
@@ -387,7 +400,7 @@ internal sealed class TranscriptWriter
     {
         var line = new TranscriptLine
         {
-            Kind = kind, Start = Text.Length, Indent = indent, SpanStart = Spans.Count, ActionStart = Actions.Count, Block = -1,
+            Kind = kind, Start = Text.Length, Indent = indent, SpanStart = Spans.Count, ActionStart = Actions.Count, Block = -1, SourceLine = SourceLine,
         };
         Text.Append(' ', indent).Append(content);
         line.Length = Text.Length - line.Start;
@@ -573,14 +586,18 @@ internal sealed class TranscriptWriter
         var actions = new List<(string, TranscriptAction, bool)>
         {
             ("Copy", new TranscriptAction(TranscriptActionKind.CopyCode, entry) { Text = shown }, false),
-            ("Insert at caret", new TranscriptAction(TranscriptActionKind.InsertCode, entry) { Text = shown }, false),
         };
+        if (!Preview)
+        {
+            actions.Add(("Insert at caret", new TranscriptAction(TranscriptActionKind.InsertCode, entry) { Text = shown }, false));
+        }
+
         foreach (var action in entryActions)
         {
             actions.Add((action.Label, new TranscriptAction(TranscriptActionKind.Panel, entry) { Action = action }, action.Primary));
         }
 
-        if (block.IsShell)
+        if (block.IsShell && !Preview)
         {
             actions.Add(("Run in terminal", new TranscriptAction(TranscriptActionKind.RunCode, entry) { Text = shown }, false));
         }
@@ -606,6 +623,11 @@ internal sealed class TranscriptWriter
             }
 
             int start = at;
+            if (CodeSourceStart >= 0)
+            {
+                SourceLine = CodeSourceStart + lineCount;
+            }
+
             do
             {
                 int piece = Math.Min(width, end - start);
@@ -640,10 +662,16 @@ internal sealed class TranscriptWriter
         var lines = markdown.Replace("\r", "", StringComparison.Ordinal).Split('\n');
         int ordinal = 0;
         bool blank = true;
+        bool tracking = SourceLine >= 0;
         for (int i = 0; i < lines.Length; i++)
         {
             string line = lines[i];
             string trimmed = line.TrimStart();
+            if (tracking)
+            {
+                SourceLine = i;
+            }
+
             if (trimmed.StartsWith("```", StringComparison.Ordinal) || trimmed.StartsWith("~~~", StringComparison.Ordinal))
             {
                 string fence = trimmed[..3];
@@ -656,7 +684,9 @@ internal sealed class TranscriptWriter
                 }
 
                 long key = ((long)entry << 16) | (uint)ordinal;
+                CodeSourceStart = tracking ? i + 1 : -1;
                 Code(entry, ordinal++, code.ToString(), language, [], colour, shownAll(key));
+                CodeSourceStart = -1;
                 i = j;
                 blank = false;
                 continue;
@@ -686,7 +716,7 @@ internal sealed class TranscriptWriter
                     }
                 }
 
-                Table(entry, rows);
+                Table(entry, rows, tracking ? i : -1);
                 i = j - 1;
                 continue;
             }
@@ -803,7 +833,7 @@ internal sealed class TranscriptWriter
     }
 
     // A table: the columns as wide as their widest cell (inline marks taken out), the header bold, a rule under it.
-    private void Table(int entry, List<string[]> rows)
+    private void Table(int entry, List<string[]> rows, int firstSource = -1)
     {
         int count = rows.Max(r => r.Length);
         var shown = rows.Select(r => r.Select(c => Plain(c)).ToArray()).ToList();
@@ -818,6 +848,11 @@ internal sealed class TranscriptWriter
 
         for (int r = 0; r < shown.Count; r++)
         {
+            if (firstSource >= 0)
+            {
+                SourceLine = firstSource + (r == 0 ? 0 : r + 1);   // the rule under the header is the source's second line
+            }
+
             var text = new StringBuilder();
             var columns = new List<(int Column, int Length)>();
             for (int c = 0; c < count; c++)
@@ -923,6 +958,25 @@ internal sealed class TranscriptWriter
                 {
                     spans?.Add(new LineSpan(text.Length, close - i - 1, ChatClasses.Italic));
                     text.Append(source, i + 1, close - i - 1);
+                    i = close + 1;
+                    continue;
+                }
+            }
+
+            if (c == '!' && i + 1 < source.Length && source[i + 1] == '[')
+            {
+                int middle = source.IndexOf("](", i + 2, StringComparison.Ordinal);
+                int close = middle > 0 ? source.IndexOf(')', middle + 2) : -1;
+                if (middle > i && close > middle)
+                {
+                    // An image: a link to its file (X part 9's preview opens it in the image preview).
+                    string label = "🖼 " + (middle > i + 2 ? source[(i + 2)..middle] : "image");
+                    string url = source[(middle + 2)..close].Trim();
+                    int space = url.IndexOf(' ', StringComparison.Ordinal);
+                    url = space > 0 ? url[..space] : url;             // ![a](b.png "title"): the title left out
+                    spans?.Add(new LineSpan(text.Length, label.Length, ChatClasses.Link));
+                    links?.Add((text.Length, label.Length, url));
+                    text.Append(label);
                     i = close + 1;
                     continue;
                 }

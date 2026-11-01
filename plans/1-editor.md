@@ -4241,6 +4241,124 @@ Output. Craft only; Idrak unchanged (nothing in the library was needed: the link
   the same line in Output by a click; split the editor, fold a block, close the window and start it again on the same
   folder (the groups, tabs, carets, folds and pins back); `$env:CRAFT_LINKS_UNDERLINE="always"` underlines every link.
 
+### X part 9, tools 18-22, as built (2026-11-01)
+
+Slot s1: the Test explorer, the Markdown and image previews, the TODO list and the spell check. Craft only; Idrak
+unchanged (no cause was in the library; the run goes through Idrak's `CommandSandboxes` as the Run view's do).
+- **Contracts** (`Craft.Abstractions`, additions to contract 1.1): `Testing.cs`: `TestOutcome`, `TestItem`, `TestResult`,
+  `TestRunRequest`, `ITestProvider : IKind` and `TestProviders` (none built in; W's npm tests can join), `TrxResults` (a
+  TRX read as a stream: each result named by its definition's class and method, a theory's cases joined),
+  `TestConsoleResults` (the console logger's lines when no file came), `TestStackFrame` (a frame's `file:line`);
+  `Spelling.cs`: `ISpellDictionary : IKind`, `SpellDictionaries`, `SpellWords` (camelCase, acronyms, snake_case, digits
+  split, allocation-free); `LineMarkKind.TestReady/TestPassed/TestFailed/TestSkipped` and `LineMark.IsGlyph`;
+  `EditorColors.Spelling` (the info colour at 60% unless a theme sets it).
+- **18 Test explorer** (`Craft.Editor.Testing.TestExplorerView`, the rail's Testing; the C# plug-in's
+  `Craft.CSharp.Run.DotnetTestProvider` "dotnet"): xUnit's `[Fact]`/`[Theory]`, NUnit's `[Test]`/`[TestCase]`, MSTest's
+  `[TestMethod]`/`[DataTestMethod]` found in Roslyn's syntax tree off the UI thread, in the test projects the Run view
+  reads (a file parsed only when its bytes hold an attribute's word; abstract and generic classes left out; nested classes
+  as `Outer+Inner`); joined with the Run view's test targets that list no test (their Run runs them all). Tree: project ›
+  class › method with Run all, Run failed, Stop, Refresh, Collapse, a filter, Run per project, class and test; each row's
+  ✓ ✗ ○ and time; a failed test's card with its message and its stack, each `file:line` frame opening its place. A run is
+  `dotnet test PROJECT --filter FullyQualifiedName=…` (classes past 40 tests) with a TRX logger into
+  `.craft/test-results` (deleted once read) and the console logger, through the Run view's new `RunCommandAsync`: the
+  user's approval, `CRAFT_RUN_SANDBOX`, a "Test: …" terminal tab, an activity with Cancel; results read off the UI thread.
+  The gutter of an open test file draws ▶ at each test (a click runs it), then ✓ ✗ ○; failures go to Problems as
+  "File.cs (tests)" at the stack's first frame in the workspace, else the test's line. Commands: Test: Run all, Run failed,
+  Run the test at the caret (Run menu).
+- **19 Markdown preview** (`Craft.Editor.Preview.MarkdownPreview`, `Craft.Maui.MarkdownPreviewView`): Ctrl+Shift+V opens a
+  preview page tab, Ctrl+K V beside (the source shown in a group on the right too); rendered by X part 10's
+  `TranscriptWriter` (headings, lists, tables, quotes, rules, links, emphasis, code blocks coloured by their language with
+  Copy only), on Craft's own read-only editor surface (only the shown lines laid out and drawn); re-rendered on the thread
+  pool `CRAFT_MARKDOWN_PREVIEW_DELAY_MS` after the last edit; each line knows its source line, so it follows the source's
+  scroll (`CRAFT_MARKDOWN_PREVIEW_FOLLOW`); a link opens (an image in its preview, a file in its tab, an address in the
+  browser). A "markdown" language joined the C# plug-in's project languages (`LineStateLanguage` with `MarkdownTokenizer`:
+  headings, quotes, lists, code spans and fences, links, tables, HTML comments; prose left plain) and `MarkdownFolding`
+  (headings to the next of their level, fenced blocks).
+- **20 Image preview** (`Craft.Editor.Preview.ImagePreview`, `ImageFormats`, `SvgDrawing`; `Craft.Maui.ImagePreviewView`): a
+  png, jpg, gif, bmp, ico or svg opened from the tree or quick open is a page tab (Image: Open as text gives an SVG's
+  source; a plug-in's `OpenDocumentAsync` still opens text); read off the UI thread up to `CRAFT_IMAGE_PREVIEW_MAX_MB`;
+  format and size from the header bytes; zoom −, +, 100%, Fit (fit never enlarges); "PNG · 640 × 480 · 12.3 KB · 50%
+  (fit)" in the status bar while it shows; an SVG of paths, rectangles, circles, ellipses, lines, polylines and polygons
+  (fills and strokes inherited, currentColor) drawn through MAUI Graphics' `PathBuilder`, one with text, gradients,
+  transforms, styles or images said instead.
+- **21 TODO list** (`Craft.Editor.Tools.TodoScanner`, `TodoListView`; the bottom panel's TODO tab with its count):
+  `CRAFT_TODO_TAGS` (TODO, FIXME, HACK, NOTE) as whole words with their case, in comments only (the file's language session
+  classifies just the lines holding a tag; plain text files by line); files read as bytes, skipped undecoded without a
+  tag's bytes, binary or past `CRAFT_SEARCH_MAX_FILE_MB`; the workspace in parallel as an activity; grouped by file; a saved
+  file read again alone; a click opens the place; `CRAFT_TODO_MAX_RESULTS`.
+- **22 Spell check** (`Craft.Editor.Spelling`: `WordListDictionary`, `SpellChecker`, `SpellCheckLayer`,
+  `SpellingCodeActions`): a bundled English list (SCOWL size 60's en_US Hunspell, affixes expanded, 88,000 words, plain
+  text, its licence in `Spelling/Words/scowl-license.txt`) and the words of code, read once off the UI thread from their
+  bytes into a `FrozenSet` ignoring case, looked up by span; only the lines a frame draws, their comments and strings
+  (prose files: all but code), identifiers split; each line's unknown words kept while its text, spans and the checker stay,
+  so a warm frame checks and allocates nothing; faint squiggles in `EditorColors.Spelling`; Ctrl+. on a word: up to
+  `CRAFT_SPELL_SUGGESTIONS` suggestions by Damerau distance (the user's pick typed in its place, one undo step), Add to your
+  dictionary (`spelling/words.txt` in the data folder), Ignore in this workspace (`.craft/words.txt`). Options
+  `CRAFT_SPELL_CHECK` (on), `CRAFT_SPELL_LANGUAGE` (en), `CRAFT_SPELL_MIN_LENGTH` (4).
+- **Options** (each a `CRAFT_*` variable with its shape on the settings page): `CRAFT_TEST_GUTTER`, `CRAFT_TEST_PROBLEMS`
+  (Terminal › Tests); `CRAFT_MARKDOWN_PREVIEW_DELAY_MS` (300), `CRAFT_MARKDOWN_PREVIEW_FOLLOW` (Editor › Markdown);
+  `CRAFT_IMAGE_PREVIEW_MAX_MB` (64, Files › Images); `CRAFT_TODO_TAGS`, `CRAFT_TODO_MAX_RESULTS` (5000, Files › TODO list);
+  `CRAFT_SPELL_CHECK`, `CRAFT_SPELL_LANGUAGE`, `CRAFT_SPELL_SUGGESTIONS` (5), `CRAFT_SPELL_MIN_LENGTH` (Editor › Spelling).
+
+**Decisions on the recommendation (the owner asleep; one line each).**
+- The Test explorer, TODO list and previews are the shell's own views drawn from the public block contract and registries (as the Run view), the test provider in the C# plug-in; no new plug-in project.
+- Tests run through the Run view (`RunCommandAsync`), so approval, sandbox, terminal tab, activity and Stop are one code path.
+- Discovery reads syntax only (no build); a test project with no test found keeps a Run-all row from the Run view.
+- Results come from a TRX in `.craft/test-results` (deleted after reading), else the console logger's lines.
+- A theory's cases join into their method (failed if any failed); the tree shows methods, not cases.
+- Discovery runs again when a watched file (.cs, .csproj) is saved, not on every keystroke; the gutter marks follow the saved lines.
+- Test glyphs sit in the gutter's first cell and stay off the overview ruler; the marks' bar strip is unchanged.
+- The previews are page tabs (pages show in the first group), so "beside" shows the source in a new group on the right.
+- The preview reuses the chat's renderer (one Markdown renderer), with a preview mode: Copy only on code, images as links.
+- Images in a preview are links that open the image preview: the editor canvas draws no bitmaps.
+- Markdown joined the C# plug-in's project languages (README.md is in every project); W had none.
+- An image opened by the user opens its preview; Image: Open as text (and any plug-in's open) gives the text.
+- SVGs with features beyond simple shapes are said, never drawn half.
+- TODO tags match whole words with their case, in comments only where a language classifies; plain text by line.
+- The spell list is SCOWL size 60 (permissive licence, kept beside it), case ignored, possessives accepted; all-caps words, words touching digits, addresses and paths are passed over.
+- A spelling fix chosen by the user is typed as the user's own input (one undo step), not a proposed diff.
+- The Markdown preview's keys bind in the text editor only, so a terminal keeps Ctrl+Shift+V for paste.
+
+**Measured** (the 4-core Linux container, Release; written to `test-output/benches/`; the first run quiet, the filter
+run under load): test discovery of 2,000 tests in 100 files plus 200 files without tests: cold 17.9 ms, warm median
+10.4 ms (75.0 / 63.9 ms under load); a TODO scan of Craft's own `src` (295 files then, 344 after W): cold 318 ms, warm
+median 79 ms (1,067 / 50 ms under load), 20 entries; spell check on 21 shown lines with a comment and a string each:
+warm frame median 22.9 µs, p99 44.7 µs, **0 B over 500 frames**, each line checked once cold. The paint's warm frame of a
+C# file stays 0 B with the spell check on.
+
+**Tests**: `TestExplorer` (4: discovery of every framework from a fixture with its lines, filters and the command; TRX and
+console parsing and stack frames; a run asked first, refused then run through a fake sandbox writing a TRX, the tree's
+marks and times, the gutter's ▶ ✓ ✗ ○, failures in Problems at their frame, the failure card, Run failed's filter, a click
+on ▶ running its test; 2,000 tests timed), `MarkdownPreview` (2), `ImagePreview` (2), `TodoList` (3, one scanning
+Craft's `src`), `SpellCheck` (3); `Inventory.OptionsReadEveryVariable` extended; the test program reads the bundled
+words before the tests so every frame draws the same squiggles. First run: 9 of 14; the five failures were the tests' own
+expectations (two lines, a column, a fold's end, a scroll the fake host never applied, stale lines counted) and one bug
+(Ctrl+K V moved the source and its emptied group closed: the source is now shown in both groups). After the merge of
+main: filter `TestExplorer|MarkdownPreview|ImagePreview|TodoList|SpellCheck|RunView|Conversation|Plugins|Shell|Editor|Paint|Settings|Ui|ApiGuard|Inventory|Bookmarks|LocalHistory|Problems|OverviewRuler|SourceControl`:
+151 of 151. API dumps of Craft.Abstractions (and its contract list), Craft.Core, Craft.Editor, Craft.CSharp and the
+inventory regenerated, lines added only.
+
+**Not compiled here**: nothing under `Platforms/` changed; Craft.Maui compiled on net10.0. **Not run here** (the owner's):
+the Testing view, the TODO tab, both preview tabs and the squiggles on WinUI; a real `dotnet test` of a test project.
+
+**Left, for later**: images drawn inside the Markdown preview (needs an image call on `IEditorCanvas`); a preview in any
+editor group (pages show in the first); test marks that move with unsaved edits; a folder watcher for test discovery;
+other spelling languages (a plug-in registers a dictionary).
+
+**The owner's commands** (Craft only; Idrak unchanged since its last list):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="TestExplorer.|MarkdownPreview.|ImagePreview.|TodoList.|SpellCheck.|RunView.|Shell.|Editor.|Paint.|Settings.|Ui.|ApiGuard.|Inventory."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: add an xUnit test project to CarftTestPOC (`dotnet new xunit -o Tests`), open the rail's Testing (the tests
+listed before any build), Run all (asked once, "Test: Tests" tab), a failing test's ✗ in the tree, its card's stack line
+opening the file, the gutter's ▶ and ✓/✗, Problems' "(tests)" group; write a README.md, Ctrl+Shift+V and Ctrl+K V (the
+preview follows the scroll and updates as you type); open a .png and an .svg from the tree (zoom, status bar); View › TODO
+list; a misspelled word in a comment (Ctrl+. for suggestions, Add to dictionary); light and dark themes.
+
 ### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
 good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow
 it to expand to cover the full editor space, not just the right side, without overflowing the left side bar")

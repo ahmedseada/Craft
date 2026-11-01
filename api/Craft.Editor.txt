@@ -434,6 +434,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean IsAnimating { get; }
   System.Boolean IsReadOnly { get; set; }
   System.Boolean KeepSelectionForContextMenu()
+  System.Boolean MinimapShown { get; set; }
   System.Boolean MoveLines(Craft.Editor.LineDirection direction)
   System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Boolean OutdentLines()
@@ -487,6 +488,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.String LanguageName { get; }
   System.String LastCaretMessage { get; }
   System.String LastFormatMessage { get; }
+  System.String LastStatusMessage { get; }
   System.String WorkspaceRoot { get; }
   System.Threading.Tasks.Task<System.Boolean> FormatDocumentAsync(System.Threading.CancellationToken cancellationToken = null)
   System.Void ApplyDiagnostics()
@@ -531,6 +533,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   event System.EventHandler<Craft.Editor.EditorPointerEventArgs> PointerActivity
   event System.EventHandler<Craft.Editor.EditorScrollEventArgs> ScrollRequested
   event System.EventHandler<Craft.Editor.FindRequestedEventArgs> FindRequested
+  event System.EventHandler<System.String> StatusRequested
   static Craft.Abstractions.EditorDiagnostic[] ClampTo(Craft.Abstractions.EditorDiagnostic[] diagnostics, System.Int32 length)
   static Craft.Abstractions.EditorDiagnostic[] MapThrough(System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> diagnostics, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits)
   static Craft.Abstractions.LanguageOpenContext OpenContext(Craft.Abstractions.ITextDocument document, System.String workspaceRoot, Craft.Core.CraftOptions options, Craft.Abstractions.IEditorActivities activities)
@@ -578,6 +581,7 @@ sealed class Craft.Editor.EditorRenderer : System.IDisposable
   System.Int32 WordHighlightsDrawn { get; }
   System.Int64 ParseWaitsExceeded { get; }
   System.Int64 RunStringsBuilt { get; }
+  System.String GhostPlusDrawn { get; }
   System.String Step { get; }
   System.Void Dispose()
   System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Editor.EditorModel model, System.Single scrollX, System.Single scrollY, System.Single viewportWidth, System.Single viewportHeight, System.Boolean caretVisible)
@@ -712,6 +716,7 @@ sealed class Craft.Editor.InlineCompletionController : System.IDisposable
   System.Double TokensPerSecond { get; }
   System.Double? FirstPieceMilliseconds { get; }
   System.Exception LastError { get; }
+  System.Int32 OtherCarets { get; }
   System.Int32 Position { get; }
   System.Int32 Tokens { get; }
   System.Int64 Accepted { get; }
@@ -754,6 +759,43 @@ struct Craft.Editor.LineRange : System.IEquatable<Craft.Editor.LineRange>
   System.String ToString()
   System.Void Deconstruct(out System.Int32 First, out System.Int32 Last)
   ctor(System.Int32 First, System.Int32 Last)
+struct Craft.Editor.MinimapGeometry : System.IEquatable<Craft.Editor.MinimapGeometry>
+  System.Boolean Equals(Craft.Editor.MinimapGeometry other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.Single ColumnWidth { get; init; }
+  System.Single MapWidth { get; init; }
+  System.Single RowHeight { get; init; }
+  System.Single RulerWidth { get; init; }
+  System.Single ScrollPerSlider { get; init; }
+  System.Single SliderHeight { get; init; }
+  System.Single SliderTop { get; init; }
+  System.Single Top { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Single RowHeight, out System.Single ColumnWidth, out System.Single MapWidth, out System.Single RulerWidth, out System.Single Top, out System.Single SliderTop, out System.Single SliderHeight, out System.Single ScrollPerSlider)
+  ctor(System.Single RowHeight, System.Single ColumnWidth, System.Single MapWidth, System.Single RulerWidth, System.Single Top, System.Single SliderTop, System.Single SliderHeight, System.Single ScrollPerSlider)
+sealed class Craft.Editor.MinimapRenderer : System.IDisposable
+  Craft.Editor.LineRange LastWindow { get; }
+  Craft.Editor.OverviewRuler OverviewRuler { get; }
+  System.Boolean IsDragging { get; }
+  System.Boolean NeedsRedraw(Craft.Editor.EditorModel model, System.Single width, System.Single height)
+  System.Boolean Pending { get; }
+  System.Boolean PointerMoved(Craft.Editor.EditorModel model, System.Single x, System.Single y, System.Single width, System.Single height)
+  System.Boolean PointerPressed(Craft.Editor.EditorModel model, System.Single x, System.Single y, System.Single width, System.Single height)
+  System.Int32 LinesHeld { get; }
+  System.Int32 MarksDrawn { get; }
+  System.Int32 RectsDrawn { get; }
+  System.Int64 ClassifyCalls { get; }
+  System.Int64 Frames { get; }
+  System.Int64 LinesBuilt { get; }
+  System.Void Dispose()
+  System.Void Draw(Craft.Abstractions.IEditorCanvas canvas, Craft.Editor.EditorModel model, System.Single width, System.Single height)
+  System.Void PointerReleased()
+  System.Void ReleaseLines()
+  ctor()
+  static Craft.Editor.MinimapGeometry Geometry(Craft.Editor.EditorModel model, System.Single width, System.Single height)
+  static System.Boolean Shows(Craft.Core.CraftOptions options, System.Single editorWidth)
+  static System.Single WidthOf(Craft.Core.CraftOptions options)
 static class Craft.Editor.Motion
   static System.Double Ease(System.Double t)
   static System.Double Progress(System.TimeSpan elapsed, System.Int32 milliseconds)
@@ -2516,6 +2558,7 @@ sealed class Craft.Editor.SyntacticLanguageSession : Craft.Abstractions.ILanguag
   System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> ScopeAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+  System.Void ClassifySyntactic(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   System.Void Dispose()
   ctor(Craft.Abstractions.ILanguageSession inner)
   event System.EventHandler Reclassified

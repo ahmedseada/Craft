@@ -472,6 +472,8 @@ sealed class Craft.Abstractions.EditorColors : System.IEquatable<Craft.Abstracti
   System.UInt32 IndentGuide { get; init; }
   System.UInt32 Info { get; init; }
   System.UInt32 InterfaceSelection { get; init; }
+  System.UInt32 MinimapSlider { get; init; }
+  System.UInt32 MinimapSliderActive { get; init; }
   System.UInt32 PopupBackground { get; init; }
   System.UInt32 PopupBorder { get; init; }
   System.UInt32 PopupSelection { get; init; }
@@ -1058,6 +1060,7 @@ interface Craft.Abstractions.ILanguageSession : System.IDisposable
   System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> ScopeAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
   System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+  System.Void ClassifySyntactic(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
   event System.EventHandler Reclassified
 interface Craft.Abstractions.IMemoryPressureMonitor : Idrak.Abstraction.IKind
   System.IDisposable Watch(System.Action<Craft.Abstractions.MemoryPressureLevel> onPressure)

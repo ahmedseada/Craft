@@ -14,7 +14,7 @@ Windows run (2026-11-01)" at the end.
 | 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
 | 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
 | 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
-| 5 | X rest: minimap, completion at several carets, peek (built in piece 3a), measured response times on Windows | After 4 |
+| 5 | X rest: minimap, completion at several carets (both built 2026-11-01, "X restart piece 2b as built"), peek (built in piece 3a), measured response times on Windows | Response times left |
 | 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
 | 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
 | 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
@@ -3119,6 +3119,118 @@ Craft only; nothing in Idrak (no cause there).
   dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "Buffer|Document|MultiCaret|HoverCards|OverviewRuler|StickyScroll|Surface|Editor|Paint|Folding|Semantic|Settings|ApiGuard|Inventory"
   dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
+### X restart piece 2b as built (2026-11-01)
+
+Slot s1: X rest's **Minimap** and **Completion and ghost text at several carets**. Craft only; nothing was missing in Idrak
+(Craft builds against Idrak `main` 9e63a92, which s4's Run view input needs).
+- **The minimap** (`Craft.Editor/MinimapRenderer.cs`, `Craft.Maui/MinimapView.cs`). Its own `GraphicsView` beside the text's
+  scroll view in each `EditorView` (a grid column), so the text's frames and the caret's blink never draw it; one renderer
+  per view. It shows while `CRAFT_MINIMAP` is on (off by default) and the view is at least `CRAFT_MINIMAP_MIN_WIDTH` (600)
+  wide and more than twice the minimap's width (`MinimapRenderer.Shows`); only the documents' views may show it
+  (`EditorView.ShowsMinimap`: not the peek, the output or the chat's transcript). A row is `CRAFT_MINIMAP_SCALE` (2) units
+  tall and a column half as wide; `CRAFT_MINIMAP_MAX_COLUMNS` (120) columns, a 4-unit margin, and the overview ruler at its
+  right edge (`EditorModel.MinimapShown`: the text's viewport then keeps no room for the ruler; `OverviewRuler.Draw` takes a
+  left edge and a width). Each line of the window (the rows the height shows, scrolled with the text once the file does
+  not fit, VS Code's geometry, `MinimapRenderer.Geometry`) is one rect per piece of a coloured run, cut at white space
+  (pieces of one colour across a single space join), in the run's colour a little see-through. The lines come from a
+  per-line cache keyed by the text's version, the theme and the colours' stamp (`EditorModel.ClassificationStamp`, bumped by
+  `ApplyReclassification`), bounded to the window and as many lines again around it, its entries reused (no allocation once
+  warm). Colours are the syntactic layer's only: new default member `ILanguageSession.ClassifySyntactic` (contract 1.1,
+  additive; the default classifies as `Classify`; C#'s session gives the parse's spans without Roslyn's semantic colours and
+  never asks for a semantic pass; `SyntacticLanguageSession` forwards it); never waiting for a parse (a landed one redraws).
+  **Incremental**: the model keeps a line-change log (`NoteLineChange` on each buffer change, merged change by change: the
+  touched lines in the old version's lines and the line delta after them); a frame moves the kept lines through it, builds
+  the touched (and never-built) lines at once, and checks the other kept lines' colours again at most
+  `CRAFT_MINIMAP_LINES_PER_FRAME` (64) a frame; `Pending` makes the view draw the next frame until the cache equals a fresh
+  build (a typed quote or `/*` colours the lines below). A translucent slider (new tokens `MinimapSlider`,
+  `MinimapSliderActive`: the theme's text colour, faint, unless a theme sets them) covers the lines the viewport shows; a
+  press away from it centres the line there at once and a drag goes on from there; a press on it drags it (the text scrolls
+  at once, `ScrollPerSlider` text units a slider unit); a press on the ruler at its edge is the ruler's. Problems (the
+  error or warning colour across the row) and the find box's hits behind the lines, `CRAFT_MINIMAP_DIAGNOSTICS`,
+  `CRAFT_MINIMAP_FIND` (on). The view redraws only when `NeedsRedraw` says: the scroll, the text, the colours, the theme,
+  the rows and folds, the marks it shows, the size, a drag, or pending colours; with the ruler at its edge the carets and
+  the repository's marks too (the ruler's marks); never the blink. A frame that throws is reported through `PaintGuard`
+  ("editor: minimap") and skipped.
+- **Completion and ghost text at several carets** (`EditorModel.CaretCompletion.cs`). `CRAFT_COMPLETION_ALL_CARETS` (on):
+  typing and Ctrl+Space at several carets ask once, at the primary caret; the list filters by the primary's word. A
+  committed item goes to every caret with nothing selected whose text around it equals what the item replaces at the
+  primary (the characters before the caret and after it), a word start staying a word start ("xCon" is not "Con"), its
+  range overlapping neither the primary's nor the one taken before it; one change and one undo step through the
+  multi-caret path (`ApplyEdits` with every caret's selection after it); the carets left stay, moved by the edits before
+  them. Ghost text is asked at the primary and drawn there with a "+N" pill after its first line (the accent on the popup
+  ground; `InlineCompletionController.OtherCarets`, counted once per change of the carets, the text or its place); Tab and
+  Ctrl+Right insert at every caret whose line before it equals the primary's, its leading white space aside, the ghost's
+  later lines taking each caret's indent; typing through it works at several carets. When some carets are left the status
+  says so: "Completion applied at 2 of 4 carets: the text before the others differs." (`EditorModel.StatusRequested`, the
+  page's `IEditorHost.ShowStatus` line, replaced by the next). Off, both close while there are several carets (X slice 2).
+- **Decisions on the recommendation (one line each)**:
+  - The minimap is its own view beside the text (a grid column), not a layer of the text's frame, so no text frame or blink repaints it.
+  - With the minimap shown, the overview ruler moves to the minimap's right edge (the X restart's decision), drawn by the minimap through the same `OverviewRuler`.
+  - A row is the scale in units and a column half of it: the default 2 is VS Code's default minimap (1 × 2 units a character).
+  - One rect per piece of a coloured run, cut at white space, pieces of one colour joined across a single space (a comment's sentence is a few rects, not one bar).
+  - Syntactic colours through a new default interface member, not a new registry (a language without semantic colours changes nothing).
+  - An edit builds only its lines and re-checks the rest at a budget a frame (a new option, `CRAFT_MINIMAP_LINES_PER_FRAME`): the whole window of C# costs 2.2-4.3 ms to classify here, a keystroke's frame now 0.41-0.71 ms.
+  - The re-check is proven against a fresh build after typed text, a line break, a quote, two undos and a theme (rule 71), not assumed for lines away from the edit.
+  - The cache's bound follows the window (twice the window, trimmed at three times), so no new option for it.
+  - Narrow editors show the ruler alone: a new option `CRAFT_MINIMAP_MIN_WIDTH` per view (a split pane is narrow too), and never more than half the view.
+  - Only document views show it; the peek, the output and the chat's transcript never do.
+  - A click away from the slider jumps (instant) and centres the line, as VS Code's default; then the same press drags.
+  - A caret that moves redraws the minimap only for the ruler's caret mark (ruler on); with the ruler off it does not.
+  - Completion's match is the replaced text on both sides of the caret, as VS Code checks it, plus the word start.
+  - Ghost text's match is the line before the caret, leading white space aside (the model wrote it for that line), and its later lines are re-indented per caret.
+  - A caret with a selection never takes a completion (the primary must be empty to complete at all).
+  - The status says only when some carets were left; nothing when every caret took it.
+  - Escape with ghost text at several carets dismisses the ghost first; the next Escape goes back to one caret.
+- **Measured** (headless, Linux container, Release, the tests' fixed metrics; `Minimap.APaintOfA100000LineFileWithTheMinimapOnAndOffIsMeasured`,
+  written to `test-output/benches/minimap.txt`; a 100,000-line C# file at line 50,000, 1200 × 800, the minimap 138 wide, a
+  window of 402 lines; first alone, then in the full filter's run under other slots' builds):
+  - Minimap off: cold frame 756.7 / 568.1 ms (the first parse of the 100,000 lines waited for); warm median 269.7 / 209.6 µs,
+    p99 954.3 / 361.4 µs, 0 B a frame.
+  - Minimap on: the text's cold frame 0.54 / 0.33 ms and the minimap's 9.72 / 8.78 ms (402 lines classified and built, and
+    the JIT); the text and the minimap together warm median 229.8 / 223.2 µs, p99 307.2 / 338.8 µs, 0 B a frame; the
+    minimap's own warm frame median 13.2 / 17.8 µs, 0 B a frame.
+  - The minimap after a 3-line scroll: median 46.4 / 51.5 µs. After a keystroke: median 408.2 / 714.2 µs (the touched line
+    and 64 lines' colours), then 6 frames of at most 427.3 / 844.3 µs to check the rest; the whole window built afresh:
+    median 2,239.8 / 4,265.2 µs (classifying is 2.65 ms of 2.84 ms, building the rects 0.19 ms, measured once with a probe).
+  - Before the incremental cache (the first version, rebuilding the window on every version): a keystroke's minimap frame
+    median 2,051-2,695 µs.
+  - The Windows numbers (Win2D's fills: a frame of the window draws about 2,000 rects) are the owner's: View › Idrak telemetry.
+- **Windows-only lines**: none. `MinimapView` and `EditorView` are shared MAUI code (GraphicsView interactions); not compiled
+  for the Windows target here. **Not run here**: the window (the minimap's look and drag with WinUI's pointer, the status line).
+- **Left**: the minimap draws no selections or caret lines; no "slider on hover only" mode and no characters mode; the
+  minimap's frame is not in the telemetry table yet (`editor.paint.*` is the text's); a fold's "..." is not drawn on it;
+  `CRAFT_MINIMAP` stays off by default until the owner's Windows frame number is in (the X restart's decision); the flaky
+  `Paint.AWarmFrame…` 88 B (s4's) was not seen in this slot's runs.
+- **Tests**: new groups `Minimap` (7: a rect per coloured run from the cache keyed by version and theme, the syntactic layer
+  only, an edit's touched lines and the budget, equal to a fresh build after five kinds of change; the slider at the top,
+  the end and in a file that fits, the ruler at its edge; click, drag, the slider's drag, the ruler's press, narrow and off;
+  no redraw on a blink or a caret move with the ruler off, a redraw on a scroll, an edit, a landed parse, a theme and a size;
+  0 B over 200 warm frames and the cache bounded through a whole file; one minimap per view; the measure) and
+  `CaretCompletion` (3: an item at the matching carets, left ones said, one undo, typing asks once at the primary, off;
+  an item replacing text after the caret; ghost text's "+2", Tab with re-indented later lines, the status, one undo, off);
+  `Inventory` (the eight options). The full filter
+  (`Minimap|CaretCompletion|MultiCaret|Editor|Surface|OverviewRuler|StickyScroll|EditorGroups|AiPlugins|Settings|Ui|ApiGuard|Inventory`,
+  146 tests) after the rebase onto X parts 6b and 7 and main's health: 146 passed, 0 failed. The API dumps of
+  Craft.Abstractions, Craft.Core and Craft.Editor and the contract list (1.1) regenerated: lines added only.
+- **Options added** (each with its shape on the settings page): `CRAFT_MINIMAP` (off), `CRAFT_MINIMAP_SCALE` (2),
+  `CRAFT_MINIMAP_MAX_COLUMNS` (120), `CRAFT_MINIMAP_MIN_WIDTH` (600), `CRAFT_MINIMAP_DIAGNOSTICS` (on), `CRAFT_MINIMAP_FIND`
+  (on) in Editor › Display; `CRAFT_MINIMAP_LINES_PER_FRAME` (64) in Editor › Advanced; `CRAFT_COMPLETION_ALL_CARETS` (on) in
+  Completion › Completion list.
+- **The owner's check** on `test-output\CarftTestPOC` (the minimap on through its variable, or Settings › Editor › Display ›
+  Minimap): a long C# file: the minimap beside the text with the ruler at its right edge; drag its slider, click below it,
+  type and watch its line change, Ctrl+F a word (its hits on it); Settings › Appearance to another theme; split right
+  (Ctrl+\) and see one minimap a view, and none when the window is narrow. Then Alt+click three carets after `Con` on
+  three lines and one after `xCon`, Ctrl+Space, Enter: `Console` at three, the status says 3 of 4, Ctrl+Z once; with the
+  AI plug-in's completion, ghost text at several carets shows "+N" and Tab inserts it at each.
+  ```powershell
+  cd D:\Projects\Idrak; git checkout main; git pull origin main
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="Minimap|CaretCompletion|MultiCaret|Editor|Surface|OverviewRuler|StickyScroll|EditorGroups|AiPlugins|Settings|Ui|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_MINIMAP="true"; $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
 
 ### X part 6 as built (2026-11-01): the Search view and the Run view

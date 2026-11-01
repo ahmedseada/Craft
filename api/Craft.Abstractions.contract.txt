@@ -539,6 +539,8 @@ Craft.Abstractions.EditorColors  System.UInt32 GutterText { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 IndentGuide { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 Info { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 InterfaceSelection { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 MinimapSlider { get; init; }
+Craft.Abstractions.EditorColors  System.UInt32 MinimapSliderActive { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 PopupBackground { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 PopupBorder { get; init; }
 Craft.Abstractions.EditorColors  System.UInt32 PopupSelection { get; init; }
@@ -1178,6 +1180,7 @@ Craft.Abstractions.ILanguageSession
 Craft.Abstractions.ILanguageSession  System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
 Craft.Abstractions.ILanguageSession  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> ScopeAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
 Craft.Abstractions.ILanguageSession  System.Void Classify(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
+Craft.Abstractions.ILanguageSession  System.Void ClassifySyntactic(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.ILanguageSession  event System.EventHandler Reclassified
 Craft.Abstractions.ILanguageSession : System.IDisposable
 Craft.Abstractions.IMemoryPressureMonitor

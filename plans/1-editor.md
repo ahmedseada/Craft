@@ -3783,3 +3783,139 @@ class shows the new file and any edited file under the changed files, and Review
   dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
+
+## B8, B9 and B10 as built (2026-11-01)
+
+**B8, the splitters made easy.** `Craft.Maui.SplitPanel` keeps its API and gains the rest: the grab area is
+`CRAFT_SPLITTER_GRIP` (10) wide, centred on the one-unit line and over both neighbours (a transparent view translated over
+the edge; the panels sit above their neighbours, `ZIndex`), so it takes no room; the line takes the accent after the
+pointer rests `CRAFT_SPLITTER_HOVER_MS` (100), while dragged and while the splitter has the keyboard. The behaviour is
+headless in `Craft.Editor.Shell.SplitterModel`: a drag measured in the window's coordinates from where it started (the
+grip moves with the panel), kept within `PanelLayout.Clamp`; below the panel's smallest size (`CRAFT_PANEL_MIN_SIZE`) it
+shows closed and opens again past it (`CRAFT_SPLITTER_SNAP`, on); a drag that ends closed closes the panel through
+`PanelLayout.SetOpenAsync` with its size kept; a double-click restores the option's default (`PanelLayout.DefaultSizeOf`:
+260, 360, 132); a focused splitter steps by the arrows of its axis (`CRAFT_SPLITTER_KEY_STEP`, 10; Shift five steps), Home
+and End go to the smallest and largest, Enter restores, Escape during a drag puts it back. The resize cursor and the
+captured drag come through a new contract, `Craft.Maui.IPointerCursor` (`Attach(view, shape, IPointerDrag)`), reached as
+`IShellPlatform.PointerCursor` (a default member, null): on Windows `WindowsPointerCursor` sets the element's
+`ProtectedCursor` to `InputSystemCursor` SizeWestEast or SizeNorthSouth and drives the drag with `CapturePointer`
+(press, move, release, capture lost, double-tap; handlers that see handled events too); elsewhere MAUI's pan and a
+double-tap stay the fallback. The keys reach the splitter through the platform's `ITextInputAdapter` (the grip is a
+`GraphicsView`, a focusable control on Windows), as the editor's and the terminal's do.
+
+**B9, the terminal's profiles and design.**
+- Contracts (`Craft.Abstractions/TerminalProfiles.cs`, additive): `TerminalProfile` (id, name, shell, icon, short name,
+  folder, environment, source), `ITerminalProfileSource : IKind`, `TerminalProfiles` (a `KindTable`; `DiscoverAsync` asks
+  every source on the thread pool, first of an id wins, a source that throws is named and passed over; `LastFound` feeds the
+  settings' drop-down), `TerminalIcons`, `TerminalProgram` (file names, the PATH lookup `TerminalLaunch.FindOnPath` now
+  calls, a command line split with a quoted program, slugs), `TerminalMachine` (what discovery reads: variables, files,
+  folders, and what only the platform tells: WSL distributions, Git for Windows' folder) and the library's source
+  `MachineTerminalProfiles` ("machine"): on Windows PowerShell 7 (PATH, else Program Files), Windows PowerShell, the Command
+  Prompt, Git Bash (`--login -i`), each WSL distribution (`wsl.exe -d`), Developer PowerShell (`Launch-VsDevShell.ps1`) and
+  Developer Command Prompt (`VsDevCmd.bat`) for each Visual Studio edition found under Program Files; elsewhere the login
+  shell, bash, zsh, fish, pwsh and sh. File checks only, no process started; platform-neutral (rule 70), tested on a fake
+  machine. Windows registers `WindowsTerminalProfiles` ("machine" over the library's) with the registry's two reads, as
+  `IShellPlatform.TerminalProfiles`. `SettingChoiceSources.TerminalProfiles`,
+  `EditorContextMenus.Terminal` and `.TerminalProfiles` added.
+- Settings: `CRAFT_TERMINAL_DEFAULT_PROFILE` (a drop-down of the profiles on the settings page, Terminal; a workspace may set
+  it), `CRAFT_TERMINAL_PROFILES` (`Name=command line|…`; a workspace cannot set it, what runs is code), `CRAFT_TERMINAL_TABS`
+  (auto, tabs, list), `CRAFT_TERMINAL_LIST_FROM` (3), `CRAFT_TERMINAL_PADDING` (8), `CRAFT_TERMINAL_CURSOR` (block,
+  underline, bar), `CRAFT_TERMINAL_CURSOR_BLINK` (true), `CRAFT_TERMINAL_BUSY_AFTER_MS` (500), `CRAFT_TERMINAL_BUSY_QUIET_MS`
+  (400). `CRAFT_TERMINAL_SHELL` keeps working as a profile named by its path (id "setting", with `CRAFT_TERMINAL_ARGS`).
+- `TerminalLaunch`: `UserProfiles`, `SettingProfile`, `AllProfiles` (found, the user's, the setting's), `DefaultProfile`
+  (the setting's name or id, else `CRAFT_TERMINAL_SHELL`'s, else the host's default program's profile with exactly phase T's
+  shell), `ShortTitle` ("C:\…\cmd.exe - ping localhost" gives "ping", a program's path its file name), `IconOf`,
+  `CursorStyle`, `ListsTerminals`. `TerminalScreen.DefaultCursorStyle` (DECSCUSR 0 and a reset return to it; a shell's choice
+  wins) and `CommandRunning` (OSC 133 C, D, A). `TerminalInstance`: `Profile`, `Group` (split groups), `Rename`/`UserName`,
+  `ShortTitle`, `SelectAll`, `IsBusy` (the shell's OSC 133 mark when it gives one, else a line sent and output still coming
+  after `BUSY_AFTER_MS`, gone after `BUSY_QUIET_MS` of quiet), `Clock`.
+- `TerminalManager`: profiles found off the UI thread at its start (`ProfilesReady`) and their commands registered on the
+  UI thread: one palette command per profile ("Terminal: New PowerShell 7", `terminal.new.<id>`) with its row in the "+"
+  chevron's menu, then "Select the default profile…" (`terminal.selectDefaultProfile`, written per workspace through
+  `StoreDefaultProfile`), `terminal.newWithProfile`, `terminal.split` (the same profile in the same folder, beside it),
+  `terminal.rename`, `terminal.selectAll`; Copy, Paste, Clear, Kill, Rename act on the context menu's terminal
+  (`EditorContextMenus.Target`), else the active one; `Rows()` (one per split group: icon, short names joined, tooltip,
+  active, busy, ended); the "terminalProfiles" choices with the user's profiles; taken back on dispose.
+- The view (`Craft.Maui/TerminalPanelView.cs`, new): a 32-unit header of tabs (profile icon, short name, a busy dot in
+  the accent, a close button shown on hover and on the active tab; a double-click renames, a right-click opens its menu)
+  or, from three groups, a 200-unit list at the panel's right; "+" (the default profile, its keys in the tooltip), its
+  chevron (the profiles' menu through `MenuModel`), split and kill; the active group's terminals side by side with a
+  one-unit line, the views reused so focus and input stay; the empty state an `EmptyStateView` card (icon, "No terminal
+  open", where it starts, a primary "New terminal (Ctrl+Shift+`)", the profiles under "PROFILES"). `TerminalView`
+  (outside the paint): the padding as the view's inset (the paint unchanged), the blink setting, `Activated` (a split pane
+  clicked becomes the active terminal), `ContextRequested` (Copy, Paste, Select all, Clear, Split, Rename, Kill).
+  `EmptyState.Icon` and `.ListTitle` added.
+
+**B10, the workspace's notification and the global loader.**
+- `ActivityKinds.Workspace` and `IActivity.Global` (a default member; `ActivitySnapshot.Global`), additive. Opening a
+  folder (`ShellModel.OpenFolderAsync`) and the C# workspace's build run as `Workspace` activities, not kept: the build's
+  outcome is the language's one notification. `SemanticTelemetry.Failure` (the C# workspace sets it from the build's error
+  and clears it on the next success).
+- `WorkspaceNotices` (`Craft.Editor.Shell`): one notification per workspace and load, "C# workspace ready" with "1 project,
+  6 MB, 2.3 s (Craft)" (success, never a toast); a rebuild of the same workspace replaces it in place; a failure is "C#
+  workspace failed" in plain words with its fix (a missing SDK, a file it may not read, a missing project file) and a
+  primary Try again (the session releases its workspace and builds again); an error, so it toasts, with Open log. The page
+  observes the active editor's layer when diagnostics change and when the last workspace activity ends.
+- `SemanticCard.StatusBarText`: "Roslyn loading…" or "Roslyn failed" (the error's colour, a click opens the centre), nothing
+  once ready or while a large file waits; `Tooltip` holds the facts ("Roslyn: 1 project, 6 MB, built in 2.3 s"), on the
+  status bar's language item. The explorer's Roslyn card is gone.
+- The loader: `GlobalLoader` (headless: the loader's kinds, `CRAFT_LOADER_KINDS`, "workspace", and anything marked global,
+  past `CRAFT_LOADER_DELAY_MS`, 300; follows the most advanced, the count; `DueIn` for the view's next look) and
+  `Craft.Maui.LoaderView`: a 2-unit accent line in a 6-unit band at the top of the body, across the window, determinate
+  when a fraction is reported (it grows), else a third-wide segment crossing every `CRAFT_LOADER_CYCLE_MS` (1,400); with
+  reduced motion the segment stands still at half strength; the tooltip "C#: building the workspace of Craft · 40% · and 1
+  more"; a click opens the notification centre.
+
+**Decisions on the recommendation (one line each).**
+- The splitter's logic headless in `Craft.Editor.Shell` (tested without a window), only the cursor and the capture under `Platforms/Windows`.
+- `IPointerCursor` in Craft.Maui's own namespace beside `IShellPlatform` (only the MAUI views use it), reached as an `IShellPlatform` member like the platform's other pieces, not a new registry.
+- The grip overlaps both neighbours by a translation over the edge, the split panels above their neighbours, so the line keeps its one unit of room.
+- Snap: below the smallest size the panel shows closed during the drag, and a drag ending there closes it with its size kept.
+- Keys on a focused splitter: the arrows of its axis, Shift five steps, Home, End, Enter restores, Escape cancels a drag.
+- Profiles found by file checks only (no `vswhere` or other process), the rules platform-neutral over `TerminalMachine`; the registry's two reads are the only Windows code.
+- The default profile matches by name or id; with none set, `CRAFT_TERMINAL_SHELL`, else the host's default program, so phase T's start is unchanged.
+- The user's profiles carry a name and a command line only (icon from the program; folder and environment follow the terminal's rules); a workspace may pick the default but not add profiles.
+- The busy dot: the shell's OSC 133 marks when it gives them, else output still coming 500 ms after a line was sent (a silent long command shows no dot).
+- Splits as groups of terminals in the manager (a tab per group), shown side by side; the views reused so a split keeps the keyboard.
+- The padding as the terminal view's inset, so s1's paint loop is untouched; the scroll bar stays WinUI's own (thin, wider on hover).
+- The C# build's activity not kept: the language's notification is the one place for its outcome, so nothing is said twice.
+- The loader shows `workspace` work by default (`CRAFT_LOADER_KINDS` adds others, such as indexing) and any activity marked global.
+- `CraftOptions.TerminalEditorCommands` and the new `LoaderKinds` default to one shared list, so two default options compare equal (before, the terminal's list made every options object differ, and the shell's "options unchanged" shortcut never fired).
+
+**Compiled here.** Every project for net10.0 (the test build), and all of Craft.Maui's sources for
+`net10.0-windows10.0.19041.0` in a scratch project outside the repository (the Windows App SDK 1.8 and MAUI 10.0.110 from the
+NuGet cache, `WINDOWS` defined, nullable, warnings as errors, `AnalysisModePerformance` All; the PRI step off, it needs
+`MakePri.exe`): no error, no warning. **Not run here** (the owner's run): `Platforms/Windows/WindowsPointerCursor.cs` (the
+cursor through reflection on `ProtectedCursor`, the capture), `Platforms/Windows/WindowsTerminalProfiles.cs` (the registry's
+reads), the two `WindowsShellPlatform` properties, and the `#if WINDOWS` key adapter of `SplitPanel`.
+
+**Tests.** New: `Layout` (`SplitterTests`, 4: the drag clamped and measured from its start, snap closed and open, double-click,
+keys and Escape, the options and the default sizes), `Terminal` (`TerminalProfileTests`, 6: profiles on a fake Windows and a
+fake Unix machine, discovery past a broken source, the user's profiles, `CRAFT_TERMINAL_SHELL` as a profile and the default,
+short names, the list from three, the cursor's default shape and OSC 133, the manager opening a profile through "pipe",
+split, rename, the menus' rows, set default, select all, kill, the busy dot over a scripted session), `Notifications`
+(`WorkspaceNoticeTests`, 2), `Activities` (`GlobalLoaderTests`, 1). Updated: `Inventory.OptionsReadEveryVariable` (the new
+variables, two default options equal), `Settings.ThePageMakesSectionsAndControlsFromTheMetadata` ("blink" finds the
+terminal cursor's blink too). After the rebase onto B1-B7 (one build: the merged API dumps and B3's contract list against
+the merged code, Idrak `main` 4f394d5): `Layout|Terminal|Notifications|Activities|Settings|Shell|Ui|Design|LookAndFeel|
+Experience|ApiGuard|Inventory` 129 passed (the two above failed first: the contract list regenerated, lines added only, and
+the expectation), `Semantic|CSharp` 35 passed. API dumps of Craft.Abstractions, Craft.Core, Craft.Editor, B3's contract list
+and the inventory regenerated (lines added only).
+
+**Left.** A tab cannot be dragged to reorder or to join a split; reflow and the other phase T gaps stand; the busy dot for a
+silent long command needs the shell's OSC 133 marks (a prompt script for PowerShell); profiles' own icons beyond the six.
+
+**The owner's commands** (Idrak first: Craft's `main` needs Idrak `main` 4f394d5). In the app: drag each splitter fast across
+the editor (the resize arrows show, the drag never drops), drag one below its smallest size (it closes) and back, double-click
+one (its default size), Tab to a splitter and use the arrows; in the Terminal tab: the chevron's profiles (PowerShell 7,
+Command Prompt, Git Bash, WSL, the developer shells found), Set default profile, a split, a rename by double-click, the
+right-click menu, three terminals (the list), the empty state; open the test project (the loader line under the title bar
+while the C# workspace builds, then one "C# workspace ready" in the bell's centre and no "Roslyn ready" in the status bar):
+```powershell
+cd D:\Projects\Idrak; git checkout main; git pull origin main
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="Layout|Terminal|Notifications|Activities|Settings|Shell|Ui|Design|LookAndFeel|Experience|ApiGuard|Inventory|Semantic|CSharp"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```

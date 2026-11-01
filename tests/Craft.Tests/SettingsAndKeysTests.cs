@@ -141,7 +141,8 @@ public static class SettingsPageTests
         var font = appearance.Single(e => e.Variable == "CRAFT_FONT");
         Check.True(font.Shape.Kind == SettingKind.Font && font.Choices.Contains("JetBrains Mono"), "the code font is a font picker with the bundled family");
         var found = page.Groups(SettingSections.Editor, "blink").SelectMany(g => g.Entries).ToArray();
-        Check.True(found.Length == 1 && found[0].Variable == "CRAFT_CARET_BLINK_MS", "the search finds a setting by its words");
+        Check.True(found.Length == 2 && found[0].Variable == "CRAFT_CARET_BLINK_MS" && found[1].Variable == "CRAFT_TERMINAL_CURSOR_BLINK",
+            $"the search finds the settings by their words, across sections (the caret's blink, then the terminal cursor's, B9): {string.Join(", ", found.Select(f => f.Variable))}");
         Check.True(page.Groups(SettingSections.Editor, "terminal").Any(g => g.Title == "Terminal"), "the search runs across every section, grouped by section");
         Check.True(page.Groups(SettingSections.Editor, "CRAFT_TOAST_MS").SelectMany(g => g.Entries).Single().Variable == "CRAFT_TOAST_MS", "and by the variable");
         Check.Equal("8", SettingsPageModel.Step(tab with { Value = "8" }, 0), "a stepper keeps the value");

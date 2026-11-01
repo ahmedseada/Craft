@@ -22,7 +22,7 @@ namespace Craft.Ai;
 /// (<see cref="AiSettings.ChatKeep"/>, <see cref="AiSettings.ChatFile"/>). State changes on the UI thread; the model runs
 /// on the thread pool.
 /// </summary>
-public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisposable
+public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IModelSessionHost, IDisposable
 {
     /// <summary>The panel's id.</summary>
     public const string PanelId = "ai.chat";
@@ -71,12 +71,52 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _models = models ?? throw new ArgumentNullException(nameof(models));
+        // The owner, 2026-11-01 ("2a"): each conversation's own model settings, kept with it in the chat's file.
+        _session = new SessionModel(host, settings, models, ModelRoleKeys.Chat, "this chat");
+        _session.Changed += (_, _) =>
+        {
+            if (!_restoring)
+            {
+                Save();                                                  // the user's change is kept; a kept one shown again is not written back
+            }
+
+            ModelSessionChanged?.Invoke(this, EventArgs.Empty);
+        };
         _tools = ToolRegistry.Create().Add(EditorToolSets.Live(host)).Build();   // every registered tool set (the tools plug-in's "editor", and any plug-in's)
         host.ActiveDocumentChanged += OnContextChanged;
         host.SelectionChanged += OnContextChanged;
         LoadIfNeeded();
         RefreshChips();
     }
+
+    private readonly SessionModel _session;
+    private bool _restoring;
+
+    /// <inheritdoc />
+    public string ModelSessionTitle => _session.Title;
+
+    /// <inheritdoc />
+    public ModelSessionSettings ModelSession => _session.Settings;
+
+    /// <inheritdoc />
+    public ModelSessionShared ModelShared => _session.Shared;
+
+    /// <summary>The conversation's own model settings and lease (the tests' view).</summary>
+    public SessionModel Session => _session;
+
+    /// <inheritdoc />
+    public event EventHandler? ModelSessionChanged;
+
+    /// <inheritdoc />
+    public Task<ModelMemoryEstimate?> EstimateModelSessionAsync(ModelSessionSettings proposed, CancellationToken cancellationToken = default) =>
+        _session.EstimateAsync(proposed, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<bool> SaveModelSessionAsync(ModelSessionSettings proposed, CancellationToken cancellationToken = default) => _session.SaveAsync(proposed, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<string> ApplyModelSessionToEnvironmentAsync(ModelSessionSettings proposed, ModelSettingsScope scope, CancellationToken cancellationToken = default) =>
+        _session.ApplyToEnvironmentAsync(proposed, scope, cancellationToken);
 
     /// <summary>Runs a slash command's code action ("explain", "fix", "doc", "refactor", "tests"); set by the session; true when one ran.</summary>
     public Func<string, CancellationToken, Task<bool>>? RunAction { get; set; }
@@ -356,6 +396,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
         Id = _currentId ?? NewId(), Title = _currentTitle, TitleSet = _titleSet, Time = _currentTime,
         Turns = [.. _turns.Select(t => new KeptTurn(t.Entry, t.User.Content, t.Reply))],
         Entries = [.. Entries.Select(KeptEntry.Of)],
+        Model = _session.Settings,
     };
 
     private void StartEmpty()
@@ -366,6 +407,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
         _currentId = null;
         _currentTitle = "";
         _titleSet = false;
+        _session.End();                                                  // a new conversation: the shared settings, the old copy let go
     }
 
     // Shows a kept conversation: its exchanges and entries (a code block's actions made again).
@@ -378,6 +420,16 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
         _titleSet = kept.TitleSet;
         _currentTime = kept.Time;
         Status = null;
+        _restoring = true;
+        try
+        {
+            _session.Restore(kept.Model);
+        }
+        finally
+        {
+            _restoring = false;
+        }
+
         ReplaceFrom(0, [.. kept.Entries.Select(e => e.Role == ConversationRole.Code ? CodeEntry(e.Text, e.Language) with { Metrics = e.Metrics } : e.ToEntry())]);
     }
 
@@ -700,6 +752,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
 
         _disposed = true;
         Stop();
+        _session.End();
         Host.ActiveDocumentChanged -= OnContextChanged;
         Host.SelectionChanged -= OnContextChanged;
     }
@@ -803,13 +856,13 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
             messages.Add(user);
             Post(() => _lastPrompt = withContext);
             activity.Report(null, "waiting for the model");
-            if (!_models.IsChatLoaded)
+            if (_session.OwnLease ? !_models.IsSessionLoaded(ModelRoleKeys.Chat, _session.Settings) : !_models.IsChatLoaded)
             {
                 // Loaded on the first message (never at start-up): the composer says so; the message goes once it is ready.
                 Post(() => Status = $"Loading {settings.Model}… the message is sent once it is loaded (its progress and Cancel are in the status bar).");
             }
 
-            var lease = await _models.ChatAsync(token).ConfigureAwait(false);
+            var lease = await _session.LeaseAsync(token).ConfigureAwait(false);
             Post(() =>
             {
                 if (Status is { } shown && shown.StartsWith("Loading ", StringComparison.Ordinal))
@@ -849,7 +902,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
 
             var observed = new ObservedTools(_tools, call => Post(() => ToolStarted(generation, call)), result => Post(() => ToolEnded(generation, result)));
             var model = chat.WithTools(observed, settings.ChatToolRounds);
-            var options = new GenerationOptions { NumPredict = settings.ChatMaxTokens, NumCtx = lease.ContextLength, Stop = settings.ChatStops, Temperature = settings.ChatTemperature };
+            var options = _session.Sampling(lease.ContextLength, settings.ChatStops);                // the conversation's own sampling over the chat's
             int lastGenerated = 0;
             string? reason = null;
             watch.Start();
@@ -1312,6 +1365,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
         _deleted.Clear();
         _currentId = null;
         _currentTitle = "";
+        _session?.End();                                                 // another workspace: the conversation's own copy goes
         ReplaceFrom(0, []);
         int generation = ++_keptGeneration;
         if (ChatPath() is not { } path)
@@ -1406,6 +1460,8 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
         public List<KeptTurn> Turns { get; init; } = [];
 
         public List<KeptEntry> Entries { get; init; } = [];
+
+        public ModelSessionSettings Model { get; init; } = ModelSessionSettings.None;
     }
 
     private sealed record KeptFile(string? Current, List<KeptConversation> Conversations);
@@ -1480,7 +1536,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
         return new KeptConversation
         {
             Id = node["id"]?.GetValue<string>() ?? NewId(), Title = node["title"]?.GetValue<string>() ?? "", TitleSet = node["titleSet"]?.GetValue<bool>() ?? false,
-            Time = time, Turns = turns, Entries = entries,
+            Time = time, Turns = turns, Entries = entries, Model = SessionModel.Read(node["model"]),
         };
     }
 
@@ -1505,6 +1561,7 @@ public sealed class AiChatPanel : ConversationPanel, IConversationHistory, IDisp
         {
             ["id"] = conversation.Id, ["title"] = conversation.Title, ["titleSet"] = conversation.TitleSet,
             ["time"] = conversation.Time.ToString("O", CultureInfo.InvariantCulture), ["turns"] = turns, ["entries"] = entries,
+            ["model"] = SessionModel.Write(conversation.Model),
         };
     }
 

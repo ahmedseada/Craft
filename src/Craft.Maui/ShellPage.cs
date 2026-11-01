@@ -1759,7 +1759,8 @@ public sealed class ShellPage : ContentPage, IDisposable
         var found = ShellText.ModelStatus();
         var status = found?.Status;
         string? role = _conversations.Shown?.ModelRoleKey;
-        var picks = ShellText.ModelPicks(status, role);
+        var session = _conversations.Shown as IModelSessionHost;
+        var picks = ShellText.ModelPicks(status, role, session?.ModelSessionTitle);
         string text = status?.RoleOf(role) is { Model: { } model } shown
             ? $"{shown.Role}: {model} · {ShellText.PlannedDevice(status, role) ?? "device not known yet"}"
             : "No model is set.";
@@ -1770,6 +1771,12 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         var pick = picks[index];
+        if (pick.Kind == ModelPickKind.Session && session is not null)
+        {
+            ShowModelSession(session);
+            return;
+        }
+
         if (ShellText.WriteOf(status, role, pick) is not { } write)
         {
             await _host.ExecuteCommandAsync(ShellCommandIds.Models);
@@ -1794,6 +1801,31 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
 
         UpdateModel();
+    }
+
+    // The owner, 2026-11-01 ("2a"): the shown session's model settings as a sheet over the chat column, drawn from the
+    // panel's blocks (Craft's sliders and drop-downs); Close, Save or Apply leave it for the transcript.
+    private void ShowModelSession(IModelSessionHost session)
+    {
+        ModelSessionPanel? panel = null;
+        panel = new ModelSessionPanel(session, _shell.Workspace is not null, () =>
+        {
+            _conversations.HideSheet();
+            panel?.Dispose();
+            UpdateModel();
+        });
+        var blocks = new PanelBlocksView(panel, _palette, (title, error) => _host.Log(EditorLogLevel.Error, $"{title} failed.", error));
+        var card = new Border
+        {
+            Content = blocks,
+            Padding = new Thickness(14, 10),
+            BackgroundColor = _palette.Raised,
+            Stroke = _palette.Border,
+            StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Margin = new Thickness(6),
+        };
+        _conversations.ShowSheet(card);
     }
 
     // A tab removed has its view disposed (a tab gets its view when its group first shows it); a view moved with its tab to

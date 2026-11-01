@@ -48,8 +48,66 @@ public sealed record AiSettings
     /// <summary>The chat model's context window in tokens (<c>context</c>); 0 for the model's own (its MaxPositions).</summary>
     public int Context { get; init; }
 
-    /// <summary>The chat model's projections once loaded (<c>weights</c>): "int8", "int4", "bfloat16", or empty for float32.</summary>
-    public string Weights { get; init; } = "";
+    /// <summary>
+    /// The chat model's weights once loaded (<c>weights</c>): "auto" (the default: the largest of float32, bfloat16, int8
+    /// and int4 whose weights and working memory fit the device's free memory, measured before the load), "float32",
+    /// "bfloat16", "int8", "int4", or a packed format's name. A named one always wins.
+    /// </summary>
+    public string Weights { get; init; } = WeightsAuto.Auto;
+
+    /// <summary>
+    /// Whether part of the chat model may live in system memory when the device is full (<c>offload</c>; Idrak's offload
+    /// to host memory): slower, but a model that does not fit still loads. Off: a model that does not fit is refused, said why.
+    /// </summary>
+    public bool Offload { get; init; }
+
+    /// <summary>The agent's offload (<c>agentOffload</c>); null (empty): the chat's.</summary>
+    public bool? AgentOffload { get; init; }
+
+    /// <summary>Completion's offload (<c>completionOffload</c>); null (empty): the chat's.</summary>
+    public bool? CompletionOffload { get; init; }
+
+    /// <summary>
+    /// The context the weights "auto" choice keeps room for when a role's context is the model's own (<c>weightsAutoContext</c>,
+    /// tokens; the decoding caches grow on demand, so a model's full window is not reserved).
+    /// </summary>
+    public int WeightsAutoContext { get; init; } = 8192;
+
+    /// <summary>The share of the weights' bytes the "auto" choice keeps free beyond the working memory (<c>weightsAutoHeadroom</c>).</summary>
+    public double WeightsAutoHeadroom { get; init; } = 0.1;
+
+    /// <summary>The chat's top-k (<c>chatTopK</c>; 0: every token). The default is the library's.</summary>
+    public int ChatTopK { get; init; } = Library.TopK;
+
+    /// <summary>The chat's top-p (<c>chatTopP</c>; 1: every token). The default is the library's.</summary>
+    public float ChatTopP { get; init; } = Library.TopP;
+
+    /// <summary>The chat's min-p (<c>chatMinP</c>; 0: none left out). The default is the library's.</summary>
+    public float ChatMinP { get; init; } = Library.MinP;
+
+    /// <summary>The chat's repeat penalty (<c>chatRepeatPenalty</c>; 1: none). The default is the library's.</summary>
+    public float ChatRepeatPenalty { get; init; } = Library.RepeatPenalty;
+
+    /// <summary>The chat's seed (<c>chatSeed</c>); null (empty): random.</summary>
+    public int? ChatSeed { get; init; }
+
+    /// <summary>The agent's top-k (<c>agentTopK</c>); null (empty): the chat's.</summary>
+    public int? AgentTopK { get; init; }
+
+    /// <summary>The agent's top-p (<c>agentTopP</c>); null (empty): the chat's.</summary>
+    public float? AgentTopP { get; init; }
+
+    /// <summary>The agent's min-p (<c>agentMinP</c>); null (empty): the chat's.</summary>
+    public float? AgentMinP { get; init; }
+
+    /// <summary>The agent's repeat penalty (<c>agentRepeatPenalty</c>); null (empty): the chat's.</summary>
+    public float? AgentRepeatPenalty { get; init; }
+
+    /// <summary>The agent's seed (<c>agentSeed</c>); null (empty): the chat's.</summary>
+    public int? AgentSeed { get; init; }
+
+    // The library's sampling defaults (Idrak's GenerationOptions), the chat's defaults.
+    private static readonly GenerationOptions Library = new();
 
     /// <summary>Minutes the chat model stays loaded once unused (<c>keepAliveMinutes</c>); 0 unloads it when the last lease ends.</summary>
     public int KeepAliveMinutes { get; init; } = 10;
@@ -297,6 +355,12 @@ public sealed record AiSettings
     {
         DraftModel = DraftModel.Trim(),
         DraftTokens = DraftTokens,
+        Offload = Offload,
+        TopK = ChatTopK,
+        TopP = ChatTopP,
+        MinP = ChatMinP,
+        RepeatPenalty = ChatRepeatPenalty,
+        Seed = ChatSeed,
     };
 
     /// <summary>The agent's model settings, resolved: an empty model, device, weights, context, keep-alive or temperature is the chat's.</summary>
@@ -313,6 +377,12 @@ public sealed record AiSettings
         InheritsDevice = AgentDevice.Trim().Length == 0,
         DraftModel = AgentDraftModel.Trim() is { Length: > 0 } draft ? draft : DraftModel.Trim(),
         DraftTokens = AgentDraftTokens ?? DraftTokens,
+        Offload = AgentOffload ?? Offload,
+        TopK = AgentTopK ?? ChatTopK,
+        TopP = AgentTopP ?? ChatTopP,
+        MinP = AgentMinP ?? ChatMinP,
+        RepeatPenalty = AgentRepeatPenalty ?? ChatRepeatPenalty,
+        Seed = AgentSeed ?? ChatSeed,
     };
 
     /// <summary>
@@ -326,6 +396,7 @@ public sealed record AiSettings
         CompletionTemperature, CompletionMaxTokens)
     {
         DraftModel = AiRoleSettings.NoDraft,                   // completion is the small model: it drafts for none of its own
+        Offload = CompletionOffload ?? Offload,
     };
 
     /// <summary>The role of key <paramref name="key"/> (<see cref="ModelRoleKeys"/>).</summary>
@@ -341,10 +412,14 @@ public sealed record AiSettings
     // An empty device is auto; one name for float32 (empty), so equal settings make equal keys and share one copy.
     private static string DeviceOf(string device) => device.Trim() is { Length: > 0 } named ? named : "auto";
 
+    // One name per format, so equal settings make equal keys and share one copy: empty is "auto" (the default), "f32" float32.
     private static string WeightsOf(string weights)
     {
         string named = weights.Trim();
-        return named.Equals("float32", StringComparison.OrdinalIgnoreCase) || named.Equals("f32", StringComparison.OrdinalIgnoreCase) ? "" : named;
+        return named.Length == 0 ? WeightsAuto.Auto
+            : named.Equals("f32", StringComparison.OrdinalIgnoreCase) || named.Equals("float32", StringComparison.OrdinalIgnoreCase) ? WeightsAuto.Float32
+            : named.Equals("bf16", StringComparison.OrdinalIgnoreCase) ? "bfloat16"
+            : named.ToLowerInvariant();
     }
 
     /// <summary>The settings the plug-in declares, with their defaults and meanings (the settings page lists them).</summary>
@@ -356,7 +431,15 @@ public sealed record AiSettings
         new("chatEnabled", "true", "Whether the chat answers (the chat panel and the code actions); off: it loads no model."),
         new("model", "", "The chat's model (and the agent's when agentModel is empty): a folder, a .gguf file, store:NAME or a Hugging Face id (Idrak's model sources)."),
         new("device", "auto", "The device the chat's model loads on: auto, cpu, cuda:0, vulkan:0."),
-        new("weights", "", "The chat's model's projections once loaded: int8, int4, bfloat16; empty: float32."),
+        new("weights", "auto", "The chat's model's weights once loaded: auto (the largest of float32, bfloat16, int8, int4 that fits the device's free memory with its working memory, measured before the load), float32, bfloat16, int8, int4. A named one always wins."),
+        new("offload", "false", "Let part of the chat's model live in system memory when the device is full (slower; off: a model that does not fit is refused, said why)."),
+        new("weightsAutoContext", "8192", "The context weights 'auto' keeps room for when a role's context is the model's own (tokens; the caches grow on demand)."),
+        new("weightsAutoHeadroom", "0.1", "The share of the weights' bytes weights 'auto' keeps free beyond the working memory."),
+        new("chatTopK", Library.TopK.ToString(CultureInfo.InvariantCulture), "The chat's top-k: sample among the k likeliest tokens (0: all)."),
+        new("chatTopP", Library.TopP.ToString(CultureInfo.InvariantCulture), "The chat's top-p: sample among the likeliest tokens holding this share of the probability (1: all)."),
+        new("chatMinP", Library.MinP.ToString(CultureInfo.InvariantCulture), "The chat's min-p: leave out tokens less likely than this share of the likeliest one (0: none)."),
+        new("chatRepeatPenalty", Library.RepeatPenalty.ToString(CultureInfo.InvariantCulture), "The chat's repeat penalty: how much a recent token is held back (1: none)."),
+        new("chatSeed", "", "The chat's random seed (the same seed and prompt, the same reply); empty: random."),
         new("context", "0", "The chat's model's context window in tokens; 0: the model's own."),
         new("keepAliveMinutes", "10", "Minutes the chat's model stays loaded once unused; 0 unloads it when no plug-in uses it."),
         new("chatTemperature", DefaultTemperature.ToString(CultureInfo.InvariantCulture), "The chat's sampling temperature; 0 takes the likeliest token."),
@@ -368,7 +451,8 @@ public sealed record AiSettings
         new("completion", "true", "Whether inline completion shows ghost text after a pause in typing; off: it asks for nothing and loads nothing."),
         new("completionModel", DefaultCompletionModel, "The model inline completion uses: a small one beside the chat model (model); empty: the chat model, only while it is loaded."),
         new("completionDevice", "", "The device completion's model loads on: auto, cpu, cuda:0, vulkan:0; empty: auto."),
-        new("completionWeights", "", "Completion's model's projections once loaded: float32, int8, int4, bfloat16; empty: the chat's (weights)."),
+        new("completionWeights", "", "Completion's model's weights once loaded: auto, float32, bfloat16, int8, int4; empty: the chat's (weights)."),
+        new("completionOffload", "", "Let part of completion's model live in system memory when the device is full; empty: the chat's (offload)."),
         new("completionContext", "", "Completion's model's context window in tokens (0: the model's own); empty: the chat's (context)."),
         new("completionKeepAliveMinutes", "", "Minutes completion's model stays loaded once unused; empty: the chat's (keepAliveMinutes)."),
         new("completionLoad", "true", "Whether inline completion loads its model on its first request; off: it uses a model already loaded, else does nothing."),
@@ -395,7 +479,13 @@ public sealed record AiSettings
         new("agentEnabled", "true", "Whether the agent runs; off: it loads no model."),
         new("agentModel", "", "The agent's model; empty: the chat's (model), so one copy is shared on the device."),
         new("agentDevice", "", "The device the agent's model loads on: auto, cpu, cuda:0, vulkan:0; empty: the chat's (device)."),
-        new("agentWeights", "", "The agent's model's projections once loaded: float32, int8, int4, bfloat16; empty: the chat's (weights)."),
+        new("agentWeights", "", "The agent's model's weights once loaded: auto, float32, bfloat16, int8, int4; empty: the chat's (weights)."),
+        new("agentOffload", "", "Let part of the agent's model live in system memory when the device is full; empty: the chat's (offload)."),
+        new("agentTopK", "", "The agent's top-k (0: all); empty: the chat's (chatTopK)."),
+        new("agentTopP", "", "The agent's top-p (1: all); empty: the chat's (chatTopP)."),
+        new("agentMinP", "", "The agent's min-p (0: none left out); empty: the chat's (chatMinP)."),
+        new("agentRepeatPenalty", "", "The agent's repeat penalty (1: none); empty: the chat's (chatRepeatPenalty)."),
+        new("agentSeed", "", "The agent's random seed; empty: the chat's (chatSeed)."),
         new("agentContext", "", "The agent's model's context window in tokens (0: the model's own); empty: the chat's (context)."),
         new("agentKeepAliveMinutes", "", "Minutes the agent's model stays loaded once unused; empty: the chat's (keepAliveMinutes)."),
         new("agentTemperature", "", "The agent's sampling temperature (0 takes the likeliest token); empty: the chat's (chatTemperature)."),
@@ -491,7 +581,22 @@ public sealed record AiSettings
             Model = Text("model") ?? "",
             Device = Text("device") ?? defaults.Device,
             Context = Whole("context", 0, 0, 16_777_216),
-            Weights = Text("weights") ?? "",
+            Weights = Text("weights") ?? defaults.Weights,
+            Offload = Flag("offload", false),
+            AgentOffload = Text("agentOffload") is null ? null : Flag("agentOffload", false),
+            CompletionOffload = Text("completionOffload") is null ? null : Flag("completionOffload", false),
+            WeightsAutoContext = Whole("weightsAutoContext", defaults.WeightsAutoContext, 256, 16_777_216),
+            WeightsAutoHeadroom = Real("weightsAutoHeadroom", defaults.WeightsAutoHeadroom, 0, 4),
+            ChatTopK = Whole("chatTopK", defaults.ChatTopK, 0, 1_000_000),
+            ChatTopP = (float)Real("chatTopP", defaults.ChatTopP, 0, 1),
+            ChatMinP = (float)Real("chatMinP", defaults.ChatMinP, 0, 1),
+            ChatRepeatPenalty = (float)Real("chatRepeatPenalty", defaults.ChatRepeatPenalty, 0, 10),
+            ChatSeed = Text("chatSeed") is null ? null : Whole("chatSeed", 0, int.MinValue, int.MaxValue),
+            AgentTopK = Inherited("agentTopK", 0, 1_000_000),
+            AgentTopP = Text("agentTopP") is null ? null : (float)Real("agentTopP", 0, 0, 1),
+            AgentMinP = Text("agentMinP") is null ? null : (float)Real("agentMinP", 0, 0, 1),
+            AgentRepeatPenalty = Text("agentRepeatPenalty") is null ? null : (float)Real("agentRepeatPenalty", 0, 0, 10),
+            AgentSeed = Text("agentSeed") is null ? null : Whole("agentSeed", 0, int.MinValue, int.MaxValue),
             KeepAliveMinutes = Whole("keepAliveMinutes", defaults.KeepAliveMinutes, 0, 1_000_000),
             ChatTemperature = (float)Real("chatTemperature", DefaultTemperature, 0, 10),
             AgentEnabled = Flag("agentEnabled", defaults.AgentEnabled),
@@ -591,6 +696,59 @@ public sealed record AiRoleSettings(string Key, bool Enabled, string Model, stri
 
     /// <summary>The tokens its draft proposes a round; 0: adapted to the acceptance.</summary>
     public int DraftTokens { get; init; }
+
+    /// <summary>Whether part of its model may live in system memory when the device is full.</summary>
+    public bool Offload { get; init; }
+
+    /// <summary>Its top-k (0: every token).</summary>
+    public int TopK { get; init; } = 40;
+
+    /// <summary>Its top-p (1: every token).</summary>
+    public float TopP { get; init; } = 0.9f;
+
+    /// <summary>Its min-p (0: none left out).</summary>
+    public float MinP { get; init; }
+
+    /// <summary>Its repeat penalty (1: none).</summary>
+    public float RepeatPenalty { get; init; } = 1.1f;
+
+    /// <summary>Its seed, or null for random.</summary>
+    public int? Seed { get; init; }
+
+    /// <summary>
+    /// Its sampling for a request with <paramref name="session"/>'s own fields over its own (X: a session's model settings),
+    /// within <paramref name="context"/> tokens and ending at <paramref name="stop"/>.
+    /// </summary>
+    public GenerationOptions Sampling(ModelSessionSettings? session, int context, IReadOnlyList<string> stop)
+    {
+        ArgumentNullException.ThrowIfNull(stop);
+        var own = session ?? ModelSessionSettings.None;
+        return new GenerationOptions
+        {
+            NumPredict = own.MaxTokens ?? MaxTokens,
+            NumCtx = context,
+            Stop = stop,
+            Temperature = own.Temperature ?? Temperature,
+            TopK = own.TopK ?? TopK,
+            TopP = own.TopP ?? TopP,
+            MinP = own.MinP ?? MinP,
+            RepeatPenalty = own.RepeatPenalty ?? RepeatPenalty,
+            Seed = own.Seed ?? Seed,
+        };
+    }
+
+    /// <summary>
+    /// This role with <paramref name="session"/>'s load-time and draft fields over its own (its separate copy's lease key
+    /// and request), or this role itself when the session sets none of them.
+    /// </summary>
+    public AiRoleSettings With(ModelSessionSettings? session) => session is null || session is { ChangesLoad: false, Draft: null } ? this : this with
+    {
+        Context = session.Context ?? Context,
+        Weights = session.Weights is { Length: > 0 } weights ? weights.Trim().ToLowerInvariant() : Weights,
+        Device = session.Device is { Length: > 0 } device ? device.Trim() : Device,
+        Offload = session.Offload ?? Offload,
+        DraftModel = session.Draft ?? DraftModel,
+    };
 
     /// <summary>Whether <see cref="DraftModel"/> turns drafting off ("off" or "none").</summary>
     public bool DraftOff => DraftModel.Equals(NoDraft, StringComparison.OrdinalIgnoreCase) || DraftModel.Equals("none", StringComparison.OrdinalIgnoreCase);

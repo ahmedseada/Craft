@@ -252,6 +252,40 @@ public sealed record PanelPicker(string ActionId, string Title, IReadOnlyList<Pa
 {
     /// <summary>Whether it can be changed now.</summary>
     public bool Enabled { get; init; } = true;
+
+    /// <summary>Whether it is drawn as Craft's own drop-down (its options in an inline list under it, the design's colours) rather than the platform's picker.</summary>
+    public bool Drawn { get; init; }
+
+    /// <summary>The action that takes it back to its shared value (a small Reset beside it), or null.</summary>
+    public string? ResetActionId { get; init; }
+}
+
+/// <summary>
+/// A slider over a range of numbers (Craft's own: a track, a thumb, the value beside it); moving it runs the action with
+/// the value as text (invariant culture).
+/// </summary>
+/// <param name="ActionId">The action.</param>
+/// <param name="Title">What it sets ("Temperature").</param>
+/// <param name="Value">Its value now.</param>
+/// <param name="Min">The least value.</param>
+/// <param name="Max">The greatest value.</param>
+/// <param name="Step">The step between values.</param>
+public sealed record PanelSlider(string ActionId, string Title, double Value, double Min, double Max, double Step) : PanelBlock
+{
+    /// <summary>The value's unit after it ("tokens"), or null.</summary>
+    public string? Unit { get; init; }
+
+    /// <summary>A quieter line beside the value ("shared: 0.7"), or null.</summary>
+    public string? Detail { get; init; }
+
+    /// <summary>Whether the value is this one's own rather than the shared one (drawn in the accent).</summary>
+    public bool Overridden { get; init; }
+
+    /// <summary>The action that takes it back to its shared value (a small Reset beside it), or null.</summary>
+    public string? ResetActionId { get; init; }
+
+    /// <summary>Whether it can be moved now.</summary>
+    public bool Enabled { get; init; } = true;
 }
 
 /// <summary>A text field with a button that submits it (Enter does too): the action is called with the text.</summary>

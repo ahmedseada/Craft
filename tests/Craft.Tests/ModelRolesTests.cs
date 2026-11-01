@@ -26,7 +26,7 @@ public static class ModelRolesTests
     public static void EachRoleReadsItsOwnSettingsAndTheChatKeepsItsOldNames()
     {
         var defaults = AiSettings.Read(_ => null);
-        Check.True(defaults.ChatRole is { Enabled: true, Model: "", Device: "auto", Context: 0, Weights: "", KeepAliveMinutes: 10 },
+        Check.True(defaults.ChatRole is { Enabled: true, Model: "", Device: "auto", Context: 0, Weights: "auto", KeepAliveMinutes: 10 },
             $"the chat's defaults ({defaults.ChatRole})");
         Check.Equal(AiSettings.DefaultTemperature, defaults.ChatRole.Temperature, "the chat's temperature is the library's default");
         Check.True(defaults.CompletionRole is { Enabled: true, Model: AiSettings.DefaultCompletionModel, Device: "auto" }, $"completion's defaults: the 1.5B on auto ({defaults.CompletionRole})");
@@ -51,7 +51,7 @@ public static class ModelRolesTests
         Check.True(read.ChatRole is { Model: "Qwen/Qwen2.5-Coder-7B-Instruct", Device: "cuda:0", Weights: "int8", Context: 8192, KeepAliveMinutes: 5, MaxTokens: 1024 },
             $"model, device, weights, context and keepAliveMinutes are the chat's ({read.ChatRole})");
         Check.True(Math.Abs(read.ChatRole.Temperature - 0.2f) < 1e-6, "chatTemperature");
-        Check.True(read.CompletionRole is { Model: AiSettings.DefaultCompletionModel, Device: "cpu", Weights: "", Context: 2048, KeepAliveMinutes: 1 },
+        Check.True(read.CompletionRole is { Model: AiSettings.DefaultCompletionModel, Device: "cpu", Weights: "float32", Context: 2048, KeepAliveMinutes: 1 },
             $"completion's own device, weights (float32 named), context and keep-alive ({read.CompletionRole})");
         Check.True(read.AgentRole is { Model: "Qwen/Qwen2.5-Coder-7B-Instruct", Device: "cuda:0", Weights: "int8", Context: 8192, KeepAliveMinutes: 5, InheritsModel: true },
             $"the agent inherits every empty one from the chat ({read.AgentRole})");

@@ -155,7 +155,9 @@ public sealed partial class PanelBlocksView : ContentView
             PanelSwitch toggle => Switch(toggle),
             PanelMeter meter => Meter(meter),
             PanelChart chart => Chart(chart),
+            PanelPicker { Drawn: true } drawn => Dropdown(drawn),
             PanelPicker picker => Picker(picker),
+            PanelSlider slider => Slider(slider),
             PanelInput input => Input(input),
             PanelFacts facts => Facts(facts),
             PanelDisclosure disclosure => Disclosure(disclosure),
@@ -503,6 +505,59 @@ public sealed partial class PanelBlocksView : ContentView
 
     // One compact dropdown, as the settings page draws its choices: the title inline at its left, the platform's own picker
     // on the raised fill (one border, its own chevron), as wide as its choices, not the row; the chosen option's detail under it.
+    // Craft's own drop-down (PanelPicker.Drawn): the title, the field, a Reset beside it when the value is the panel's own.
+    private Grid Dropdown(PanelPicker picker)
+    {
+        var p = _palette;
+        var title = p.Label(picker.Title, p.Secondary, p.SmallSize);
+        title.VerticalOptions = LayoutOptions.Center;
+        var control = new CraftDropdown(p, [.. picker.Options.Select(o => (o.Value, o.Title))], picker.Selected, picker.ResetActionId is not null, picker.Enabled,
+            value => Act(picker.ActionId, value));
+        SemanticProperties.SetDescription(control, picker.Title);
+        return LabelledRow(title, control, picker.ResetActionId);
+    }
+
+    // Craft's own slider: the title, the track with the value, its shared value under it, a Reset when it is the panel's own.
+    private VerticalStackLayout Slider(PanelSlider slider)
+    {
+        var p = _palette;
+        var title = p.Label(slider.Title, slider.Overridden ? p.Text : p.Secondary, p.SmallSize);
+        title.VerticalOptions = LayoutOptions.Center;
+        var control = new CraftSlider(p, slider.Value, slider.Min, slider.Max, slider.Step, slider.Unit, slider.Overridden, slider.Enabled,
+            value => Act(slider.ActionId, value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        SemanticProperties.SetDescription(control, slider.Title);
+        var stack = new VerticalStackLayout { Spacing = 2 };
+        stack.Children.Add(LabelledRow(title, control, slider.ResetActionId));
+        if (slider.Detail is { } detail)
+        {
+            stack.Children.Add(p.Label(detail, p.Secondary, p.CaptionSize));
+        }
+
+        return stack;
+    }
+
+    // A title, a control filling the row, and a small Reset at its end when there is one.
+    private Grid LabelledRow(Label title, View control, string? resetActionId)
+    {
+        var p = _palette;
+        var row = new Grid
+        {
+            ColumnDefinitions = [new ColumnDefinition(new GridLength(150)), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)],
+            ColumnSpacing = 8,
+        };
+        row.Add(title, 0, 0);
+        row.Add(control, 1, 0);
+        if (resetActionId is { } reset)
+        {
+            var button = p.Flat("Reset", p.Accent, 26, p.CaptionSize);
+            ToolTipProperties.SetText(button, "Take the shared setting back");
+            button.Clicked += (_, _) => Act(reset, null);
+            row.Add(button, 2, 0);
+        }
+
+        return row;
+    }
+
     private VerticalStackLayout Picker(PanelPicker picker)
     {
         var p = _palette;

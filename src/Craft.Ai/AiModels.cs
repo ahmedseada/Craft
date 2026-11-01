@@ -90,6 +90,89 @@ public sealed class AiModels : IDisposable
     }
 
     /// <summary>
+    /// The lease of the session <paramref name="session"/> of the role <paramref name="role"/> with its own load-time and
+    /// draft settings <paramref name="overrides"/> (the owner, 2026-11-01, "2a"): a copy of its own when they make another
+    /// lease key, the role's (or any other holder's) copy when they make the same; held under the session until
+    /// <see cref="EndSession"/>. Loads only when the session's user confirmed it (the panel asks first).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No model is set for the role, or it is turned off.</exception>
+    public Task<ModelLease> SessionAsync(string role, string session, ModelSessionSettings overrides, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(overrides);
+        var settings = _settings();
+        var resolved = settings.RoleOf(role);
+        if (!resolved.Enabled)
+        {
+            return Task.FromException<ModelLease>(new InvalidOperationException(Off(role)));
+        }
+
+        var own = resolved.With(overrides);
+        var (key, request) = KeyOf(settings, own, own.Model);
+        string holder = SessionHolder(role, session);
+        lock (_gate)
+        {
+            _failed.Remove(key);
+            Retarget(holder, key);
+        }
+
+        return LeaseWithDraftAsync(settings, holder, own, key, request, cancellationToken);
+    }
+
+    /// <summary>Lets the session's own copy go (the session ended, or went back to the shared settings), unless another holder holds it.</summary>
+    public void EndSession(string role, string session) => LetGo(SessionHolder(role, session));
+
+    /// <summary>Whether the session's own copy (its load-time settings) is loaded.</summary>
+    public bool IsSessionLoaded(string role, ModelSessionSettings overrides)
+    {
+        ArgumentNullException.ThrowIfNull(overrides);
+        var settings = _settings();
+        var own = settings.RoleOf(role).With(overrides);
+        if (own.Model.Length == 0)
+        {
+            return false;
+        }
+
+        var (key, _) = KeyOf(settings, own, own.Model);
+        lock (_gate)
+        {
+            return _leases.TryGetValue(key, out var lease) && lease.IsCompletedSuccessfully;
+        }
+    }
+
+    /// <summary>
+    /// What a copy of the role <paramref name="role"/> with <paramref name="overrides"/> would take on its device, measured
+    /// now by the provider (nothing loaded); null when the provider cannot tell or no model is set.
+    /// </summary>
+    public Task<ModelMemoryEstimate?> EstimateAsync(string role, ModelSessionSettings overrides, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(overrides);
+        var settings = _settings();
+        var own = settings.RoleOf(role).With(overrides);
+        if (own.Model.Length == 0)
+        {
+            return Task.FromResult<ModelMemoryEstimate?>(null);
+        }
+
+        var (_, request) = KeyOf(settings, own, own.Model);
+        return ModelProviders.Get(settings.ModelProvider).EstimateAsync(request, cancellationToken);
+    }
+
+    /// <summary>The leases held now (one a distinct model, weights, device, context and offload; for the tests and the status).</summary>
+    public int LeaseCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _leases.Count;
+            }
+        }
+    }
+
+    // Who holds a session's lease: the role and the session.
+    private static string SessionHolder(string role, string session) => role + "@" + session;
+
+    /// <summary>
     /// Raised when a role's draft changed (speculative decoding: it loaded, was refused, or a reply measured how many of its
     /// tokens were kept), on any thread: the chip and the status bar read <see cref="DraftOf"/> again.
     /// </summary>
@@ -615,9 +698,10 @@ public sealed class AiModels : IDisposable
             Context = role.Context,
             Weights = role.Weights,
             KeepAlive = TimeSpan.FromMinutes(role.KeepAliveMinutes),
+            Offload = role.Offload,
         };
         string key = string.Join('\n', settings.ModelProvider, name, adapter ?? "", role.Device, role.Context.ToString(System.Globalization.CultureInfo.InvariantCulture), role.Weights,
-            role.KeepAliveMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            role.KeepAliveMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture), role.Offload ? "offload" : "");
         return (key, request);
     }
 

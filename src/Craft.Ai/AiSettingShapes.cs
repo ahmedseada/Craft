@@ -20,10 +20,11 @@ public static class AiSettingShapes
     private const string ReviewGroup = "Review changes";
     private const string BuildFixGroup = "Fix the build";
     private static readonly string[] Devices = ["auto", "cpu", "cuda:0", "vulkan:0"];
-    private static readonly string[] Weights = ["", "int8", "int4", "bfloat16"];
+    private static readonly string[] Weights = [WeightsAuto.Auto, WeightsAuto.Float32, "bfloat16", "int8", "int4"];
 
     // A role that takes the chat's when empty: "" (the chat's) first, then float32 named, then the smaller ones.
-    private static readonly string[] InheritedWeights = ["", "float32", "int8", "int4", "bfloat16"];
+    private static readonly string[] InheritedWeights = ["", WeightsAuto.Auto, WeightsAuto.Float32, "bfloat16", "int8", "int4"];
+    private const string SamplingGroup = "Sampling";
 
     /// <summary>The declared settings with their sections and shapes.</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } = PluginSettingShapes.Apply(AiSettings.Declared, SectionOf, ShapeOf);
@@ -37,7 +38,7 @@ public static class AiSettingShapes
             : setting.Key.StartsWith("completion", StringComparison.Ordinal) ? SettingSections.Completion
             : setting.Key.StartsWith("agent", StringComparison.Ordinal) ? SettingSections.Agent
             : setting.Key.StartsWith("chat", StringComparison.Ordinal) || setting.Key.StartsWith("draft", StringComparison.Ordinal)
-              || setting.Key is "model" or "device" or "weights" or "context" or "keepAliveMinutes" ? SettingSections.Chat
+              || setting.Key is "model" or "device" or "weights" or "context" or "keepAliveMinutes" or "offload" ? SettingSections.Chat
             : SettingSections.Models;
     }
 
@@ -52,6 +53,14 @@ public static class AiSettingShapes
         "keepAliveMinutes" => KeepAlive(SettingSections.Chat),
         "chatTemperature" => Temperature(SettingSections.Chat),
         "chatMaxTokens" => MaxTokens(SettingSections.Chat, "Most reply tokens"),
+        "offload" => SettingShape.Toggle(SettingSections.Chat, "Offload to system memory when the device is full", ModelGroup),
+        "chatTopK" => SettingShape.Whole(SettingSections.Chat, "Top-k (0: all)", 0, 1000, null, SamplingGroup),
+        "chatTopP" => SettingShape.Number(SettingSections.Chat, "Top-p", 0, 1, 0.01, null, SamplingGroup),
+        "chatMinP" => SettingShape.Number(SettingSections.Chat, "Min-p", 0, 1, 0.01, null, SamplingGroup),
+        "chatRepeatPenalty" => SettingShape.Number(SettingSections.Chat, "Repeat penalty", 1, 2, 0.01, null, SamplingGroup),
+        "chatSeed" => SettingShape.Text(SettingSections.Chat, "Seed (empty: random)", SamplingGroup),
+        "weightsAutoContext" => SettingShape.Whole(SettingSections.Models, "Weights auto keeps room for", 256, 16_777_216, "tokens", "Weights auto", 1024),
+        "weightsAutoHeadroom" => SettingShape.Number(SettingSections.Models, "Weights auto headroom (share of the weights)", 0, 1, 0.05, null, "Weights auto"),
         "draftModel" => SettingShape.Text(SettingSections.Chat, "Draft model (empty: the completion model when it matches; off: none)", DraftGroup),
         "draftTokens" => DraftTokens(SettingSections.Chat, "Draft tokens a round (0: adapted)"),
 
@@ -61,6 +70,7 @@ public static class AiSettingShapes
         "completionDevice" => Device(SettingSections.Completion, ["", .. Devices]),
         "completionWeights" => SettingShape.Choice(SettingSections.Completion, "Weights once loaded", InheritedWeights, ModelGroup),
         "completionContext" => Context(SettingSections.Completion),
+        "completionOffload" => SettingShape.Choice(SettingSections.Completion, "Offload (empty: the chat's)", ["", "true", "false"], ModelGroup),
         "completionKeepAliveMinutes" => KeepAlive(SettingSections.Completion),
         "completionTemperature" => Temperature(SettingSections.Completion),
         "completionMaxTokens" => MaxTokens(SettingSections.Completion, "Most tokens per completion"),
@@ -72,6 +82,12 @@ public static class AiSettingShapes
         "agentDevice" => Device(SettingSections.Agent, ["", .. Devices]),
         "agentWeights" => SettingShape.Choice(SettingSections.Agent, "Weights once loaded", InheritedWeights, ModelGroup),
         "agentContext" => Context(SettingSections.Agent),
+        "agentOffload" => SettingShape.Choice(SettingSections.Agent, "Offload (empty: the chat's)", ["", "true", "false"], ModelGroup),
+        "agentTopK" => SettingShape.Text(SettingSections.Agent, "Top-k (empty: the chat's)", SamplingGroup),
+        "agentTopP" => SettingShape.Text(SettingSections.Agent, "Top-p (empty: the chat's)", SamplingGroup),
+        "agentMinP" => SettingShape.Text(SettingSections.Agent, "Min-p (empty: the chat's)", SamplingGroup),
+        "agentRepeatPenalty" => SettingShape.Text(SettingSections.Agent, "Repeat penalty (empty: the chat's)", SamplingGroup),
+        "agentSeed" => SettingShape.Text(SettingSections.Agent, "Seed (empty: the chat's)", SamplingGroup),
         "agentKeepAliveMinutes" => KeepAlive(SettingSections.Agent),
         "agentTemperature" => Temperature(SettingSections.Agent),
         "agentMaxTokens" => MaxTokens(SettingSections.Agent, "Most tokens per turn"),

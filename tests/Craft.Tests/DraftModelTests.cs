@@ -358,7 +358,7 @@ public static class DraftModelTests
             Acquired.Enqueue(request.Model);
             var tokenizer = new CharTokenizer(request.Model.Contains("stranger", StringComparison.Ordinal) ? Letters.Replace('e', 'E') : Letters);
             var chat = Chats.GetOrAdd(request.Model, _ => new RecordingChat());
-            var draft = Drafts.GetOrAdd(request.Weights is { Length: > 0 } weights ? $"{request.Model} {weights}" : request.Model, _ => new FakeDraft(tokenizer));
+            var draft = Drafts.GetOrAdd(request.Weights is { Length: > 0 } weights && weights != "auto" ? $"{request.Model} {weights}" : request.Model, _ => new FakeDraft(tokenizer));
             return Task.FromResult(new ModelLease(request.Model, chat, null, 4096, TimeSpan.FromMilliseconds(1)) { Draft = draft });
         }
     }

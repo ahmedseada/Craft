@@ -28,8 +28,11 @@ sealed class Craft.Ai.AgentWorkspace : System.IDisposable
   System.Void Settle(System.String path, System.String text)
   static Craft.Ai.AgentWorkspace Create(System.String workspace, System.String folder, System.Collections.Generic.IReadOnlyList<System.String> ignore, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> unsaved, System.Threading.CancellationToken cancellationToken = null, System.Action<System.Int32> copied = null)
   static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> Edits(System.String current, System.String target)
-sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, System.IDisposable
+sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, Craft.Abstractions.IModelSessionHost, System.IDisposable
+  Craft.Abstractions.ModelSessionSettings ModelSession { get; }
+  Craft.Abstractions.ModelSessionShared ModelShared { get; }
   Craft.Ai.AgentWorkspace WorkingCopy { get; }
+  Craft.Ai.SessionModel Session { get; }
   System.Boolean Continues { get; }
   System.Boolean ShowsTimeline { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ConversationCommand> SlashCommands { get; }
@@ -37,19 +40,24 @@ sealed class Craft.Ai.AiAgentPanel : Craft.Ai.ConversationPanel, Craft.Abstracti
   System.Collections.Generic.IReadOnlyList<Craft.Ai.AgentChange> Changes { get; }
   System.String EmptyText { get; }
   System.String ModelRoleKey { get; }
+  System.String ModelSessionTitle { get; }
   System.String Placeholder { get; }
   System.Threading.Tasks.Task Run { get; }
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ReviewAsync(Craft.Ai.AgentChange change, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ReviewAsync(System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> SaveModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskInline(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<System.String> ApplyModelSessionToEnvironmentAsync(Craft.Abstractions.ModelSessionSettings proposed, Craft.Abstractions.ModelSettingsScope scope, System.Threading.CancellationToken cancellationToken = null)
   System.Void DiscardAll()
   System.Void Dispose()
   System.Void RemoveChip(System.String id)
   System.Void Stop()
   const System.String PanelId = ai.agent
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
+  event System.EventHandler ModelSessionChanged
   static System.Threading.Tasks.Task DiscardsDone()
 sealed class Craft.Ai.AiBuildFix : Craft.Abstractions.IBuildFixProvider, Idrak.Abstraction.IKind
   System.Boolean Offers(Craft.Abstractions.BuildFixRequest request)
@@ -59,9 +67,12 @@ sealed class Craft.Ai.AiBuildFix : Craft.Abstractions.IBuildFixProvider, Idrak.A
   const System.String ProviderName = ai
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiCodeActions actions, Craft.Ai.AiAgentPanel agent)
   static System.String Task(Craft.Abstractions.BuildFixRequest request, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunProblem> errors, System.Func<System.String, System.String> textOf, System.Int32 contextLines)
-sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationHistory, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, System.IDisposable
+sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractions.IConversationHistory, Craft.Abstractions.IConversationPanel, Craft.Abstractions.IEditorPanel, Craft.Abstractions.IModelSessionHost, System.IDisposable
   Craft.Abstractions.ConversationCapabilities Capabilities { get; }
   Craft.Abstractions.ConversationEntry CodeEntry(System.String code, System.String language)
+  Craft.Abstractions.ModelSessionSettings ModelSession { get; }
+  Craft.Abstractions.ModelSessionShared ModelShared { get; }
+  Craft.Ai.SessionModel Session { get; }
   System.Boolean DeleteConversation(System.String id)
   System.Boolean OpenConversation(System.String id)
   System.Boolean RestoreConversation(System.String id)
@@ -73,6 +84,7 @@ sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractio
   System.String CurrentConversation { get; }
   System.String EmptyText { get; }
   System.String ModelRoleKey { get; }
+  System.String ModelSessionTitle { get; }
   System.String Placeholder { get; }
   System.Threading.Tasks.Task AskAsync(System.String message, System.Threading.CancellationToken cancellationToken = null, System.String context = null)
   System.Threading.Tasks.Task EditAndResendAsync(System.Int32 index, System.String text, System.Threading.CancellationToken cancellationToken = null)
@@ -81,8 +93,11 @@ sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractio
   System.Threading.Tasks.Task LastReply { get; }
   System.Threading.Tasks.Task RetryFromAsync(System.Int32 index, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task SubmitAsync(System.String text, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ApplyAsync(System.String code, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> SaveModelSessionAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AcceptDropAsync(System.Collections.Generic.IReadOnlyList<System.String> paths, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> ApplyModelSessionToEnvironmentAsync(Craft.Abstractions.ModelSessionSettings proposed, Craft.Abstractions.ModelSettingsScope scope, System.Threading.CancellationToken cancellationToken = null)
   System.Void DeleteFrom(System.Int32 index)
   System.Void Dispose()
   System.Void NewChat()
@@ -93,6 +108,7 @@ sealed class Craft.Ai.AiChatPanel : Craft.Ai.ConversationPanel, Craft.Abstractio
   const System.String PanelId = ai.chat
   ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models)
   event System.EventHandler ConversationsChanged
+  event System.EventHandler ModelSessionChanged
 sealed class Craft.Ai.AiCodeActions : Craft.Abstractions.ICodeActionProvider, Idrak.Abstraction.IKind
   System.Boolean? LastAccepted { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeAction> ActionsFor(Craft.Abstractions.CodeActionContext context)
@@ -160,13 +176,18 @@ sealed class Craft.Ai.AiModels : System.IDisposable
   System.Boolean IsChatLoading { get; }
   System.Boolean IsLoaded(System.String role)
   System.Boolean IsLoading(System.String role)
+  System.Boolean IsSessionLoaded(System.String role, Craft.Abstractions.ModelSessionSettings overrides)
   System.IProgress<Craft.Abstractions.ModelLoadStatus> Progress { get; set; }
+  System.Int32 LeaseCount { get; }
   System.String CompletionUnavailable { get; }
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> AgentAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> ChatAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> CompletionAsync(System.Threading.CancellationToken cancellationToken)
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> RoleAsync(System.String role, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> SessionAsync(System.String role, System.String session, Craft.Abstractions.ModelSessionSettings overrides, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateAsync(System.String role, Craft.Abstractions.ModelSessionSettings overrides, System.Threading.CancellationToken cancellationToken)
   System.Void Dispose()
+  System.Void EndSession(System.String role, System.String session)
   System.Void ForgetFailures()
   System.Void LetGo(System.String role)
   System.Void Release()
@@ -221,18 +242,26 @@ sealed class Craft.Ai.AiRegistration : Idrak.Abstraction.Plugins.IdrakPlugin, Id
   protected System.Void RegisterParts()
 sealed class Craft.Ai.AiRoleSettings : System.IEquatable<Craft.Ai.AiRoleSettings>
   Craft.Ai.AiRoleSettings <Clone>$()
+  Craft.Ai.AiRoleSettings With(Craft.Abstractions.ModelSessionSettings session)
+  Idrak.Abstraction.Generation.GenerationOptions Sampling(Craft.Abstractions.ModelSessionSettings session, System.Int32 context, System.Collections.Generic.IReadOnlyList<System.String> stop)
   System.Boolean DraftOff { get; }
   System.Boolean Enabled { get; init; }
   System.Boolean Equals(Craft.Ai.AiRoleSettings other)
   System.Boolean Equals(System.Object obj)
   System.Boolean InheritsDevice { get; init; }
   System.Boolean InheritsModel { get; init; }
+  System.Boolean Offload { get; init; }
   System.Int32 Context { get; init; }
   System.Int32 DraftTokens { get; init; }
   System.Int32 GetHashCode()
   System.Int32 KeepAliveMinutes { get; init; }
   System.Int32 MaxTokens { get; init; }
+  System.Int32 TopK { get; init; }
+  System.Int32? Seed { get; init; }
+  System.Single MinP { get; init; }
+  System.Single RepeatPenalty { get; init; }
   System.Single Temperature { get; init; }
+  System.Single TopP { get; init; }
   System.String Device { get; init; }
   System.String DraftModel { get; init; }
   System.String Key { get; init; }
@@ -287,12 +316,16 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Boolean InlineChat { get; init; }
   System.Boolean LoadOnStart { get; init; }
   System.Boolean McpOnStart { get; init; }
+  System.Boolean Offload { get; init; }
+  System.Boolean? AgentOffload { get; init; }
+  System.Boolean? CompletionOffload { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentChangesIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentCopyIgnore { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> AgentStops { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> ChatStops { get; init; }
   System.Collections.Generic.IReadOnlyList<System.String> IdrakPlugins { get; init; }
   System.Double PlacementMaxError { get; init; }
+  System.Double WeightsAutoHeadroom { get; init; }
   System.Int32 AgentMaxTokens { get; init; }
   System.Int32 AgentMaxTurns { get; init; }
   System.Int32 AgentMinutes { get; init; }
@@ -303,6 +336,7 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Int32 ChatImageMaxMegabytes { get; init; }
   System.Int32 ChatMaxTokens { get; init; }
   System.Int32 ChatToolRounds { get; init; }
+  System.Int32 ChatTopK { get; init; }
   System.Int32 CompletionChunk { get; init; }
   System.Int32 CompletionDelayMilliseconds { get; init; }
   System.Int32 CompletionMaxLines { get; init; }
@@ -317,16 +351,26 @@ sealed class Craft.Ai.AiSettings : System.IEquatable<Craft.Ai.AiSettings>
   System.Int32 KeepAliveMinutes { get; init; }
   System.Int32 ReviewMaxTokens { get; init; }
   System.Int32 Threads { get; init; }
+  System.Int32 WeightsAutoContext { get; init; }
   System.Int32? AgentContext { get; init; }
   System.Int32? AgentDraftTokens { get; init; }
   System.Int32? AgentKeepAliveMinutes { get; init; }
+  System.Int32? AgentSeed { get; init; }
+  System.Int32? AgentTopK { get; init; }
+  System.Int32? ChatSeed { get; init; }
   System.Int32? CompletionContext { get; init; }
   System.Int32? CompletionKeepAliveMinutes { get; init; }
   System.Int64 CpuMemoryMegabytes { get; init; }
   System.Int64 GpuMemoryMegabytes { get; init; }
+  System.Single ChatMinP { get; init; }
+  System.Single ChatRepeatPenalty { get; init; }
   System.Single ChatTemperature { get; init; }
+  System.Single ChatTopP { get; init; }
   System.Single CompletionTemperature { get; init; }
+  System.Single? AgentMinP { get; init; }
+  System.Single? AgentRepeatPenalty { get; init; }
   System.Single? AgentTemperature { get; init; }
+  System.Single? AgentTopP { get; init; }
   System.String AgentDevice { get; init; }
   System.String AgentDraftModel { get; init; }
   System.String AgentFolder { get; init; }
@@ -426,9 +470,57 @@ sealed class Craft.Ai.LocalModelProvider : Craft.Abstractions.IModelProvider, Id
   System.String Name { get; }
   System.String Summary { get; }
   System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> AcquireAsync(Craft.Abstractions.ModelRequest request, System.IProgress<Craft.Abstractions.ModelLoadStatus> progress = null, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateAsync(Craft.Abstractions.ModelRequest request, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispose()
   ctor()
   event System.EventHandler StatusChanged
+sealed class Craft.Ai.ModelShape : System.IEquatable<Craft.Ai.ModelShape>
+  Craft.Ai.ModelShape <Clone>$()
+  System.Boolean Equals(Craft.Ai.ModelShape other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean TiedEmbeddings { get; init; }
+  System.Int32 Dim { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 HeadDim { get; init; }
+  System.Int32 KvHeads { get; init; }
+  System.Int32 Layers { get; init; }
+  System.Int32 MaxPositions { get; init; }
+  System.Int32 Vocabulary { get; init; }
+  System.Int64 Parameters { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int64 Parameters, out System.Int32 Vocabulary, out System.Int32 Dim, out System.Int32 Layers, out System.Int32 KvHeads, out System.Int32 HeadDim, out System.Int32 MaxPositions, out System.Boolean TiedEmbeddings)
+  ctor(System.Int64 Parameters, System.Int32 Vocabulary, System.Int32 Dim, System.Int32 Layers, System.Int32 KvHeads, System.Int32 HeadDim, System.Int32 MaxPositions, System.Boolean TiedEmbeddings)
+sealed class Craft.Ai.SessionModel
+  Craft.Abstractions.ModelSessionSettings Settings { get; }
+  Craft.Abstractions.ModelSessionShared Shared { get; }
+  Idrak.Abstraction.Generation.GenerationOptions Sampling(System.Int32 context, System.Collections.Generic.IReadOnlyList<System.String> stop)
+  System.Boolean OwnLease { get; }
+  System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>> Fields(Craft.Abstractions.ModelSessionSettings proposed)
+  System.String Describe(Craft.Abstractions.ModelSessionSettings proposed, Craft.Abstractions.ModelMemoryEstimate estimate)
+  System.String Id { get; }
+  System.String Role { get; }
+  System.String Title { get; }
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelLease> LeaseAsync(System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<Craft.Abstractions.ModelMemoryEstimate> EstimateAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<System.Boolean> SaveAsync(Craft.Abstractions.ModelSessionSettings proposed, System.Threading.CancellationToken cancellationToken)
+  System.Threading.Tasks.Task<System.String> ApplyToEnvironmentAsync(Craft.Abstractions.ModelSessionSettings proposed, Craft.Abstractions.ModelSettingsScope scope, System.Threading.CancellationToken cancellationToken)
+  System.Void End()
+  System.Void Restore(Craft.Abstractions.ModelSessionSettings kept)
+  ctor(Craft.Abstractions.IEditorHost host, System.Func<Craft.Ai.AiSettings> settings, Craft.Ai.AiModels models, System.String role, System.String title)
+  event System.EventHandler Changed
+  static Craft.Abstractions.ModelSessionSettings Read(System.Text.Json.Nodes.JsonNode node)
+  static System.Text.Json.Nodes.JsonObject Write(Craft.Abstractions.ModelSessionSettings settings)
 static class Craft.Ai.SnippetPlacement
   const System.Int64 MatchWorkLimit = 400000000
   static System.ValueTuple<Craft.Abstractions.TextEdit, System.String> Place(Craft.Abstractions.ITextSnapshot snapshot, Craft.Abstractions.SelectionState selection, System.String snippet, Craft.Ai.AiSettings settings)
+static class Craft.Ai.WeightsAuto
+  const System.String Auto = auto
+  const System.String Float32 = float32
+  static Craft.Abstractions.ModelMemoryEstimate Choose(System.String model, System.String device, Craft.Ai.ModelShape shape, System.String setting, System.Int32 context, System.Int64? free, System.Boolean offload, System.Double headroom)
+  static Craft.Ai.ModelShape ShapeOf(System.String folder)
+  static System.Collections.Generic.IReadOnlyList<System.String> Formats { get; }
+  static System.Func<System.String, System.Int64?> FreeMemoryProbe { get; set; }
+  static System.Int32 BudgetContext(Craft.Ai.ModelShape shape, System.Int32 roleContext, System.Int32 autoContext)
+  static System.Int64 WeightBytes(Craft.Ai.ModelShape shape, System.String format)
+  static System.Int64 WorkingBytes(Craft.Ai.ModelShape shape, System.Int32 context, System.Int64 weightBytes, System.Double headroom)
+  static System.Int64? FreeMemory(System.String device)

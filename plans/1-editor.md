@@ -7115,3 +7115,101 @@ of how far it was. Slot s4; Idrak changed too (the load and the download had no 
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
   Idrak's own check: `cd D:\Projects\Idrak; dotnet build -c Release tests\Idrak.Tests; $env:IDRAK_DEVICES="cpu"; $env:IDRAK_FILTER="models: |inventory|public API|model sources"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt`.
+
+## Weights auto and each session's model settings as built (2026-11-01)
+
+The owner's answers "1a 2a", one agent (`slot/session-settings`). Craft only: Idrak already tells what was needed (the
+parameter count before any weight is read, through its checkpoint formats and the architecture's spec from
+`config.json`; the free memory through `Backend.AvailableMemory()`), so Idrak is unchanged (`main` 8716206).
+- **Weights "auto" (1a)** (`Craft.Ai/WeightsAuto.cs`, `LocalModelProvider`): `weights` is "auto" by default (it meant
+  float32 when empty). Before a load, after the idle copies are let go, the model's size is read from its folder
+  (`WeightsAuto.ShapeOf`: parameters, vocabulary, width, layers, key and value heads) and the device's free memory is
+  measured now (Idrak's `AvailableMemory`: the driver's free memory and the pool's reusable blocks, less the reserve, so
+  the copies already loaded and the driver's share count). The largest of float32, bfloat16, int8 and int4 is taken whose
+  weights plus the role's working memory fit. The working memory is the float32 caches of the role's context (else
+  `weightsAutoContext`, 8192, since caches grow on demand), a step's scores, and `weightsAutoHeadroom` (0.1) of the
+  weights. A named format always wins. When even int4 does not fit, the load is refused before any weight is read, with
+  the sizes and offload named. With `offload` on, int4 loads with Idrak's offload to host memory. The choice is said
+  as "int4 (auto): 4.1 GB of 6.6 GB free" on the lease (`ModelLease.Memory`), the role's status (`ModelRole.Weights`),
+  the chip ("· int4 (auto)"), its tooltip and the Models page. `completionWeights` and `agentWeights` left empty are the
+  chat's, which can be auto; `offload`, `agentOffload` and `completionOffload` work the same way. Contracts (additions,
+  1.1): `ModelMemoryEstimate`, `ModelRequest.Offload`, `ModelLease.Memory`, `ModelRole.Weights`, and
+  `IModelProvider.EstimateAsync` (default null).
+- **Each session's model settings (2a)**: the chip's menu has "Model settings for this chat…" (or "this agent
+  session…"), which opens a sheet over the conversation (`ModelSessionPanel`, drawn from blocks). It has:
+  - Craft's own sliders (`PanelSlider`, `CraftSlider`) for temperature, top-k, top-p, min-p, repeat penalty, most tokens
+    and context; the seed as a field.
+  - Craft's own drop-downs (`PanelPicker.Drawn`, `CraftDropdown`) for weights, device and draft; offload as a switch.
+  - The shared value beside each field, Reset per field, and Reset all.
+  - Save keeps the settings with that conversation (in `.craft/chat.json`, "model") or agent session only; the shared
+    settings stay unchanged.
+  - Apply to the environment writes them as the role's shared settings, to the user's settings or the workspace's
+    `.craft/settings.json` (`IPluginSettings.SetAsync(…, ModelSettingsScope)`, `EditorHost.WorkspaceSettingWriter`). It
+    says what it wrote, and the session takes the shared settings again.
+
+  Sampling needs no reload: the session's fields go into its requests (`AiRoleSettings.Sampling`). A load-time change
+  (weights, device, context, offload) loads a separate copy (`AiModels.SessionAsync`, one lease per distinct model,
+  weights, device, context and offload), only after a confirm. The confirm shows its measured cost and whether it fits
+  beside the copies loaded. If it does not fit, it says so and offers "Load with offload" and "Use int4". The copy is let
+  go when the session ends (new conversation, Clear, the panel closed) or goes back to the shared settings. New
+  settings: `chatTopK`, `chatTopP`, `chatMinP`, `chatRepeatPenalty`, `chatSeed` and the agent's `agent*` (empty: the
+  chat's), each a `CRAFT_PLUGIN_AI_*` variable on the settings page. Contracts (additions, 1.1): `ModelSessionSettings`,
+  `ModelSessionShared`, `ModelSettingsScope`, `IModelSessionHost`, `PanelSlider`, `PanelPicker.Drawn` and
+  `ResetActionId`.
+- **Decisions (the recommended option each time):**
+  - No Idrak change: its public checkpoint formats and architecture specs give the parameter count from the config before any weight, and `AvailableMemory` the free memory.
+  - Bytes per weight: float32 4, bfloat16 2, int8 1 and 1/16 for its scales, int4 5 bits (Idrak's figure); with int8 and int4 the token table stays in bfloat16 beside the packed head.
+  - The free memory is measured after the idle copies are let go, so a copy about to be unloaded is not counted against the new one.
+  - The working memory keeps room for `weightsAutoContext` tokens when the role's context is the model's own (the caches grow on demand), with a headroom share of the weights.
+  - A device that reports no free memory loads float32 under auto, said "(auto)".
+  - A named format is never refused; only auto refuses, before the load, with the sizes and what to do.
+  - Offload is Idrak's process-wide offload to host memory, turned on when a copy asks for it (it moves storages only when the device is full).
+  - The chip shows the weights once they are measured, or when a format is named; plain "auto" before a load says nothing yet.
+  - The session sheet covers the conversation's transcript and composer (the header stays), not a modal page.
+  - A chat's own settings are kept with its conversation in `.craft/chat.json`; an agent session's live until Clear or the panel closes (the agent's runs are not listed).
+  - Showing a kept conversation restores its settings without writing the file back.
+  - A draft-only change uses the session's own lease holder on the shared copy (no second copy), with its own draft pair.
+  - Apply writes only the fields the session set; the scope picker shows only while a workspace is open.
+- **Tests:** `WeightsAuto` (2):
+  - the choice by free memory for every format, the text, the refusal naming offload, offload, a named format winning,
+    and float32 when nothing is reported;
+  - a tiny model loaded through the local provider on a fake device's measure (float32, then int8 with less free), a
+    named bfloat16 winning, the refusal before the load, and the chip, tooltip and status saying it.
+
+  `SessionModelSettings` (4):
+  - a session's sampling reaching only its own requests and kept with its conversation;
+  - Save leaving the shared settings unchanged and Apply writing the user's and the workspace's settings, Reset and
+    Reset all;
+  - a load-time change making a separate lease only after the confirm, let go at the session's end, the shared copy
+    kept;
+  - the not-fitting confirm offering offload and int4.
+
+  `Ai.TheSettingsReadEveryVariable` extended; `ModelLoading` and `DraftModel` fixtures follow the "auto" default.
+  First run: 15 of 16 passed (a float shown as 0.30000001 on a slider). Then the full filter
+  `SessionModelSettings|WeightsAuto|Ai.|AiPlugins|DraftModel|ModelLoading|Conversation|Settings|ApiGuard|Inventory`:
+  - first run: 70 of 73. The chip's "· auto" before a load and two fixtures' empty-weights expectations were fixed.
+  - second run: 72 of 73. Reading the kept chat back wrote the file again while it was being read; fixed.
+  - last run: 73 passed, 0 failed.
+
+  The API dumps (`Craft.Abstractions` and its contract list, `Craft.Ai`, `Craft.Editor`) were regenerated: lines added;
+  two `Craft.Ai` class lines changed to name the new interface.
+- **Windows only (not run here; Craft.Maui compiled for net10.0):** the sheet's look, `CraftSlider`'s drag and
+  `CraftDropdown`'s inline list, the Models page's Weights line, and the real "auto" choice on the owner's 8 GB card.
+- **Left, for later:** `ShapeOf` resolves (downloads) a model that is not cached before the estimate; the Models page edits no session's settings; an agent session's settings are not kept across restarts.
+- **The owner's commands** (Craft only; Idrak is unchanged):
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="SessionModelSettings|WeightsAuto|Ai.|AiPlugins|DraftModel|ModelLoading|Conversation|Settings|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  ```powershell
+  git push origin --delete slot/session-settings
+  ```
+  In the app: with the 1.5B as the chat's model and weights left at auto, send a message. The chip reads "· float32
+  (auto)" or smaller, and its tooltip and the Models page say "… GB of … GB free". Set the 7B: auto picks what fits, or
+  says before loading that it does not fit, naming offload. Open the chip's menu, then "Model settings for this
+  chat…": move the temperature and Save (the next reply uses it; Settings › Chat is unchanged). Then "Apply to the
+  environment" (Settings › Chat shows it). Set the weights to int8 and Save: the confirm shows the copy's memory and
+  whether it fits. Start a new chat: that copy goes.

@@ -424,6 +424,7 @@ public sealed partial class ShellModel : IDisposable
         }
 
         host.SettingWriter = StoreSettingAsync;
+        host.WorkspaceSettingWriter = StoreWorkspaceSettingAsync;
         RegisterCommands();
         CreateViews();
         CreateTools();
@@ -1173,7 +1174,7 @@ public sealed partial class ShellModel : IDisposable
     /// <summary>
     /// Writes <paramref name="value"/> for <paramref name="variable"/> as <see cref="ApplySetting"/> does, into the user's
     /// settings (the workspace's when there is no user file), the file written on the thread pool (the value held at once):
-    /// a plug-in's <see cref="IPluginSettings.SetAsync"/>. Null when written, else why not.
+    /// a plug-in's <see cref="IPluginSettings.SetAsync(string, string, string?)"/>. Null when written, else why not.
     /// </summary>
     public async Task<string?> StoreSettingAsync(string variable, string? value)
     {
@@ -1187,6 +1188,37 @@ public sealed partial class ShellModel : IDisposable
         try
         {
             var write = Settings.StoreAsync(layer, variable, value);
+            ReloadOptions();
+            SettingApplied?.Invoke(this, variable);
+            await write.ConfigureAwait(true);
+            return null;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return e.Message;
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="value"/> for <paramref name="variable"/> into the open workspace's <c>.craft/settings.json</c>
+    /// (a session's model settings applied to the workspace), the file written on the thread pool. Null when written, else why not.
+    /// </summary>
+    public async Task<string?> StoreWorkspaceSettingAsync(string variable, string? value)
+    {
+        ArgumentNullException.ThrowIfNull(variable);
+        if (Workspace is null)
+        {
+            return $"No folder is open, so {variable} has no workspace settings to go into.";
+        }
+
+        if (Settings.SourceOf(variable) == SettingSource.Environment)
+        {
+            return $"The environment sets {variable}, which overrides the settings: change it there.";
+        }
+
+        try
+        {
+            var write = Settings.StoreAsync(SettingLayer.Workspace, variable, value);
             ReloadOptions();
             SettingApplied?.Invoke(this, variable);
             await write.ConfigureAwait(true);

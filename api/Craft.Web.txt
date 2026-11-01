@@ -1,0 +1,38 @@
+enum Craft.Web.Style.StyleDialect : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Css = 0
+  Less = 2
+  Sass = 3
+  Scss = 1
+static class Craft.Web.Style.StyleFolding
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, Craft.Abstractions.LineTokenizer tokenizer, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Web.Style.StyleFormatter : Craft.Abstractions.ITextFormatter
+  Craft.Web.Style.StyleDialect Dialect { get; }
+  System.Void Format(System.ReadOnlySpan<System.Char> text, Craft.Abstractions.FormatStyle style, System.Collections.Generic.List<Craft.Abstractions.TextEdit> edits)
+  ctor(Craft.Web.Style.StyleDialect dialect)
+static class Craft.Web.Style.StyleNames
+  const System.Int32 Future = 9999
+  const System.Int32 Latest = 2147483647
+  static System.Boolean IsColor(System.ReadOnlySpan<System.Char> name)
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllAtRules { get; }
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllFunctions { get; }
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllProperties { get; }
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllPseudos { get; }
+  static System.Int32 AtRuleYear(System.ReadOnlySpan<System.Char> name)
+  static System.Int32 FunctionYear(System.ReadOnlySpan<System.Char> name)
+  static System.Int32 PropertyYear(System.ReadOnlySpan<System.Char> name)
+  static System.Int32 PseudoYear(System.ReadOnlySpan<System.Char> name)
+  static System.ReadOnlySpan<System.Char> WithoutVendor(System.ReadOnlySpan<System.Char> name)
+static class Craft.Web.Style.StyleProjectVersion
+  const System.Int32 MaxFileBytes = 1048576
+  const System.Int32 MaxLevels = 32
+  static System.Boolean FromPackage(System.ReadOnlySpan<System.Byte> json, out System.Int32? year)
+  static System.Int32? FromQuery(System.ReadOnlySpan<System.Char> query)
+  static System.Int32? Read(System.String folder, System.String workspaceRoot)
+sealed class Craft.Web.Style.StyleTokenizer : Craft.Abstractions.LineTokenizer
+  Craft.Web.Style.StyleDialect Dialect { get; }
+  System.Int32 Year { get; }
+  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
+  const System.Int32 MaxFrames = 5
+  static Craft.Web.Style.StyleTokenizer For(Craft.Web.Style.StyleDialect dialect, System.Int32 year = 2147483647)
+  static System.Boolean IsAtStatement(System.UInt64 state)
+  static System.Boolean IsInComment(System.UInt64 state)

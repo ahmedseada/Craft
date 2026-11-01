@@ -317,7 +317,49 @@ public sealed partial class EditorModel
     /// (<see cref="LastFormatMessage"/>, a failed activity); a language with no formatter changes nothing. Format on save
     /// awaits it before it writes. The task never faults.
     /// </summary>
-    public Task<bool> FormatDocumentAsync(CancellationToken cancellationToken = default)
+    public Task<bool> FormatDocumentAsync(CancellationToken cancellationToken = default) => FormatRangeAsync(0, -1, cancellationToken);
+
+    /// <summary>Ctrl+K Ctrl+F: formats the lines of the selection (the caret's line when nothing is selected); see <see cref="FormatSelectionAsync"/>.</summary>
+    public bool FormatSelection()
+    {
+        _ = FormatSelectionAsync();
+        return FormattingSession is not null;
+    }
+
+    /// <summary>
+    /// Formats the selection's lines (the caret's line when nothing is selected) as <see cref="FormatDocumentAsync"/> formats
+    /// the document: the formatter's edits that lie within those lines, from the end of the text before the first one (so
+    /// the first line's indentation is set too) to the end of the last one, applied as one undo step, the selection kept
+    /// on its characters. A malformed document is left unchanged with the reason, as for the document. The task never faults.
+    /// </summary>
+    public Task<bool> FormatSelectionAsync(CancellationToken cancellationToken = default)
+    {
+        var snapshot = Snapshot;
+        if (FormattingSession is null || snapshot.Length == 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        int firstLine = snapshot.GetLineIndex(Math.Clamp(_selection.Start, 0, snapshot.Length));
+        int end = Math.Clamp(_selection.End, 0, snapshot.Length);
+        int lastLine = snapshot.GetLineIndex(end);
+        if (lastLine > firstLine && end == snapshot.GetLine(lastLine).Start)
+        {
+            lastLine--;                                   // a selection that ends at a line's start does not take that line
+        }
+
+        int start = snapshot.GetLine(firstLine).Start;
+        while (start > 0 && char.IsWhiteSpace(snapshot[start - 1]))
+        {
+            start--;
+        }
+
+        int stop = snapshot.GetLine(lastLine).End;
+        return FormatRangeAsync(start, stop - start, cancellationToken);
+    }
+
+    // Formats `length` characters at `start` (the whole document when length is -1); see FormatDocumentAsync.
+    private Task<bool> FormatRangeAsync(int start, int length, CancellationToken cancellationToken)
     {
         if (FormattingSession is not { } session)
         {
@@ -327,8 +369,9 @@ public sealed partial class EditorModel
         var snapshot = Snapshot;
         var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         string name = Path.GetFileName(_document.FilePath) is { Length: > 0 } file ? file : "the document";
-        var activity = _activities.Start($"Formatting {name}", ActivityKinds.General, cancellable: false, cancellationToken);
-        Track(FormatOrReasonAsync(session, snapshot, cancellationToken), result =>
+        var activity = _activities.Start(length < 0 ? $"Formatting {name}" : $"Formatting the selection of {name}", ActivityKinds.General, cancellable: false, cancellationToken);
+        var selection = _selection;
+        Track(FormatOrReasonAsync(session, snapshot, start, length, cancellationToken), result =>
         {
             var (edits, reason, error) = result;
             if (reason is not null)
@@ -356,7 +399,8 @@ public sealed partial class EditorModel
             }
 
             int caret = MapThroughEdits(_selection.Caret, edits);
-            ApplyEdits([.. edits], EditKind.Command, SelectionState.At(caret));
+            var after = length < 0 ? SelectionState.At(caret) : new SelectionState(MapThroughEdits(selection.Anchor, edits), MapThroughEdits(selection.Caret, edits));
+            ApplyEdits([.. edits], EditKind.Command, after);
             EnsureCaretVisible();
             activity.Complete(edits.Count == 1 ? "1 change" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{edits.Count} changes"));
             done.TrySetResult(true);
@@ -369,11 +413,11 @@ public sealed partial class EditorModel
     }
 
     // The formatter's answer, or why there is none: a malformed text's message (FormatException), or the error it threw.
-    private static async Task<(IReadOnlyList<TextEdit> Edits, string? Reason, Exception? Error)> FormatOrReasonAsync(IFormattingLanguageSession session, ITextSnapshot snapshot, CancellationToken cancellationToken)
+    private static async Task<(IReadOnlyList<TextEdit> Edits, string? Reason, Exception? Error)> FormatOrReasonAsync(IFormattingLanguageSession session, ITextSnapshot snapshot, int start, int length, CancellationToken cancellationToken)
     {
         try
         {
-            return (await session.FormatAsync(snapshot, 0, -1, cancellationToken).ConfigureAwait(false), null, null);
+            return (await session.FormatAsync(snapshot, start, length, cancellationToken).ConfigureAwait(false), null, null);
         }
         catch (FormatException malformed)
         {
@@ -774,6 +818,12 @@ public sealed partial class EditorModel
             if (control && key == EditorKey.D)
             {
                 FormatDocument();
+                return true;
+            }
+
+            if (control && key == EditorKey.F)
+            {
+                FormatSelection();
                 return true;
             }
         }

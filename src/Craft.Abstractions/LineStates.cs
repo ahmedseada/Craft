@@ -730,9 +730,21 @@ public class LineStateLanguage : ILanguage
     public ILanguageSession Open(ITextBuffer buffer, LanguageOpenContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return new LineStateSession(buffer, TokenizerFor(context), Formatter, context.Settings);
+        return OpenSession(buffer, context);
     }
 
     /// <summary>The tokenizer (dialect) a file opens with: <see cref="Tokenizer"/> by default.</summary>
     protected virtual LineTokenizer TokenizerFor(LanguageOpenContext context) => Tokenizer;
+
+    /// <summary>
+    /// The session of a file that opens with <paramref name="context"/>: by default one with <see cref="TokenizerFor"/>'s
+    /// dialect, <see cref="Formatter"/> and the context's settings. A subclass may pick the formatter per file (none for an
+    /// indented dialect it cannot format) or keep the session to change its dialect when a version is learned later
+    /// (<see cref="LineStateSession.ChangeDialect"/>, off the calling thread); it never waits here (the UI thread opens).
+    /// </summary>
+    protected virtual LineStateSession OpenSession(ITextBuffer buffer, LanguageOpenContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new LineStateSession(buffer, TokenizerFor(context), Formatter, context.Settings);
+    }
 }

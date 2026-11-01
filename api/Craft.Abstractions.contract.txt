@@ -1735,6 +1735,7 @@ Craft.Abstractions.LineStateLanguage  System.Collections.Generic.IReadOnlyList<S
 Craft.Abstractions.LineStateLanguage  System.String Name { get; }
 Craft.Abstractions.LineStateLanguage  System.String Summary { get; }
 Craft.Abstractions.LineStateLanguage  ctor(System.String name, System.String summary, System.Collections.Generic.IReadOnlyList<System.String> extensions, Craft.Abstractions.LanguageRules rules, Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextFormatter formatter = null)
+Craft.Abstractions.LineStateLanguage  protected Craft.Abstractions.LineStateSession OpenSession(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
 Craft.Abstractions.LineStateLanguage  protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
 Craft.Abstractions.LineStateLanguage : Craft.Abstractions.ILanguage
 Craft.Abstractions.LineStateLanguage : Idrak.Abstraction.IKind

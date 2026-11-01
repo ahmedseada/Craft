@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CSS, SCSS and LESS as a pre-installed, removable plug-in (plan phase W, W-style): the "css", "scss" and "less" languages
+    (colours, brackets, folding, the built-in format, icons, the version setting and the project's Baseline year). The
+    lexers and the formatter are Craft.Web's (src/Craft.Web/Style), carried as a plain copied reference: Craft.Web.dll
+    lands in this plug-in's own folder, so HTML's <style> colours with this plug-in removed. Android and AOT: pure C#, no
+    reflection, nothing native (IsAotCompatible, trim-safe); System.Text.Json's Utf8JsonReader only.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Craft.Plugins.Css</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Craft.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Craft.Abstractions\Craft.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\Craft.Web\Craft.Web.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The contracts shared with the host are not copied. -->
+  <Target Name="CraftSharedContractsNotCopied" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Idrak.Abstraction' or '%(Filename)' == 'Craft.Abstractions'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

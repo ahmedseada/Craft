@@ -5058,6 +5058,121 @@ activity's Cancel in the status bar stops it); "Run npm script in a terminal" �
 the same menu (an activity with its time and last line); Settings › Terminal › npm › Node says "This machine's only"; with
 `"CRAFT_PLUGIN_NPM_NODE": "C:\\nowhere\\node.exe"` in the project's `.craft\settings.json` nothing changes (passed over).
 
+### W-style as built (2026-11-01)
+
+Slot w1, on Craft `main` f787030 (W0) and Idrak `main` e3d656c. Craft only: no cause was found in Idrak. Not rebased: pushed
+to `slot/w-style` for the main session to merge (the owner's rule of 2026-11-01).
+- **The lexers** (`src/Craft.Web/Style/`): `StyleTokenizer`, one `LineTokenizer` per dialect (`StyleDialect` Css, Scss, Less,
+  Sass) and version (`StyleTokenizer.For(dialect, year)`, made once, shared). CSS Syntax 3 tokens, so new syntax always
+  lexes; nesting: a statement in a block is a nested rule when its first `{` comes before a `;` or `}` (strings, comments,
+  parentheses and `#{}`/`@{}` skipped), a declaration otherwise, and on a line with neither a declaration when a known
+  property, a `--name` or a ':' followed by a space starts it (`b:hover,` is a selector, `color:` a declaration). The latest
+  CSS: `@layer`, `@container`, `@scope … to …`, `@starting-style`, `@property`, `@position-try`, `@view-transition`,
+  `@function --x()` and `if(… ; else: …)` (a ';' inside parentheses does not end a declaration), `:has()`, `:is()`,
+  `:where()`, `color-mix()`, `oklch()`/`oklab()`, relative colours (`rgb(from …)`), `light-dark()`, anchor positioning
+  (`anchor()`, `anchor-size()`, `anchor-name`, `position-anchor`, `position-try-fallbacks`), custom properties, units and
+  hex and named colours as numbers, `!important`, attribute selectors, escapes in strings. SCSS: `$var`, `#{}` in selectors,
+  properties, values and strings and across lines (frames to five deep), `@use`/`@forward` (`as`, `with`, `show`, `hide`),
+  `@mixin`/`@include`/`@content`, `@function`/`@return`, `@if`/`@else if`/`@each … in`/`@for … from … through`/`@while`,
+  `@extend`, `%placeholder`, `&-suffix`, `module.function()` and `module.$var`, maps (a key before ':' in parentheses),
+  `!default`, `//`. LESS: `@var:`, `@@var`, `@{}`, mixins (`.m(@a; @b: 2)`, calls `.m();`), guards (`when`), detached
+  rulesets (`@r: { }`, `@r();`), `~"…"`, `:extend()`, `@plugin`, `//`. .sass (indented) lexes as SCSS whose statements end
+  at the line's end. Colours through the theme's existing classes only: properties `PropertyName`, class selectors and
+  placeholders `ClassName` (a LESS mixin `MethodName`), id selectors `ConstantName`, type selectors, `&` and `*` `Keyword`,
+  pseudo-classes and pseudo-elements `TypeParameterName`, attribute names `ParameterName`, at-rules `ControlKeyword`,
+  functions `MethodName`, custom properties and SCSS/LESS variables `LocalName`, layer names and SCSS modules
+  `NamespaceName`, value keywords `EnumMemberName` (CSS-wide ones and `true`/`false`/`null`/`and`/`or`/`not` `Keyword`),
+  numbers, units and colours `Number`, strings, escapes, comments; interpolation delimiters `Operator`. The state is one
+  number under 63 bits (mode, comment, parentheses, an at-rule's prelude kind, frames), so HTML's `<style>` can carry it;
+  nothing is allocated per token (names by span through frozen alternate lookups, specials in `SearchValues`, no boxing).
+- **The names** (`StyleNames`): data lists of the properties, at-rules (CSS's, SCSS's, LESS's), functions, pseudo-classes
+  and pseudo-elements and the named colours, each newer one with the year it became Baseline (`Future` for none yet:
+  `if()`, `@function`, `calc-size()`, `field-sizing`, `interpolate-size`, scroll-driven animations, `::scroll-marker`,
+  `contrast-color()`, `sibling-index()`). They only tell a declaration from a rule where a line does not, and let an older
+  version read a newer name as plain; any name lexes by its syntax.
+- **The formatter** (`StyleFormatter`, CSS, SCSS, LESS): only the white space between tokens changes (never inside a string,
+  comment, interpolation or unquoted `url()`, never where a space changes a selector): one declaration and nested rule per
+  line at the editor's indent, one selector of a list per line, `' {'`, `': '` after a declaration's colon only, a space after
+  a value's comma, none before `;` or `,`, a value's own line breaks kept (one step in, or by its parentheses: SCSS maps),
+  one empty line kept, comments where they were, `} @else {`. Unclosed `{`, `(`, string, comment or interpolation, or a
+  close with nothing open: the file is left unchanged with "line L, column C: …". Format Selection and format on save
+  (`CRAFT_FORMAT_ON_SAVE`) through the existing paths.
+- **Format Selection in the editor** (it lacked one): `EditorModel.FormatSelectionAsync`/`FormatSelection` (Ctrl+K Ctrl+F,
+  `craft.editor.formatSelection`, the Edit menu and the palette): the selection's lines (the caret's when none), from the
+  end of the text before the first (so its indentation is set) to the end of the last, one undo step, the selection kept on
+  its characters; for every language that formats (C#'s through Roslyn's span).
+- **Folding** (`StyleFolding`, the plug-in's `CssFolding` "css"): blocks by braces, `/* #region */` and `// #region` to
+  `#endregion` (marked), block comments and runs of `//` lines (comments), with the language's own tokenizer (a brace in a
+  string, a comment, a `url()` or an interpolation never folds).
+- **The plug-in** `plugins/Craft.Plugins.Css` (pre-installed, removable, contract 1.1): languages "css" (.css), "scss"
+  (.scss, and .sass as SCSS-like, not formatted), "less" (.less), on `LineStateLanguage` with a copy of Craft.Web in its own
+  folder; `CssFolding`; icons .css "#", .scss and .sass "S", .less "L" (today's `FileIcons` badges: W-files' vector icons had
+  not merged when this was written; the main session moves them onto its API on merge); the editor plug-in "css" with
+  `CRAFT_PLUGIN_CSS_VERSION` (latest; or a Baseline year 2020-2026), `CRAFT_PLUGIN_CSS_PROJECTVERSION` (true),
+  `CRAFT_PLUGIN_CSS_FORMAT` (true), each on the settings page (Editor › CSS, SCSS, LESS) and in `.craft/settings.json`.
+  `StyleProjectVersion` reads the nearest `.browserslistrc` or `package.json` `browserslist` (`baseline 2024`, production
+  first) as UTF-8 bytes (`Utf8JsonReader`), off the UI thread, once per folder (bounded at 1,024 folders), and changes the
+  open session's dialect when it lands (`ChangeDialect`, `Reclassified`).
+- **Contract** (Craft.Abstractions 1.1, one addition): `LineStateLanguage.OpenSession(buffer, context)`, protected virtual,
+  so a language picks its formatter per file and keeps the session to change its dialect when a version is learned later.
+- **Decisions (each the recommended option, one line each)**:
+  - The language objects and settings live in the plug-in; the lexers, formatter, folding, names and the project-version reader in Craft.Web (HTML's `<style>` reuses them).
+  - A version is a Baseline year ("latest" by default), the year a name became Baseline in every major engine; a known name newer than the version is plain, an unknown name keeps its syntax's colour.
+  - Precedence: the setting when it names a year, else the project's browserslist `baseline YYYY`, else latest; "baseline widely available" names no year (a moving target; confirm with the owner).
+  - Years marked as of 2026-11-01 (confirm): `@scope` 2025, `@view-transition` 2025, anchor positioning and `@position-try` 2026, `if()` and `@function` not Baseline yet (only "latest" colours them).
+  - SCSS's own `@function` is never version-gated (it is not CSS's newer `@function`).
+  - Pseudo-classes and pseudo-elements take `TypeParameterName`, id selectors `ConstantName`, value keywords `EnumMemberName`, type selectors `Keyword`: distinct hues from the existing classes, no new class.
+  - Interpolation delimiters are `Operator`, so a block's `{`/`}` (`Punctuation`) alone folds and colours as a bracket.
+  - A ':' followed by a space at a line's end means a declaration (a selector's pseudo-class never has one), beside the known-property rule.
+  - `RulesAt` is not answered (the style languages embed none); toggle comment wraps CSS lines in `/* */` (W0's fallback) and comments SCSS/LESS lines with `//`.
+  - The formatter never adds a space inside a selector (`a>b` stays), never spaces a colon other than a declaration's, keeps `{}` empty blocks on one line.
+  - .sass is lexed as SCSS whose statements end at the line's end and never formatted (its line breaks are its syntax), said in the language's summary.
+  - Format Selection works on whole lines (VS Code's and Visual Studio's Ctrl+K Ctrl+F), the formatter's edits within them; it is not in the editor's context menu (the menu stays as it was).
+  - The format setting off gives a session without a formatter: Format document says "already formatted" and changes nothing (a later Prettier through W-tools' `DocumentFormatters` takes over).
+- **Measured** (this container, Release, 10,000-line files of the fixtures repeated; `test-output/benches/web-style.txt`):
+  a 60-line screen at line 5,000 cold (5,000 states learned) CSS 8.1-12.3 ms, SCSS 2.1-3.1 ms, LESS 1.9-3.7 ms; warm
+  21-36 µs a screen and **0 B**; a keystroke (a letter, or a `{` at a selector's end) re-lexes the 60 painted lines and
+  **0** more (the states below settle on the next line); `/*` typed at the top of the SCSS and LESS files reads the 4,999
+  lines above the screen once (0.5-1.1 ms; the CSS fixture's first line is a comment, so there it closed at once: 1 line);
+  Format document 14-19 ms cold, 5-6 ms warm (CSS), 4-7 ms (SCSS, LESS); folding 4-12 ms cold, 3-7 ms warm. Target (guess)
+  a warm screen under 0.5 ms: met (about 0.03 ms).
+- **Proven** (rule 71): 6,000 random edits (1,500 per dialect, .sass included, weighted to `{ } ; : / * " ' #` and line
+  breaks, plus `#{`, `@{`, `/*`, `*/`, `//`, `url(`), every 15th compared whole: the incremental session's spans equal a fresh
+  session's, in order, never overlapping; each fixture's formatted text equals the original with the white space removed,
+  formats to itself with no edits, and a messy copy formats to the same text.
+- **Tests** (CPU, here): new group `WebStyle` (9: CSS, SCSS and LESS fixtures with expected spans; rule vs declaration and
+  .sass, rules, toggle comment; random edits equal a fresh session; a warm screen at 0 B, lines re-lexed per keystroke, the
+  bench file; the formatter's exact outputs, white space only, idempotent, malformed left with the line and column; through
+  the editor: the caret kept, one undo step, Format Selection and Ctrl+K Ctrl+F, malformed with its message, the format
+  setting off, .sass not formatted; folding of CSS and SCSS and the provider; versions, the settings, browserslist and the
+  project's version landing on an open session, the setting winning); `WebPlugins` extended (the CSS plug-in from its own
+  folder with its Craft.Web copy named in its deps.json, its languages, colours, folding, settings and icons; removed and
+  disabled, .css, .scss, .sass and .less open as plain text; in the test host the context shares the host's Craft.Web, as it
+  shares any `Craft.*` the host carries: the app carries none, so there the plug-in's copy loads). First run: 13 of 17
+  passed; the four failures were the tests' (the load-context rule above, a timing text left unbalanced by the edits, a
+  malformed SCSS case whose `}` closed its interpolation) and one real one (SCSS's `@function` was version-gated as CSS's),
+  fixed. The full filter `WebStyle|WebKit|WebPlugins|WebFiles|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|ApiGuard|Inventory`:
+  149 of 149 passed. Dumps: Craft.Abstractions (and its contract list, one line added), Craft.Editor, Craft.Web regenerated,
+  `api/Craft.Plugins.Css.txt` added.
+- **Android and AOT**: Craft.Web's style lexers and Craft.Plugins.Css are pure C# with no reflection and nothing native
+  (`IsAotCompatible`, trim-safe); JSON is read with `Utf8JsonReader` only.
+- **Left, for later**: the indented Sass syntax's own lexer and formatter (.sass is SCSS-like and not formatted today); a
+  selector list or a value longer than the line length is not broken (the formatter changes white space only, it never
+  wraps); "baseline widely available" in a browserslist names no year; the icons move to W-files' vector icons on merge.
+- **The owner's check** on `test-output\CarftTestPOC` (add a `site.css`, an `app.scss` and a `theme.less`, or open the
+  Angular project's `.scss` under `test-output\WebTestPOC`): the colours of nesting, `@layer`, `@container`, `:has()`,
+  `oklch()`, `$var`, `#{}`, `@mixin`/`@include`, LESS's `@var:` and guards; folding of blocks and `/* #region */`;
+  Ctrl+/ (CSS wraps in `/* */`, SCSS uses `//`); Shift+Alt+F and Ctrl+K Ctrl+F on a messy rule; a missing `}` leaves the
+  file unchanged with a toast; Settings › Editor › CSS, SCSS, LESS: version 2023 makes `@starting-style` plain; Settings ›
+  Plug-ins: disable Craft.Plugins.Css and restart, the files open as plain text.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "WebStyle|WebKit|WebPlugins|WebFiles|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 
 Planned by a read-only agent from `wip/p-batch-2` (`74a5c21` on `e04652c`; `main` 47 commits ahead). The WIP holds P6

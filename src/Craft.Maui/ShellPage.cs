@@ -352,6 +352,7 @@ public sealed class ShellPage : ContentPage, IDisposable
         _bottom.FindRequested += (_, e) => ShowFind(false, e.InitialQuery, e.Model);
         _bottom.ContextRequested += (_, e) => OpenContextMenu(EditorContextMenus.ReadOnlyText, new ContextMenuTarget(EditorContextMenus.ReadOnlyText, null, false, e.Model), e.Where);
         _bottom.CollapseRequested += (_, _) => _ = _shell.Panels.SetOpenAsync(ShellPanel.Bottom, false);
+        _bottom.SetHierarchy(_shell.Hierarchy);              // X part 9: the call and type hierarchies' tab
         // X part 9: a file:line link clicked in Output opens the file there.
         _bottom.LinkActivated += (_, e) => _ = _shell.OpenLinkAsync(e.Path, e.Line, e.Column);
         _bottomSplit.Panel = _bottom;
@@ -1602,6 +1603,10 @@ public sealed class ShellPage : ContentPage, IDisposable
             case ShellViewNames.Telemetry:
                 ShowBottom(BottomTab.Telemetry);
                 break;
+            case ShellViewNames.Hierarchy:
+                ShowBottom(BottomTab.Hierarchy);
+                break;
+
             case ShellViewNames.Todo:
                 ShowBottom(BottomTab.Todo);
                 break;
@@ -1930,6 +1935,7 @@ public sealed class ShellPage : ContentPage, IDisposable
             KeyHandler = _keys,
             Labels = _host.Labels,
             Activities = _host.Activities,
+            Host = _host,
             WorkspaceRoot = _shell.Workspace?.Root,
             ShowsMinimap = true,                            // the X restart, piece 2b: one minimap per document view
         };

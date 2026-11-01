@@ -131,6 +131,13 @@ public sealed class HtmlTokenizer : LineTokenizer
     public override ulong Tokenize(ReadOnlySpan<char> line, int lineStart, ulong state, TokenSpanBuffer? into) => Lex(line, lineStart, state, into, null);
 
     /// <inheritdoc />
+    /// <remarks>X part 9: HTML's (and Angular's) tags link; its void elements open none.</remarks>
+    public override bool LinksTags => true;
+
+    /// <inheritdoc />
+    public override bool IsVoidElement(ReadOnlySpan<char> name) => HtmlNames.Void.Contains(name);
+
+    /// <inheritdoc />
     public override LanguageRules? RulesAt(ReadOnlySpan<char> line, int column, ulong state)
     {
         var mode = ModeOf(state, out _, out var script);

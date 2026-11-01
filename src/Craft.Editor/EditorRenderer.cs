@@ -42,6 +42,7 @@ public sealed class EditorRenderer : IDisposable
     private readonly Dictionary<int, (string Source, int Columns, string Text)> _inlineTexts = [];
     private int[] _bracketColors = new int[64];
     private readonly Dictionary<int, LineRuns> _lines = [];
+    private readonly Dictionary<long, HintedLine> _hinted = [];
     private readonly Dictionary<int, string> _numbers = [];
     private readonly GhostTextRenderer _ghost = new();
     private readonly InlineChatRenderer _inlineChat = new();
@@ -204,6 +205,12 @@ public sealed class EditorRenderer : IDisposable
         }
 
         ClassifyShown(model, snapshot, visible);
+        // X part 9: the inlay hints and the code lenses of the lines shown (asked after a pause, once a version and range).
+        model.NoteHintsShown(firstLine.Start, lastLine.End, visible.Count);
+        model.NoteLensesShown(visible.First, visible.Last);
+        bool hintsShown = model.InlayHintsShown;
+        LensRowsDrawn = 0;
+        HintsDrawn = 0;
         var spans = _spans.Spans;
         var find = model.Find;
         bool findShown = FindHighlightLayer.IsShown(find);
@@ -240,17 +247,16 @@ public sealed class EditorRenderer : IDisposable
         Step = StepLines;
         try
         {
-            int row = model.RowOfLine(visible.First);
             for (int index = visible.First; index <= visible.Last && index < snapshot.LineCount; index = model.NextShownLine(index))
             {
                 var line = snapshot.GetLine(index);
                 var text = TextReading.ReadLine(snapshot, line, ref buffer);
                 var wrapped = wrapping ? wordWrap.Line(index, text) : null;
                 int lineRows = wrapped?.Rows ?? 1;
-                float top = (row * height) - scrollY;
+                float top = (model.RowOfLine(index) * height) - scrollY;     // X part 9: a code lens row may stand above it
                 float left = textLeft - scrollX;
                 float block = height * lineRows;
-                row += lineRows;
+                var hints = hintsShown ? new HintColumns(model.InlayHintsBetween(line.Start, line.End), text, line.Start, tabSize, wrapped) : default;
                 drawn++;
                 RowsDrawn += lineRows;
                 _drawnRows.Add((index, top));
@@ -283,15 +289,20 @@ public sealed class EditorRenderer : IDisposable
                     model.NoteLineColumns(runs.Columns);
                 }
 
+                if (model.HasLensRow(index))
+                {
+                    DrawLensRow(canvas, model, index, left, top - height, cell, height, textLeft, viewportWidth);
+                }
+
                 model.LineBackdrop?.DrawLine(canvas, index, left, top, cell, block, viewportWidth);
                 if (findShown)
                 {
-                    FindHighlightLayer.DrawLine(canvas, find, text, wrapped, left, top, cell, height, tabSize, colors.FindMatch);
+                    FindHighlightLayer.DrawLine(canvas, find, text, wrapped, left, top, cell, height, tabSize, colors.FindMatch, hints);
                 }
 
                 if (word is not null)
                 {
-                    DrawWord(canvas, text, wrapped, word, left, top, cell, height, tabSize, colors.WordHighlight);
+                    DrawWord(canvas, text, wrapped, word, left, top, cell, height, tabSize, colors.WordHighlight, hints);
                 }
 
                 while (selectionIndex < selections.Length && selections[selectionIndex].End < line.Start)
@@ -312,7 +323,7 @@ public sealed class EditorRenderer : IDisposable
                         int end = selection.End > line.End ? runs.Columns + 1 : TextReading.ColumnOf(text, endIndex, tabSize);
                         if (end > start)
                         {
-                            FillColumns(canvas, wrapped, startIndex, start, selection.End > line.End ? text.Length + 1 : endIndex, end, left, top, cell, height, colors.Selection);
+                            FillColumns(canvas, wrapped, startIndex, start, selection.End > line.End ? text.Length + 1 : endIndex, end, left, top, cell, height, colors.Selection, hints);
                         }
 
                         _lineSelections.Add((startIndex, endIndex));
@@ -325,11 +336,11 @@ public sealed class EditorRenderer : IDisposable
                         if (wrapped is { Rows: > 1 })
                         {
                             int caretRow = wrapped.RowOf(caretIndex);
-                            _carets.Add((wrapped.VisualColumn(caretRow, column), top + (caretRow * height), index));
+                            _carets.Add((hints.Caret(wrapped.VisualColumn(caretRow, column), caretRow), top + (caretRow * height), index));
                         }
                         else
                         {
-                            _carets.Add((column, top, index));
+                            _carets.Add((hints.Caret(column), top, index));
                         }
                     }
                 }
@@ -341,7 +352,7 @@ public sealed class EditorRenderer : IDisposable
                         if (at >= line.Start && at < line.End)
                         {
                             int column = TextReading.ColumnOf(text, at - line.Start, tabSize);
-                            FillColumns(canvas, wrapped, at - line.Start, column, at - line.Start + 1, column + 1, left, top, cell, height, colors.BracketMatch);
+                            FillColumns(canvas, wrapped, at - line.Start, column, at - line.Start + 1, column + 1, left, top, cell, height, colors.BracketMatch, hints);
                         }
                     }
                 }
@@ -361,9 +372,15 @@ public sealed class EditorRenderer : IDisposable
                         float rowTop = top + (k * height);
                         if (rowTop + height > 0 && rowTop < viewportHeight)
                         {
-                            StyledLines.Draw(canvas, runs.Rows![k], left, rowTop, cell, textLeft, viewportWidth);
+                            // X part 9: a row with inlay hints is drawn with them (its own kept piece, the hints between its runs).
+                            var rowLine = hints.Any && hints.CellsOn(k) > 0 ? HintedRow(index, k, runs.Rows![k], hints, theme, canvas, left, rowTop, cell, height, colors) : runs.Rows![k];
+                            StyledLines.Draw(canvas, rowLine, left, rowTop, cell, textLeft, viewportWidth);
                         }
                     }
+                }
+                else if (hints.Any)
+                {
+                    StyledLines.Draw(canvas, HintedRow(index, 0, runs.Line, hints, theme, canvas, left, top, cell, height, colors), left, top, cell, textLeft, viewportWidth);
                 }
                 else
                 {
@@ -376,7 +393,7 @@ public sealed class EditorRenderer : IDisposable
                 }
 
                 // The end of the line's last row: where the fold marker and the inline message go.
-                float endX = left + ((wrapped is { Rows: > 1 } ? wrapped.RowWidth(lineRows - 1) : runs.Columns) * cell);
+                float endX = left + (((wrapped is { Rows: > 1 } ? wrapped.RowWidth(lineRows - 1) : runs.Columns) + (hints.Any ? hints.CellsOn(lineRows - 1) : 0)) * cell);
                 float endTop = top + ((lineRows - 1) * height);
                 if (hidden && folding.Map.IsFolded(index))
                 {
@@ -395,7 +412,7 @@ public sealed class EditorRenderer : IDisposable
 
                 for (int d = firstDiagnostic; d < diagnostics.Length && diagnostics[d].Start <= line.End; d++)
                 {
-                    DrawSquiggle(canvas, diagnostics[d], line, text, wrapped, left, top, metrics, tabSize, textLeft, viewportWidth, colors);
+                    DrawSquiggle(canvas, diagnostics[d], line, text, wrapped, left, top, metrics, tabSize, textLeft, viewportWidth, colors, hints);
                 }
 
                 if (inline > 0)
@@ -554,11 +571,18 @@ public sealed class EditorRenderer : IDisposable
                 var text = TextReading.ReadLine(snapshot, line, ref buffer);
                 int column = TextReading.ColumnOf(text, caret - line.Start, tabSize);
                 int row = model.RowOfLine(index);
-                if (model.WordWrap.IsActive && model.WordWrap.Line(index, text) is { Rows: > 1 } wrapped)
+                var wrappedLine = model.WordWrap.IsActive ? model.WordWrap.Line(index, text) : null;
+                int sub = 0;
+                if (wrappedLine is { Rows: > 1 } wrapped)
                 {
-                    int sub = wrapped.RowOf(caret - line.Start);
+                    sub = wrapped.RowOf(caret - line.Start);
                     row += sub;
                     column = wrapped.VisualColumn(sub, column);
+                }
+
+                if (model.InlayHintsShown)
+                {
+                    column = new HintColumns(model.InlayHintsBetween(line.Start, line.End), text, line.Start, tabSize, wrappedLine).Caret(column, sub);     // X part 9
                 }
 
                 float top = (row * height) - scrollY;
@@ -620,6 +644,12 @@ public sealed class EditorRenderer : IDisposable
         }
 
         _lines.Clear();
+        foreach (var hinted in _hinted.Values)
+        {
+            hinted.Line.ReleaseLayout();
+        }
+
+        _hinted.Clear();
         _inlineTexts.Clear();
     }
 
@@ -860,7 +890,7 @@ public sealed class EditorRenderer : IDisposable
     }
 
     // The other places of the current word on a line (whole words), behind the text.
-    private void DrawWord(IEditorCanvas canvas, ReadOnlySpan<char> text, WrappedLine? wrapped, string word, float left, float top, float cell, float height, int tabSize, uint color)
+    private void DrawWord(IEditorCanvas canvas, ReadOnlySpan<char> text, WrappedLine? wrapped, string word, float left, float top, float cell, float height, int tabSize, uint color, scoped in HintColumns hints)
     {
         int from = 0;
         while (from <= text.Length - word.Length)
@@ -877,7 +907,7 @@ public sealed class EditorRenderer : IDisposable
             {
                 int startColumn = TextReading.ColumnOf(text, at, tabSize);
                 int endColumn = TextReading.ColumnOf(text, end, tabSize);
-                FillColumns(canvas, wrapped, at, startColumn, end, endColumn, left, top, cell, height, color);
+                FillColumns(canvas, wrapped, at, startColumn, end, endColumn, left, top, cell, height, color, hints);
                 WordHighlightsDrawn++;
             }
 
@@ -954,7 +984,7 @@ public sealed class EditorRenderer : IDisposable
 
     /// <summary>A diagnostic's part on one line: a wave (errors, warnings) or dots (information) under its columns, row by row when the line wraps; hidden ones are not drawn.</summary>
     private void DrawSquiggle(IEditorCanvas canvas, in EditorDiagnostic diagnostic, in TextLine line, ReadOnlySpan<char> text, WrappedLine? wrapped, float left, float top,
-        FontMetrics metrics, int tabSize, float textLeft, float viewportWidth, EditorColors colors)
+        FontMetrics metrics, int tabSize, float textLeft, float viewportWidth, EditorColors colors, scoped in HintColumns hints)
     {
         if (diagnostic.Severity == DiagnosticSeverity.Hidden || diagnostic.End < line.Start)
         {
@@ -997,7 +1027,7 @@ public sealed class EditorRenderer : IDisposable
         float cell = metrics.CellWidth;
         if (wrapped is not { Rows: > 1 })
         {
-            DrawWave(canvas, left + (startColumn * cell), left + (endColumn * cell), top + metrics.LineHeight - 1.5f, cell, textLeft, viewportWidth, color, dotted);
+            DrawWave(canvas, left + (hints.Char(startColumn) * cell), left + (hints.Caret(endColumn) * cell), top + metrics.LineHeight - 1.5f, cell, textLeft, viewportWidth, color, dotted);
             return;
         }
 
@@ -1005,8 +1035,8 @@ public sealed class EditorRenderer : IDisposable
         int last = Math.Max(first, wrapped.RowOfEnd(endIndex));
         for (int k = first; k <= last; k++)
         {
-            int c0 = k == first ? wrapped.VisualColumn(k, startColumn) : wrapped.RowIndent(k);
-            int c1 = k == last ? wrapped.VisualColumn(k, endColumn) : wrapped.RowWidth(k);
+            int c0 = k == first ? hints.Char(wrapped.VisualColumn(k, startColumn), k) : wrapped.RowIndent(k);
+            int c1 = k == last ? hints.Caret(wrapped.VisualColumn(k, endColumn), k) : wrapped.RowWidth(k) + hints.CellsOn(k);
             DrawWave(canvas, left + (c0 * cell), left + (c1 * cell), top + (k * metrics.LineHeight) + metrics.LineHeight - 1.5f, cell, textLeft, viewportWidth, color, dotted);
         }
     }
@@ -1049,11 +1079,18 @@ public sealed class EditorRenderer : IDisposable
     /// or one per row the range spans when the line wraps.
     /// </summary>
     internal static void FillColumns(IEditorCanvas canvas, WrappedLine? wrapped, int startIndex, int startColumn, int endIndex, int endColumn,
-        float left, float top, float cell, float height, uint color)
+        float left, float top, float cell, float height, uint color) =>
+        FillColumns(canvas, wrapped, startIndex, startColumn, endIndex, endColumn, left, top, cell, height, color, default);
+
+    /// <summary>As the overload without hints, each row's columns moved past the inlay hints drawn before them on that row (X part 9).</summary>
+    internal static void FillColumns(IEditorCanvas canvas, WrappedLine? wrapped, int startIndex, int startColumn, int endIndex, int endColumn,
+        float left, float top, float cell, float height, uint color, scoped in HintColumns hints)
     {
         if (wrapped is not { Rows: > 1 })
         {
-            canvas.FillRect(left + (startColumn * cell), top, (endColumn - startColumn) * cell, height, color);
+            int s0 = hints.Char(startColumn);
+            int s1 = hints.Caret(endColumn);
+            canvas.FillRect(left + (s0 * cell), top, (s1 - s0) * cell, height, color);
             return;
         }
 
@@ -1061,8 +1098,8 @@ public sealed class EditorRenderer : IDisposable
         int last = Math.Max(first, wrapped.RowOfEnd(endIndex));
         for (int k = first; k <= last; k++)
         {
-            int c0 = k == first ? wrapped.VisualColumn(k, startColumn) : wrapped.RowIndent(k);
-            int c1 = k == last ? wrapped.VisualColumn(k, endColumn) : wrapped.RowWidth(k);
+            int c0 = k == first ? hints.Char(wrapped.VisualColumn(k, startColumn), k) : wrapped.RowIndent(k);
+            int c1 = k == last ? hints.Caret(wrapped.VisualColumn(k, endColumn), k) : wrapped.RowWidth(k) + hints.CellsOn(k);
             if (c1 > c0)
             {
                 canvas.FillRect(left + (c0 * cell), top + (k * height), (c1 - c0) * cell, height, color);
@@ -1362,6 +1399,19 @@ public sealed class EditorRenderer : IDisposable
                 if (key < first || key > last)
                 {
                     _inlineTexts.Remove(key);
+                }
+            }
+        }
+
+        if (_hinted.Count > keep + (keep / 2) + 8)
+        {
+            foreach (var (key, hinted) in _hinted)
+            {
+                long line = key >> 16;
+                if (line < first || line > last)
+                {
+                    hinted.Line.ReleaseLayout();
+                    _hinted.Remove(key);
                 }
             }
         }
@@ -1741,6 +1791,146 @@ public sealed class EditorRenderer : IDisposable
         runs.Line.Add(new StyledRun(new string(expanded, 0, written), start, style));
         RunStringsBuilt++;
         return end;
+    }
+
+    /// <summary>The code lens rows the last frame drew (X part 9).</summary>
+    public int LensRowsDrawn { get; private set; }
+
+    /// <summary>The inlay hints the last frame drew (X part 9).</summary>
+    public int HintsDrawn { get; private set; }
+
+    /// <summary>The lines laid out again with their inlay hints since the renderer was made (the hinted cache's misses).</summary>
+    public long HintedLinesBuilt { get; private set; }
+
+    // A lens row above a member: its titles, faded, from the member's indentation (made once while the lenses stay).
+    private void DrawLensRow(IEditorCanvas canvas, EditorModel model, int index, float left, float top, float cell, float height, float textLeft, float viewportWidth)
+    {
+        if (model.LensRowOf(index) is not { } row || row.Text.Length == 0)
+        {
+            return;
+        }
+
+        float x = left + (row.Column * cell);
+        if (x > viewportWidth || x + (row.Text.Length * cell) < textLeft)
+        {
+            return;
+        }
+
+        canvas.DrawText(row.Text, x, top, new TextStyle(model.Theme.Colors.GutterText));
+        LensRowsDrawn++;
+    }
+
+    // X part 9: row `row` of line `index` (a whole line that does not wrap is its row 0) with its inlay hints: its chips
+    // drawn behind, and its runs with the hints between them (the runs after a hint moved right by its cells; each hint a
+    // faded italic run), kept while the row's runs and its hints stay the same, so a frame over the same lines makes nothing.
+    private StyledLine HintedRow(int index, int row, StyledLine source, scoped in HintColumns hints, ITheme theme, IEditorCanvas canvas,
+        float left, float top, float cell, float height, EditorColors colors)
+    {
+        var all = hints.Hints;
+        int first = -1;
+        int count = 0;
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (hints.RowOf(i) == row)
+            {
+                first = first < 0 ? i : first;
+                count++;
+            }
+        }
+
+        // The chips, behind the text.
+        uint chip = (colors.GutterText & 0x00FFFFFFu) | 0x22000000u;
+        int shift = 0;
+        for (int i = first; i >= 0 && i < first + count; i++)
+        {
+            var hint = all[i];
+            float x = left + ((hints.ColumnOf(i) + shift + (hint.PaddingLeft ? 1 : 0)) * cell);
+            canvas.FillRect(x - 1, top + 2, (hint.Label.Length * cell) + 2, height - 4, chip);
+            shift += hint.Cells;
+            HintsDrawn++;
+        }
+
+        first = Math.Max(0, first);
+        long key = ((long)index << 16) | (uint)row;
+        if (_hinted.TryGetValue(key, out var kept) && ReferenceEquals(kept.Source, source) && kept.Same(all.Slice(first, count), hints, first))
+        {
+            return kept.Line;
+        }
+
+        var line = new StyledLine();
+        var faded = new TextStyle(theme.Colors.GutterText, Italic: true);
+        var columns = new int[count];
+        var labels = new string[count];
+        for (int i = 0; i < count; i++)
+        {
+            columns[i] = hints.ColumnOf(first + i);
+            labels[i] = all[first + i].Label;
+        }
+
+        int h = 0;
+        shift = 0;
+        foreach (var run in source.Runs)
+        {
+            int at = 0;
+            while (at < run.Text.Length)
+            {
+                int column = run.Column + at;
+                // Hints standing before this character go first.
+                while (h < columns.Length && columns[h] <= column)
+                {
+                    shift = AddHint(line, all[first + h], columns[h] + shift, shift, faded);
+                    h++;
+                }
+
+                int next = h < columns.Length ? columns[h] - run.Column : run.Text.Length;
+                int end = Math.Clamp(next, at + 1, run.Text.Length);
+                line.Add(new StyledRun(at == 0 && end == run.Text.Length ? run.Text : run.Text[at..end], column + shift, run.Style));
+                at = end;
+            }
+        }
+
+        for (; h < columns.Length; h++)
+        {
+            shift = AddHint(line, all[first + h], columns[h] + shift, shift, faded);
+        }
+
+        line.Columns = source.Columns + shift;
+        kept?.Line.ReleaseLayout();
+        _hinted[key] = new HintedLine(source, columns, labels, line);
+        HintedLinesBuilt++;
+        return line;
+    }
+
+    private static int AddHint(StyledLine line, InlayHint hint, int drawnColumn, int shift, TextStyle style)
+    {
+        line.Add(new StyledRun(hint.Label, drawnColumn + (hint.PaddingLeft ? 1 : 0), style));
+        return shift + hint.Cells;
+    }
+
+    // A row drawn with its hints: the row it was made from, the hints' columns and labels, and the row with them.
+    private sealed class HintedLine(StyledLine source, int[] columns, string[] labels, StyledLine line)
+    {
+        public StyledLine Source { get; } = source;
+
+        public StyledLine Line { get; } = line;
+
+        public bool Same(ReadOnlySpan<InlayHint> hints, scoped in HintColumns all, int first)
+        {
+            if (hints.Length != columns.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < hints.Length; i++)
+            {
+                if ((!ReferenceEquals(hints[i].Label, labels[i]) && hints[i].Label != labels[i]) || all.ColumnOf(first + i) != columns[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
     }
 
     private sealed class LineRuns

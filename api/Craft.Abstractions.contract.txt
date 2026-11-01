@@ -208,6 +208,45 @@ Craft.Abstractions.CodeActionProviders  static System.Collections.Generic.IReadO
 Craft.Abstractions.CodeActionProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ICodeActionProvider> All { get; }
 Craft.Abstractions.CodeActionProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.CodeActionProviders  static System.Void Register(Craft.Abstractions.ICodeActionProvider provider)
+Craft.Abstractions.CodeLens
+Craft.Abstractions.CodeLens  Craft.Abstractions.CodeLens <Clone>$()
+Craft.Abstractions.CodeLens  System.Boolean Equals(Craft.Abstractions.CodeLens other)
+Craft.Abstractions.CodeLens  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.CodeLens  System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<Craft.Abstractions.CodeLens>> ResolveAsync { get; init; }
+Craft.Abstractions.CodeLens  System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> RunAsync { get; init; }
+Craft.Abstractions.CodeLens  System.Int32 GetHashCode()
+Craft.Abstractions.CodeLens  System.Int32 Order { get; init; }
+Craft.Abstractions.CodeLens  System.Int32 Start { get; init; }
+Craft.Abstractions.CodeLens  System.String Title { get; init; }
+Craft.Abstractions.CodeLens  System.String ToString()
+Craft.Abstractions.CodeLens  System.String Tooltip { get; init; }
+Craft.Abstractions.CodeLens  System.Void Deconstruct(out System.Int32 Start, out System.String Title)
+Craft.Abstractions.CodeLens  ctor(System.Int32 Start, System.String Title)
+Craft.Abstractions.CodeLens : System.IEquatable<Craft.Abstractions.CodeLens>
+Craft.Abstractions.CodeLensProviders
+Craft.Abstractions.CodeLensProviders  static Craft.Abstractions.ICodeLensProvider Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.CodeLensProviders  static Craft.Abstractions.ICodeLensProvider Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.CodeLensProviders  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.CodeLensProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ICodeLensProvider> All { get; }
+Craft.Abstractions.CodeLensProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ICodeLensProvider> For(System.String language)
+Craft.Abstractions.CodeLensProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.CodeLensProviders  static System.Void Register(Craft.Abstractions.ICodeLensProvider provider)
+Craft.Abstractions.CodeLensRequest
+Craft.Abstractions.CodeLensRequest  Craft.Abstractions.CodeLensRequest <Clone>$()
+Craft.Abstractions.CodeLensRequest  Craft.Abstractions.IEditorHost Host { get; init; }
+Craft.Abstractions.CodeLensRequest  Craft.Abstractions.ILanguageSession Session { get; init; }
+Craft.Abstractions.CodeLensRequest  Craft.Abstractions.ITextSnapshot Snapshot { get; init; }
+Craft.Abstractions.CodeLensRequest  System.Boolean Equals(Craft.Abstractions.CodeLensRequest other)
+Craft.Abstractions.CodeLensRequest  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.CodeLensRequest  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol> Members { get; init; }
+Craft.Abstractions.CodeLensRequest  System.Int32 GetHashCode()
+Craft.Abstractions.CodeLensRequest  System.String FilePath { get; init; }
+Craft.Abstractions.CodeLensRequest  System.String Language { get; init; }
+Craft.Abstractions.CodeLensRequest  System.String ToString()
+Craft.Abstractions.CodeLensRequest  System.String WorkspaceRoot { get; init; }
+Craft.Abstractions.CodeLensRequest  System.Void Deconstruct(out Craft.Abstractions.ITextSnapshot Snapshot, out System.String Language, out Craft.Abstractions.ILanguageSession Session, out System.String FilePath, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol> Members)
+Craft.Abstractions.CodeLensRequest  ctor(Craft.Abstractions.ITextSnapshot Snapshot, System.String Language, Craft.Abstractions.ILanguageSession Session, System.String FilePath, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol> Members)
+Craft.Abstractions.CodeLensRequest : System.IEquatable<Craft.Abstractions.CodeLensRequest>
 Craft.Abstractions.CodeReviewPlan
 Craft.Abstractions.CodeReviewPlan  Craft.Abstractions.CodeReviewPlan <Clone>$()
 Craft.Abstractions.CodeReviewPlan  System.Boolean Equals(Craft.Abstractions.CodeReviewPlan other)
@@ -1012,6 +1051,18 @@ Craft.Abstractions.EditorToolSets  static System.Collections.Generic.IReadOnlyLi
 Craft.Abstractions.EditorToolSets  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
 Craft.Abstractions.EditorToolSets  static System.String Origin(System.String name)
 Craft.Abstractions.EditorToolSets  static System.Void Register(Craft.Abstractions.IEditorToolSet set)
+Craft.Abstractions.ExpandedSnippet
+Craft.Abstractions.ExpandedSnippet  Craft.Abstractions.ExpandedSnippet <Clone>$()
+Craft.Abstractions.ExpandedSnippet  System.Boolean Equals(Craft.Abstractions.ExpandedSnippet other)
+Craft.Abstractions.ExpandedSnippet  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.ExpandedSnippet  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SnippetStop> Stops { get; init; }
+Craft.Abstractions.ExpandedSnippet  System.Collections.Generic.IReadOnlyList<System.Int32> Order { get; }
+Craft.Abstractions.ExpandedSnippet  System.Int32 GetHashCode()
+Craft.Abstractions.ExpandedSnippet  System.String Text { get; init; }
+Craft.Abstractions.ExpandedSnippet  System.String ToString()
+Craft.Abstractions.ExpandedSnippet  System.Void Deconstruct(out System.String Text, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SnippetStop> Stops)
+Craft.Abstractions.ExpandedSnippet  ctor(System.String Text, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SnippetStop> Stops)
+Craft.Abstractions.ExpandedSnippet : System.IEquatable<Craft.Abstractions.ExpandedSnippet>
 Craft.Abstractions.FileDiagnostic
 Craft.Abstractions.FileDiagnostic  Craft.Abstractions.DiagnosticSeverity Severity { get; init; }
 Craft.Abstractions.FileDiagnostic  Craft.Abstractions.EditorDiagnostic In(Craft.Abstractions.ITextSnapshot snapshot, System.String source = null, System.String id = null)
@@ -1272,6 +1323,41 @@ Craft.Abstractions.GitIgnore  Craft.Abstractions.GitIgnore Parent { get; }
 Craft.Abstractions.GitIgnore  System.Boolean Ignores(System.ReadOnlySpan<System.Char> relativePath, System.Boolean isFolder)
 Craft.Abstractions.GitIgnore  System.String Folder { get; }
 Craft.Abstractions.GitIgnore  static Craft.Abstractions.GitIgnore Parse(System.String text, System.String folder, Craft.Abstractions.GitIgnore parent)
+Craft.Abstractions.HierarchyDirection
+Craft.Abstractions.HierarchyDirection  Incoming = 0
+Craft.Abstractions.HierarchyDirection  Outgoing = 1
+Craft.Abstractions.HierarchyDirection  Subtypes = 3
+Craft.Abstractions.HierarchyDirection  Supertypes = 2
+Craft.Abstractions.HierarchyDirection : System.IComparable
+Craft.Abstractions.HierarchyDirection : System.IConvertible
+Craft.Abstractions.HierarchyDirection : System.IFormattable
+Craft.Abstractions.HierarchyDirection : System.ISpanFormattable
+Craft.Abstractions.HierarchyItem
+Craft.Abstractions.HierarchyItem  Craft.Abstractions.HierarchyItem <Clone>$()
+Craft.Abstractions.HierarchyItem  Craft.Abstractions.ScopeKind Kind { get; init; }
+Craft.Abstractions.HierarchyItem  System.Boolean Equals(Craft.Abstractions.HierarchyItem other)
+Craft.Abstractions.HierarchyItem  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.HierarchyItem  System.Boolean IsMetadata { get; }
+Craft.Abstractions.HierarchyItem  System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.Int32, System.Int32>> Calls { get; init; }
+Craft.Abstractions.HierarchyItem  System.Int32 Column { get; init; }
+Craft.Abstractions.HierarchyItem  System.Int32 GetHashCode()
+Craft.Abstractions.HierarchyItem  System.Int32 Line { get; init; }
+Craft.Abstractions.HierarchyItem  System.String CallsFile { get; init; }
+Craft.Abstractions.HierarchyItem  System.String Data { get; init; }
+Craft.Abstractions.HierarchyItem  System.String Detail { get; init; }
+Craft.Abstractions.HierarchyItem  System.String FilePath { get; init; }
+Craft.Abstractions.HierarchyItem  System.String Name { get; init; }
+Craft.Abstractions.HierarchyItem  System.String ToString()
+Craft.Abstractions.HierarchyItem  System.Void Deconstruct(out System.String Name, out Craft.Abstractions.ScopeKind Kind, out System.String Detail, out System.String FilePath, out System.Int32 Line, out System.Int32 Column)
+Craft.Abstractions.HierarchyItem  ctor(System.String Name, Craft.Abstractions.ScopeKind Kind, System.String Detail, System.String FilePath, System.Int32 Line, System.Int32 Column)
+Craft.Abstractions.HierarchyItem : System.IEquatable<Craft.Abstractions.HierarchyItem>
+Craft.Abstractions.HierarchyKind
+Craft.Abstractions.HierarchyKind  Call = 0
+Craft.Abstractions.HierarchyKind  Type = 1
+Craft.Abstractions.HierarchyKind : System.IComparable
+Craft.Abstractions.HierarchyKind : System.IConvertible
+Craft.Abstractions.HierarchyKind : System.IFormattable
+Craft.Abstractions.HierarchyKind : System.ISpanFormattable
 Craft.Abstractions.HoverInfo
 Craft.Abstractions.HoverInfo  Craft.Abstractions.HoverInfo <Clone>$()
 Craft.Abstractions.HoverInfo  System.Boolean Equals(Craft.Abstractions.HoverInfo other)
@@ -1306,6 +1392,10 @@ Craft.Abstractions.IBuildFixProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.ICodeActionProvider
 Craft.Abstractions.ICodeActionProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeAction> ActionsFor(Craft.Abstractions.CodeActionContext context)
 Craft.Abstractions.ICodeActionProvider : Idrak.Abstraction.IKind
+Craft.Abstractions.ICodeLensProvider
+Craft.Abstractions.ICodeLensProvider  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+Craft.Abstractions.ICodeLensProvider  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeLens>> GetLensesAsync(Craft.Abstractions.CodeLensRequest request, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ICodeLensProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.ICodeReviewProvider
 Craft.Abstractions.ICodeReviewProvider  Craft.Abstractions.CodeReviewPlan Plan()
 Craft.Abstractions.ICodeReviewProvider  System.Collections.Generic.IAsyncEnumerable<Craft.Abstractions.ReviewFinding> ReviewAsync(Craft.Abstractions.CodeReviewRequest request, System.Threading.CancellationToken cancellationToken)
@@ -1411,6 +1501,7 @@ Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> Open
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ProposeWorkspaceAsync(Craft.Abstractions.WorkspaceEdit edit, System.String title, System.Threading.CancellationToken cancellationToken = null)
+Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> RunTestAsync(System.String filePath, System.String testName, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DiffNote> notes, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
 Craft.Abstractions.IEditorHost  System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
@@ -1534,6 +1625,7 @@ Craft.Abstractions.ILanguageSelector  System.Threading.Tasks.Task PrepareAsync(S
 Craft.Abstractions.ILanguageSelector : Idrak.Abstraction.IKind
 Craft.Abstractions.ILanguageSession
 Craft.Abstractions.ILanguageSession  Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
+Craft.Abstractions.ILanguageSession  Craft.Abstractions.LinkedEditingRanges GetLinkedEditingRanges(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxLines)
 Craft.Abstractions.ILanguageSession  System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
 Craft.Abstractions.ILanguageSession  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> ScopeAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
 Craft.Abstractions.ILanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol>> GetDocumentSymbolsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken)
@@ -1575,6 +1667,7 @@ Craft.Abstractions.IPluginSettings  System.String Get(System.String plugin, Syst
 Craft.Abstractions.IPluginSettings  System.Threading.Tasks.Task<System.String> SetAsync(System.String plugin, System.String key, System.String value)
 Craft.Abstractions.IRunProvider
 Craft.Abstractions.IRunProvider  Craft.Abstractions.RunCommand Command(Craft.Abstractions.RunTarget target, Craft.Abstractions.RunActions action, Craft.Abstractions.RunConfiguration configuration, System.String root)
+Craft.Abstractions.IRunProvider  Craft.Abstractions.RunCommand TestCommand(Craft.Abstractions.RunTarget target, System.String testName, System.String root)
 Craft.Abstractions.IRunProvider  System.Boolean TryParseProblem(System.ReadOnlySpan<System.Char> line, System.String folder, out Craft.Abstractions.RunProblem problem)
 Craft.Abstractions.IRunProvider  System.Boolean Watches(System.ReadOnlySpan<System.Char> fileName)
 Craft.Abstractions.IRunProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.RunTarget> Find(Craft.Abstractions.RunWorkspace workspace, System.Threading.CancellationToken cancellationToken = null)
@@ -1588,10 +1681,13 @@ Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.A
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.CompletionList> GetCompletionsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.CompletionTrigger trigger, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.DefinitionLocation> GetDefinitionAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.DiagnosticSet> DiagnoseEditsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.HierarchyItem> PrepareHierarchyAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.HierarchyKind kind, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.HoverInfo> GetHoverAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.RenameTarget> PrepareRenameAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.SignatureHelp> GetSignatureHelpAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<Craft.Abstractions.WorkspaceEdit> RenameAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.String newName, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.HierarchyItem>> HierarchyAsync(Craft.Abstractions.HierarchyItem item, Craft.Abstractions.HierarchyDirection direction, System.Threading.CancellationToken cancellationToken)
+Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.InlayHint>> InlayHintsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 start, System.Int32 length, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindReferencesAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxResults, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.SymbolLocation>> FindSymbolsAsync(System.String query, System.Int32 maxResults, System.Threading.CancellationToken cancellationToken)
 Craft.Abstractions.ISemanticLanguageSession  System.Void EnableSemantics()
@@ -1603,6 +1699,9 @@ Craft.Abstractions.ISemanticLanguageSession : System.IDisposable
 Craft.Abstractions.ISettingChoices
 Craft.Abstractions.ISettingChoices  System.Collections.Generic.IReadOnlyList<System.String> Choices { get; }
 Craft.Abstractions.ISettingChoices : Idrak.Abstraction.IKind
+Craft.Abstractions.ISnippetProvider
+Craft.Abstractions.ISnippetProvider  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.Snippet> SnippetsFor(System.String language)
+Craft.Abstractions.ISnippetProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.ISourceControlProvider
 Craft.Abstractions.ISourceControlProvider  System.String Unavailable { get; }
 Craft.Abstractions.ISourceControlProvider  System.Threading.Tasks.Task<Craft.Abstractions.ISourceControlRepository> OpenAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
@@ -1704,6 +1803,30 @@ Craft.Abstractions.IWorkspaceSearchProvider : Idrak.Abstraction.IKind
 Craft.Abstractions.IdrakInPlugins
 Craft.Abstractions.IdrakInPlugins  static System.Void IncludeLibraries(System.Reflection.Assembly plugin)
 Craft.Abstractions.IdrakInPlugins  static System.Void IncludePackages(System.Reflection.Assembly plugin, System.Collections.Generic.IEnumerable<System.String> packages)
+Craft.Abstractions.InlayHint
+Craft.Abstractions.InlayHint  Craft.Abstractions.InlayHint <Clone>$()
+Craft.Abstractions.InlayHint  Craft.Abstractions.InlayHintKind Kind { get; init; }
+Craft.Abstractions.InlayHint  System.Boolean Equals(Craft.Abstractions.InlayHint other)
+Craft.Abstractions.InlayHint  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.InlayHint  System.Boolean PaddingLeft { get; init; }
+Craft.Abstractions.InlayHint  System.Boolean PaddingRight { get; init; }
+Craft.Abstractions.InlayHint  System.Int32 Cells { get; }
+Craft.Abstractions.InlayHint  System.Int32 GetHashCode()
+Craft.Abstractions.InlayHint  System.Int32 Position { get; init; }
+Craft.Abstractions.InlayHint  System.String Label { get; init; }
+Craft.Abstractions.InlayHint  System.String ToString()
+Craft.Abstractions.InlayHint  System.String Tooltip { get; init; }
+Craft.Abstractions.InlayHint  System.Void Deconstruct(out System.Int32 Position, out System.String Label, out Craft.Abstractions.InlayHintKind Kind)
+Craft.Abstractions.InlayHint  ctor(System.Int32 Position, System.String Label, Craft.Abstractions.InlayHintKind Kind)
+Craft.Abstractions.InlayHint : System.IEquatable<Craft.Abstractions.InlayHint>
+Craft.Abstractions.InlayHintKind
+Craft.Abstractions.InlayHintKind  Other = 2
+Craft.Abstractions.InlayHintKind  Parameter = 0
+Craft.Abstractions.InlayHintKind  Type = 1
+Craft.Abstractions.InlayHintKind : System.IComparable
+Craft.Abstractions.InlayHintKind : System.IConvertible
+Craft.Abstractions.InlayHintKind : System.IFormattable
+Craft.Abstractions.InlayHintKind : System.ISpanFormattable
 Craft.Abstractions.InlineCard
 Craft.Abstractions.InlineCard  Craft.Abstractions.InlineCard <Clone>$()
 Craft.Abstractions.InlineCard  System.Boolean Equals(Craft.Abstractions.InlineCard other)
@@ -1991,6 +2114,7 @@ Craft.Abstractions.LineStateLanguage : Idrak.Abstraction.IKind
 Craft.Abstractions.LineStateSession
 Craft.Abstractions.LineStateSession  Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
 Craft.Abstractions.LineStateSession  Craft.Abstractions.LineTokenizer Tokenizer { get; }
+Craft.Abstractions.LineStateSession  Craft.Abstractions.LinkedEditingRanges GetLinkedEditingRanges(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxLines)
 Craft.Abstractions.LineStateSession  System.Boolean ChangeDialect(Craft.Abstractions.LineTokenizer tokenizer)
 Craft.Abstractions.LineStateSession  System.Int32 KnownLines { get; }
 Craft.Abstractions.LineStateSession  System.Int64 LinesScanned { get; }
@@ -2018,10 +2142,22 @@ Craft.Abstractions.LineStates  ctor(System.Int32 capacity = 4096, System.Int32 m
 Craft.Abstractions.LineStates  static System.Boolean IsInterned(System.UInt64 state)
 Craft.Abstractions.LineTokenizer
 Craft.Abstractions.LineTokenizer  Craft.Abstractions.LanguageRules RulesAt(System.ReadOnlySpan<System.Char> line, System.Int32 column, System.UInt64 state)
+Craft.Abstractions.LineTokenizer  System.Boolean IsVoidElement(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.LineTokenizer  System.Boolean LinksTags { get; }
 Craft.Abstractions.LineTokenizer  System.UInt64 Initial { get; }
 Craft.Abstractions.LineTokenizer  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
 Craft.Abstractions.LineTokenizer  protected ctor()
 Craft.Abstractions.LineTokenizer  protected static System.Void Add(Craft.Abstractions.TokenSpanBuffer into, System.Int32 start, System.Int32 length, System.String tokenClass)
+Craft.Abstractions.LinkedEditingRanges
+Craft.Abstractions.LinkedEditingRanges  Craft.Abstractions.LinkedEditingRanges <Clone>$()
+Craft.Abstractions.LinkedEditingRanges  System.Boolean Equals(Craft.Abstractions.LinkedEditingRanges other)
+Craft.Abstractions.LinkedEditingRanges  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.LinkedEditingRanges  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextRange> Ranges { get; init; }
+Craft.Abstractions.LinkedEditingRanges  System.Int32 GetHashCode()
+Craft.Abstractions.LinkedEditingRanges  System.String ToString()
+Craft.Abstractions.LinkedEditingRanges  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextRange> Ranges)
+Craft.Abstractions.LinkedEditingRanges  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextRange> Ranges)
+Craft.Abstractions.LinkedEditingRanges : System.IEquatable<Craft.Abstractions.LinkedEditingRanges>
 Craft.Abstractions.LintFileResult
 Craft.Abstractions.LintFileResult  Craft.Abstractions.LintFileResult <Clone>$()
 Craft.Abstractions.LintFileResult  System.Boolean Equals(Craft.Abstractions.LintFileResult other)
@@ -2118,6 +2254,29 @@ Craft.Abstractions.MachineTerminalProfiles  ctor(System.String name, Craft.Abstr
 Craft.Abstractions.MachineTerminalProfiles  static System.String Describe(System.Collections.Generic.IEnumerable<Craft.Abstractions.TerminalProfile> profiles)
 Craft.Abstractions.MachineTerminalProfiles : Craft.Abstractions.ITerminalProfileSource
 Craft.Abstractions.MachineTerminalProfiles : Idrak.Abstraction.IKind
+Craft.Abstractions.MarkupTags
+Craft.Abstractions.MarkupTags  static System.Boolean IsHtmlVoid(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.MarkupTags  static System.Boolean IsVoid(Craft.Abstractions.LineTokenizer tokenizer, Craft.Abstractions.ITextSnapshot snapshot, Craft.Abstractions.MarkupTags.Tag tag)
+Craft.Abstractions.MarkupTags  static System.Void Collect(System.ReadOnlySpan<System.Char> text, System.Int32 lineStart, System.ReadOnlySpan<Craft.Abstractions.TokenSpan> spans, System.Collections.Generic.List<Craft.Abstractions.MarkupTags.Tag> into)
+Craft.Abstractions.MarkupTags.Kind
+Craft.Abstractions.MarkupTags.Kind  Close = 1
+Craft.Abstractions.MarkupTags.Kind  Open = 0
+Craft.Abstractions.MarkupTags.Kind  SelfClose = 2
+Craft.Abstractions.MarkupTags.Kind : System.IComparable
+Craft.Abstractions.MarkupTags.Kind : System.IConvertible
+Craft.Abstractions.MarkupTags.Kind : System.IFormattable
+Craft.Abstractions.MarkupTags.Kind : System.ISpanFormattable
+Craft.Abstractions.MarkupTags.Tag
+Craft.Abstractions.MarkupTags.Tag  Craft.Abstractions.MarkupTags.Kind Kind { get; init; }
+Craft.Abstractions.MarkupTags.Tag  System.Boolean Equals(Craft.Abstractions.MarkupTags.Tag other)
+Craft.Abstractions.MarkupTags.Tag  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.MarkupTags.Tag  System.Int32 GetHashCode()
+Craft.Abstractions.MarkupTags.Tag  System.Int32 NameEnd { get; init; }
+Craft.Abstractions.MarkupTags.Tag  System.Int32 NameStart { get; init; }
+Craft.Abstractions.MarkupTags.Tag  System.String ToString()
+Craft.Abstractions.MarkupTags.Tag  System.Void Deconstruct(out Craft.Abstractions.MarkupTags.Kind Kind, out System.Int32 NameStart, out System.Int32 NameEnd)
+Craft.Abstractions.MarkupTags.Tag  ctor(Craft.Abstractions.MarkupTags.Kind Kind, System.Int32 NameStart, System.Int32 NameEnd)
+Craft.Abstractions.MarkupTags.Tag : System.IEquatable<Craft.Abstractions.MarkupTags.Tag>
 Craft.Abstractions.MemoryPressureLevel
 Craft.Abstractions.MemoryPressureLevel  Critical = 1
 Craft.Abstractions.MemoryPressureLevel  High = 0
@@ -2831,8 +2990,11 @@ Craft.Abstractions.PanelResultRow  Craft.Abstractions.PanelTone Tone { get; init
 Craft.Abstractions.PanelResultRow  System.Boolean Code { get; init; }
 Craft.Abstractions.PanelResultRow  System.Boolean Equals(Craft.Abstractions.PanelResultRow other)
 Craft.Abstractions.PanelResultRow  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.PanelResultRow  System.Boolean Selected { get; init; }
+Craft.Abstractions.PanelResultRow  System.Boolean? Expanded { get; init; }
 Craft.Abstractions.PanelResultRow  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelButton> Buttons { get; init; }
 Craft.Abstractions.PanelResultRow  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelSpan> Highlights { get; init; }
+Craft.Abstractions.PanelResultRow  System.Int32 Depth { get; init; }
 Craft.Abstractions.PanelResultRow  System.Int32 GetHashCode()
 Craft.Abstractions.PanelResultRow  System.String ActionId { get; init; }
 Craft.Abstractions.PanelResultRow  System.String Badge { get; init; }
@@ -2842,6 +3004,7 @@ Craft.Abstractions.PanelResultRow  System.String Id { get; init; }
 Craft.Abstractions.PanelResultRow  System.String Prefix { get; init; }
 Craft.Abstractions.PanelResultRow  System.String Text { get; init; }
 Craft.Abstractions.PanelResultRow  System.String ToString()
+Craft.Abstractions.PanelResultRow  System.String ToggleActionId { get; init; }
 Craft.Abstractions.PanelResultRow  System.String Value { get; init; }
 Craft.Abstractions.PanelResultRow  System.Void Deconstruct(out System.String Id, out System.String Text)
 Craft.Abstractions.PanelResultRow  ctor(System.String Id, System.String Text)
@@ -3046,7 +3209,9 @@ Craft.Abstractions.RailIcons  const System.String Close = M6 6l12 12M18 6L6 18
 Craft.Abstractions.RailIcons  const System.String Collapse = M4 6h16M8 12h8M10 18h4
 Craft.Abstractions.RailIcons  const System.String Edit = M4 20h4L19 9l-4-4L4 16zM14 6l4 4
 Craft.Abstractions.RailIcons  const System.String Explorer = M4 4h6l2 2h8v13H4z
+Craft.Abstractions.RailIcons  const System.String Hierarchy = M6 3v6M6 9h12M6 9v6h6M18 9v6M12 15v6M18 15v6
 Craft.Abstractions.RailIcons  const System.String History = M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6M3 3v4h4
+Craft.Abstractions.RailIcons  const System.String Outline = M4 5h12M8 10h12M8 15h10M12 20h8M4 5v0
 Craft.Abstractions.RailIcons  const System.String Panel = M4 6h16M4 12h16M4 18h10
 Craft.Abstractions.RailIcons  const System.String Plugins = M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4
 Craft.Abstractions.RailIcons  const System.String Refresh = M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6
@@ -3407,6 +3572,58 @@ Craft.Abstractions.SignatureParameter  System.String ToString()
 Craft.Abstractions.SignatureParameter  System.Void Deconstruct(out System.String Name, out System.Int32 Start, out System.Int32 Length, out System.String Documentation)
 Craft.Abstractions.SignatureParameter  ctor(System.String Name, System.Int32 Start, System.Int32 Length, System.String Documentation)
 Craft.Abstractions.SignatureParameter : System.IEquatable<Craft.Abstractions.SignatureParameter>
+Craft.Abstractions.Snippet
+Craft.Abstractions.Snippet  Craft.Abstractions.Snippet <Clone>$()
+Craft.Abstractions.Snippet  System.Boolean Equals(Craft.Abstractions.Snippet other)
+Craft.Abstractions.Snippet  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.Snippet  System.Boolean IsFor(System.String language)
+Craft.Abstractions.Snippet  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; init; }
+Craft.Abstractions.Snippet  System.Collections.Generic.IReadOnlyList<System.String> Prefixes { get; init; }
+Craft.Abstractions.Snippet  System.Int32 GetHashCode()
+Craft.Abstractions.Snippet  System.String Body { get; init; }
+Craft.Abstractions.Snippet  System.String Description { get; init; }
+Craft.Abstractions.Snippet  System.String Name { get; init; }
+Craft.Abstractions.Snippet  System.String Source { get; init; }
+Craft.Abstractions.Snippet  System.String ToString()
+Craft.Abstractions.Snippet  System.Void Deconstruct(out System.String Name, out System.Collections.Generic.IReadOnlyList<System.String> Prefixes, out System.String Body, out System.String Description)
+Craft.Abstractions.Snippet  ctor(System.String Name, System.Collections.Generic.IReadOnlyList<System.String> Prefixes, System.String Body, System.String Description = null)
+Craft.Abstractions.Snippet : System.IEquatable<Craft.Abstractions.Snippet>
+Craft.Abstractions.SnippetContext
+Craft.Abstractions.SnippetContext  Craft.Abstractions.SnippetContext <Clone>$()
+Craft.Abstractions.SnippetContext  System.Boolean Equals(Craft.Abstractions.SnippetContext other)
+Craft.Abstractions.SnippetContext  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.SnippetContext  System.Func<System.String, System.String> Variables { get; init; }
+Craft.Abstractions.SnippetContext  System.Int32 GetHashCode()
+Craft.Abstractions.SnippetContext  System.String Indent { get; init; }
+Craft.Abstractions.SnippetContext  System.String IndentUnit { get; init; }
+Craft.Abstractions.SnippetContext  System.String NewLine { get; init; }
+Craft.Abstractions.SnippetContext  System.String ToString()
+Craft.Abstractions.SnippetContext  ctor()
+Craft.Abstractions.SnippetContext : System.IEquatable<Craft.Abstractions.SnippetContext>
+Craft.Abstractions.SnippetParser
+Craft.Abstractions.SnippetParser  static Craft.Abstractions.ExpandedSnippet Expand(System.String body, Craft.Abstractions.SnippetContext context = null)
+Craft.Abstractions.SnippetParser  static System.String Preview(System.String body)
+Craft.Abstractions.SnippetProviders
+Craft.Abstractions.SnippetProviders  static Craft.Abstractions.ISnippetProvider Find(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.SnippetProviders  static Craft.Abstractions.ISnippetProvider Get(System.ReadOnlySpan<System.Char> name)
+Craft.Abstractions.SnippetProviders  static System.Boolean Unregister(System.String name)
+Craft.Abstractions.SnippetProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ISnippetProvider> All { get; }
+Craft.Abstractions.SnippetProviders  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.Snippet> For(System.String language, System.Action<System.String, System.Exception> failed = null)
+Craft.Abstractions.SnippetProviders  static System.Collections.Generic.IReadOnlyList<System.String> Names { get; }
+Craft.Abstractions.SnippetProviders  static System.Void Register(Craft.Abstractions.ISnippetProvider provider)
+Craft.Abstractions.SnippetStop
+Craft.Abstractions.SnippetStop  Craft.Abstractions.SnippetStop <Clone>$()
+Craft.Abstractions.SnippetStop  System.Boolean Equals(Craft.Abstractions.SnippetStop other)
+Craft.Abstractions.SnippetStop  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.SnippetStop  System.Collections.Generic.IReadOnlyList<System.String> Choices { get; init; }
+Craft.Abstractions.SnippetStop  System.Int32 GetHashCode()
+Craft.Abstractions.SnippetStop  System.Int32 Index { get; init; }
+Craft.Abstractions.SnippetStop  System.Int32 Length { get; init; }
+Craft.Abstractions.SnippetStop  System.Int32 Start { get; init; }
+Craft.Abstractions.SnippetStop  System.String ToString()
+Craft.Abstractions.SnippetStop  System.Void Deconstruct(out System.Int32 Index, out System.Int32 Start, out System.Int32 Length)
+Craft.Abstractions.SnippetStop  ctor(System.Int32 Index, System.Int32 Start, System.Int32 Length)
+Craft.Abstractions.SnippetStop : System.IEquatable<Craft.Abstractions.SnippetStop>
 Craft.Abstractions.SourceControlFile
 Craft.Abstractions.SourceControlFile  Craft.Abstractions.SourceControlFile <Clone>$()
 Craft.Abstractions.SourceControlFile  Craft.Abstractions.SourceControlState State { get; init; }
@@ -3849,6 +4066,18 @@ Craft.Abstractions.TextPattern  System.String Query { get; }
 Craft.Abstractions.TextPattern  System.String Replacement(System.ReadOnlySpan<System.Char> line, System.Int32 start, System.String replacement)
 Craft.Abstractions.TextPattern  ctor(System.String query, System.Boolean matchCase, System.Boolean wholeWord, System.Boolean regex, System.TimeSpan regexTimeout, System.Boolean compiled = false)
 Craft.Abstractions.TextPattern  static System.Boolean IsWordChar(System.Char c)
+Craft.Abstractions.TextRange
+Craft.Abstractions.TextRange  System.Boolean Equals(Craft.Abstractions.TextRange other)
+Craft.Abstractions.TextRange  System.Boolean Equals(System.Object obj)
+Craft.Abstractions.TextRange  System.Boolean Touches(System.Int32 position)
+Craft.Abstractions.TextRange  System.Int32 End { get; }
+Craft.Abstractions.TextRange  System.Int32 GetHashCode()
+Craft.Abstractions.TextRange  System.Int32 Length { get; init; }
+Craft.Abstractions.TextRange  System.Int32 Start { get; init; }
+Craft.Abstractions.TextRange  System.String ToString()
+Craft.Abstractions.TextRange  System.Void Deconstruct(out System.Int32 Start, out System.Int32 Length)
+Craft.Abstractions.TextRange  ctor(System.Int32 Start, System.Int32 Length)
+Craft.Abstractions.TextRange : System.IEquatable<Craft.Abstractions.TextRange>
 Craft.Abstractions.TextStyle
 Craft.Abstractions.TextStyle  System.Boolean Bold { get; init; }
 Craft.Abstractions.TextStyle  System.Boolean Equals(Craft.Abstractions.TextStyle other)

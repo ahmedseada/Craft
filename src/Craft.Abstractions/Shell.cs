@@ -510,6 +510,12 @@ public static class RailIcons
     /// <summary>Folding everything (lines drawn together).</summary>
     public const string Collapse = "M4 6h16M8 12h8M10 18h4";
 
+    /// <summary>The Outline view (a tree of lines, each level further in; X part 9).</summary>
+    public const string Outline = "M4 5h12M8 10h12M8 15h10M12 20h8M4 5v0";
+
+    /// <summary>A hierarchy (a node and the nodes under it; X part 9).</summary>
+    public const string Hierarchy = "M6 3v6M6 9h12M6 9v6h6M18 9v6M12 15v6M18 15v6";
+
     /// <summary>Refresh (a circular arrow).</summary>
     public const string Refresh = "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6";
 

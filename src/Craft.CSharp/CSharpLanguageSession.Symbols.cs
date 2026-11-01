@@ -37,13 +37,7 @@ public sealed partial class CSharpLanguageSession
         var parsed = Volatile.Read(ref _parsed);
         if ((parsed is null || !IsOf(snapshot, parsed)) && ReferenceEquals(snapshot.Buffer, _buffer))
         {
-            Task idle;
-            lock (_gate)
-            {
-                idle = _idle.Task;
-            }
-
-            await idle.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await WhenIdle().WaitAsync(cancellationToken).ConfigureAwait(false);
             parsed = Volatile.Read(ref _parsed);
         }
 

@@ -231,6 +231,7 @@ sealed class Craft.Editor.CompletionController : System.IDisposable
   System.Void Dispose()
   System.Void Invoke()
   System.Void SelectIndex(System.Int32 index)
+  System.Void ShowChoices(System.Collections.Generic.IReadOnlyList<System.String> choices, System.Int32 start, System.Int32 end)
   event System.EventHandler Changed
   static System.Boolean IsIdentifierPart(System.Char c)
   static System.Int32 Score(System.String text, System.String typed)
@@ -369,6 +370,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Func<Craft.Abstractions.KeyChord, System.Boolean> KeyCapture { get; set; }
   System.Func<System.String, System.Action, System.Action, System.Boolean> UndoPresenter { get; set; }
   System.Func<System.String, System.Boolean> ClipboardWriter { get; set; }
+  System.Func<System.String, System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Boolean>> RunTests { get; set; }
   System.Func<System.String, System.String, System.Threading.Tasks.Task<System.String>> SettingWriter { get; set; }
   System.Func<System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task<Craft.Abstractions.IEditorDocument>> OpenFile { get; set; }
   System.Func<System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.String>> FolderPicker { get; set; }
@@ -391,6 +393,7 @@ sealed class Craft.Editor.EditorHost : Craft.Abstractions.IEditorHost, Craft.Edi
   System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ProposeWorkspaceAsync(Craft.Abstractions.WorkspaceEdit edit, System.String title, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.Boolean> RunTestAsync(System.String filePath, System.String testName, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DiffNote> notes, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ShowDiffAsync(System.String title, System.String path, System.String before, System.String after, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
@@ -460,6 +463,7 @@ sealed class Craft.Editor.EditorMeasureEventArgs : System.EventArgs
 sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, System.IDisposable
   Craft.Abstractions.FileSettings FileSettings { get; }
   Craft.Abstractions.FontMetrics Metrics { get; }
+  Craft.Abstractions.IEditorHost Host { get; set; }
   Craft.Abstractions.IFormattingLanguageSession FormattingSession { get; }
   Craft.Abstractions.ILanguage Language { get; }
   Craft.Abstractions.ILanguageSession LanguageSession { get; }
@@ -488,6 +492,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   Craft.Editor.LineRange VisibleLines(System.Single scrollY, System.Single viewportHeight)
   Craft.Editor.LineRange VisibleRows(System.Single scrollY, System.Single viewportHeight)
   Craft.Editor.PopupBox? CompletionBox()
+  Craft.Editor.SnippetSession ActiveSnippet { get; }
   Craft.Editor.Spelling.SpellCheckLayer Spelling { get; }
   Craft.Editor.Spelling.SpellChecker SpellChecker { get; set; }
   Craft.Editor.StickyScrollLayer StickyScroll { get; }
@@ -499,9 +504,11 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean AddNextOccurrence()
   System.Boolean AddSelection(Craft.Abstractions.SelectionState selection)
   System.Boolean CanFormat { get; }
+  System.Boolean CodeLensShown { get; }
   System.Boolean CollapseCarets()
   System.Boolean ColumnSelect(Craft.Abstractions.EditorKey key)
   System.Boolean CommentLines()
+  System.Boolean ControlHeld { get; set; }
   System.Boolean ConvertIndentation(System.Boolean toSpaces)
   System.Boolean ConvertLineEndings(System.String newLine)
   System.Boolean CopyLines(Craft.Editor.LineDirection direction)
@@ -511,22 +518,29 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean ExpandSelection()
   System.Boolean FormatSelection()
   System.Boolean GoToLine(System.Int32 line, System.Int32 column = 1)
+  System.Boolean HasLensRow(System.Int32 line)
   System.Boolean HasMultipleCarets { get; }
   System.Boolean IndentLines()
+  System.Boolean InlayHintsShown { get; }
   System.Boolean InlineChatOpen { get; }
   System.Boolean InsertFinalNewline()
+  System.Boolean InsertSnippet(Craft.Abstractions.Snippet snippet, System.Int32 start, System.Int32 end)
+  System.Boolean InsertSnippet(System.String body, System.Int32 start, System.Int32 end)
   System.Boolean IsAnimating { get; }
+  System.Boolean IsLensRow(System.Int32 row)
   System.Boolean IsReadOnly { get; set; }
   System.Boolean KeepSelectionForContextMenu()
   System.Boolean LinksNeedControl { get; set; }
   System.Boolean MinimapShown { get; set; }
   System.Boolean MoveLines(Craft.Editor.LineDirection direction)
+  System.Boolean NextSnippetStop(System.Boolean forward = true)
   System.Boolean OnKey(Craft.Abstractions.EditorKey key, Craft.Abstractions.KeyModifiers modifiers)
   System.Boolean OpenInlineChat()
   System.Boolean OutdentLines()
   System.Boolean Overwrite { get; }
   System.Boolean OwnsLanguageSession { get; }
   System.Boolean PeekDefinition()
+  System.Boolean RunLens(System.Int32 index)
   System.Boolean SelectAllOccurrences()
   System.Boolean SelectLine()
   System.Boolean ShowLineNumbers { get; set; }
@@ -537,8 +551,10 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Boolean UncommentLines()
   System.Boolean WaitForClassification(Craft.Abstractions.ITextSnapshot snapshot)
   System.Boolean WheelOverPopup(System.Single pixelsDown)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.CodeLens> CodeLenses { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.EditorDiagnostic> DiagnosticsAt(System.Int32 position)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.EditorDiagnostic> DiagnosticsOnLine(System.Int32 line)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.InlayHint> InlayHints { get; }
   System.Double CompletionReveal { get; }
   System.Double LastInputToPaintMilliseconds { get; }
   System.Double MaxInputToPaintMilliseconds { get; }
@@ -546,10 +562,15 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Int32 CaretColumn { get; }
   System.Int32 CaretLine { get; }
   System.Int32 ClickCount { get; }
+  System.Int32 CodeLensRequests { get; }
+  System.Int32 CodeLensResolves { get; }
   System.Int32 ColumnOf(System.Int32 position)
   System.Int32 ErrorCount { get; }
+  System.Int32 InlayHintRequests { get; }
+  System.Int32 LensesRun { get; }
   System.Int32 LightbulbLine { get; }
   System.Int32 LineAtRow(System.Int32 row)
+  System.Int32 LinkedEdits { get; }
   System.Int32 NextShownLine(System.Int32 line)
   System.Int32 PositionAtVisual(System.Int32 row, System.Single column, System.Boolean nearest)
   System.Int32 PositionFromPoint(System.Single x, System.Single y)
@@ -566,6 +587,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.ReadOnlySpan<Craft.Abstractions.EditorDiagnostic> Diagnostics { get; }
   System.ReadOnlySpan<Craft.Abstractions.LineMark> LineMarks { get; }
   System.ReadOnlySpan<Craft.Abstractions.SelectionState> Selections { get; }
+  System.ReadOnlySpan<System.Int32> LensLines { get; }
   System.ReadOnlySpan<System.Int32> RulerColumns { get; }
   System.Single CompletionShownHeight()
   System.Single ContentHeight { get; }
@@ -593,6 +615,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.ValueTuple<System.Int32, Craft.Abstractions.OutputLink>? HoveredLink { get; }
   System.ValueTuple<System.Int32, Craft.Abstractions.OutputLink>? LinkAt(System.Single viewX, System.Single viewY)
   System.ValueTuple<System.Int32, System.Int32> VisualOf(System.Int32 position)
+  System.ValueTuple<System.Int32, System.Int32>? InlayHintsRange { get; }
   System.Void ApplyDiagnostics()
   System.Void ApplyFileSettings(Craft.Abstractions.FileSettings settings)
   System.Void ApplyReclassification()
@@ -602,6 +625,7 @@ sealed class Craft.Editor.EditorModel : Craft.Abstractions.IEditorInputSink, Sys
   System.Void FormatDocument()
   System.Void GoToDefinition()
   System.Void GoToDefinitionAt(System.Int32 position)
+  System.Void LeaveSnippet()
   System.Void NoteLineColumns(System.Int32 columns)
   System.Void NotePainted()
   System.Void OnText(System.String text)
@@ -684,9 +708,11 @@ sealed class Craft.Editor.EditorRenderer : System.IDisposable
   System.Int32 CaretsDrawnAlone { get; }
   System.Int32 GhostLinesDrawn { get; }
   System.Int32 GuidesDrawn { get; }
+  System.Int32 HintsDrawn { get; }
   System.Int32 InlineChatRowsDrawn { get; }
   System.Int32 InlineDiagnosticsDrawn { get; }
   System.Int32 LayoutsHeld { get; }
+  System.Int32 LensRowsDrawn { get; }
   System.Int32 LineMarksDrawn { get; }
   System.Int32 LinesDrawn { get; }
   System.Int32 LinesHeld { get; }
@@ -695,6 +721,7 @@ sealed class Craft.Editor.EditorRenderer : System.IDisposable
   System.Int32 SquiggleSegmentsDrawn { get; }
   System.Int32 WhitespaceMarksDrawn { get; }
   System.Int32 WordHighlightsDrawn { get; }
+  System.Int64 HintedLinesBuilt { get; }
   System.Int64 ParseWaitsExceeded { get; }
   System.Int64 RunStringsBuilt { get; }
   System.String GhostPlusDrawn { get; }
@@ -1025,6 +1052,44 @@ static class Craft.Editor.Motion
   static System.Double Progress(System.TimeSpan elapsed, System.Int32 milliseconds)
   static System.Int32 Duration(Craft.Core.CraftOptions options)
   static System.Int32 ScrollDuration(Craft.Core.CraftOptions options)
+sealed class Craft.Editor.Outline.HierarchyView : Craft.Abstractions.IEditorPanel, Craft.Abstractions.IEditorViewPanel
+  Craft.Abstractions.HierarchyDirection Direction { get; }
+  Craft.Abstractions.HierarchyItem Root { get; }
+  Craft.Abstractions.HierarchyKind Kind { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+  System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.Int32, Craft.Abstractions.HierarchyItem>> Rows { get; }
+  System.String Id { get; }
+  System.String Note { get; }
+  System.String Title { get; }
+  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task GoToAsync(Craft.Abstractions.HierarchyItem item, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task Pending { get; }
+  System.Threading.Tasks.Task ShowAsync(Craft.Abstractions.ISemanticLanguageSession session, Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, Craft.Abstractions.HierarchyKind kind, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task ToggleAsync(System.String id, System.Threading.CancellationToken cancellationToken = null)
+  const System.String PanelId = craft.hierarchy
+  ctor(Craft.Editor.EditorHost host, System.Func<Craft.Core.CraftOptions> options, System.Func<System.String, System.Int32, System.Int32, System.Threading.CancellationToken, System.Threading.Tasks.Task> goTo)
+  event System.EventHandler Changed
+sealed class Craft.Editor.Outline.OutlineView : Craft.Abstractions.IEditorPanel, Craft.Abstractions.IEditorViewPanel, System.IDisposable
+  Craft.Editor.SymbolIndex Symbols { get; }
+  System.Boolean FollowsCaret { get; }
+  System.Boolean GoTo(System.Int32 symbol)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+  System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.Int32, System.Int32>> Rows { get; }
+  System.Int32 SelectedSymbol { get; }
+  System.String Filter { get; }
+  System.String Id { get; }
+  System.String Sort { get; }
+  System.String Title { get; }
+  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task Loaded { get; }
+  System.Void Dispose()
+  System.Void Refresh()
+  const System.String PanelId = craft.outline
+  ctor(Craft.Editor.EditorHost host, System.Func<Craft.Editor.EditorModel> active, System.Func<Craft.Core.CraftOptions> options)
+  event System.EventHandler Changed
+  static System.Boolean Matches(System.String name, System.String filter)
 sealed class Craft.Editor.OverviewRuler : System.IDisposable
   System.Int32 Marks { get; }
   System.Int32 MarksDrawn { get; }
@@ -1255,6 +1320,7 @@ sealed class Craft.Editor.Run.RunView : Craft.Abstractions.IEditorPanel, Craft.A
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunAsync(Craft.Abstractions.RunConfiguration configuration, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunCommandAsync(System.String name, Craft.Abstractions.RunCommand command, Craft.Abstractions.RunActions action, System.Action<System.String> tap = null, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunDefaultAsync(Craft.Abstractions.RunActions action, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<Craft.Editor.Run.RunOutcome> RunTestAsync(System.String filePath, System.String testName, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispose()
   System.Void WorkspaceChanged()
   const System.String FixWithAiAction = run.fixWithAi
@@ -2618,6 +2684,7 @@ sealed class Craft.Editor.Shell.SettingsPageModel
 static class Craft.Editor.Shell.ShellCommandIds
   const System.String About = craft.about
   const System.String Agent = craft.agent
+  const System.String CallHierarchy = craft.callHierarchy
   const System.String ClearNotifications = craft.clearNotifications
   const System.String CloseAllTabs = craft.closeAllTabs
   const System.String CloseFolder = craft.closeFolder
@@ -2681,6 +2748,7 @@ static class Craft.Editor.Shell.ShellCommandIds
   const System.String SaveAs = craft.saveAs
   const System.String SelectForCompare = craft.explorer.selectForCompare
   const System.String Settings = craft.settings
+  const System.String ShowOutline = craft.outline.show
   const System.String ShowOutput = craft.showOutput
   const System.String ShowProblems = craft.showProblems
   const System.String ShowTelemetry = craft.showTelemetry
@@ -2691,6 +2759,7 @@ static class Craft.Editor.Shell.ShellCommandIds
   const System.String TogglePanel = craft.togglePanel
   const System.String ToggleTheme = craft.toggleTheme
   const System.String ToggleTree = craft.toggleTree
+  const System.String TypeHierarchy = craft.typeHierarchy
   const System.String UnpinTab = craft.unpinTab
   const System.String Welcome = craft.welcome
   const System.String ZoomIn = craft.zoomIn
@@ -2754,6 +2823,8 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Editor.Abstractions.IShellUi Ui { get; }
   Craft.Editor.EditorHost Host { get; }
   Craft.Editor.LanguageSessionPool Sessions { get; }
+  Craft.Editor.Outline.HierarchyView Hierarchy { get; }
+  Craft.Editor.Outline.OutlineView Outline { get; }
   Craft.Editor.Run.RunView Run { get; }
   Craft.Editor.Search.WorkspaceSearchView Search { get; }
   Craft.Editor.Shell.BookmarkList Bookmarks { get; }
@@ -2777,6 +2848,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Editor.Shell.UndoBar UndoBar { get; }
   Craft.Editor.Testing.TestExplorerView Tests { get; }
   Craft.Editor.Tools.TodoListView Todo { get; }
+  Craft.Editor.UserSnippets UserSnippets { get; }
   System.Boolean DiscardRecovered(Craft.Editor.Shell.RecoveredFile file)
   System.Boolean FullScreenSupported { get; set; }
   System.Boolean InlineTreeEdits { get; set; }
@@ -2823,6 +2895,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   System.Threading.Tasks.Task RevertAsync(Craft.Editor.Shell.DocumentTab tab, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task SaveSessionAsync()
   System.Threading.Tasks.Task SessionSaved { get; }
+  System.Threading.Tasks.Task ShowHierarchyAsync(Craft.Abstractions.HierarchyKind kind, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task ShowSearch(System.Boolean replace = false)
   System.Threading.Tasks.Task TimelineRead { get; }
   System.Threading.Tasks.Task<Craft.Abstractions.FileSettings> FileSettingsAsync(System.String path, System.Threading.CancellationToken cancellationToken = null)
@@ -2953,6 +3026,7 @@ static class Craft.Editor.Shell.ShellTooltips
 static class Craft.Editor.Shell.ShellViewNames
   const System.String GoToLine = quickOpen.line
   const System.String GoToSymbol = quickOpen.symbol
+  const System.String Hierarchy = panel.hierarchy
   const System.String Output = panel.output
   const System.String Problems = panel.problems
   const System.String QuickOpen = quickOpen
@@ -3209,6 +3283,27 @@ sealed class Craft.Editor.SmoothScroll
   System.Void ScrollTo(System.Double x, System.Double y, System.Double maxX, System.Double maxY, System.Int64 now)
   ctor()
   static System.Double WheelPixels(System.Double delta, System.Int32 lines, System.Double lineHeight)
+sealed class Craft.Editor.SnippetSession
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.SnippetSession.Stop> Stops { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.SnippetSession.Stop> StopsOf(System.Int32 number)
+  System.Collections.Generic.IReadOnlyList<System.Int32> Order { get; }
+  System.Int32 Current { get; }
+  System.Int32 CurrentStop { get; }
+  System.Int32 End { get; }
+  System.Int32 Start { get; }
+  System.Int32 Version { get; }
+sealed class Craft.Editor.SnippetSession.Stop : System.IEquatable<Craft.Editor.SnippetSession.Stop>
+  Craft.Editor.SnippetSession.Stop <Clone>$()
+  System.Boolean Equals(Craft.Editor.SnippetSession.Stop other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.String> Choices { get; init; }
+  System.Int32 End { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 Index { get; init; }
+  System.Int32 Start { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 Index, out System.Int32 Start, out System.Int32 End, out System.Collections.Generic.IReadOnlyList<System.String> Choices)
+  ctor(System.Int32 Index, System.Int32 Start, System.Int32 End, System.Collections.Generic.IReadOnlyList<System.String> Choices)
 sealed class Craft.Editor.Spelling.SpellCheckLayer
   System.Boolean TryMissAt(System.Int32 position, out System.Int32 start, out System.Int32 length, out System.String word)
   System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.Int32, System.Int32, System.Int32>> Misses()
@@ -3292,6 +3387,7 @@ static class Craft.Editor.SymbolKinds
 sealed class Craft.Editor.SyntacticLanguageSession : Craft.Abstractions.ILanguageSession, System.IDisposable
   Craft.Abstractions.ILanguageSession Inner { get; }
   Craft.Abstractions.LanguageRules RulesAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
+  Craft.Abstractions.LinkedEditingRanges GetLinkedEditingRanges(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position, System.Int32 maxLines)
   System.Boolean WaitUntilClassified(Craft.Abstractions.ITextSnapshot snapshot, System.TimeSpan timeout)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.ScopeName> ScopeAt(Craft.Abstractions.ITextSnapshot snapshot, System.Int32 position)
   System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.DocumentSymbol>> GetDocumentSymbolsAsync(Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken)
@@ -3686,6 +3782,23 @@ static class Craft.Editor.Tools.TodoScanner
   static System.Boolean IsComment(System.String tokenClass)
   static System.Collections.Generic.List<Craft.Editor.Tools.TodoEntry> Scan(System.String path, System.String text, Craft.Abstractions.ILanguage language, System.Collections.Generic.IReadOnlyList<System.String> tags, System.Threading.CancellationToken cancellationToken = null)
   static System.Collections.Generic.List<Craft.Editor.Tools.TodoEntry> ScanFile(System.String path, System.Collections.Generic.IReadOnlyList<System.String> tags, System.Int64 maxBytes, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Editor.UserSnippets : Craft.Abstractions.ISnippetProvider, Idrak.Abstraction.IKind, System.IDisposable
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.Snippet> All { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.Snippet> SnippetsFor(System.String language)
+  System.Collections.Generic.IReadOnlyList<System.String> Folders { get; }
+  System.Collections.Generic.IReadOnlyList<System.String> Problems { get; }
+  System.Int32 Reads { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task Loaded { get; }
+  System.Threading.Tasks.Task Reload()
+  System.Threading.Tasks.Task SetFolders(System.String userFolder, System.String workspaceRoot, System.String watcher)
+  System.Void Dispose()
+  System.Void NoteSaved(System.String path)
+  const System.String ProviderName = user
+  ctor()
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.Snippet> Parse(System.ReadOnlySpan<System.Byte> utf8, System.String path)
+  static System.ValueTuple<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.Snippet>, System.Collections.Generic.IReadOnlyList<System.String>> Read(System.Collections.Generic.IReadOnlyList<System.String> folders)
 sealed class Craft.Editor.WordWrap
   Craft.Editor.WrappedLine Line(System.Int32 line)
   System.Boolean IsActive { get; }

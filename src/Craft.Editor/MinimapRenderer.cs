@@ -178,15 +178,14 @@ public sealed class MinimapRenderer : IDisposable
 
         // The lines: one rect per piece of a coloured run.
         float rectHeight = g.RowHeight <= 1 ? g.RowHeight : g.RowHeight * 0.75f;
-        int row = firstRow;
-        for (int index = window.First; index <= window.Last && index < snapshot.LineCount; index = model.NextShownLine(index), row++)
+        for (int index = window.First; index <= window.Last && index < snapshot.LineCount; index = model.NextShownLine(index))
         {
             if (!_lines.TryGetValue(index, out var line))
             {
                 continue;
             }
 
-            float y = (row * g.RowHeight) - g.Top;
+            float y = (model.RowOfLine(index) * g.RowHeight) - g.Top;     // X part 9: a code lens row stays a row here too
             for (int i = 0; i < line.Count; i++)
             {
                 int cells = line.Cells[i];

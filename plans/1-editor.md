@@ -4473,6 +4473,108 @@ Craft's). Main's health went to `main` first (46d6e17); the recovery prompt and 
   $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
   ```
 
+### X part 9, language 3-5 and 10-12, as built (2026-11-01)
+
+Slot s3 (stopped once, resumed alone, merged over phase W and X part 9's other groups). Craft only: nothing was missing in
+Idrak (Roslyn, the line-state kit and the run sandboxes held what was needed).
+- **Contracts** (`Craft.Abstractions`, contract 1.1, additions only): `Snippet`, `ISnippetProvider` and `SnippetProviders`
+  (a `KindTable`; `For(language)`), `SnippetParser` (VS Code's subset: `$1`, `${1:placeholder}` nested, `${1|a,b|}`, `$0`,
+  `$NAME`, `${NAME:default}`, escapes, a transform read and mirrored; a plain `$1` repeats its placeholder's text, as VS
+  Code's mirrors do), `SnippetContext`, `ExpandedSnippet`, `SnippetStop`; `ISemanticLanguageSession.InlayHintsAsync(snapshot,
+  start, length)`, `InlayHint`, `InlayHintKind`; `CodeLens` (with `ResolveAsync` for a costly title), `CodeLensRequest`,
+  `ICodeLensProvider` and `CodeLensProviders`; `ILanguageSession.GetLinkedEditingRanges(snapshot, position, maxLines)`,
+  `TextRange`, `LinkedEditingRanges`; `LineTokenizer.LinksTags`, `IsVoidElement` and `MarkupTags` on W0's public line-state
+  kit (the session walks the tags; the markup tokenizer and W's HTML tokenizer opt in); `PrepareHierarchyAsync`,
+  `HierarchyAsync`, `HierarchyItem`, `HierarchyKind`, `HierarchyDirection`; `IEditorHost.RunTestAsync`,
+  `IRunProvider.TestCommand`; `PanelResultRow.Depth`, `Expanded`, `ToggleActionId`, `Selected` (trees in a results list);
+  `RailIcons.Outline`, `Hierarchy`.
+- **Snippets (3)**: completion lists the registered providers' snippets with their own kind ("sn"), merged into the
+  language's list by sort text, or alone for a language with no semantic layer; never after '.', nor for an empty word
+  unless invoked. A commit expands the body in place of the word (the line's indent on its next lines, a tab as the
+  editor's indent, the variables), one undo step; Tab and Shift+Tab move between stops, a repeated stop is selected at every
+  place (several carets: typing fills them all), a choice stop lists its choices, Escape or `$0` leaves. C#'s set in the
+  plug-in ("csharp": prop, propg, propfull, ctor (named after the file), class, interface, record, struct, enum, for, forr,
+  foreach, if, else, while, do, switch, try, tryf, using, lock, cw, cwi, namespace, main, svm, sim, mbox, async, exception,
+  indexer, iterator, test (xUnit), testa, theory, nunit, mstest, region, summary). The user's own: `UserSnippets` ("user",
+  registered by the shell) reads `*.json` and `*.code-snippets` of `CRAFT_SNIPPETS_FOLDER` (the data folder's "snippets")
+  and the workspace's `.craft/snippets` off the UI thread, again when a watcher sees one made, removed or renamed or the
+  editor saves one; a language-named file is that language's, `scope` names others; a file that does not parse is said.
+- **Inlay hints (4)**: the editor asks the lines on screen and a screen either side after `CRAFT_INLAY_HINTS_DELAY_MS`,
+  once a version and range, keeps the answer, moves it through each edit until the next answer; a failed request is not
+  asked again for that text. C#'s come from Roslyn's semantic model (Roslyn's inline hints service is internal in the
+  Features version shipped, checked by reading its metadata), with its default rules: parameter names before literals,
+  object creations and indexer arguments, left out for parameters that differ only by a number, a method named after its
+  one parameter, an argument that already names it; inferred types after `var` (declarations, foreach, out var,
+  deconstruction) and before implicit lambda parameters. Drawn as faded italic chips: the text after a hint moves right,
+  the caret, the selection and the columns stay the text's (a click on the moved text finds it, one on a chip goes to its
+  place). With word wrap on, a hint moves only what follows it on its own wrapped row; the wrap itself is unchanged.
+- **Code lens (5)**: each member with lenses gets a row of its own above it (line numbers stay the lines'; the caret steps
+  over lens rows); the providers are asked once a version for the document's symbols, a costly title is resolved only for
+  the rows on screen, and across an edit the lenses move with their members and keep their last titles. C#'s provider: "N
+  references" over types, methods, properties and events (Roslyn's find references, the declaration not counted; a click
+  puts the caret on the name and runs Shift+F12), and over an xUnit, NUnit or MSTest test "Run test" (through
+  `IEditorHost.RunTestAsync`: the Run view finds the test project holding the file and its provider's
+  `dotnet test … --filter FullyQualifiedName=…`, asked and run in the sandbox as any run) and "Debug test" (says Craft has
+  no debugger). With word wrap on, lens rows step aside (the rows are the wrap's).
+- **Linked tag rename (10)**: typing, Backspace or Delete in a start tag's name edits its end tag's (and the reverse) as
+  one undo step, while what is typed is a name's characters; the partner is found from the tokenizer's line states
+  (nesting, empty elements, comments, values and CDATA skipped; void elements in Razor and HTML), within
+  `CRAFT_BRACKET_SCAN_LINES`. XML, XAML, MSBuild, Razor and W's HTML.
+- **Outline (11)**: a side view of the rail: the active editor's document symbols as a tree that opens and closes, a
+  filter box (contains or capitals, parents kept), order by position, name or kind, the symbol at the caret highlighted
+  and scrolled into view, a click selects the name; an empty state when no file is open or the language gives none.
+- **Hierarchy (12)**: the bottom panel's Hierarchy tab (beside Problems, Terminal, Output, TODO and the telemetry):
+  Shift+Alt+H (both keymaps) shows who calls the member at the caret, "Go: Type hierarchy" (the palette and the editor's
+  menu) its bases; a picker turns to the calls made or the derived types; each level is asked when opened, as an activity
+  that can be cancelled; a click goes to the call (a caller's) or the declaration. C# on Roslyn's `SymbolFinder`
+  (FindCallers, FindDerivedClasses, FindDerivedInterfaces, FindImplementations; the calls a member makes bound in its
+  bodies), a symbol carried as its assembly and documentation id.
+- **Speed fixes (the C# session)**: a colour pass that finds no workspace document stops asking until the workspace is
+  built again, one that fails stops for that text (before: a pass every delay while frames came); the diagnostics' idle
+  source and the parse worker's are made only when someone waits (before: a pair on every keystroke after an idle pass).
+- **Options** (each a `CRAFT_*` variable on the settings page): `CRAFT_SNIPPETS` (true), `CRAFT_SNIPPETS_FOLDER`,
+  `CRAFT_INLAY_HINTS` (on; off, ctrl-held), `CRAFT_INLAY_HINTS_PARAMETERS`, `CRAFT_INLAY_HINTS_TYPES` (true),
+  `CRAFT_INLAY_HINTS_DELAY_MS` (250), `CRAFT_CODE_LENS` (true), `CRAFT_CODE_LENS_DELAY_MS` (500), `CRAFT_LINKED_EDITING`
+  (true), `CRAFT_OUTLINE_SORT` (position), `CRAFT_OUTLINE_FOLLOW_CARET` (true), `CRAFT_HIERARCHY_LIMIT` (500).
+- **Decisions on the recommendation (one line each):**
+  - Inlay hints from Roslyn's public semantic model with its service's default rules (the service is internal); no reflection, no new package.
+  - Hints shift drawing only (the editor's columns are the text's); on a wrapped row, row by row, the wrap unchanged.
+  - Code lenses in two steps (found for every member at once so rows never jump on scroll; counted only on screen).
+  - A Run test lens goes through a host contract (`RunTestAsync`) and the run providers' `TestCommand`, so a third party's lens can run a test too.
+  - Lens rows step aside while word wrap is on (main's wrap rows stay exactly as built).
+  - Linked tags on the public line-state kit as an opt-in of the tokenizer (markup and HTML opt in), no new registry.
+  - "ctrl-held" reads Ctrl from the keys and the pointer's moves (no platform reports a lone modifier key).
+  - The Outline and the Hierarchy are drawn from the public panel blocks; trees through four additive row fields.
+  - The user's snippets reload on the watcher's name events and on the editor's saves (the watcher reports no content change).
+  - A failed or empty answer is not asked again until the text changes (hints, lenses, colours).
+- **Measured** (Linux container, Release, `test-output/benches/part-9.txt`): inlay hints for a screen (42 lines) of a
+  5,000-line C# file: cold 66-114 ms (the workspace and compilation built), warm median 0.19-0.48 ms, worst 0.59-1.21 ms (28
+  hints); the editor's warm frame with 123 hints on screen: **0 B over 500 frames**; the paint and the wrapped 100,000-line
+  frame stay 0 B a frame. An idle file with no workspace document: 1 colour pass over 40 frames (before: one a delay); 50
+  keystrokes: no idle source made.
+- **Tests**: `Snippets` (4), `InlayHints` (4), `CodeLens` (3), `LinkedTags` (2), `Outline` (1), `Hierarchy` (2), `CSharp` (+2:
+  the colour pass, the idle sources); `Inventory.OptionsReadEveryVariable` takes the new variables; my tests register C#
+  and unregister it after (the Inventory group reads the registries). Filter
+  `Snippets|InlayHints|CodeLens|LinkedTags|Outline|Hierarchy|CSharp|WordWrap|Editor|Paint|Find|MultiCaret|ProjectLanguages|WebKit|Shell|Settings|ApiGuard|Inventory|DocSymbols|SymbolRename|Semantic|Surface|RunView|Keys|Folding|Layout`:
+  260 passed, 0 failed. API dumps (Abstractions and its contract list, Core, Editor, CSharp, Web) and the inventory
+  regenerated, lines added only. **Not run here**: the window (chips, lens rows and their clicks, the Outline's tree and
+  reveal, the Hierarchy tab, Ctrl held).
+- **Left, for later**: lens rows while word wrap is on; whitespace dots, link underlines and spelling marks on a hinted
+  line are drawn unshifted; a code lens screen measure of the 5,000-line file.
+- **The owner's commands** (once merged; Craft only):
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="Snippets|InlayHints|CodeLens|LinkedTags|Outline|Hierarchy|CSharp|WordWrap|Editor|Paint|Find|MultiCaret|ProjectLanguages|WebKit|Shell|Settings|ApiGuard|Inventory|DocSymbols|SymbolRename|Semantic|Surface|RunView|Keys|Folding|Layout"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app, on `Program.cs`: type `ctor` then Tab or Enter (the class's name selected, Tab moves on), `for` and type
+  over `i` (every place follows); a call with a literal shows the parameter's name faded before it, `var x = …` its type;
+  a method shows "N references" above it (a click lists them), a `[Fact]` method "Run test"; the rail's Outline (filter,
+  order, the caret followed); Shift+Alt+H on a method (the Hierarchy tab, open a caller, click it); in a `.csproj`, type
+  in an element's start tag name (its end tag follows).
+
 ### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
 good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow
 it to expand to cover the full editor space, not just the right side, without overflowing the left side bar")

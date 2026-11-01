@@ -21,7 +21,7 @@ namespace Craft.CSharp;
 public sealed class CSharpPlugin() : IdrakPlugin("csharp")
 {
     /// <summary>What it brings.</summary>
-    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig (JSON is its own plug-in since phase W); the Run view's projects, solutions and launch profiles (run, build, test, publish with the .NET SDK); the Test explorer's xUnit, NUnit and MSTest tests; Markdown's colours and folding";
+    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig (JSON is its own plug-in since phase W); the Run view's projects, solutions and launch profiles (run, build, test, publish with the .NET SDK); the Test explorer's xUnit, NUnit and MSTest tests; Markdown's colours and folding; snippets, inlay hints, code lenses (references, Run test), call and type hierarchies";
 
     /// <inheritdoc />
     protected override void RegisterParts()
@@ -45,6 +45,10 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
 
         // The Run view (X part 6): projects, solutions and launch profiles, run and built with the .NET SDK.
         Part(() => RunProviders.Register(new DotnetRunProvider()), () => RunProviders.Unregister(DotnetRunProvider.ProviderName));
+
+        // X part 9: C#'s snippets and code lenses (references, Run test and Debug test).
+        Part(() => SnippetProviders.Register(new CSharpSnippets()), () => SnippetProviders.Unregister(CSharpSnippets.ProviderName));
+        Part(() => CodeLensProviders.Register(new CSharpCodeLens()), () => CodeLensProviders.Unregister(CSharpCodeLens.ProviderName));
 
         // The Test explorer (X part 9): xUnit, NUnit and MSTest tests found in the syntax, run with dotnet test --filter.
         Part(() => TestProviders.Register(new DotnetTestProvider()), () => TestProviders.Unregister(DotnetTestProvider.ProviderName));

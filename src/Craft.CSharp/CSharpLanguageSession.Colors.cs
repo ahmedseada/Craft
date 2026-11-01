@@ -36,10 +36,19 @@ public sealed partial class CSharpLanguageSession
     private bool _colorsDue;
     private TokenSpanBuffer? _colorScratch;
     private int _colorsPasses;
+    private int _colorsStarted;
+    // X part 9's speed fix: a pass that found no workspace document (a file no reader gives a project) or failed for a
+    // version is not asked again while nothing can change it (a release for the first, an edit for the second): before, a
+    // file with no document started a pass every delay while frames came.
+    private bool _colorsNoDocument;
+    private int _colorsFailedVersion = -1;
     private long _lastColorsTicks;
 
     /// <summary>How many semantic colour passes landed since the session opened.</summary>
     public int ColorsPasses => Volatile.Read(ref _colorsPasses);
+
+    /// <summary>How many semantic colour passes started since the session opened (landed or not).</summary>
+    internal int ColorsPassesStarted => Volatile.Read(ref _colorsStarted);
 
     /// <summary>What the last semantic colour pass cost on the thread pool (the document brought to its snapshot, and Roslyn's classification).</summary>
     public TimeSpan LastColorsTime => TimeSpan.FromTicks(Volatile.Read(ref _lastColorsTicks));
@@ -261,7 +270,7 @@ public sealed partial class CSharpLanguageSession
     /// <summary>Called holding the gate: the range a pass should classify next (the asked range and a screen either side).</summary>
     private void WantColors(ITextSnapshot snapshot, int start, int length)
     {
-        if (_disposed || IsSemanticDeferred || _options.Kind != Microsoft.CodeAnalysis.SourceCodeKind.Regular)
+        if (_disposed || IsSemanticDeferred || _options.Kind != Microsoft.CodeAnalysis.SourceCodeKind.Regular || _colorsNoDocument || _colorsFailedVersion == snapshot.Version)
         {
             return;
         }
@@ -307,6 +316,7 @@ public sealed partial class CSharpLanguageSession
             }
 
             _colorsRunning = true;
+            Interlocked.Increment(ref _colorsStarted);
             _colorsWant = null;
             _colorsRunChange = null;
             _colorsRunUnknown = false;
@@ -326,7 +336,17 @@ public sealed partial class CSharpLanguageSession
         try
         {
             long started = Stopwatch.GetTimestamp();
-            if (await DocumentForAsync(snapshot, cancellationToken).ConfigureAwait(false) is { } document)
+            var found = await DocumentForAsync(snapshot, cancellationToken).ConfigureAwait(false);
+            if (found is null)
+            {
+                lock (_gate)
+                {
+                    _colorsNoDocument = true;                  // nothing to classify until the workspace is built again
+                    _colorsWant = null;
+                }
+            }
+
+            if (found is { } document)
             {
                 var roslyn = await RoslynClassifier.GetClassifiedSpansAsync(document, TextSpan.FromBounds(want.Start, want.End), cancellationToken).ConfigureAwait(false);
                 var spans = Convert(roslyn);
@@ -349,11 +369,16 @@ public sealed partial class CSharpLanguageSession
         catch (OperationCanceledException)
         {
         }
-#pragma warning disable CA1031 // A failed pass is kept in SemanticError; the syntactic colours stay, the next frame asks again.
+#pragma warning disable CA1031 // A failed pass is kept in SemanticError; the syntactic colours stay, the next version asks again.
         catch (Exception error)
 #pragma warning restore CA1031
         {
             Volatile.Write(ref _semanticError, error);
+            lock (_gate)
+            {
+                _colorsFailedVersion = snapshot.Version;       // not again for this text: an edit asks again
+                _colorsWant = null;
+            }
         }
 
         if (landed)

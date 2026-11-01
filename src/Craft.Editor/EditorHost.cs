@@ -511,6 +511,20 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
     /// <inheritdoc />
     public bool TypeText(IEditorDocument document, string text) => TypeCore(document, text, HostSource);
 
+    /// <summary>
+    /// What runs one test for <see cref="RunTestAsync"/> (the shell's Run view sets it): the file, the test's fully qualified
+    /// name, the token; null when the host has no Run view.
+    /// </summary>
+    public Func<string, string, CancellationToken, Task<bool>>? RunTests { get; set; }
+
+    /// <inheritdoc />
+    public Task<bool> RunTestAsync(string filePath, string testName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(testName);
+        return RunTests is { } run ? run(filePath, testName, cancellationToken) : Task.FromResult(false);
+    }
+
     /// <inheritdoc />
     public bool Select(IEditorDocument document, SelectionState selection)
     {

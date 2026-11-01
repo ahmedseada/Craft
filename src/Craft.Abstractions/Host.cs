@@ -230,6 +230,14 @@ public interface IEditorHost
     bool Select(IEditorDocument document, SelectionState selection) => false;
 
     /// <summary>
+    /// Runs the one test <paramref name="testName"/> (a fully qualified name, "App.Tests.MathTests.Adds") of the project
+    /// that holds <paramref name="filePath"/> through the Run view's providers (<see cref="IRunProvider.TestCommand"/>):
+    /// asked of the user and run in the registered sandbox like any run, its output in its own terminal tab (X part 9: a
+    /// code lens's Run test). False when the host has no Run view or no provider can run that test (contract 1.1).
+    /// </summary>
+    Task<bool> RunTestAsync(string filePath, string testName, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <summary>
     /// The panels the plug-ins added, in order: a plug-in reads another's (the last reply of a chat, through
     /// <see cref="IConversationPanel"/>) without referencing it. None by default.
     /// </summary>

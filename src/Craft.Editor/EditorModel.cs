@@ -188,15 +188,39 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     /// <summary>The cells of the gutter's fold column (its chevrons), when the document folds.</summary>
     public const int FoldGutterCells = 2;
 
-    /// <summary>The rows drawn: the lines minus those the folds hide, each wrapped line counting its rows (X part 9).</summary>
-    public int RowCount => WordWrap.IsActive ? WordWrap.RowCount : Folding.Map.HasHidden ? Folding.Map.RowCount : Snapshot.LineCount;
+    /// <summary>
+    /// The rows drawn: the lines minus those the folds hide, each wrapped line counting its rows; without word wrap, a code
+    /// lens row above each member that has lenses (X part 9).
+    /// </summary>
+    public int RowCount
+    {
+        get
+        {
+            if (WordWrap.IsActive)
+            {
+                return WordWrap.RowCount;
+            }
 
-    /// <summary>The row <paramref name="line"/> is drawn on, its first when wrapped (its fold's header row when hidden).</summary>
-    public int RowOfLine(int line) => WordWrap.IsActive ? WordWrap.RowOfLine(line) : Folding.Map.HasHidden ? Folding.Map.RowOf(line) : line;
+            EnsureLensRows();
+            return TextRowCount + _lensLines.Length;
+        }
+    }
 
-    /// <summary>The line drawn on <paramref name="row"/> (any of its rows when wrapped).</summary>
-    public int LineAtRow(int row) => WordWrap.IsActive ? WordWrap.LineAtRow(row, out _)
-        : Folding.Map.HasHidden ? Folding.Map.LineAt(row) : Math.Clamp(row, 0, Snapshot.LineCount - 1);
+    /// <summary>The row <paramref name="line"/> is drawn on, its first when wrapped (its fold's header row when hidden; below its lens row when it has one).</summary>
+    public int RowOfLine(int line)
+    {
+        if (WordWrap.IsActive)
+        {
+            return WordWrap.RowOfLine(line);
+        }
+
+        EnsureLensRows();
+        int row = TextRowOf(line);
+        return _lensBaseRows.Length == 0 ? row : row + LensRowsThrough(row);
+    }
+
+    /// <summary>The line drawn on <paramref name="row"/> (any of its rows when wrapped; a lens row gives the line below it).</summary>
+    public int LineAtRow(int row) => WordWrap.IsActive ? WordWrap.LineAtRow(row, out _) : LineAtViewRow(row);
 
     /// <summary>The next line drawn after <paramref name="line"/> (the line count when it is the last).</summary>
     public int NextShownLine(int line) => Folding.Map.HasHidden ? Folding.Map.NextShown(line) : line + 1;
@@ -435,6 +459,11 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     {
         int row = y < 0 ? 0 : Math.Clamp((int)MathF.Floor(y / Metrics.LineHeight), 0, Math.Max(0, RowCount - 1));
         float column = Math.Max(0, (x - TextLeft) / Metrics.CellWidth);
+        if (_hints.Length > 0 && InlayHintsShown)
+        {
+            column = HintedColumn(row, column);                // X part 9: a click past an inlay hint is a click on the text it moved
+        }
+
         return PositionAtVisual(row, column, nearest: true);
     }
 
@@ -602,6 +631,8 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
         Folding.Dispose();
         InlineCompletion.Dispose();
         _inlineChat?.Dispose();
+        DisposeHints();
+        DisposeLenses();
         DisposeSemantic();
         if (_session is not null)
         {
@@ -763,6 +794,9 @@ public sealed partial class EditorModel : IEditorInputSink, IDisposable
     private void OnBufferChanged(object? sender, TextChangedEventArgs e)
     {
         NoteLineChange(e);                                   // the minimap moves its kept lines through it (piece 2b)
+        MapSnippet(e);                                       // X part 9: a snippet's stops, the inlay hints and the lenses follow the change
+        MapHints(e);
+        MapLenses(e);
         // The folds first: the selections mapped below may land on lines they hide; then the rows and the bracket states.
         Folding.OnBufferChanged(e);
         _wordWrap?.OnBufferChanged(e);

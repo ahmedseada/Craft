@@ -114,6 +114,8 @@ sealed class Craft.Web.Markup.HtmlTokenizer : Craft.Abstractions.LineTokenizer
   Craft.Abstractions.LanguageRules RulesAt(System.ReadOnlySpan<System.Char> line, System.Int32 column, System.UInt64 state)
   Craft.Abstractions.LineStates States { get; }
   Craft.Web.Markup.HtmlOptions Options { get; }
+  System.Boolean IsVoidElement(System.ReadOnlySpan<System.Char> name)
+  System.Boolean LinksTags { get; }
   System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
   ctor(Craft.Web.Markup.HtmlOptions options, Craft.Abstractions.LineStates states = null)
   static Craft.Abstractions.LanguageRules HtmlRules { get; }

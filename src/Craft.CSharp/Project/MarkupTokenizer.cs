@@ -70,6 +70,17 @@ internal sealed class MarkupTokenizer(MarkupDialect dialect) : LineTokenizer
 
     private bool IsRazor => dialect == MarkupDialect.Razor;
 
+    /// <summary>Which markup it reads.</summary>
+    public MarkupDialect Dialect => dialect;
+
+    /// <inheritdoc />
+    /// <remarks>X part 9: its tags link (a start tag's name renamed with its end tag's).</remarks>
+    public override bool LinksTags => true;
+
+    /// <inheritdoc />
+    /// <remarks>Razor's HTML has void elements (br, img, input, …); XML and MSBuild have none.</remarks>
+    public override bool IsVoidElement(ReadOnlySpan<char> name) => IsRazor && MarkupTags.IsHtmlVoid(name);
+
     /// <inheritdoc />
     public override ulong Tokenize(ReadOnlySpan<char> line, int lineStart, ulong state, TokenSpanBuffer? into)
     {

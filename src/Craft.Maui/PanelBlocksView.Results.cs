@@ -305,6 +305,15 @@ public sealed partial class PanelBlocksView
             }
 
             _empty.IsVisible = lines.Count == 0 && _empty.Text.Length > 0;
+            // X part 9: the row that stands for where the user is (the Outline's symbol at the caret) is scrolled into view.
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].Row is { Selected: true })
+                {
+                    _list.ScrollTo(i, position: ScrollToPosition.MakeVisible, animate: false);
+                    break;
+                }
+            }
         }
     }
 
@@ -355,6 +364,10 @@ public sealed partial class PanelBlocksView
             {
                 _owner.Act(action, row.Value);
             }
+            else if (_line.Row is { ToggleActionId: { } nodeToggle } node)
+            {
+                _owner.Act(nodeToggle, node.Id);
+            }
             else if (_line.Row is null && _line.Group.ToggleActionId is { } toggle)
             {
                 _owner.Act(toggle, _line.Group.Id);
@@ -368,7 +381,8 @@ public sealed partial class PanelBlocksView
             _grid.ColumnDefinitions.Clear();
             _buttons.Children.Clear();
             _buttons.IsVisible = false;
-            Padding = new Thickness(line.IsHeader ? 6 : 26, line.IsHeader ? 4 : 1, 6, line.IsHeader ? 4 : 1);
+            Padding = new Thickness(line.IsHeader ? 6 : 26 + ((line.Row?.Depth ?? 0) * 14) - (line.Row?.Expanded is null || line.Row is null ? 0 : 16), line.IsHeader ? 4 : 1, 6, line.IsHeader ? 4 : 1);
+            BackgroundColor = line.Row is { Selected: true } ? p.Accent.WithAlpha(0.18f) : Colors.Transparent;
             void Column(View view, GridLength width)
             {
                 _grid.ColumnDefinitions.Add(new ColumnDefinition(width));
@@ -424,6 +438,21 @@ public sealed partial class PanelBlocksView
                 }
 
                 return;
+            }
+
+            if (row.Expanded is { } open)
+            {
+                // X part 9: a tree node's chevron (the Outline's, a hierarchy's); a click on it opens or closes the node.
+                var chevron = new StrokeIcon(open ? "M6 9l6 6l6-6" : "M9 6l6 6l-6 6", 12) { Color = p.Secondary, VerticalOptions = LayoutOptions.Center };
+                var box = new ContentView { Content = chevron, WidthRequest = 14, VerticalOptions = LayoutOptions.Center };
+                if (row.ToggleActionId is { } flipAction)
+                {
+                    var flip = new TapGestureRecognizer();
+                    flip.Tapped += (_, _) => _owner.Act(flipAction, row.Id);
+                    box.GestureRecognizers.Add(flip);
+                }
+
+                Column(box, new GridLength(14));
             }
 
             ToolTipProperties.SetText(this, row.Detail is { } tip ? row.Text.Trim() + "\n" + tip : "");

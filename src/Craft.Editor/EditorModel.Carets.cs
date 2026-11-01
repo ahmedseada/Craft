@@ -235,7 +235,7 @@ public sealed partial class EditorModel
     {
         var all = Selections;
         var edge = direction == LineDirection.Up ? all[0] : all[^1];
-        int row = VisualOf(edge.Caret).Row + (direction == LineDirection.Up ? -1 : 1);
+        int row = SkipLensRows(VisualOf(edge.Caret).Row + (direction == LineDirection.Up ? -1 : 1), direction == LineDirection.Up ? -1 : 1);
         if (row < 0 || row >= RowCount)
         {
             return true;
@@ -264,7 +264,7 @@ public sealed partial class EditorModel
         switch (key)
         {
             case EditorKey.Up:
-                _boxLine = LineAtRow(Math.Max(0, RowOfLine(_boxLine) - 1));
+                _boxLine = LineAtRow(Math.Max(0, SkipLensRows(RowOfLine(_boxLine) - 1, -1)));
                 break;
             case EditorKey.Down:
                 _boxLine = LineAtRow(Math.Min(RowCount - 1, RowOfLine(_boxLine) + RowsOfLine(_boxLine)));

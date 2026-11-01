@@ -146,6 +146,9 @@ public static class InventoryTests
             ["CRAFT_ICON_THEME"] = "mono", ["CRAFT_WORKSPACE_SHOW_IGNORED"] = "false",
             // X part 9, the look group and the recovery prompt.
             ["CRAFT_RECOVERY_PROMPT"] = "false", ["CRAFT_ZEN_WIDTH"] = "720", ["CRAFT_ZEN_FULL_SCREEN"] = "false",
+            ["CRAFT_SNIPPETS"] = "false", ["CRAFT_SNIPPETS_FOLDER"] = "/snip", ["CRAFT_INLAY_HINTS"] = "ctrl-held", ["CRAFT_INLAY_HINTS_PARAMETERS"] = "false",
+            ["CRAFT_INLAY_HINTS_TYPES"] = "false", ["CRAFT_INLAY_HINTS_DELAY_MS"] = "300", ["CRAFT_CODE_LENS"] = "false", ["CRAFT_CODE_LENS_DELAY_MS"] = "700",
+            ["CRAFT_LINKED_EDITING"] = "false", ["CRAFT_OUTLINE_SORT"] = "kind", ["CRAFT_OUTLINE_FOLLOW_CARET"] = "false", ["CRAFT_HIERARCHY_LIMIT"] = "50",
         };
         var options = CraftOptions.FromVariables(name => values.GetValueOrDefault(name));
         Check.Equal(new CraftOptions
@@ -198,6 +201,8 @@ public static class InventoryTests
             BookmarksWrap = false, PreviewTabs = false, RestoreSession = false, LocalHistoryMaxMegabytes = 64, LocalHistoryDays = 7, LocalHistoryFileMegabytes = 2,
             LinksUnderline = "always", IconTheme = "mono", WorkspaceShowIgnored = false,
             RecoveryPrompt = false, ZenWidth = 720, ZenFullScreen = false,
+            Snippets = false, SnippetsFolder = "/snip", InlayHints = "ctrl-held", InlayHintsParameters = false, InlayHintsTypes = false, InlayHintsDelayMilliseconds = 300,
+            CodeLens = false, CodeLensDelayMilliseconds = 700, LinkedEditing = false, OutlineSort = "kind", OutlineFollowCaret = false, HierarchyLimit = 50,
         }, options, "options read from every variable");
         Check.SequenceEqual(["TODO", "BUG"], options.TodoTags, "CRAFT_TODO_TAGS split at ','");
         Check.True(options.TerminalProfiles is [{ Key: "Node", Value: "node -i" }] && options.LoaderKinds is ["workspace", "indexing"], "CRAFT_TERMINAL_PROFILES and CRAFT_LOADER_KINDS split");

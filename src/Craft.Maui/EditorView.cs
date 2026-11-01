@@ -283,6 +283,9 @@ public sealed class EditorView : ContentView, IDisposable
     /// <summary>Where the document's language shows its long work (the host's activities), or null; set before <see cref="Open(ITextDocument?, ILanguage?)"/>.</summary>
     public IEditorActivities? Activities { get; set; }
 
+    /// <summary>The host the editor's code lenses run through (X part 9: a test's Run), or null; set before <see cref="Open(ITextDocument?, ILanguage?)"/>.</summary>
+    public IEditorHost? Host { get; set; }
+
     /// <summary>The open folder the document belongs to (its language's workspace), or null; a change makes a new model.</summary>
     public string? WorkspaceRoot
     {
@@ -448,6 +451,8 @@ public sealed class EditorView : ContentView, IDisposable
 
         model.IsReadOnly = _readOnly;
         model.ShowLineNumbers = _lineNumbers;
+        model.Host = Host;
+
         if (_fileSettings is not null)
         {
             model.ApplyFileSettings(_fileSettings);
@@ -836,8 +841,11 @@ public sealed class EditorView : ContentView, IDisposable
         }
 
         var point = e.Touches[0];
-        // X part 9: the modifiers held, so a link shows under the pointer with Ctrl where it needs it.
-        _model.PointerHovered(point.X, point.Y, _inputConnection is IKeyModifierSource source ? source.CurrentModifiers : KeyModifiers.None);
+        // X part 9: the modifiers held, so a link shows under the pointer with Ctrl where it needs it; and CRAFT_INLAY_HINTS
+        // "ctrl-held" (the platform tells no lone modifier key: the pointer's moves and the keys read it).
+        var modifiers = _inputConnection is IKeyModifierSource source ? source.CurrentModifiers : KeyModifiers.None;
+        _model.ControlHeld = (modifiers & KeyModifiers.Control) != 0;
+        _model.PointerHovered(point.X, point.Y, modifiers);
     }
 
     private void OnEndHoverInteraction(object? sender, EventArgs e) => _model?.PointerExited();
@@ -939,6 +947,11 @@ public sealed class EditorView : ContentView, IDisposable
         {
             using var label = view._labels?.Enter(KeyLabel(key));
             view.EngageFromKeyboard();
+            if (view._model is { } model)
+            {
+                model.ControlHeld = (modifiers & KeyModifiers.Control) != 0;
+            }
+
             return view.KeyHandler is { } handler ? handler.HandleKey(key, modifiers, view._model) : view._model?.OnKey(key, modifiers) ?? false;
         }
 

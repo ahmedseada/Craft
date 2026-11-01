@@ -113,6 +113,9 @@ public sealed partial class EditorHost
 
         public bool Select(IEditorDocument document, SelectionState selection) => !_closed && host.Select(document, selection);
 
+        public Task<bool> RunTestAsync(string filePath, string testName, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult(false) : host.RunTestAsync(filePath, testName, cancellationToken);
+
         public Task<bool> ExecuteCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ExecuteCommandAsync(commandId, cancellationToken);
 

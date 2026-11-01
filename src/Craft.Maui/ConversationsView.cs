@@ -108,7 +108,7 @@ public sealed class ConversationsView : ContentView, IDisposable
                 _ = _host.ExecuteCommandAsync(command);
             }
         };
-        var jumpLabel = palette.Label("↓  Jump to latest", palette.Text, palette.SmallSize);
+        var jumpLabel = palette.Label("↓  Scroll to bottom", palette.Text, palette.SmallSize);
         _jump = new Border
         {
             Content = jumpLabel,
@@ -123,13 +123,18 @@ public sealed class ConversationsView : ContentView, IDisposable
         var jumpTap = new TapGestureRecognizer();
         jumpTap.Tapped += (_, _) => Controller.Transcript.JumpToLatest();
         _jump.GestureRecognizers.Add(jumpTap);
-        SemanticProperties.SetDescription(_jump, "Jump to the latest message and follow it");
+        SemanticProperties.SetDescription(_jump, "Scroll to the bottom and follow the newest text");
         _list = new ConversationListView(this, palette) { IsVisible = false };
         _body.Add(_transcriptView);
         _body.Add(_empty);
         _body.Add(_jump);
         _body.Add(_list);
-        Controller.Transcript.FollowChanged += (_, _) => _jump.IsVisible = Controller.Transcript.ShowsJump;
+        Controller.Transcript.FollowChanged += (_, _) =>
+        {
+            // Shown whenever the view is away from the end; it says when new text came below meanwhile.
+            _jump.IsVisible = Controller.Transcript.ShowsJump;
+            jumpLabel.Text = Controller.Transcript.NewBelow ? "↓  New messages below" : "↓  Scroll to bottom";
+        };
         Controller.List.Changed += (_, _) => _list.Rebuild();
 
         // The header: the panels' tabs, the title, its buttons.

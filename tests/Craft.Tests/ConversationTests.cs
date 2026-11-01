@@ -279,11 +279,12 @@ public static class ConversationTests
         Check.True(scrolls[^1] == end, "each piece is followed");
         model.UpdateViewport(0, end - 200, 800, 400);         // the user scrolls up to read
         Check.True(!controller.Transcript.Following, "scrolled up: not following");
+        Check.True(controller.Transcript.ShowsJump && !controller.Transcript.NewBelow, "away from the end: \"Scroll to bottom\" shows at once, nothing new below yet");
         int before = scrolls.Count;
         panel.Change(streaming, new ConversationEntry(ConversationRole.Assistant, "It grows still\nand more\nand more") { IsStreaming = true });
-        Check.True(scrolls.Count == before && controller.Transcript.ShowsJump, "the view stays; \"Jump to latest\" shows");
+        Check.True(scrolls.Count == before && controller.Transcript.ShowsJump && controller.Transcript.NewBelow, "the view stays; the button says new messages are below");
         controller.Transcript.JumpToLatest();
-        Check.True(controller.Transcript.Following && !controller.Transcript.ShowsJump && scrolls[^1] == model.ContentHeight - model.ViewportHeight, "Jump to latest: at the end, following");
+        Check.True(controller.Transcript.Following && !controller.Transcript.ShowsJump && scrolls[^1] == model.ContentHeight - model.ViewportHeight, "Scroll to bottom: at the end, following, the button gone");
         string text = All(model);
         Check.True(text.TrimEnd().EndsWith("and more", StringComparison.Ordinal), "the newest text at the end");
     }

@@ -137,8 +137,14 @@ public sealed class ConversationTranscript : IDisposable
     /// <summary>Whether the view follows the newest text: on at first; off when the user scrolls up, on again at the end or by <see cref="JumpToLatest"/>.</summary>
     public bool Following => _following;
 
-    /// <summary>Whether new text came below while the user read further up: the view shows "Jump to latest".</summary>
-    public bool ShowsJump => !_following && _newBelow;
+    /// <summary>
+    /// Whether the view shows its scroll-to-bottom button: whenever the user is away from the end (the owner, 2026-11-01:
+    /// "add scroll to bottom" in the chat and the agent), not only when new text came below (<see cref="NewBelow"/>).
+    /// </summary>
+    public bool ShowsJump => !_following;
+
+    /// <summary>Whether new text came below while the user read further up (the button then says so).</summary>
+    public bool NewBelow => !_following && _newBelow;
 
     /// <summary>The entry under the pointer (its actions shown), or -1.</summary>
     public int Hovered => _hovered;

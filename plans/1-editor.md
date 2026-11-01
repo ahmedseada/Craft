@@ -4047,8 +4047,7 @@ Idrak (no cause there).
 - **Windows-only lines**: none. `EditorView` (the file settings and the probe kept over a model's rebuild, Quick fix forwarded)
   and `ShellPage` (applying the settings, the tooltips) are shared code, compiled here for `net10.0`. Not run here: the drawing
   on Windows, Alt+Z reaching the editor through WinUI (an Alt chord may open the menu bar's access keys: the owner's check).
-- **Left**: hanging white space past the width is not drawn in the selection's colour beyond the row; the minimap (piece 2b)
-  draws lines unwrapped; ghost text at a wrapped caret is drawn unwrapped; Razor's and XAML's strings inside markup text are
+- **Left**: the minimap (piece 2b) draws lines unwrapped; ghost text at a wrapped caret is drawn unwrapped; Razor's and XAML's strings inside markup text are
   approximate for the depth.
 - **Tests**: new groups `WordWrap` (6: rows, indent and row-by-row drawing; Up/Down/Home/End; hit tests and points; folds and
   sticky scroll; 300 random edits against a fresh wrap and a fresh editor; Alt+Z and the option; the measured 100,000-line warm

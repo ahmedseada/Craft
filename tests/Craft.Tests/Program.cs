@@ -50,6 +50,11 @@ for (int i = 0; i < args.Length; i++)
     }
 }
 
+// X part 9: the spell check's bundled words are read before the tests (as a running app has them after its first moment),
+// so a frame of any test draws the same squiggles whether it runs first or last.
+Craft.Editor.Spelling.SpellChecker.EnsureEnglish();
+Craft.Editor.Spelling.WordListDictionary.English.Ready.GetAwaiter().GetResult();
+
 var all = TestRunner.Discover(typeof(Program).Assembly);
 if (list)
 {

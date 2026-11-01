@@ -1,0 +1,19 @@
+sealed class Craft.Plugins.Angular.AngularPackage : Idrak.Abstraction.Plugins.IIdrakPluginPackage
+  System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Plugins.IIdrakPlugin> All { get; }
+  System.String Name { get; }
+  const System.String PackageName = Craft.Plugins.Angular
+  ctor()
+static class Craft.Plugins.Angular.AngularParts
+  const System.String PluginName = angular
+  const System.String TemplatesName = angular-html
+  const System.String TypeScriptName = angular-typescript
+  static Craft.Web.Markup.AngularHtmlLanguage Templates { get; }
+  static Craft.Web.Markup.AngularSelector Selector { get; }
+  static Craft.Web.Markup.AngularTypeScriptLanguage TypeScript { get; }
+  static Craft.Web.Markup.HtmlFolding TemplateFolding { get; }
+  static Craft.Web.Markup.MarkupEditorPlugin Editor { get; }
+  static Craft.Web.Script.ScriptFolding TypeScriptFolding { get; }
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FileIcon> Icons { get; }
+sealed class Craft.Plugins.Angular.AngularPlugin : Idrak.Abstraction.Plugins.IdrakPlugin, Idrak.Abstraction.Plugins.IIdrakPlugin
+  ctor()
+  protected System.Void RegisterParts()

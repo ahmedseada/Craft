@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Html",
+  "version": "0.1.0",
+  "summary": "HTML (living standard): colours of .html and .htm (tags, attributes, entities, the doctype; <script> as JavaScript, <style> as CSS, style=\"…\" and on*=\"…\" as code), brackets, folding by elements, Format document and Format Selection, icons [EditorLanguages \"html\", FoldingRangeProviders \"html\"]",
+  "contractVersion": "1.1",
+  "capabilities": []
+}

@@ -130,11 +130,31 @@ public sealed class DocumentLineMarks
             }
         }
 
-        for (int i = found; i >= 0 && i > found - 4; i--)
+        for (int i = found; i >= 0 && i > found - 5; i--)
         {
-            if (marks[i].Line <= line && marks[i].LastLine >= line)
+            if (marks[i].Line <= line && marks[i].LastLine >= line && !marks[i].IsGlyph && marks[i].Kind != LineMarkKind.Bookmark)
             {
                 return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>The index in <see cref="Marks"/> of a glyph mark (a test's) on <paramref name="line"/>, or -1.</summary>
+    public int GlyphIndexAt(int line)
+    {
+        var marks = _marks;
+        for (int i = 0; i < marks.Length; i++)
+        {
+            if (marks[i].Line == line && marks[i].IsGlyph)
+            {
+                return i;
+            }
+
+            if (marks[i].Line > line)
+            {
+                break;
             }
         }
 

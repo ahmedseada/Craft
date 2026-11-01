@@ -6,21 +6,46 @@ Windows run, then the X restart (note 27, X parts 4 and 5, the rest of X), then 
 batch 2 last, once W is done (the owner: the Idrak plug-ins in the editor are a later priority). See "The owner's third
 Windows run (2026-11-01)" at the end.
 
-## Now (2026-11-01)
+## Now (2026-11-01, late)
 
 | # | Phase or item | Status |
 |---|---|---|
-| 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2 | Built; the owner's Windows checks listed in each "as built" |
-| 2 | Notes 1-26, X slices 1-3, the fixes after them (completion 600 ms, search 200 ms, tree click and icons, three test fixes) | Built |
-| 3 | B1-B11: the Learning view redesigned to explain and guide, the terminal's single shell and design, "Roslyn ready" to the notification centre and a global loader, hard splitter drags, learning runs that fail (out of memory or any), paint and scroll lag, the WinUI crash, the sample plug-in, learning's Qwen2, Idrak's start-up probe, the agent's file never written to the workspace | Next (planned below) |
-| 4 | Note 27, X part 4, X part 5 (split editor first), X part 6 (Search view, Run view: built 2026-11-01, "X part 6 as built"; 6b, input to a running program, built: "X part 6b and the paint allocation as built"), X part 7 (rich context menus: built 2026-11-01, "X part 7 as built"), X part 8 (Source Control: built 2026-11-01, "X part 8 as built"), X part 9 (26 modern-editor gaps), X part 10 (chat and agent redesigned, expandable), X part 11 (speculative decoding, next edit, repo-aware completion, AI review, fix the build) | Parts 6-11 asked 2026-11-01; 27, 4 and 5 lost when the other account's limit stopped its agents (nothing was committed); restart after B1-B5; piece 3a (split editor, tree move by drag, peek) built 2026-11-01 |
-| 5 | X rest: minimap, completion at several carets (both built 2026-11-01, "X restart piece 2b as built"), peek (built in piece 3a), measured response times on Windows | Response times left |
-| 6 | W: HTML, CSS, JavaScript, TypeScript, Angular, file icons, npm, ESLint (TSLint where a project has it), latest syntax of each | Starts the moment X is done (replaces L) |
-| 7 | P batch 2: P6, P9, P10, P8 on `wip/p-batch-2` (45 commits behind `main`), P11 if measured necessary | Last: after W is done (the owner, 2026-11-01: the Idrak plug-ins in the editor are a later priority) |
-| 8 | The AI test that fails only on Windows (the agent's working copy goes missing) | The owner's run with `$env:CRAFT_TRACE="1"` |
-| 9 | M (Android) | Only on the owner's clear decision (2026-11-01: "needs my clear decision, don't start"); never on a recommendation |
-| 9b | A3 (remote models) | Only on the owner's clear decision; never on a recommendation |
-| 10 | Does voice dictation go through the diff view? | Only on the owner's clear decision; never on a recommendation |
+| 1 | E0-E5, S0, K, A0-A2, V, R0, R, D, T, U, U2, notes 1-26, X slices 1-3 | Built earlier |
+| 2 | B1-B11 (paint and scroll, crash guard, sample plug-in and contract guard, learning's families, the start-up probe, the agent's files, learning's memory, splitters, terminal profiles, Roslyn's notification and the loader, the Learning view) | Built 2026-11-01 |
+| 3 | Note 27 (Idrak and Craft), X restart pieces 1b, 2a, 2b, 3a, 3b, X parts 6, 6b, 7, 8, 10, speculative decoding (part 11 item 1) | Built 2026-11-01 |
+| 4 | X part 9: editing helpers 1, 2, 6-9; navigation 13-17 | Built 2026-11-01 |
+| 5 | X part 9: tools 18-22 (Test explorer, Markdown and image preview, TODO list, spell check) | Stopped for W (the owner, 2026-11-01: "stop all"), 14 tests passing, not pushed; for later, after W |
+| 6 | X part 9 item 23 and part 11 items 4-5 (inline AI chat, AI review, fix the build) | Stopped for W, half written, not pushed; for later, after W |
+| 7 | X part 9: language 3-5, 10-12 (snippets, inlay hints, code lens, linked tags, Outline, hierarchy) and two C# session speed fixes | Stopped for W, tests being fixed (one real bug found: a mirrored `$1` must repeat its placeholder's text), not pushed; for later, after W |
+| 8 | Main's health (the Lightbulb wait, a timing-dependent terminal test) | Built (46d6e17) |
+| 8b | The recovery prompt at start, X part 9's look group 24-26 | Built on `slot/x-look` (2026-11-01): "Main's health, the recovery prompt and X part 9's look group as built" |
+| 9 | Phase W, the web languages | Built 2026-11-01: W0, W-files, W-npm, W-style, W-script, W-tools, W-markup (phase W complete; W-semantic waits for the owner's word) |
+| 10 | Left of X, for later (after W): rows 5, 6, 7 and 8b above, part 11 items 2-3 (next-edit suggestions, repo-aware completion), 1c (measured input-to-response times); left of W-tools: a closed file's Fix in Problems, ESLint's multi-pass fix, ESLint and Angular output in the Run view's problems (lint as you type waits for W-semantic); W-script's "Left, for later" line (re-reading a project on WorkspaceChanged, a contextual word split across lines, generics in a JSX tag, Prettier-style layout) | Planned; starts only on the owner's word after W; the stopped slots' unpushed work was saved as patches outside the repository (the session's scratchpad, gone with the container) and is redone from this plan; W-markup's "Left, for later" line (open tabs re-picked when angular.json changes, a JSON script by the JSON plug-in's lexer, block parameters over lines) |
+| 11 | P batch 2 (P10, P9 and P8, P6; P11 if measured) | Planned; starts only on the owner's word |
+| 12 | The owner's Windows runs of everything above | The owner's (each "as built" section lists its checks and commands) |
+| 13 | M (Android), A3 (remote models), voice dictation through the diff view | Only on the owner's clear decision |
+
+**X leftovers, split (the owner, 2026-11-01: "will work on phase x leftover only, split in phases and start the first";
+then "1 agent to run").** Only X's leftovers (row 10's X items; not W's "Left, for later" lines, not P batch 2), one
+agent at a time, each piece resumed in the agent that wrote its stopped work (its worktree already merged with `main` by
+the session), each pushed to its `slot/<piece>` branch and merged by the session:
+- **XL1, the stopped work finished:** 1 `slot/x-tools` (tools 18-22: Test explorer, Markdown and image preview, TODO
+  list, spell check); 2 `slot/x-ai` (item 23 inline chat, part 11 items 4-5: AI review, fix the build); 3 `slot/x-look`
+  (the recovery prompt, look 24-26: theme picker, Zen and full screen, status pickers); 4 `slot/x-language` (language
+  3-5, 10-12: snippets, inlay hints, code lens, linked tags, Outline, hierarchy, two C# session speed fixes; its merge
+  with word wrap finished by its agent).
+- **XL2, the rest of X:** 5 `slot/x-nextedit` (part 11 item 2); 6 `slot/x-repocompletion` (part 11 item 3); 7
+  `slot/x-timings` (1c, measured input-to-response times).
+- Decision (noted): the one agent takes the pieces in that order without a pause (XL2 follows XL1 as a slot frees);
+  nothing outside this list starts.
+
+**The owner's order (2026-11-01): W first, no endless leftovers.** "The web languages should have been finished far
+before the above enhancements." From here W runs to its end before any other work: no slot takes an X item, a
+leftover or a new enhancement while a W piece is ready. What a W slot leaves undone goes into one "Left, for later"
+line in its "as built" section and into row 10 above, never into a follow-up slot of its own; a failing test on
+`main` is the only thing that may interrupt W. New asks from the owner are written into the plan and queued after W
+unless the owner says otherwise. **When W is done, the work stops** (the owner, 2026-11-01: "finish W and don't start new
+phases"): the "later" items of row 10, P batch 2 and every held phase wait for the owner's word; no agent starts them.
 
 ## The original status (2026-10-31)
 
@@ -3951,6 +3976,503 @@ variable, drawn through B1's cached layouts, and a contract where a plug-in may 
   `InlineChat`, `ThemePicker`, `ZenMode`, `StatusPickers`). Slots: split by area over the three slots as each frees
   (editing helpers, navigation, tools and look).
 
+### X part 9, editing helpers 1, 2, 6-9, as built (2026-11-01)
+
+Slot s2: X part 9's word wrap (1), bracket pair colours (2), diagnostics at the line end (6), the lightbulb (7), rendered
+white space, rulers, trim and final newline on save (8), and `.editorconfig` applied per file (9). Craft only; nothing in
+Idrak (no cause there).
+- **Word wrap** (`Craft.Editor/WordWrap.cs`, `EditorModel.Helpers.cs`). `CRAFT_WORD_WRAP` (off, on, column),
+  `CRAFT_WORD_WRAP_COLUMN` (80), Alt+Z (`craft.editor.toggleWordWrap`; Visual Studio's keymap Ctrl+E Ctrl+W) for the editor
+  in hand, the line at the top kept. `WrappedLine`: a line's row starts (a character index and its column), the indent its
+  continuation rows keep (the line's own, when at most half the width), made from the line's text and kept while that text,
+  the width and the tab size stay (whatever the snapshot's version). Rows break after white space; inside a word only when it
+  is wider than a row; white space may hang past the width. The rows of all lines are a binary indexed tree over the lines
+  (a folded line counts none): a line's row and a row's line are each one walk of the tree's height; a line never shown counts
+  one row until it is, so a frame wraps only the lines it shows (`PrepareFrame`: the viewport's lines wrapped until their rows
+  stop moving), the kept wraps are trimmed like the run cache, and an edit splices the counts of the lines it touched
+  (`LineEdits`, shared with the bracket states). A new width wraps again keeping the top line where it was. The model's row
+  API (`RowCount`, `RowOfLine`, `LineAtRow`, `RowsOfLine`, `VisualOf`, `PositionAtVisual`, `PointFromPosition`,
+  `PositionFromPoint`, `EnsureCaretVisible`) follows the rows, so the hit tests, the popups' anchors, sticky scroll, the
+  overview ruler and the line marks need no change of their own. Up/Down (and PageUp/Down, Ctrl+Alt+Up/Down) move by visual
+  row at the screen's column; Home on a continuation row goes to the row's start, again to the line's Home; End on a row
+  before the last goes to the row's end, again to the line's end. The renderer draws a wrapped line row by row, each row a
+  kept `StyledLine` of its own (B1's one layout a shown line becomes one a shown row), and splits the selection, find hits,
+  the current word, the bracket match and squiggles per row; a folded header's "..." and the line-end message follow its last
+  row; the line number and the chevron stay on the first.
+- **Bracket pair colours** (`Craft.Editor/BracketColors.cs`). `CRAFT_BRACKET_COLORS` (on), `CRAFT_BRACKET_COLORS_SCAN_LINES`
+  (20,000). New theme tokens `BracketDepth1..6` (the theme's accent, info and success, then those three mixed a third toward
+  the text's colour), `BracketUnmatched` (the error colour) and `EditorColors.BracketDepth(int)`. The state at each line's
+  start (the depth, a block comment open) is kept per line; strings and comments are found by the language's rules, so a
+  depth needs no parse: new `LanguageRules.StringDelimiters` and `StringEscape` (contract 1.1, additions), set by the C#
+  plug-in's languages (C# `"'`, Razor, JSON `"`; XML and .sln `"` with no escape). A frame reads at most the option's lines of
+  states it does not know (a jump deep into a long file colours over a few frames, asking for each next frame, never one long
+  one); an edit splices the states and the lines after it are read again only until one starts in the state it had. Each
+  coloured bracket is a run of its own colour in the run cache, its key holding the colours, so a warm frame builds nothing.
+  An opening bracket is unmatched when the depth never comes back below it before the file's end (known once every line was
+  read: the least depth from each line to the end, one pass back); a closing one with nothing open at once.
+- **Diagnostics at the line end**. `CRAFT_INLINE_DIAGNOSTICS` (off, errors, all; errors). The first line of the message of the
+  line's most severe diagnostic (those starting on the line), italic, in new faded tokens `InlineError`, `InlineWarning`,
+  `InlineInfo`, two cells after the text (after the fold marker), cut with an ellipsis to the room left of the overview ruler;
+  a cut message is kept per line, so a warm frame makes no string.
+- **The lightbulb** (`Craft.Editor/Lightbulb.cs`). `CRAFT_LIGHTBULB` (on), `CRAFT_LIGHTBULB_DELAY_MS` (250). After the caret and
+  the diagnostics stop changing for the delay, the host's probe is asked off the UI thread about the diagnostics at the caret,
+  else those on its line, else the selection; the answer is kept per text version and range (a caret coming back asks
+  nothing). The shell's probe (`ShellModel.LightbulbProbe(tab)`) asks the registered code action providers on the tab's
+  document. Drawn at the gutter's left on the caret's line (new token `Lightbulb`, the warning colour); a click puts the caret
+  on the problem when the bulb was for one elsewhere on the line, then `EditorModel.QuickFixRequested` runs `craft.quickFix`.
+- **White space, rulers, save actions**. `CRAFT_RENDER_WHITESPACE` (none, boundary, selection, all; selection): a dot a
+  space, an arrow a tab, token `Whitespace`, only on the columns and rows on screen. `CRAFT_RULERS` ("80,120"; empty, the
+  default, none) plus a file's `max_line_length`, token `VerticalRuler`, under the text, the columns parsed once per value.
+  `CRAFT_TRIM_TRAILING_WHITESPACE` and `CRAFT_INSERT_FINAL_NEWLINE` (both off): Save (after format on save) trims and ends the
+  text with a break, each one undo step, through the tab's editor (`TrimTrailingWhitespace`, `InsertFinalNewline`, also the
+  command `craft.editor.trimTrailingWhitespace`) or, with no editor, on the document (`SaveActions`).
+- **`.editorconfig` applied** (new contract `FileSettings`, `IFileSettingsProvider` and the `FileSettingsProviders` registry in
+  `Craft.Abstractions`, the library's `editorconfig` provider its default; `CRAFT_EDITORCONFIG`, on). The files from the file's
+  folder up to the first `root = true`, sections matched per file (`*`, `**`, `?`, `[set]`, `[!set]`, `{a,b}`, `{1..9}`; a glob
+  without '/' at any depth), the nearer file and the later section winning, `unset` taking a value back. Read off the UI thread
+  and kept per folder with its write time (`ForFileAsync` reads again a file whose time changed; `Cached` answers at once
+  when every folder was read). `indent_style`, `indent_size`/`tab_width` (the tab size), `end_of_line` (the break the editor
+  inserts), `charset` (a new file's encoding on its first save), `trim_trailing_whitespace`, `insert_final_newline`,
+  `max_line_length` (a ruler), each over Craft's options (`EditorModel.ApplyFileSettings`; the model is not made again). The page
+  applies them when a tab's view is made (at once when cached, else when read) and again when the shell says a file's settings
+  changed: an `.editorconfig` saved in the editor or made, removed or renamed in the workspace (`FolderTreeWatch.EntryChanged`),
+  and any file saved (its path may be new). The status bar's Spaces and line ending items name the `.editorconfig` in their
+  tooltips (`ShellText.IndentationTooltip`, `LineEndingTooltip`).
+- **Measured** (headless, Linux container, Release, the tests' fixed metrics; `WordWrap.AWarmFrameOfAWrapped100000Line...`,
+  written to `test-output/benches/editing-helpers.txt`): a wrapped 100,000-line file (each line about 115 characters, two rows
+  at 800 wide) with bracket colours, inline diagnostics (10,000 of them) and two rulers, 800 x 600, scrolled to line 50,000:
+  cold frame 76.1 ms alone (the JIT, 20,000 bracket states read) and 16.2 ms in the full filter's run; the rest of the states
+  in 5 frames (24.6-26.9 ms in all); **warm frame median 14.4-22.7 us, p99 37.8-49.3 us, 0 B a frame** (1,000 frames), nothing
+  wrapped, read or laid out; 16 lines in 32 rows drawn, 16 lines' wraps kept of 100,000. B1's C# paint test (bracket colours on
+  by default now) still 0 B a warm frame.
+- **Decisions on the recommendation (one line each)**:
+  - Unshown lines count one row until shown (a height map, as CodeMirror's), not a whole-file wrap at a width change.
+  - The rows are a binary indexed tree over the lines, rebuilt in one pass when the folds or the line count change.
+  - Rows break after white space; white space hangs past the width; a continuation row keeps the line's indent when it is at most half the width.
+  - "on" wraps at the editor's width less the gutter, the ruler and a cell, never under 8 columns; "column" wraps at the option's column and keeps sideways scrolling.
+  - Alt+Z switches the editor in hand (a settings change makes the model again with the options' mode).
+  - End on a wrapped row stops before its last character (the next row's start is drawn at the row's end; no caret affinity).
+  - Column selection and the line commands stay by line under wrap; the sticky header and a fold's preview show a wrapped line's first row.
+  - Bracket depth is one counter for every pair (a ')' closing a '[' is not told apart), as VS Code's default.
+  - Strings and comments for the depth come from new `LanguageRules` members, not the classifier (no parse, the same answer on every frame).
+  - A string never spans a line for the depth (a verbatim or raw string over lines is approximate there; a block comment does span).
+  - The budget per frame is an option (20,000); the frames that could not finish ask for the next frame.
+  - Unmatched openings are told once every line is read; until then they take their depth's colour.
+  - Inline messages: the line's most severe diagnostic that starts on it, its first line, italic, two cells after the text.
+  - The lightbulb asks after a pause off the UI thread (the providers' `ActionsFor` is cheap and touches no UI) and is drawn at the gutter's left.
+  - Render white space defaults to "selection" (VS Code's); rulers default to none.
+  - Trim and the final newline run after format on save, each its own undo step.
+  - `.editorconfig` is the library's default `IFileSettingsProvider` in `Craft.Abstractions` (as `FolderWatchers` keeps its defaults), in its registry.
+  - `indent_size` sets the tab size with spaces, `tab_width` with tabs (Craft has one tab size).
+  - `end_of_line` sets the breaks the editor inserts; the file's own breaks are kept (no silent edit).
+  - `charset` applies to a new file's first save only; an existing file keeps the encoding it was read in.
+  - A content change to an `.editorconfig` outside the editor is seen when a file's settings are next read (its write time); the folder watcher reports names only.
+- **Found on the way**: a lambda over `Draw`'s `model` parameter made a closure at every frame's start (32 B a frame) even
+  where it never ran; the post moved into a method of its own (rule 63's warm frame caught it).
+- **Windows-only lines**: none. `EditorView` (the file settings and the probe kept over a model's rebuild, Quick fix forwarded)
+  and `ShellPage` (applying the settings, the tooltips) are shared code, compiled here for `net10.0`. Not run here: the drawing
+  on Windows, Alt+Z reaching the editor through WinUI (an Alt chord may open the menu bar's access keys: the owner's check).
+- **Left**: the minimap (piece 2b) draws lines unwrapped; ghost text at a wrapped caret is drawn unwrapped; Razor's and XAML's strings inside markup text are
+  approximate for the depth.
+- **Tests**: new groups `WordWrap` (6: rows, indent and row-by-row drawing; Up/Down/Home/End; hit tests and points; folds and
+  sticky scroll; 300 random edits against a fresh wrap and a fresh editor; Alt+Z and the option; the measured 100,000-line warm
+  frame), `BracketColors` (4: depth colours, strings and comments skipped and unmatched, 200 random edits against a fresh read
+  and a keystroke reading one line, the per-frame budget and 0 B warm), `InlineDiagnostics` (2), `Lightbulb` (2), `Whitespace`
+  (4: modes, rulers and 0 B warm, trim and final newline as one undo step each, Save with the options), `EditorConfigApplied`
+  (4: globs and precedence, read off the UI thread and refreshed, applied to the editor and the tooltips, Save's trim, final
+  newline and a new file's charset); `StickyScroll` (a header's brackets are runs of their depth's colour now), `Inventory`
+  (the twelve options). The full filter (`WordWrap|BracketColors|InlineDiagnostics|Lightbulb|Whitespace|EditorConfigApplied|Editor|Surface|Folding|StickyScroll|OverviewRuler|MultiCaret|Document|Settings|ProjectLanguages|ApiGuard|Inventory`):
+  159 passed, 0 failed (after the rebase over pieces 2b and 3b); `Paint|Shell|CSharp|Plugins|Keys|ReadOnly|Metrics|OutputLog|ProblemsPanel`:
+  114 passed, 0 failed. The API dumps of Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and
+  `plans/inventory.md` regenerated: lines added only.
+- **Options added** (each with its shape on the settings page): Editor › Display: `CRAFT_WORD_WRAP` (off), `CRAFT_WORD_WRAP_COLUMN`
+  (80), `CRAFT_BRACKET_COLORS` (on), `CRAFT_INLINE_DIAGNOSTICS` (errors), `CRAFT_LIGHTBULB` (on), `CRAFT_LIGHTBULB_DELAY_MS`
+  (250), `CRAFT_RENDER_WHITESPACE` (selection), `CRAFT_RULERS` (none); Editor › Files: `CRAFT_TRIM_TRAILING_WHITESPACE` (off),
+  `CRAFT_INSERT_FINAL_NEWLINE` (off), `CRAFT_EDITORCONFIG` (on); Editor › Advanced: `CRAFT_BRACKET_COLORS_SCAN_LINES` (20,000).
+- **The owner's check** on `test-output\CarftTestPOC`: open `Program.cs`, Alt+Z (and Settings › Editor › Display › Word wrap "on"
+  and "column"), make a long line and narrow the window: the rows follow, Up/Down/Home/End move by row, a click on a
+  continuation row, fold a method holding a wrapped line, scroll so the class header sticks; see the brackets' colours (a
+  `)` too many in red); make an error: its message faded at the line's end, the lightbulb in the gutter, click it; Settings ›
+  Editor › Display: render white space "all", rulers "80,120"; add `.editorconfig` beside the project with `[*.cs]`
+  `indent_style = tab`, `trim_trailing_whitespace = true`, `insert_final_newline = true`, `max_line_length = 100`: reopen
+  `Program.cs`, the status bar's Spaces item and its tooltip, Tab, a ruler at 100, type trailing spaces and save, then Ctrl+Z
+  twice.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "WordWrap|BracketColors|InlineDiagnostics|Lightbulb|Whitespace|EditorConfigApplied|Editor|Surface|Folding|StickyScroll|OverviewRuler|MultiCaret|Document|Settings|ProjectLanguages|Paint|Shell|CSharp|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
+### X part 9, navigation 13-17, as built (2026-11-01)
+
+Slot s4: bookmarks, preview tabs, the last session restored, local history with its Timeline, links in the terminal and
+Output. Craft only; Idrak unchanged (nothing in the library was needed: the links' registry is Craft's, on Idrak's
+`KindTable`).
+- **13 Bookmarks** (`Craft.Editor.Shell.BookmarkList`, `BookmarksFile`, `ShellModel.Bookmarks.cs`): Toggle at the caret
+  (Ctrl+K Ctrl+K; Visual Studio's keymap Ctrl+F2 too), Next and Previous across files (Ctrl+K Ctrl+N, Ctrl+K Ctrl+P; past
+  the last the first, `CRAFT_BOOKMARKS_WRAP`), Label (asked through the shell's prompt), Clear all with Undo (Visual
+  Studio's Ctrl+K Ctrl+L), the Bookmarks side view (rail item with its count; Visual Studio's Ctrl+K Ctrl+W): a group per
+  file, a row per bookmark (line, text, label; Label and Remove on hover; a click goes there). An open document's
+  bookmarks move with its edits (each bookmark's line start mapped through the change's edits: an insertion at a line's
+  start moves it down with its text, a removal around it takes it to where the removal began, two that meet become one).
+  Drawn through X part 8's line marks: a new `LineMarkKind.Bookmark` (contract 1.1, at the enum's end), the accent's tag
+  at the gutter's left edge; not clickable (the change bar's click keeps going to git), not on the overview ruler (its
+  eight lanes are taken). Kept in `.craft/bookmarks.json` (relative paths, lines from 1, the line's text and label) on
+  the thread pool, latest wins: at each toggle, label and clear, and when a document with bookmarks is saved; read off
+  the UI thread when the folder opens. The editor's context menu has Toggle bookmark, the View menu Bookmarks.
+- **14 Preview tabs** (`DocumentTab.IsPreview`, `DocumentTabs.Preview`, `AddPreview`, `Keep`, `ShellModel.OpenPreviewAsync`,
+  `OpenKeptAsync`, `KeepTab`): a single click on a file in the explorer opens it in the focused group's preview tab
+  (italic title, its tooltip says so), which the next preview replaces in its place (its document closed unless another
+  group shows it; a file open in another group previews as a shared tab); an edit, a double click on the tab or on the
+  file in the explorer, a pin, or Tab: Keep open (Ctrl+K Enter; the tab's menu shows it on a preview only) keeps it.
+  Quick open, Ctrl+O, links, bookmarks and every other way open a kept tab. `CRAFT_PREVIEW_TABS` (on).
+- **15 The last session** (`ShellModel.Session.cs`): the groups (piece 3a's layout), their tabs, active tabs, the focus,
+  and each tab's pin, selection, scroll and folds (`EditorTabState`, beside its file in `EditorLayoutNodeState.Tabs`)
+  written per workspace to the data folder (`sessions/<hash of the folder>.json`, `ShellModel.SessionPathOf`; the same
+  format as `.craft/editor-layout.json` through `EditorLayoutFile(root, path)`) on the thread pool, latest wins, at every
+  change of the groups, tabs, focus or shares, when another folder opens, and when the window closes (the close guard
+  asks about unsaved tabs, then awaits the write; carets and scroll are as they are then). At start with a folder
+  (`RestoreSessionAsync`, `CRAFT_RESTORE_SESSION`, on): read off the UI thread with the recovery folder's sidecars
+  (`RecoveryStore.RecoveredFiles`) and which files exist; the groups shaped (`EditorGroups.Shape`), the files opened in
+  order, pins and the active tabs and focus as they were; each tab's caret, scroll and folds applied when its editor is
+  made (`ApplyViewState`: the selection at once, the scroll once the view knows its viewport, the folds once the fold
+  ranges arrive, then the scroll again). Files that are gone are skipped and said once (one status line); a file with a
+  recovery copy is not reopened (said: "left for the recovery"). No session kept: the workspace's
+  `.craft/editor-layout.json` (piece 3a) reopens the groups. File: Reopen the last session runs it by hand.
+- **16 Local history** (`Craft.Core.Documents.LocalHistory`, `ShellModel.History.cs`): every save through the host keeps a
+  snapshot of the saved text in the data folder's `history` (never the workspace), a folder per file (a hash of its path,
+  `source.txt` naming it), each snapshot a UTF-8 file named by its time and the first 64 bits of its SHA-256, written in
+  16 K blocks from a pooled buffer while hashed (rule 74), one write at a time on the thread pool. Deduplicated by hash:
+  the newest snapshot's text again writes nothing; an older one's moves that file to now. Bounds: past
+  `CRAFT_LOCAL_HISTORY_DAYS` (30) the snapshots go (the saved file's folder at each write, all at most once an hour),
+  past `CRAFT_LOCAL_HISTORY_MAX_MB` (256; 0 turns it off) the oldest go, a file over `CRAFT_LOCAL_HISTORY_FILE_MB` (16)
+  is not kept; the history holds one number in memory (the bytes kept), nothing per snapshot. The Timeline side view
+  (rail item; View › Timeline; the tab's menu Open timeline) lists the active file's snapshots (time, size; Compare with
+  now and Restore on hover): a click shows the diff of the snapshot with the text now (`ShowDiffAsync`), Restore takes the
+  text back as one undo step (not saved) with Undo in the inline bar.
+- **17 Links** (`Craft.Abstractions.OutputLinkDetectors`, `IOutputLinkDetector`, `OutputLink`, the library's
+  `FileLineLinks` "file-line"): `a.cs(12,5)` and MSBuild's `(l,c,l,c)`, `a.cs:12:5`, `a.cs:12`, .NET's `a.cs:line 12`,
+  drive letters (`C:\`, `C:/`), UNC paths; the markers found with `SearchValues`, the path's start with `LastIndexOfAny`,
+  no regular expression, nothing allocated; a path must end in a file name whose extension holds a letter (so `10:30`,
+  `Main(1)`, `http://host:80`, `1.2:3` are no links). A plug-in adds a format by registering a detector. Output's
+  read-only editor (`EditorModel.DetectsLinks`, `LinkAt`, `LinkActivated`; `LinkUnderlineLayer`, wrap-aware) underlines the
+  link under the pointer and opens it on a click without a drag; the terminal (`TerminalLinks`, the row read one character
+  per cell; `TerminalRenderer.HoveredLink`, `LinksUnderline`) underlines it while Ctrl is held and opens it on Ctrl+click.
+  `CRAFT_LINKS_UNDERLINE`: hover (default), always (every link on screen), off. The path is resolved off the UI thread
+  (`ShellModel.ResolveLink`): as it is when absolute, else against the terminal's folder (its shell's reported folder,
+  else where it started), then the workspace; a missing file is said in the status bar.
+- **Settings page**: `CRAFT_BOOKMARKS_WRAP` (Editor › Bookmarks), `CRAFT_PREVIEW_TABS` (Files › Tabs),
+  `CRAFT_RESTORE_SESSION` (Files › Session), `CRAFT_LOCAL_HISTORY_MAX_MB`, `_DAYS`, `_FILE_MB` (Files › Local history),
+  `CRAFT_LINKS_UNDERLINE` (Terminal › Links); each with its variable and a workspace's `.craft/settings.json`.
+- **Decisions on the recommendation (the owner asleep; one line each)**:
+  - Bookmarks' keys: Ctrl+K Ctrl+K, Ctrl+K Ctrl+N, Ctrl+K Ctrl+P in both keymaps (Visual Studio's chords, free in Craft's VS Code keymap); Visual Studio's keymap adds Ctrl+F2, Ctrl+K Ctrl+W (the list) and Ctrl+K Ctrl+L (clear).
+  - The Bookmarks list is a side view of the rail (the Search and Run views' blocks), not a bottom-panel tab.
+  - Bookmarks are drawn through the line marks (X part 8's host API) as a new kind, not a layer of their own.
+  - Bookmarks are not on the overview ruler: its byte of lanes is full (git's four, find, the diagnostics, the carets).
+  - A bookmark's line moves are written when its document is saved (the file's lines are then the document's), toggles at once.
+  - Two bookmarks that meet after a deletion become one, keeping the first one's label (else the second's).
+  - Labels are asked with the shell's prompt; an empty label takes it away.
+  - A preview is replaced in its place (VS Code's); only the explorer's single click previews (quick open does not).
+  - A file already open is shown as it is by a single click (a kept tab is never turned into a preview).
+  - The session lives in the user's data folder, not the workspace (a single group adds no file to the user's folder, piece 3a's rule); the workspace's layout file stands in when no session is kept.
+  - The session is written at each change of tabs and groups and at the close (not at every caret move): a crash keeps the carets of the last tab change.
+  - A restored preview tab comes back kept (the session keeps pins, not previews).
+  - A file with a recovery copy is left out of the restore and said (the recovery prompt is not in the app yet; the session never opens a file past it).
+  - The restore runs only into an empty editor area (a file named on the command line opens alone).
+  - Local history dedups per file (a snapshot of the same text moves to now), not across files.
+  - Snapshots are UTF-8 text (the file's encoding and line endings are not kept); Restore restores the text, unsaved.
+  - The Timeline is a side view following the active file (VS Code's is in the explorer), not a tab.
+  - 0 MB turns the local history off; no separate on/off setting.
+  - Links: a regular expression was not used anywhere; detectors are a registry (`OutputLinkDetectors`, "not registered" for an unknown name), so a plug-in adds a format.
+  - A link's path must end in a name with an extension holding a letter (fewer false links than accepting any word).
+  - Paths with spaces are not links (a space ends a path walking back); a quoted path with spaces is not either (said here).
+  - Output opens a link on a plain click (its click selects nothing worth keeping); the terminal needs Ctrl (its click selects).
+  - `CRAFT_LINKS_UNDERLINE` "hover" underlines the link under the pointer in Output and, with Ctrl held, in the terminal; "always" every link on screen; "off" no links.
+  - No disk access while drawing: a link is underlined when it parses; its file is looked for only when it is followed.
+  - The shell fixtures of the tests keep `CRAFT_DATA_FOLDER` in their temp folder (`TempFolder.Isolated`, under `obj/`, which the tree ignores), so no test writes sessions or snapshots into the machine's data folder.
+- **Found and fixed**: none outside this work. **Seen, not this work's**: `Ui.TheUiSideHasNoSynchronousWait` flags
+  `src/Craft.Editor/Lightbulb.cs:169` (`done.Result` on a completed task, s2's editing helpers; fails on `main` too);
+  `Terminal.TheManagerReplacesAnEndedTabGivesItTheKeyboardAndStopsAProgramWhoseTabCloses` is timing-dependent (it types
+  before the program's prompt reached the screen; 1 of 3 runs failed on a clean `main`, 0 of 3 here).
+- **Tests**: new groups `Bookmarks` (4: toggle, gutter tag, moved with edits and merged, both keymaps' keys; next and previous
+  across files with wrap; the view, labels, a row's click, Clear with Undo, the file written and read back by a new shell;
+  Visual Studio's keymap), `PreviewTabs` (3: replaced in place, kept by an edit, a double click, a pin, Keep open; off;
+  shared with another group), `SessionRestore` (3: two groups, pins, focus, active tabs, caret, scroll once the viewport is
+  known, folds once the ranges arrive, a gone file said once, the file in the data folder; a recovery copy left out;
+  off, and the workspace's layout standing in), `LocalHistory` (4: dedup by hash and the move to now, UTF-8; the size,
+  days and file-size bounds and 0 MB off; the heap within 256 KB over 500 more saves; a save's snapshot, the Timeline's
+  rows, Restore as one undo step and Undo), `OutputLinks` (6: the formats, drive letters, UNC, .NET's frames, seven
+  lookalikes that are not links; 1,000 scans 0 B and a plug-in's detector; resolution against the run's folder and the
+  workspace, open at the place, a missing file said; Output's hover underline, click, a drag that opens nothing, Ctrl where
+  needed; 200 warm frames underlining two links a line under 1 KB; the terminal's link under a cell after a wide
+  character, the Ctrl underline, off, always, 200 warm frames under 1 KB). Updated: `Inventory.OptionsReadEveryVariable`
+  (the seven options), `Experience` (the tab's menu has Open timeline), the shell fixtures' data folder. First run: 23 of
+  26 passed (the keymap test read the host's keys without the Visual Studio keymap registered, as only the app's edit
+  commands register it; the inventory's new registry; the Timeline's refresh raced a dispatched one, made one awaited
+  task); then all passed, and a leak they showed fixed (the shell's new panels were disposed while it still listened to
+  panel changes, registering the Search and Run side views again). After the rebase onto s1's piece 2b, s2's editing
+  helpers and s3's piece 3b (one build: the link underline follows s2's wrapped rows, the hit test goes through the
+  model's own point-to-position), the full filter (`Bookmarks|PreviewTabs|SessionRestore|LocalHistory|OutputLinks|
+  EditorGroups|PeekDefinition|TreeMove|ContextMenus|Shell|Terminal|Recovery|Workspace|Document|Settings|Keys|Ui|Design|
+  Layout|Experience|SourceControl|RunView|Diagnostics|ProjectLanguages|Paint|OverviewRuler|Editor|ApiGuard|Inventory`,
+  289 tests): 286 passed; the tab menu's expectation (fixed, passed), and the two above that are not this work's. API dumps
+  of Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and `plans/inventory.md` regenerated
+  (additions only).
+- **Not compiled here**: Craft.Maui's Windows target (nothing under `Platforms/` changed; the views compiled on net10.0).
+  **Not run here** (the owner's run): the italic preview tab and double clicks in the explorer and the strip, the
+  bookmark's tag in the gutter, the Bookmarks and Timeline views, the restore at start and the write at close, Ctrl+hover
+  and Ctrl+click in the terminal (the Windows input connection's modifiers), a click in Output.
+- **Left**: bookmarks on the overview ruler; a session's preview tab kept as a preview; the recovery prompt at start (the
+  store is still not used by the app; the restore leaves those files closed); quoted paths with spaces as links.
+- **The owner's commands**:
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="Bookmarks|PreviewTabs|SessionRestore|LocalHistory|OutputLinks|EditorGroups|ContextMenus|Shell|Terminal|Recovery|Workspace|Document|Settings|Keys|Ui|Experience|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app: click files in the explorer (one italic tab replaced), double-click one, type in a preview; Ctrl+K Ctrl+K on
+  a few lines of `Program.cs`, Enter above them (the tags move), Ctrl+K Ctrl+N and Ctrl+K Ctrl+P, the rail's Bookmarks
+  view; save `Program.cs` a few times, open the rail's Timeline, click a row (the diff), Restore, then Undo; in the
+  terminal run `dotnet build` with an error in `Program.cs`, hold Ctrl over `Program.cs(…)` (underlined) and Ctrl+click it;
+  the same line in Output by a click; split the editor, fold a block, close the window and start it again on the same
+  folder (the groups, tabs, carets, folds and pins back); `$env:CRAFT_LINKS_UNDERLINE="always"` underlines every link.
+
+### X part 9, tools 18-22, as built (2026-11-01)
+
+Slot s1: the Test explorer, the Markdown and image previews, the TODO list and the spell check. Craft only; Idrak
+unchanged (no cause was in the library; the run goes through Idrak's `CommandSandboxes` as the Run view's do).
+- **Contracts** (`Craft.Abstractions`, additions to contract 1.1): `Testing.cs`: `TestOutcome`, `TestItem`, `TestResult`,
+  `TestRunRequest`, `ITestProvider : IKind` and `TestProviders` (none built in; W's npm tests can join), `TrxResults` (a
+  TRX read as a stream: each result named by its definition's class and method, a theory's cases joined),
+  `TestConsoleResults` (the console logger's lines when no file came), `TestStackFrame` (a frame's `file:line`);
+  `Spelling.cs`: `ISpellDictionary : IKind`, `SpellDictionaries`, `SpellWords` (camelCase, acronyms, snake_case, digits
+  split, allocation-free); `LineMarkKind.TestReady/TestPassed/TestFailed/TestSkipped` and `LineMark.IsGlyph`;
+  `EditorColors.Spelling` (the info colour at 60% unless a theme sets it).
+- **18 Test explorer** (`Craft.Editor.Testing.TestExplorerView`, the rail's Testing; the C# plug-in's
+  `Craft.CSharp.Run.DotnetTestProvider` "dotnet"): xUnit's `[Fact]`/`[Theory]`, NUnit's `[Test]`/`[TestCase]`, MSTest's
+  `[TestMethod]`/`[DataTestMethod]` found in Roslyn's syntax tree off the UI thread, in the test projects the Run view
+  reads (a file parsed only when its bytes hold an attribute's word; abstract and generic classes left out; nested classes
+  as `Outer+Inner`); joined with the Run view's test targets that list no test (their Run runs them all). Tree: project ›
+  class › method with Run all, Run failed, Stop, Refresh, Collapse, a filter, Run per project, class and test; each row's
+  ✓ ✗ ○ and time; a failed test's card with its message and its stack, each `file:line` frame opening its place. A run is
+  `dotnet test PROJECT --filter FullyQualifiedName=…` (classes past 40 tests) with a TRX logger into
+  `.craft/test-results` (deleted once read) and the console logger, through the Run view's new `RunCommandAsync`: the
+  user's approval, `CRAFT_RUN_SANDBOX`, a "Test: …" terminal tab, an activity with Cancel; results read off the UI thread.
+  The gutter of an open test file draws ▶ at each test (a click runs it), then ✓ ✗ ○; failures go to Problems as
+  "File.cs (tests)" at the stack's first frame in the workspace, else the test's line. Commands: Test: Run all, Run failed,
+  Run the test at the caret (Run menu).
+- **19 Markdown preview** (`Craft.Editor.Preview.MarkdownPreview`, `Craft.Maui.MarkdownPreviewView`): Ctrl+Shift+V opens a
+  preview page tab, Ctrl+K V beside (the source shown in a group on the right too); rendered by X part 10's
+  `TranscriptWriter` (headings, lists, tables, quotes, rules, links, emphasis, code blocks coloured by their language with
+  Copy only), on Craft's own read-only editor surface (only the shown lines laid out and drawn); re-rendered on the thread
+  pool `CRAFT_MARKDOWN_PREVIEW_DELAY_MS` after the last edit; each line knows its source line, so it follows the source's
+  scroll (`CRAFT_MARKDOWN_PREVIEW_FOLLOW`); a link opens (an image in its preview, a file in its tab, an address in the
+  browser). A "markdown" language joined the C# plug-in's project languages (`LineStateLanguage` with `MarkdownTokenizer`:
+  headings, quotes, lists, code spans and fences, links, tables, HTML comments; prose left plain) and `MarkdownFolding`
+  (headings to the next of their level, fenced blocks).
+- **20 Image preview** (`Craft.Editor.Preview.ImagePreview`, `ImageFormats`, `SvgDrawing`; `Craft.Maui.ImagePreviewView`): a
+  png, jpg, gif, bmp, ico or svg opened from the tree or quick open is a page tab (Image: Open as text gives an SVG's
+  source; a plug-in's `OpenDocumentAsync` still opens text); read off the UI thread up to `CRAFT_IMAGE_PREVIEW_MAX_MB`;
+  format and size from the header bytes; zoom −, +, 100%, Fit (fit never enlarges); "PNG · 640 × 480 · 12.3 KB · 50%
+  (fit)" in the status bar while it shows; an SVG of paths, rectangles, circles, ellipses, lines, polylines and polygons
+  (fills and strokes inherited, currentColor) drawn through MAUI Graphics' `PathBuilder`, one with text, gradients,
+  transforms, styles or images said instead.
+- **21 TODO list** (`Craft.Editor.Tools.TodoScanner`, `TodoListView`; the bottom panel's TODO tab with its count):
+  `CRAFT_TODO_TAGS` (TODO, FIXME, HACK, NOTE) as whole words with their case, in comments only (the file's language session
+  classifies just the lines holding a tag; plain text files by line); files read as bytes, skipped undecoded without a
+  tag's bytes, binary or past `CRAFT_SEARCH_MAX_FILE_MB`; the workspace in parallel as an activity; grouped by file; a saved
+  file read again alone; a click opens the place; `CRAFT_TODO_MAX_RESULTS`.
+- **22 Spell check** (`Craft.Editor.Spelling`: `WordListDictionary`, `SpellChecker`, `SpellCheckLayer`,
+  `SpellingCodeActions`): a bundled English list (SCOWL size 60's en_US Hunspell, affixes expanded, 88,000 words, plain
+  text, its licence in `Spelling/Words/scowl-license.txt`) and the words of code, read once off the UI thread from their
+  bytes into a `FrozenSet` ignoring case, looked up by span; only the lines a frame draws, their comments and strings
+  (prose files: all but code), identifiers split; each line's unknown words kept while its text, spans and the checker stay,
+  so a warm frame checks and allocates nothing; faint squiggles in `EditorColors.Spelling`; Ctrl+. on a word: up to
+  `CRAFT_SPELL_SUGGESTIONS` suggestions by Damerau distance (the user's pick typed in its place, one undo step), Add to your
+  dictionary (`spelling/words.txt` in the data folder), Ignore in this workspace (`.craft/words.txt`). Options
+  `CRAFT_SPELL_CHECK` (on), `CRAFT_SPELL_LANGUAGE` (en), `CRAFT_SPELL_MIN_LENGTH` (4).
+- **Options** (each a `CRAFT_*` variable with its shape on the settings page): `CRAFT_TEST_GUTTER`, `CRAFT_TEST_PROBLEMS`
+  (Terminal › Tests); `CRAFT_MARKDOWN_PREVIEW_DELAY_MS` (300), `CRAFT_MARKDOWN_PREVIEW_FOLLOW` (Editor › Markdown);
+  `CRAFT_IMAGE_PREVIEW_MAX_MB` (64, Files › Images); `CRAFT_TODO_TAGS`, `CRAFT_TODO_MAX_RESULTS` (5000, Files › TODO list);
+  `CRAFT_SPELL_CHECK`, `CRAFT_SPELL_LANGUAGE`, `CRAFT_SPELL_SUGGESTIONS` (5), `CRAFT_SPELL_MIN_LENGTH` (Editor › Spelling).
+
+**Decisions on the recommendation (the owner asleep; one line each).**
+- The Test explorer, TODO list and previews are the shell's own views drawn from the public block contract and registries (as the Run view), the test provider in the C# plug-in; no new plug-in project.
+- Tests run through the Run view (`RunCommandAsync`), so approval, sandbox, terminal tab, activity and Stop are one code path.
+- Discovery reads syntax only (no build); a test project with no test found keeps a Run-all row from the Run view.
+- Results come from a TRX in `.craft/test-results` (deleted after reading), else the console logger's lines.
+- A theory's cases join into their method (failed if any failed); the tree shows methods, not cases.
+- Discovery runs again when a watched file (.cs, .csproj) is saved, not on every keystroke; the gutter marks follow the saved lines.
+- Test glyphs sit in the gutter's first cell and stay off the overview ruler; the marks' bar strip is unchanged.
+- The previews are page tabs (pages show in the first group), so "beside" shows the source in a new group on the right.
+- The preview reuses the chat's renderer (one Markdown renderer), with a preview mode: Copy only on code, images as links.
+- Images in a preview are links that open the image preview: the editor canvas draws no bitmaps.
+- Markdown joined the C# plug-in's project languages (README.md is in every project); W had none.
+- An image opened by the user opens its preview; Image: Open as text (and any plug-in's open) gives the text.
+- SVGs with features beyond simple shapes are said, never drawn half.
+- TODO tags match whole words with their case, in comments only where a language classifies; plain text by line.
+- The spell list is SCOWL size 60 (permissive licence, kept beside it), case ignored, possessives accepted; all-caps words, words touching digits, addresses and paths are passed over.
+- A spelling fix chosen by the user is typed as the user's own input (one undo step), not a proposed diff.
+- The Markdown preview's keys bind in the text editor only, so a terminal keeps Ctrl+Shift+V for paste.
+
+**Measured** (the 4-core Linux container, Release; written to `test-output/benches/`; the first run quiet, the filter
+run under load): test discovery of 2,000 tests in 100 files plus 200 files without tests: cold 17.9 ms, warm median
+10.4 ms (75.0 / 63.9 ms under load); a TODO scan of Craft's own `src` (295 files then, 344 after W): cold 318 ms, warm
+median 79 ms (1,067 / 50 ms under load), 20 entries; spell check on 21 shown lines with a comment and a string each:
+warm frame median 22.9 µs, p99 44.7 µs, **0 B over 500 frames**, each line checked once cold. The paint's warm frame of a
+C# file stays 0 B with the spell check on.
+
+**Tests**: `TestExplorer` (4: discovery of every framework from a fixture with its lines, filters and the command; TRX and
+console parsing and stack frames; a run asked first, refused then run through a fake sandbox writing a TRX, the tree's
+marks and times, the gutter's ▶ ✓ ✗ ○, failures in Problems at their frame, the failure card, Run failed's filter, a click
+on ▶ running its test; 2,000 tests timed), `MarkdownPreview` (2), `ImagePreview` (2), `TodoList` (3, one scanning
+Craft's `src`), `SpellCheck` (3); `Inventory.OptionsReadEveryVariable` extended; the test program reads the bundled
+words before the tests so every frame draws the same squiggles. First run: 9 of 14; the five failures were the tests' own
+expectations (two lines, a column, a fold's end, a scroll the fake host never applied, stale lines counted) and one bug
+(Ctrl+K V moved the source and its emptied group closed: the source is now shown in both groups). After the merge of
+main: filter `TestExplorer|MarkdownPreview|ImagePreview|TodoList|SpellCheck|RunView|Conversation|Plugins|Shell|Editor|Paint|Settings|Ui|ApiGuard|Inventory|Bookmarks|LocalHistory|Problems|OverviewRuler|SourceControl`:
+151 of 151. API dumps of Craft.Abstractions (and its contract list), Craft.Core, Craft.Editor, Craft.CSharp and the
+inventory regenerated, lines added only.
+
+**Not compiled here**: nothing under `Platforms/` changed; Craft.Maui compiled on net10.0. **Not run here** (the owner's):
+the Testing view, the TODO tab, both preview tabs and the squiggles on WinUI; a real `dotnet test` of a test project.
+
+**Left, for later**: images drawn inside the Markdown preview (needs an image call on `IEditorCanvas`); a preview in any
+editor group (pages show in the first); test marks that move with unsaved edits; a folder watcher for test discovery;
+other spelling languages (a plug-in registers a dictionary).
+
+**The owner's commands** (Craft only; Idrak unchanged since its last list):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="TestExplorer.|MarkdownPreview.|ImagePreview.|TodoList.|SpellCheck.|RunView.|Shell.|Editor.|Paint.|Settings.|Ui.|ApiGuard.|Inventory."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: add an xUnit test project to CarftTestPOC (`dotnet new xunit -o Tests`), open the rail's Testing (the tests
+listed before any build), Run all (asked once, "Test: Tests" tab), a failing test's ✗ in the tree, its card's stack line
+opening the file, the gutter's ▶ and ✓/✗, Problems' "(tests)" group; write a README.md, Ctrl+Shift+V and Ctrl+K V (the
+preview follows the scroll and updates as you type); open a .png and an .svg from the tree (zoom, status bar); View › TODO
+list; a misspelled word in a comment (Ctrl+. for suggestions, Add to dictionary); light and dark themes.
+
+### Main's health, the recovery prompt and X part 9's look group as built (2026-11-01)
+
+Slot s4. Craft only; Idrak unchanged (nothing in the library was needed: themes, settings and the recovery store are
+Craft's). Main's health went to `main` first (46d6e17); the recovery prompt and items 24-26 are on `slot/x-look`.
+- **Main's health** (46d6e17): `Lightbulb.Ask` awaits its probe in an `async` method and posts the answer (no `.Result`
+  left, so `Ui.TheUiSideHasNoSynchronousWait` passes with no new allowed line); the program-tab test
+  (`Terminal.TheManagerReplaces…`) waits, bounded by its 30 s, until the prompt is on the screen before it types (it typed
+  before the prompt arrived); what it checks is unchanged.
+- **The recovery prompt** (`ShellModel.Recovery.cs`, `RecoveryOffer`, `RecoveredFile`, `Craft.Maui/RecoveryCardView.cs`).
+  The app starts the shell's `RecoveryStore` at start (`StartRecovery`: every open document tracked once, its copy written
+  every `CRAFT_AUTOSAVE_SECONDS` on the thread pool while it has unsaved changes, deleted on save and close); after the
+  folder opens and its session is restored, `OfferRecoveryAsync` lists the copies off the UI thread: this workspace's files
+  and the untitled documents (all of them with no folder open), newest first, each with its folder, time and size, and
+  whether its file is on the disk. A card at the top of the editor area ("2 unsaved files were recovered", a row per file
+  with Restore, Compare, Discard; Restore all, Discard all; × hides it) and a notification (Restore all, Show). Restore
+  opens the file and puts the recovered text over it as one undo step (unsaved; Ctrl+Z goes back to the disk's text); an
+  untitled document, or a file that is gone, opens as a new unsaved tab of the recovered text (a gone file saves to its
+  path); its old copy is deleted off the UI thread, and the tab joins the session. Compare shows the existing diff view
+  (the disk's text against the recovered one). Discard takes the file off at once with the Undo bar; its copy is deleted
+  when the bar goes. `CRAFT_RECOVERY_PROMPT` (on). The recovery folder now defaults to the data folder's "recovery" (the
+  same place as before unless `CRAFT_DATA_FOLDER` moves it), so a shell under test keeps its copies in its temp folder.
+- **24 The theme picker** (`ShellModel.Look.cs`, `QuickPickRequest`/`QuickPickItem` and `IShellUi.QuickPickAsync`, a
+  default member falling back to `PickAsync`; `QuickOpen.BeginPick`). Ctrl+K Ctrl+T and the palette's "Preferences: Color
+  theme": the quick-open overlay lists "system" and every registered theme (summary; "current"; a plug-in's "from
+  ASSEMBLY", `EditorThemes.Origin`, `IsBuiltIn`); each row moved to re-themes the window at once (the existing
+  `ThemeChanged` walk, one per move; a theme equal to the one shown walks nothing), Enter writes `CRAFT_THEME` to the user's
+  settings, Escape brings the theme before back. Four new built-in themes, each made by `Fitted` (every text-like colour
+  moved by `ColorContrast.Ensure` until it reads on every ground it is drawn on): `dusk` (a slate dark, the teal accent),
+  `dawn` (a warm paper light, a blue accent), `high-contrast-dark` and `high-contrast-light` (text, every code class, the
+  accent as focus and caret, the line numbers at 7:1, `ColorContrast.Enhanced`, on the grounds and the text selection;
+  strong borders). `CRAFT_THEME` "system" follows the system's light or dark (`EditorThemes.ForSystem`; the app reads
+  MAUI's `PlatformAppTheme` and its change). "Preferences: File icon theme" puts W's icon themes in the same quick pick
+  (each shown as you move, `CRAFT_ICON_THEME` written on Enter).
+- **25 Zen and full screen**. Ctrl+K Z (`craft.toggleZenMode`, the wide layout): the rail, the side view, the bottom
+  panel, the chat, the status bar, the tab strips and the breadcrumb hidden, the editor centred at `CRAFT_ZEN_WIDTH` (960
+  units; 0 the whole width); with `CRAFT_ZEN_FULL_SCREEN` (on) the window goes full screen too and back out when Zen
+  ends (unless it was full screen before). Escape twice in a row leaves (the host's `KeyPressed`; another key between
+  starts the count again). F11 (`craft.toggleFullScreen`): the window's own full screen through `IWindowFullScreen`
+  (`IShellPlatform.FullScreen`, a default member returning null; Windows: `WindowsFullScreen`, the app window's
+  full-screen presenter and the overlapped one back); a platform without one says so.
+- **26 Status bar pickers**: the indentation, encoding, line ending and language items are clickable, each opening a
+  quick pick (also commands in the palette). Indentation: spaces or tabs (then the size 1-8), the tab size, convert the
+  indentation to spaces or tabs (one undo step; `EditorModel.SetIndentation`, `IndentationOverride`,
+  `ConvertIndentation`). Line ending: LF or CRLF, every break converted as one undo step (`ConvertLineEndings`) and the
+  document's line ending set for new lines and the save. Encoding: reopen with an encoding (the bytes read again off the UI
+  thread, the text replaced as one undo step, the document clean; asked first when it has unsaved changes) or save with
+  one (`EncodingChoices`: the UTF forms, then 15 code pages the runtime's `CodePagesEncodingProvider` makes). Language:
+  Auto (by the file's name), every registered language, plain text (`EditorGroups.SetLanguage`). A file's
+  `.editorconfig` value is said in the rows where it wins (indent_style and indent_size at the next open, end_of_line for
+  the lines Enter inserts, charset for a new file's first save); the indentation tooltip says when a pick holds.
+- **Decisions on the recommendation (the owner asleep; one line each)**:
+  - The lightbulb's site is an `async` method awaiting the probe, not an allowed line in the UI scan.
+  - The program-tab test waits for the prompt on the screen (bounded by its 30 s), it does not loosen a check.
+  - The shell starts its recovery store only when asked (`StartRecovery`: the app at start, a test when it wants copies), so a shell under test writes no copy by default.
+  - The recovery folder defaults to the data folder's "recovery" (the same folder as before by default; tests stay in their temp folder).
+  - A workspace is offered its own files' copies and the untitled ones; another folder's copies wait for that folder; with no folder all are offered.
+  - Restore onto a file on the disk is one undo step over the opened file (unsaved); a gone file or an untitled draft opens as a new unsaved tab.
+  - A restored file's old copy is deleted at once; the open document keeps its own copy from then on.
+  - Discard holds the copy until the Undo bar goes (one Undo for Discard all).
+  - The card sits at the top of the editor area (over the welcome page too), not modal; × hides it, the notification keeps the files.
+  - `CRAFT_RECOVERY_PROMPT` turns the prompt off; the copies stay in the folder.
+  - The pickers use the quick-open overlay (a quick pick), not the dialog's list, so the window stays visible for the live preview.
+  - The theme picker lists "system" first, then the registry's names in order; a plug-in's theme says its assembly.
+  - Previews are not written; only Enter writes `CRAFT_THEME` (an environment's `CRAFT_THEME` still wins at the next start; this run keeps the pick).
+  - New themes: dusk (second dark), dawn (second light), high-contrast-dark and -light; names in the design's lower-case style.
+  - The high-contrast pair is fitted to 7:1 for text, every code class, the accent (focus ring, caret) and the line numbers, also on the text selection.
+  - "system" follows light or dark only; a high-contrast theme is picked by name (not followed from the system's high-contrast mode).
+  - The icon theme picker reuses the same quick pick (W had none; one command).
+  - Zen hides the chat column and the breadcrumb too; it works in the wide layout only.
+  - Zen goes full screen by default (`CRAFT_ZEN_FULL_SCREEN`, VS Code's), and gives back only the full screen it took.
+  - Escape twice means two Escapes in a row, no time window (nothing to tune).
+  - `CRAFT_ZEN_WIDTH` is in units (960), 0 the whole width.
+  - An indentation pick holds for the editor in hand (over `.editorconfig`), until the file is opened again.
+  - Converting the indentation also sets the editor's style to the one converted to.
+  - Reopen with an encoding leaves the document clean (it is the file's text) with one undo step back.
+  - Save with an encoding saves at once (VS Code's).
+  - The encodings listed are the UTF forms and the common code pages this runtime can make; one it cannot is not offered.
+- **Windows-only lines**: `src/Craft.Maui/Platforms/Windows/WindowsFullScreen.cs` (new) and the `FullScreen` member of
+  `WindowsShellPlatform.cs`; not compiled here (Craft.Maui's Windows target). The page's wiring (`ShellPage.cs`, the card,
+  the status bar's taps, Zen's layout, `PlatformAppTheme`) is shared code, compiled here for net10.0; not run here.
+- **Tests**: new groups `ThemePicker` (3: live preview per move, Escape back, Enter written, one walk each; the
+  high-contrast pair's 7:1 for every text role, every code class, the accent's ink, the caret and the line numbers, and
+  dusk and dawn at 4.5:1; a plug-in's theme listed with its origin and picked, "system" following the system, the icon
+  theme picker), `ZenMode` (2: Ctrl+K Z and F11 bound, full screen taken and given back, Escape twice, a key between, a
+  platform without full screen; `CRAFT_ZEN_FULL_SCREEN` off, `CRAFT_ZEN_WIDTH`), `StatusPickers` (3: indentation picked
+  and converted to spaces and to tabs as one undo step each, the `.editorconfig` said; LF and CRLF converted as one undo
+  step, end_of_line said; reopen as Windows-1252 clean with one undo step, save as UTF-16 LE with its mark, the language
+  picked, plain text, Auto), `RecoveryPrompt` (3: copies found for this workspace and the untitled one, another folder's
+  left, the card's rows and the notification, Compare's diff, Restore as unsaved with one undo step to the disk, the old
+  copy gone, the session keeps it, Discard with Undo and for good, the notification gone; Restore all of an untitled and a
+  gone file, the shell's own copies; nothing shown with none or with the prompt off, the folder following
+  `CRAFT_DATA_FOLDER`). Updated: `Inventory.OptionsReadEveryVariable` (the three options); the shared test UI answers
+  quick picks. First run of the new groups: 26 of 26 passed. The full filter
+  (`ThemePicker|ZenMode|StatusPickers|Recovery|SessionRestore|Design|LookAndFeel|Shell|Settings|Keys|Ui|Terminal|Experience|Paint|ApiGuard|Inventory|EditorConfigApplied|Lightbulb|Editor|Layout|ContextMenus|EditorGroups|Workspace|Document`):
+  279 passed, 0 failed. The API dumps of Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and
+  `plans/inventory.md` regenerated (additions only; the themes' row lists the four new names).
+- **Options added** (each with its shape on the settings page): Files › Recovery: `CRAFT_RECOVERY_PROMPT` (on);
+  Appearance › Zen mode: `CRAFT_ZEN_WIDTH` (960), `CRAFT_ZEN_FULL_SCREEN` (on); Appearance › Theme: `CRAFT_THEME` takes
+  "system" and the four new names.
+- **Left, for later**: an indentation pick is lost when the editor's model is made again (an options change); the card's
+  rows are not keyboard-navigable; Zen mode's narrow layout; following the system's high-contrast mode.
+- **The owner's check** on `test-output\CarftTestPOC`: Ctrl+K Ctrl+T, move through the themes (the window follows), Escape,
+  then pick high-contrast-dark with Enter; set Settings › Appearance › Theme to "system" and switch Windows' light/dark;
+  Ctrl+K Z (full screen, centred, Escape twice), F11; click the status bar's Spaces, LF/CRLF, UTF-8 and language items;
+  type in `Program.cs` without saving, wait 30 s, end the process from the Task Manager, start again: the card offers it
+  (Compare, Restore, Ctrl+Z).
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="ThemePicker|ZenMode|StatusPickers|Recovery|SessionRestore|Design|LookAndFeel|Shell|Settings|Keys|Ui|Terminal|Experience|Paint|ApiGuard|Inventory|EditorConfigApplied|Lightbulb|Editor|Layout|ContextMenus|EditorGroups|Workspace|Document"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
 ### X part 10: the chat and the agent redesigned (the owner, 2026-11-01: "make both chat and agent windows modern; it's
 good now but still basic; I can only copy one message, which is hard if I want several; redesign the chat in both; allow
 it to expand to cover the full editor space, not just the right side, without overflowing the left side bar")
@@ -4322,6 +4844,91 @@ Item 1, slot s1. Idrak `main` 2ab9c3a, then Craft `main` (this commit and the on
   ```
   In the app: send a chat message; once the completion model has loaded the chip reads "draft: …, NN% accepted".
 
+#### Inline chat, AI review and the build fix as built (2026-11-01)
+X part 9 item 23 and X part 11 items 4 and 5, slot s2 (`slot/x-ai`). Craft only; nothing was missing in Idrak (the chat
+and the agent run on its `FakeChatModel`, `CodingAgent` and `CommandSandboxes` as they are; no cause was in the library).
+- **Contracts** (`Craft.Abstractions`, additions to contract 1.1): `IInlineChatProvider : IKind` in `InlineChatProviders`
+  (`InlineChatRequest` with the lines, the instruction, the problems on them and the earlier `InlineChatTurn`s;
+  `InlineChatPlan` with the model, or why none and `LoadAsync`); `ICodeReviewProvider : IKind` in `CodeReviewProviders`
+  (`CodeReviewRequest`, `CodeReviewPlan`, `ReviewFinding`); `IBuildFixProvider : IKind` in `BuildFixProviders`
+  (`BuildFixRequest`, `BuildFixResult`, `For` = the first that offers); `LineMarkKind.Note`; `DiffNote` with
+  `IEditorHost.ShowDiffAsync(…, notes)` (and `IEditorPresenter`'s, the diff page's note rows); `IEditorHost.CopyText`
+  (the shell's clipboard through `EditorHost.ClipboardWriter`).
+- **Inline chat** (`Craft.Editor.InlineChatController`, `InlineChatRenderer`, `EditorModel.InlineChat`): Ctrl+I (both
+  keymaps, Edit menu, the editor's context menu; `craft.editor.inlineChat`) opens a box under the caret's line or over the
+  selection's whole lines, with the keyboard; Enter sends to the first registered provider; the answer streams line by
+  line as a ghost diff drawn over the lines (kept plain, removed struck on the removed fill, added on the added fill,
+  lines the stream has not reached faded); Ctrl+Enter or Accept applies it as one undo step (the original's line breaks
+  kept), Escape or Discard leaves the text, Retry asks again without the answer it replaces, a follow-up typed in the
+  box sends the earlier exchanges and refines the same edit against the original lines; Up and Down walk the box's
+  history; a change to the lines meanwhile is said on Accept. The AI plug-in's "ai" (`AiInlineChat`): the chat role's
+  model only once loaded, its temperature and reply limit; none loaded, the box says so and its button loads it, the
+  instruction then sent. Settings `inlineChat` (`CRAFT_PLUGIN_AI_INLINECHAT`, on), `inlineChatContextLines` (40),
+  `inlineChatMaxTokens` (0: the chat's), Settings › Chat › Inline chat.
+- **Review changes** (git plug-in `GitSession.Review.cs`, `CodeReviews`; the AI plug-in's `AiCodeReview`): a checked-box
+  button beside Generate in the commit box and the palette's "Source Control: Review changes" (`git.reviewChanges`); the
+  staged diff (else every change, said so), each kept and added line numbered in the new text, trimmed by file to
+  `CRAFT_PLUGIN_GIT_REVIEWDIFFTOKENS` (6000) within the model's context (the files left out named); the model writes one
+  finding a line, read as each line ends; findings stream into the view (by file: line, severity, one line, the reason;
+  Apply fix, Dismiss; Copy all, Clear), as notes in the open files' gutters (a click or a row shows the card: Apply fix,
+  Dismiss, Copy all) and under their lines in the diff view; Apply fix runs the registered code actions' Fix on the
+  finding's line (a diff the user accepts); Stop keeps what was found; nothing loaded: said, with the load offered.
+  Settings `reviewModel` (`CRAFT_PLUGIN_AI_REVIEWMODEL`, chat; loaded, agent, completion or a name), `reviewPrompt`,
+  `reviewMaxTokens`, under Source Control › Review changes.
+- **Fix with AI** (`RunView.Fix.cs`, the AI plug-in's `AiBuildFix`): a Run-view build or test that fails with errors
+  shows a card ("Build: App failed", its errors) with Fix with AI and Run again; a build's Problems row says "Fix with
+  AI"; one error goes to the chat's model through the code action Fix (its lines rewritten, a diff), several to the agent
+  as one task with each error and `buildFixContextLines` (8) of numbered code around it, its changes then proposed file
+  by file; Run again saves the documents the accepted fix changed and runs the same configuration (asked as any run);
+  the fix is an activity with Stop. Settings `buildFix` (`CRAFT_PLUGIN_AI_BUILDFIX`, on), `buildFixContextLines`.
+- **Decisions on the recommendation (one line each):**
+  - The inline chat answers through a registry beside the code actions (the same shape, "ai" its provider); the ghost diff is the review, so Accept applies in place without the diff page.
+  - The box and the ghost diff are an overlay over the lines below (as the ghost text), not inserted rows: the text moves only on Accept.
+  - The range is whole lines (the selection's, else the caret's line); the model answers their full replacement.
+  - The first registered provider answers (as the commit message's); its on and off is the AI plug-in's setting.
+  - The answer streams by whole lines; prose before a fenced block is dropped, an answer with no block is taken whole at its end.
+  - While it streams, the removed lines past those the answer has replaced so far are pending, not removed.
+  - Retry has no key of its own (its button): Ctrl+R and Alt chords belong to the keymaps and the menu.
+  - The box's history is shared by the editors of the process, the newest 50.
+  - Pressing the box's load button is the user's asking (note 23): the model loads, then the waiting instruction goes.
+  - A review's model is the review's own choice (`reviewModel`, chat by default), read like the commit message's.
+  - The review's lines are numbered in the new text in the diff given to the model, so a finding names a line of the file.
+  - The review's budget is a git setting (it trims the diff) bounded by the model's context; large files are named, not reviewed.
+  - Apply fix reuses the code actions' Fix (the AI plug-in's rewrite), so a finding's fix is the same diff path as a problem's.
+  - Findings show in the gutter as one new mark kind (`Note`, the accent colour) whose card holds the actions.
+  - One error goes to the chat's Fix, several to the agent; pressing Fix with AI is the user's asking, so the model may load then.
+  - Run again is a button, never automatic, and saves only what the accepted fix changed before it runs.
+  - Only a build or test that failed with errors keeps a failure; the same configuration's success clears it.
+- **Tests**: `InlineChat` (4: the ghost diff drawn and one undo step on accept; discard, retry, a follow-up refining the
+  same edit and the history; no model said and the load only on the press, no provider said, read-only refused, Ctrl+I;
+  the streaming rows, the replacement's line breaks and the request's context), `CommitReview` (4: the parser, the
+  numbering and the budget; a real repository reviewed into the view, the gutter, the card, the diff view's notes, Copy
+  all and Apply fix as one undo step; Stop and no model; the AI provider on a loaded lease, never loading), `BuildFix`
+  (2: two errors to the agent, both fixes accepted as diffs, Run again succeeding; one error to the chat's fix, the
+  Problems row's "Fix with AI", Run again saving it, turned off offering nothing); `Ai.TheSettingsReadEveryVariable` and
+  a `SourceControl` expectation (two buttons in the box) updated. First run: 27 of 31; the four (two expectations, prose
+  before a fence leaking into the answer, a replaced line shown pending while streaming) fixed. The filter
+  `InlineChat|CommitReview|BuildFix|AiPlugins|Ai.|Conversation|SourceControl|RunView|ProblemsPanel|DraftModel|ModelLoading|Editor|Settings|Keys|Paint|ApiGuard|Inventory`:
+  143 passed, 0 failed. API dumps (`Craft.Abstractions` and its contract list, `Craft.Ai`, `Craft.Editor`,
+  `Craft.Plugins.Git`) and `plans/inventory.md` regenerated: lines added only.
+- **Windows only (not run here; Craft.Maui compiled on net10.0):** the box's keys through WinUI (Ctrl+I, Ctrl+Enter,
+  Escape, Up and Down reaching the editor), the overlay's look, the diff page's note rows, the Problems row's wider button.
+- **Left, for later:** the ghost rows are not syntax-coloured and not wrapped; the Run view does not redraw its card when
+  `buildFix` changes until the next run; findings are not kept across sessions.
+- **The owner's commands:**
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  $env:CRAFT_FILTER="InlineChat|CommitReview|BuildFix|AiPlugins|Ai.|Conversation|SourceControl|RunView|ProblemsPanel|Editor|Settings|Keys|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+  In the app, with the chat model loaded: in `Program.cs` select a method, Ctrl+I, "add a null check", Enter (the ghost
+  diff), type a follow-up, Ctrl+Enter, then Ctrl+Z once; Ctrl+I with no model loaded (the box's load button); in Source
+  Control (after `git init` in the test project and a change) the checked-box button beside the sparkle (findings,
+  a note in the gutter, its card's Apply fix, Copy all, Open changes); make two errors, Ctrl+Shift+B, the Run view's Fix
+  with AI (the agent), accept, Run again; with one error, the Problems row's "Fix with AI".
+
 ### Slots and merge order
 - Slot 1, AI: 1a note 27 in Idrak; 1b Craft's note 27, chat drop, Models page, more folding; then X part 10 (the chat
   and the agent redesigned); then X part 8 (Source Control); 1c (last) the interaction times.
@@ -4481,6 +5088,825 @@ open, colours of app.ts, app.html (with `@if`/`@for`), app.scss, index.html, mai
 brackets, folding, toggle comment; "npm: run build" and "npm install"; "Set up ESLint", a squiggle and its fix as a
 diff, "Lint workspace"; Shift+Alt+F on the .scss; the Angular plug-in disabled turns .html to plain HTML; typing at the
 top of a long .ts with the paint and keystroke numbers written here.
+
+### W0 as built (2026-11-01)
+
+Slot w1, on Craft `main` 0f14e72 and Idrak `main` 9e63a92. Craft only: no cause was found in Idrak.
+- **The line-state kit is public** (`Craft.Abstractions/LineStates.cs`, contract 1.1, additions only): `LineTokenizer`,
+  `LineStateSession`, `ITextFormatter` (with `ITextFormatter.Malformed`, the "line 3, column 9: …" message JSON and XML
+  shared), `FormatStyle` and `LineStateLanguage` (the C# plug-in's internal `ProjectLanguage`, made public), unchanged in
+  behaviour. New: `LineStates`, a thread-safe interning table for states past 64 bits (a stack of template, JSX or
+  embedded frames gets one number with `LineStates.InternedBit` set; a held stack is found with nothing allocated),
+  bounded to `Capacity` stacks (4,096) of `MaxDepth` frames (64), past which `Intern` gives the `Fallback` state (the
+  tokenizer's reset state) and counts `Overflows` (rule 77); `LineStateSession.ChangeDialect(tokenizer)` (a version
+  learned later) drops the states and raises `Reclassified`; `LineStateLanguage.TokenizerFor(context)` picks a dialect per
+  file; `LineTokenizer.RulesAt(line, column, state)` lets an embedded part answer its own rules; `KnownLines` and
+  `LinesScanned` are public (a third party's incremental tests). The C# plug-in's project languages (MSBuild, XML, XAML,
+  Razor, .editorconfig, .sln) are `LineStateLanguage`s on the public kit (proof a third party can do the same).
+- **`ILanguageSession.RulesAt(snapshot, position)`** (default null: the language's own rules), forwarded by
+  `SyntacticLanguageSession`; `LineStateSession` answers from its tokenizer at the line's state. `EditorModel.RulesAt(position)`.
+  Toggle comment (Ctrl+/, Ctrl+K Ctrl+C, Ctrl+K Ctrl+U) reads the rules at the first caret's first non-blank character, and
+  a language with no line comment but a block comment (CSS, HTML, and today XML, XAML, MSBuild) wraps each caret's lines in
+  it (`/* … */`, `<!-- … -->`) or unwraps them, one undo step.
+- **JSON is its own pre-installed, removable plug-in** `plugins/Craft.Plugins.Json` ("json"; package `Craft.Plugins.Json`):
+  the language (.json, .jsonc: package.json, tsconfig.json, appsettings.json, launchSettings.json, global.json), its
+  colours, brackets, folding (`JsonFolding`, moved), Format document (`JsonFormatter`, moved) and the icons of .json and
+  .jsonc, on `Craft.Abstractions` alone; JSON with comments and trailing commas as before. The C# plug-in keeps only what
+  is C#'s (`ProjectLanguages.Json` and `JsonFolding` left its public API; its summary and plugin.json say so). Craft.App's
+  `CraftPreinstalledPlugins` targets copy it with the others (`plugins\*\*.csproj`), so no app change was needed.
+- **`src/Craft.Web`**, empty (net10.0, `IsAotCompatible`, no reflection), its folders `Script/`, `Style/`, `Markup/` (one
+  file each naming its slot), in `Craft.slnx`, referenced by the tests and the API guard (`api/Craft.Web.txt`, empty).
+  How each web plug-in carries its own copy: its project references `src/Craft.Web` as a plain (copied) project reference,
+  so `Craft.Web.dll` lands in the plug-in's output folder and the app's targets copy that folder whole; the app has no
+  Craft.Web of its own, so each plug-in's load context loads the copy in its folder (HTML's `<script>` colours with the
+  JavaScript plug-in removed).
+- **Android and AOT**: `Craft.Web` and `Craft.Plugins.Json` are pure C# with no reflection and nothing native
+  (`IsAotCompatible` true, trim-safe); the kit in `Craft.Abstractions` adds none either.
+- **Decisions (each the recommended option, one line each)**:
+  - The kit lives in the `Craft.Abstractions` namespace (no `Craft.Abstractions.Text`): one `using` for a plug-in, as every other contract.
+  - `ILanguageSession.RulesAt` returns null for "the language's own" (a session does not know its language's rules).
+  - A dialect is a tokenizer: `ChangeDialect` swaps it; the formatter stays the language's.
+  - `LineStates` is per tokenizer (shared by its sessions), append-only and bounded; full, it gives the reset state rather than clearing (an id a session holds never changes meaning).
+  - `FormatStyle`'s equality is its indent and line break (the record's cache of breaks left out).
+  - The comment fallback wraps whole lines (first line's indent to last line's last non-blank character), one pair per caret's block, and unwraps when every block is wrapped; blank blocks are left.
+  - The comment's language is read once, at the first caret's first line (a multi-caret toggle across a `<script>` boundary uses that one).
+  - JSON also opens `.jsonc` (VS Code's settings); names without an extension (`.babelrc`) wait for W-files' patterns.
+  - The JSON plug-in registers .json's icon over the library's (the library's answers again when it is removed) and .jsonc's.
+  - `LineStates`' capacity and depth are constructor arguments (each web plug-in carries them as its settings when its lexer needs them).
+- **Tests** (CPU, here): new groups `WebKit` (5: a test-only third-party language on the public kit with interned frames,
+  400 random edits equal to a fresh session's, typing settling on the next line, a warm 60-line screen at 0 B, its
+  formatter through the editor as one undo step and `Malformed`'s message; the C# plug-in's languages on the kit; the
+  dialect switch raising `Reclassified` through the session and the editor, per-file dialects; interning bounded with the
+  reset fallback, 0 B lookups, a tokenizer resuming at the top level past the bound; `RulesAt` and the block-comment toggle
+  for a block-only language, XML and an embedded part) and `WebPlugins` (5: the JSON plug-in from its own folder,
+  removed and disabled, `package.json` coloured with the C# plug-in disabled, icons and folding with it; the C# plug-in
+  holds no JSON; JSON's colours, format, format undo and format on save, moved from `ProjectLanguages`). Touched: `Plugins`
+  (the project languages' tokenizers from the plug-in's context; the app layout's probe opens package.json as JSON),
+  `ProjectLanguages` (JSON's cases moved out, the rest unchanged), `Folding` (JSON's ranges from the plug-in). First run:
+  49 of 51 passed; the two failures were the tests' "from the plug-in's own context" read on the language object, which is
+  now the host's `LineStateLanguage` (fixed to read its tokenizer). API dumps of Craft.Abstractions, Craft.CSharp and
+  Craft.Editor regenerated (Craft.CSharp lost its JSON members), `api/Craft.Plugins.Json.txt` and `api/Craft.Web.txt`
+  added, the contract list (1.1) with lines added only.
+- **Left**: nothing of W0. The lexers, the `LineStates` settings per plug-in and the plug-ins' copies of Craft.Web come with
+  W-script, W-style and W-markup.
+- **The owner's check** on `test-output\CarftTestPOC`: open `appsettings.json` (colours, folding, Shift+Alt+F); Settings ›
+  Plug-ins: disable Craft.CSharp and restart, `appsettings.json` still coloured, then disable Craft.Plugins.Json too and it
+  opens as plain text; in a `.csproj`, Ctrl+/ on a line wraps it in `<!-- -->` and again unwraps it.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "WebKit|WebPlugins|ProjectLanguages|Plugins|PluginKit|PhaseP|Folding|BracketColors|Editor|Settings|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
+### W-files as built (2026-11-01)
+
+Slot w2, Craft only (nothing in Idrak was needed: the icons' paths are parsed by MAUI Graphics, the registries are Idrak's
+`KindTable`). Contracts 3, 4 and 5 and the rich icon theme.
+- **Languages by name** (contract 3): `ILanguage.FilePatterns` (a default member, none: exact names and `*`/`?` globs);
+  `EditorLanguages.ForFile` ranks an exact name, then the longest pattern (its characters other than wildcards), then the
+  extension; the first language registered wins a tie. `FilePatternTable<T>` (public, any plug-in can use it) holds names,
+  compound suffixes (".d.ts", and a star with a literal suffix: "*.component.html"), globs and extensions, each ignoring
+  case: a walk over the name's dots with alternate lookups (rules 15, 17), the globs longest first, made again only when a
+  registration changed the registry (its list is then a new array). Measured: 0 bytes over 230,000 warm lookups of
+  languages, file icons and folder icons together (`WebFiles.MatchingNamesAllocatesNothing`).
+- **Languages by workspace** (contract 4): `ILanguageSelector : IKind` (`Select(path, workspaceRoot)` from its own cache,
+  no I/O; `PrepareAsync(root)` off the UI thread) and `LanguageSelectors` (`PrepareAsync` runs them together, a failing one
+  named and skipped); `ForFile(path, workspaceRoot)` asks them first. The shell's call sites (open, new, save as, rename,
+  peek, session restore, groups, the context menu's "Open with" and Format) go through `ShellModel.LanguageFor`, which
+  passes the open folder; opening a folder prepares the selectors off the UI thread and then `RepickLanguages` gives the
+  open tabs their languages again.
+- **Rich icons** (contract 5): `FileIcon` gains `Shape`, `OpenShape` (a folder's open look) and `LightArgb`;
+  `FileIconShape` (layers on a 16-unit box; `Problem` checks SVG path data, `Transform` places a glyph) and
+  `FileIconLayer` (path data, dark and light colours, fill or a round stroke). `FileIcons` matches by exact name, compound
+  suffix, glob and extension (the same table as the languages), `ForFolder(name)` by folder name, `RegisterFolder`,
+  `PlainFolder`; a shape that cannot be drawn fails at registration. `FileIconThemes : IKind` (`IFileIconTheme`, and
+  `FileIconTheme` for a plug-in made of icons by key) with the library's "craft"; `CRAFT_ICON_THEME` (Settings ›
+  Appearance › Theme, its choices the registered themes) picks one, a theme's gaps drawn from Craft's set.
+- **Craft's own set** (`CraftIcons`, 112 file keys, 31 folders, 417 layers): original drawings in the design's style (the
+  logo's rounded tile with an ink mark): sources on a rounded tile, documents and data on a page with a folded corner,
+  Angular's parts on a hexagon of Craft's own, each in the design's hues with a monogram of stroked letters or a small
+  drawing (cube, gear, globe, branch, lock, tick, crates); folders open and closed with an emblem. The C# set redrawn
+  (.cs .csx .csproj .props .targets .sln .slnx .razor .cshtml .xaml .xml .config .resx .json appsettings*.json
+  launchSettings.json global.json .editorconfig .md images .svg .ps1 .cmd .bat .sh .gitignore .gitattributes Dockerfile
+  .yml .txt) and the web set (.html/.htm, .css .scss .sass .less, .js .mjs .cjs .jsx jsconfig.json, .ts .mts .cts .tsx
+  .d.ts tsconfig*.json, the Angular parts and angular.json, package.json, package-lock.json, .npmrc, .nvmrc,
+  eslint.config.*, .eslintrc*, tslint.json, .prettierrc*, .spec/.test files); folders src, test(s), docs, .git, .github,
+  .vscode, .vs, .craft, node_modules, dist/out/build, bin, obj, assets/images, public/wwwroot, components, services, scripts,
+  .angular, Properties. Light: each base moved to 3:1 on the light theme's grounds (`ColorContrast`), a white ink; dark:
+  the design's hues, a near-black ink. Checked here: every layer parsed by MAUI Graphics' own `PathBuilder` (a scratch
+  program against the package's net10.0 assembly: 417 of 417, all inside the box) and drawn to a preview sheet.
+- **Drawing**: `IconPathCache<TPath>` (Craft.Editor) keeps each layer's parsed path per size, by the layer's identity,
+  bounded (4,096); `MauiFileIcons` builds them with `PathBuilder.Build` scaled once and caches each colour; `FileIconView`
+  (a bindable `GraphicsView`) shows one; the badge is the fallback (no shape, or a path the parser refused). `IIconCanvas`
+  (optional on an `IEditorCanvas`, MAUI's implements it) and `FileIconDrawing.Draw` let a drawn list (Problems) draw icons.
+  Measured with the cache and a recording canvas: the first frame parses each layer once, 0 bytes and no parse over 1,000
+  warm frames of 22 icons, a new size parses once more.
+- **Where they show**: the tree (the chevron, then the folder's open or closed icon or the file's), the tabs, quick open
+  (folders too), the breadcrumb's file, the welcome page's recent folders, Problems' file headers, search, bookmark,
+  history and Run results (`PanelResultGroup.FileIcon`), the menus' "file:" icons, the Source Control file lists.
+- **node_modules**: `Workspace.ListFolder` keeps the skipped folders (`CRAFT_WORKSPACE_IGNORE`) marked
+  `WorkspaceEntry.IsIgnored` (and every entry listed inside one) when `CRAFT_WORKSPACE_SHOW_IGNORED` is on (the default):
+  the tree draws them at half opacity, closed, read only when opened; `EnumerateFiles` (quick open's list, indexing) and
+  the search's walk never enter them, as before; `Workspace.IsInIgnoredFolder`.
+
+**Decisions on the recommendation (the owner away; one line each).**
+- A star followed by a literal suffix is a compound suffix (found by the dot walk), any other wildcard a glob; both rank as patterns, above every extension.
+- An extension a language lists keeps its rank as an extension even when it has two dots (".d.ts" listed as an extension ranks as a suffix-pattern).
+- A selector returns the language itself (not a name); a disabled plug-in takes its selector with it, so nothing names a missing language.
+- The selectors learn a folder when it opens, not on every call; the host re-picks the open tabs after (a later change of angular.json waits for W-npm's `WorkspaceChanged`).
+- The icon set is one registry keyed by any kind of key (`FileIcons`), and is the "craft" theme; a theme a plug-in registers answers first and Craft's set fills its gaps.
+- An unregistered `CRAFT_ICON_THEME` keeps Craft's own, said in the log (as `CRAFT_THEME` falls back), while `FileIconThemes.Use` itself fails with "not registered".
+- Shapes are 16-unit boxes of SVG path data per layer (fill or round stroke), not a font or images: no package, any plug-in can draw its own, light and dark per layer.
+- The library's set is built once from bases and glyphs placed by a path transform (one walk, InvariantCulture), so each glyph is drawn once and reused.
+- Light icons: the base moved to 3:1 (a graphic's contrast) on the light theme's grounds, white ink; the badge's text colour to 4.5:1.
+- The path cache is by the layer's identity and the size, bounded, cleared when the icon theme changes; a layer the platform's parser refuses draws the badge from then on.
+- Problems draws icons through an optional canvas interface (as `IStyledLineCanvas`), so the headless tests and any canvas without shapes keep the badge.
+- The tree's folder rows keep their chevron and add the folder icon; file rows leave the chevron's place empty so names line up.
+- Skipped folders show by default (VS Code shows git-ignored folders dimmed); off, the tree is as before.
+- The JSON plug-in's .json and .jsonc icons take Craft's drawn JSON shape (its registration over the library's had turned them back into badges); package.json keeps its own icon (an exact name above .json).
+- Angular's parts use a hexagon of Craft's own and letters, never Angular's mark; no vendor logo anywhere in the set.
+
+**Tests**: new group `WebFiles` (7): `ForFile` by name, longest pattern, extension and tie, the table's grammar and globs, a
+registration changing the table; 0 bytes warm for languages and icons by name; a selector first from its cache, a failing
+one named, the shell's folder passed and the open tab re-picked; icons by name, suffix, glob, extension and folder, open and
+closed, light at 3:1, a plug-in's icons and Unregister; every built-in shape parses and is written again the same, the bad
+forms refused, the C# and web lists covered; quick open, the tree and Problems on the same table (the badge without shapes,
+the icon with them); warm icon frames parse once and allocate nothing, per size, bounded; a plug-in's icon theme picked by
+`CRAFT_ICON_THEME`, an unknown name kept to Craft's, `Use` failing loudly; node_modules listed dimmed and closed, never in the
+workspace's files or a search, hidden with the switch off. First run of the group and the touched ones: all 7 passed;
+`Inventory` wanted the regeneration. After the rebase onto W0, the full filter
+(`WebFiles|Inline|Shell|ContextMenus|SourceControl|WorkspaceSearch|Breadcrumb|Settings|Design|LookAndFeel|Ui|ApiGuard|Inventory|ProblemsPanel|WebKit|WebPlugins|ProjectLanguages`,
+153): 150 passed; two expectations this work changes on purpose were updated (`Shell.TheFolderTreeListsAFolderWhenItOpens`:
+bin now shows dimmed by default, the old order kept with the switch off; `WebPlugins`: package.json shows its npm icon, a
+.json file the plug-in's drawn one), and `Layout.TheTreeFollowsTheDisk…` (bin's own row now shows, still no batch for the
+churn inside it); then those and `Experience|TreeMove|Layout|EditorGroups|Navigation|Plugins` passed. One failure is not
+this work's: `LookAndFeel.NoPlatformMessageBoxIsLeft` matches X part 8's `PanelMessageBox` (`MessageBox(box)` in
+`src/Craft.Maui/PanelBlocksView.cs` and `plugins/Craft.Plugins.Git/SourceControlView.cs`), left to its owner. API dumps of
+Craft.Abstractions, Craft.Core and Craft.Editor, the contract list (1.1) and `plans/inventory.md` regenerated, lines added only.
+
+**Windows only (not run here; Craft.Maui compiled on net10.0)**: `FileIconView` and `MauiFileIcons` on Win2D (the look, the
+antialiasing at 16 units, whether Win2D's `FillPath` allocates per call), the tree's chevron and icon row, the tabs',
+breadcrumb's, quick open's, welcome page's, menus' and panels' icons, Problems' icons through `MauiEditorCanvas`, the dimmed
+node_modules. No file under `Platforms/` changed.
+
+**Left**: folder icons in the breadcrumb's folder parts; a tab's icon follows a rename only when the strip is rebuilt; the
+selectors re-read a folder only when it opens (W-npm's `WorkspaceChanged` can drive it); files inside an opened skipped
+folder do not follow the disk (the watcher drops them, as before); the closed file of a review (`BackgroundDocument`) is
+named by its file name only.
+
+**The owner's commands:**
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebFiles|Inline|Shell|ContextMenus|SourceControl|WorkspaceSearch|Breadcrumb|Settings|Design|LookAndFeel|Ui|ApiGuard|Inventory|ProblemsPanel|WebKit|WebPlugins|ProjectLanguages|Layout|Experience|Plugins"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: the explorer's icons beside every file and folder (open a folder: its icon opens), `bin` and `obj` dimmed and
+closed (open one: its files dimmed); the tabs', quick open's (Ctrl+P, and a folder browsed), the breadcrumb's, the welcome
+page's and Problems' icons; the light theme (Settings › Appearance › Theme) for the light variants; Settings ›
+Appearance › File icon theme lists "craft"; Settings › Files › "Show skipped folders in the explorer, dimmed" off hides them.
+With W's web project (`test-output\WebTestPOC`), node_modules dimmed, package.json, angular.json, the component parts.
+
+### W-npm as built (2026-11-01)
+
+Slot w3. Idrak first (its gap fixed in Idrak, on `main`), then Craft.
+
+**Idrak** (`Idrak.Abstraction/CommandSandboxes.cs`, additive; commits 27e7560, e3d656c): `CommandLimits.Requester` (who asks
+for a command, as the words of a sentence; default "the agent", which the coding tools keep) and `CommandLimits.Purpose`
+(what the command is for when its command line does not say it plainly, null by default); neither changes how a command
+runs; the container sandbox carries both to the run of its program. Test `command sandboxes: requester` (defaults, copies,
+equality, the same run whoever asks); the public API dump (two lines added). The filter `command sandboxes|public API|abstraction inventory`:
+10 of 10 on the CPU, both times.
+
+**Craft contracts** (`Craft.Abstractions`, additive, contract 1.1):
+- (9) `PluginSetting.MachineOnly`, `EditorPlugins.IsMachineOnly(variable)` (compared in place, nothing allocated),
+  `PluginSetting.VariablePrefix` and `IsVariable`. `CraftSettings` passes a workspace's value over (the user's or the
+  default is read), refuses to write it into the workspace's file, and the settings page's row says "This machine's only …
+  (its value there is passed over)". Git's `path` and approve-each's `inner` are machine-only now too.
+- (10) `IEditorHost.WorkspaceChanged` with `WorkspaceChangedEventArgs` (`Previous`, `Current`, `Kind`: `Opened`, `Closed`,
+  `Switched`, `Refreshed`); the host raises it with `WorkspaceFolderChanged`, and `EditorHost.RefreshWorkspace()` (the
+  explorer's Refresh) raises `Refreshed`.
+- **approve-each** words its question through `Requester` ("The npm plug-in wants to run a command") and shows `Purpose`
+  ("Runs: the script build of package.json: ng build"); a plug-in's command is a dialog (the agent's stays inline in its
+  timeline), says plain "Deny", gets no second activity and no copy of its output in "Agent sandbox" (its command and end
+  only); a run with no time limit says "Time limit: none (it runs until stopped)" (it said "-0 s").
+
+**The npm plug-in** (`plugins/Craft.Plugins.Npm`, pre-installed and removable, contract 1.1, capabilities files and sandbox):
+- Node: `CRAFT_PLUGIN_NPM_NODE` (machine-only; a path or a name on PATH), else `node` on PATH; npm as `node npm-cli.js`
+  (never npm.cmd): `CRAFT_PLUGIN_NPM_NPM` (machine-only; the file or npm's package folder), else beside Node in each layout
+  (Windows' installer `node_modules\npm\bin`, Unix `../lib/node_modules/npm/bin`, Debian `../share/nodejs/npm/bin`), through
+  Node's link (Homebrew, nvm), else npm on PATH followed to its npm-cli.js. Found off the UI thread with file checks only;
+  the version read once (`node --version` through Idrak's "process" sandbox, 10 s) into the status item "Node 22.23.4"
+  (its click opens the Run view). No Node, or Android: a status entry in the notification centre says why with "Look for
+  Node again", and nothing else is added.
+- Scripts: every package.json of the workspace (`node_modules` never walked; the folders of `ignore` and each `.gitignore`
+  passed over), read as UTF-8 bytes with `Utf8JsonReader` (rule 74: BOM passed over, comments and trailing commas taken,
+  odd names and escapes kept, a duplicate name keeps its last text in its first place as `JSON.parse`, non-string values
+  skipped unread, a broken file logged once per problem). Each script is a palette command ("npm: run build (src/app)",
+  "npm: run build in a terminal (src/app)"), each package an "npm: install (src/app)"; the tree's and the tab's menu on
+  package.json get "Run npm script ▸", "Run npm script in a terminal ▸" (rows made as the menu opens, `EditorMenuSources`)
+  and "npm install", with icons and a `When` on package.json; the Run view's provider "npm" gives a target per script
+  (build also builds, test also tests: F5 and Ctrl+Shift+B), run as `node npm-cli.js run SCRIPT -- arguments` in the
+  package's folder. All follow the file: the folder watcher (a package.json or lock file made, removed, renamed, a folder
+  holding one removed; a burst gathered for `scanDelayMs`), the editor's saves, and `WorkspaceChanged` (open, close,
+  switch, Refresh).
+- Runs: through the sandbox `CRAFT_PLUGIN_NPM_SANDBOX` (machine-only, default "approve-each"; "not registered" said,
+  nothing runs) with `Requester` "the npm plug-in" and `Purpose` the script's text; output streamed to the terminal tab
+  "npm: build" (the folder and the command first, colours kept: `FORCE_COLOR=1`, `npm_config_color=always`; one append
+  per UI turn), the end in green or red with the time; an activity "npm: build" whose Cancel (and "npm: Stop every npm
+  run") stops the process tree, its text the elapsed time and the last line; long-running scripts (`longRunning`,
+  "start;serve;watch;dev", and their ":" variants) have no time limit, the rest `timeLimitMinutes` (30). "In a terminal"
+  is X part 6b's interactive start: asked once, then a program tab that takes the keyboard (Ctrl+C stops it).
+  Install: `install` (or `ci`; without npm's lock file install runs, said in the tab) as the same kind of run. Every run
+  gets `npm_config_fund=false`, `npm_config_audit=false`, `npm_config_update_notifier=false`, `NG_CLI_ANALYTICS=false`.
+  `.npmrc` is never read, so never logged.
+- yarn, pnpm and bun: found by `packageManager` or a lock file in the package's folder or above it within the workspace;
+  said once per workspace ("npm: pnpm is not supported yet"); their scripts still run with npm, install is refused, said.
+- Options (`CRAFT_PLUGIN_NPM_*`, Settings › Terminal › npm): `NODE`, `NPM`, `SANDBOX` (machine-only), `INSTALL`,
+  `LONGRUNNING`, `TIMELIMITMINUTES`, `COLOR`, `IGNORE`, `SCANDELAYMS`.
+
+**Decisions on the recommendation (the owner away; one line each).**
+- `Requester` is a phrase in a sentence ("the agent", "the npm plug-in"), not a bare name, so any sandbox words its question without a lookup.
+- The question also needed the script's text, which the command line (`node …/npm-cli.js run build`) does not show: a second additive Idrak field, `CommandLimits.Purpose`, rather than a Craft side channel.
+- approve-each treats any requester but "the agent" as a plug-in: a dialog, a plain Deny, no activity or output of its own (the plug-in shows them), only the command and its end in its tab.
+- `WorkspaceChanged` is added beside X part 8's `WorkspaceFolderChanged` (kept, B3), with the folders and the kind, and a `Refreshed` kind from the explorer's Refresh so a plug-in re-reads what the watcher (names only) cannot see.
+- `MachineOnly` is enforced where Craft's own list is (`CraftSettings`), asking the registered plug-ins; Git's path and approve-each's inner sandbox take it too.
+- Node's version is read through the plain "process" sandbox without a question: a fixed argument to a program only this machine's settings can name.
+- The provider, commands and menus are registered only once Node is found, so a machine without Node gets none of them.
+- Each script gets two palette commands (in its tab, in a terminal) rather than a guess at which scripts read input; the Run view's npm targets do not take the keyboard by default (its Interactive setting turns it on).
+- The palette and menus run through the npm sandbox setting (approve-each); F5 through the Run view's own approval and `CRAFT_RUN_SANDBOX`, as every Run view target.
+- `npm ci` without npm's lock file runs `npm install` and says so; another manager's package is never installed with npm.
+- The tab is named "npm: build" for the root's package and "npm: build (src/app)" for another's; a second run of a running script is refused, said.
+- The file icons are W-files' drawn library set (package.json, package-lock.json, .npmrc, .nvmrc, node_modules), merged before this slot; the plug-in registers none to shadow them.
+- The plug-in uses the "system" folder watcher, as the git plug-in does.
+
+**Tests**: new group `WebNpm` (9): package.json from bytes (BOM, comments, trailing commas, odd and escaped names, a
+duplicate, values skipped, broken and empty files, `packageManager`, lock files in the folder and above, node_modules and
+`.gitignore` never walked); Node on a fake machine (Windows', Unix's and a linked layout, both settings, the reasons, the
+version, long-running and time limits, the variables, the command); a workspace refused for the Node path (read, write,
+the page's note, back once the plug-in is gone; Git's and approve-each's settings); the scripts as commands, menu rows and
+Run targets following Refresh, the watcher, a switch and a close; no Node says why and adds nothing; approve-each's question
+naming the npm plug-in and the script's text, Deny, Allow, the limits and variables, the tab, one activity, no time limit for
+dev and Cancel stopping it, `.npmrc` nowhere; install as an activity with its elapsed time and last line, ci and install,
+yarn and pnpm said once, a pnpm package not installed, a sandbox not registered; loaded from its folder and removed;
+real Node (skipped with its reason without it; it ran here, Node 22.23.4): `npm run` through the process sandbox with the
+variables, Cancel ending an endless script, a script reading "Ada" typed into its terminal tab. First run: 5 of 9 (a real
+bug: a `u8` literal of "\xEF" is U+00EF's bytes, so a BOM was not passed over; a Windows test separator and case; the
+activity checks looked at Recent, which keeps only longer activities); then all passed. After the rebase onto W0 and
+W-files, the full filter `WebNpm|WebPlugins|RunView|Terminal|ContextMenus|Settings|Plugins|PluginKit|PhaseP|ApiGuard|Inventory|SourceControl`:
+138 of 138. API dumps of Craft.Abstractions, Craft.Editor, the new Craft.Plugins.Npm and the contract list (1.1)
+regenerated, lines added only; the inventory unchanged.
+
+**Not run here** (the owner's): the menus, tabs, program tab and status item on WinUI; Windows' Node layout and PATHEXT on
+a real machine; `npm install` over the network.
+
+**Left**: a package.json edited outside the editor is read again on Refresh, a save or a name change (the watcher sees
+names only); yarn, pnpm and bun runners; npm workspaces' `--workspace` runs; problems from a script's output use the
+Run view's MSBuild form only (tsc's `file(line,col)` lines), not Angular's or ESLint's.
+
+**The owner's commands.** Idrak first (Craft builds against it):
+```powershell
+cd D:\Projects\Idrak; git checkout main; git pull origin main
+dotnet build -c Release tests\Idrak.Tests
+$env:IDRAK_DEVICES="cpu"; $env:IDRAK_FILTER="command sandboxes|public API|abstraction inventory"; dotnet run -c Release --no-build --project tests\Idrak.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:IDRAK_FILTER; Remove-Item Env:IDRAK_DEVICES
+```
+Then Craft (a small npm project under `test-output` to try the scripts):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebNpm|WebPlugins|RunView|Terminal|ContextMenus|Settings|Plugins|PluginKit|PhaseP|ApiGuard|Inventory|SourceControl"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$p="D:\Projects\Craft\test-output\NpmTestPOC"; New-Item -ItemType Directory -Force $p | Out-Null; cd $p; npm init -y; Set-Content ask.js "process.stdout.write('Name? '); process.stdin.once('data', d => { console.log('Hello ' + String(d).trim()); process.exit(0); });"; Set-Content tick.js "setInterval(() => console.log(new Date().toISOString()), 1000);"; npm pkg set scripts.hello="node --version" scripts.ask="node ask.js" scripts.dev="node tick.js"; cd D:\Projects\Craft
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\NpmTestPOC
+```
+In the app: "Node 22.x" in the status bar (its click opens the Run view, which lists hello, ask, dev); Ctrl+Shift+P "npm: run
+hello" (the question "The npm plug-in wants to run a command" with "Runs: the script hello of package.json: node --version";
+Allow once; the tab "npm: hello"); right-click package.json › Run npm script › dev (no time limit in the question; the
+activity's Cancel in the status bar stops it); "Run npm script in a terminal" › ask (type a name, Enter); "npm install" from
+the same menu (an activity with its time and last line); Settings › Terminal › npm › Node says "This machine's only"; with
+`"CRAFT_PLUGIN_NPM_NODE": "C:\\nowhere\\node.exe"` in the project's `.craft\settings.json` nothing changes (passed over).
+
+### W-style as built (2026-11-01)
+
+Slot w1, on Craft `main` f787030 (W0) and Idrak `main` e3d656c. Craft only: no cause was found in Idrak. Not rebased: pushed
+to `slot/w-style` for the main session to merge (the owner's rule of 2026-11-01).
+- **The lexers** (`src/Craft.Web/Style/`): `StyleTokenizer`, one `LineTokenizer` per dialect (`StyleDialect` Css, Scss, Less,
+  Sass) and version (`StyleTokenizer.For(dialect, year)`, made once, shared). CSS Syntax 3 tokens, so new syntax always
+  lexes; nesting: a statement in a block is a nested rule when its first `{` comes before a `;` or `}` (strings, comments,
+  parentheses and `#{}`/`@{}` skipped), a declaration otherwise, and on a line with neither a declaration when a known
+  property, a `--name` or a ':' followed by a space starts it (`b:hover,` is a selector, `color:` a declaration). The latest
+  CSS: `@layer`, `@container`, `@scope … to …`, `@starting-style`, `@property`, `@position-try`, `@view-transition`,
+  `@function --x()` and `if(… ; else: …)` (a ';' inside parentheses does not end a declaration), `:has()`, `:is()`,
+  `:where()`, `color-mix()`, `oklch()`/`oklab()`, relative colours (`rgb(from …)`), `light-dark()`, anchor positioning
+  (`anchor()`, `anchor-size()`, `anchor-name`, `position-anchor`, `position-try-fallbacks`), custom properties, units and
+  hex and named colours as numbers, `!important`, attribute selectors, escapes in strings. SCSS: `$var`, `#{}` in selectors,
+  properties, values and strings and across lines (frames to five deep), `@use`/`@forward` (`as`, `with`, `show`, `hide`),
+  `@mixin`/`@include`/`@content`, `@function`/`@return`, `@if`/`@else if`/`@each … in`/`@for … from … through`/`@while`,
+  `@extend`, `%placeholder`, `&-suffix`, `module.function()` and `module.$var`, maps (a key before ':' in parentheses),
+  `!default`, `//`. LESS: `@var:`, `@@var`, `@{}`, mixins (`.m(@a; @b: 2)`, calls `.m();`), guards (`when`), detached
+  rulesets (`@r: { }`, `@r();`), `~"…"`, `:extend()`, `@plugin`, `//`. .sass (indented) lexes as SCSS whose statements end
+  at the line's end. Colours through the theme's existing classes only: properties `PropertyName`, class selectors and
+  placeholders `ClassName` (a LESS mixin `MethodName`), id selectors `ConstantName`, type selectors, `&` and `*` `Keyword`,
+  pseudo-classes and pseudo-elements `TypeParameterName`, attribute names `ParameterName`, at-rules `ControlKeyword`,
+  functions `MethodName`, custom properties and SCSS/LESS variables `LocalName`, layer names and SCSS modules
+  `NamespaceName`, value keywords `EnumMemberName` (CSS-wide ones and `true`/`false`/`null`/`and`/`or`/`not` `Keyword`),
+  numbers, units and colours `Number`, strings, escapes, comments; interpolation delimiters `Operator`. The state is one
+  number under 63 bits (mode, comment, parentheses, an at-rule's prelude kind, frames), so HTML's `<style>` can carry it;
+  nothing is allocated per token (names by span through frozen alternate lookups, specials in `SearchValues`, no boxing).
+- **The names** (`StyleNames`): data lists of the properties, at-rules (CSS's, SCSS's, LESS's), functions, pseudo-classes
+  and pseudo-elements and the named colours, each newer one with the year it became Baseline (`Future` for none yet:
+  `if()`, `@function`, `calc-size()`, `field-sizing`, `interpolate-size`, scroll-driven animations, `::scroll-marker`,
+  `contrast-color()`, `sibling-index()`). They only tell a declaration from a rule where a line does not, and let an older
+  version read a newer name as plain; any name lexes by its syntax.
+- **The formatter** (`StyleFormatter`, CSS, SCSS, LESS): only the white space between tokens changes (never inside a string,
+  comment, interpolation or unquoted `url()`, never where a space changes a selector): one declaration and nested rule per
+  line at the editor's indent, one selector of a list per line, `' {'`, `': '` after a declaration's colon only, a space after
+  a value's comma, none before `;` or `,`, a value's own line breaks kept (one step in, or by its parentheses: SCSS maps),
+  one empty line kept, comments where they were, `} @else {`. Unclosed `{`, `(`, string, comment or interpolation, or a
+  close with nothing open: the file is left unchanged with "line L, column C: …". Format Selection and format on save
+  (`CRAFT_FORMAT_ON_SAVE`) through the existing paths.
+- **Format Selection in the editor** (it lacked one): `EditorModel.FormatSelectionAsync`/`FormatSelection` (Ctrl+K Ctrl+F,
+  `craft.editor.formatSelection`, the Edit menu and the palette): the selection's lines (the caret's when none), from the
+  end of the text before the first (so its indentation is set) to the end of the last, one undo step, the selection kept on
+  its characters; for every language that formats (C#'s through Roslyn's span).
+- **Folding** (`StyleFolding`, the plug-in's `CssFolding` "css"): blocks by braces, `/* #region */` and `// #region` to
+  `#endregion` (marked), block comments and runs of `//` lines (comments), with the language's own tokenizer (a brace in a
+  string, a comment, a `url()` or an interpolation never folds).
+- **The plug-in** `plugins/Craft.Plugins.Css` (pre-installed, removable, contract 1.1): languages "css" (.css), "scss"
+  (.scss, and .sass as SCSS-like, not formatted), "less" (.less), on `LineStateLanguage` with a copy of Craft.Web in its own
+  folder; `CssFolding`; icons .css "#", .scss and .sass "S", .less "L" (today's `FileIcons` badges: W-files' vector icons had
+  not merged when this was written; the main session moves them onto its API on merge); the editor plug-in "css" with
+  `CRAFT_PLUGIN_CSS_VERSION` (latest; or a Baseline year 2020-2026), `CRAFT_PLUGIN_CSS_PROJECTVERSION` (true),
+  `CRAFT_PLUGIN_CSS_FORMAT` (true), each on the settings page (Editor › CSS, SCSS, LESS) and in `.craft/settings.json`.
+  `StyleProjectVersion` reads the nearest `.browserslistrc` or `package.json` `browserslist` (`baseline 2024`, production
+  first) as UTF-8 bytes (`Utf8JsonReader`), off the UI thread, once per folder (bounded at 1,024 folders), and changes the
+  open session's dialect when it lands (`ChangeDialect`, `Reclassified`).
+- **Contract** (Craft.Abstractions 1.1, one addition): `LineStateLanguage.OpenSession(buffer, context)`, protected virtual,
+  so a language picks its formatter per file and keeps the session to change its dialect when a version is learned later.
+- **Decisions (each the recommended option, one line each)**:
+  - The language objects and settings live in the plug-in; the lexers, formatter, folding, names and the project-version reader in Craft.Web (HTML's `<style>` reuses them).
+  - A version is a Baseline year ("latest" by default), the year a name became Baseline in every major engine; a known name newer than the version is plain, an unknown name keeps its syntax's colour.
+  - Precedence: the setting when it names a year, else the project's browserslist `baseline YYYY`, else latest; "baseline widely available" names no year (a moving target; confirm with the owner).
+  - Years marked as of 2026-11-01 (confirm): `@scope` 2025, `@view-transition` 2025, anchor positioning and `@position-try` 2026, `if()` and `@function` not Baseline yet (only "latest" colours them).
+  - SCSS's own `@function` is never version-gated (it is not CSS's newer `@function`).
+  - Pseudo-classes and pseudo-elements take `TypeParameterName`, id selectors `ConstantName`, value keywords `EnumMemberName`, type selectors `Keyword`: distinct hues from the existing classes, no new class.
+  - Interpolation delimiters are `Operator`, so a block's `{`/`}` (`Punctuation`) alone folds and colours as a bracket.
+  - A ':' followed by a space at a line's end means a declaration (a selector's pseudo-class never has one), beside the known-property rule.
+  - `RulesAt` is not answered (the style languages embed none); toggle comment wraps CSS lines in `/* */` (W0's fallback) and comments SCSS/LESS lines with `//`.
+  - The formatter never adds a space inside a selector (`a>b` stays), never spaces a colon other than a declaration's, keeps `{}` empty blocks on one line.
+  - .sass is lexed as SCSS whose statements end at the line's end and never formatted (its line breaks are its syntax), said in the language's summary.
+  - Format Selection works on whole lines (VS Code's and Visual Studio's Ctrl+K Ctrl+F), the formatter's edits within them; it is not in the editor's context menu (the menu stays as it was).
+  - The format setting off gives a session without a formatter: Format document says "already formatted" and changes nothing (a later Prettier through W-tools' `DocumentFormatters` takes over).
+- **Measured** (this container, Release, 10,000-line files of the fixtures repeated; `test-output/benches/web-style.txt`):
+  a 60-line screen at line 5,000 cold (5,000 states learned) CSS 8.1-12.3 ms, SCSS 2.1-3.1 ms, LESS 1.9-3.7 ms; warm
+  21-36 µs a screen and **0 B**; a keystroke (a letter, or a `{` at a selector's end) re-lexes the 60 painted lines and
+  **0** more (the states below settle on the next line); `/*` typed at the top of the SCSS and LESS files reads the 4,999
+  lines above the screen once (0.5-1.1 ms; the CSS fixture's first line is a comment, so there it closed at once: 1 line);
+  Format document 14-19 ms cold, 5-6 ms warm (CSS), 4-7 ms (SCSS, LESS); folding 4-12 ms cold, 3-7 ms warm. Target (guess)
+  a warm screen under 0.5 ms: met (about 0.03 ms).
+- **Proven** (rule 71): 6,000 random edits (1,500 per dialect, .sass included, weighted to `{ } ; : / * " ' #` and line
+  breaks, plus `#{`, `@{`, `/*`, `*/`, `//`, `url(`), every 15th compared whole: the incremental session's spans equal a fresh
+  session's, in order, never overlapping; each fixture's formatted text equals the original with the white space removed,
+  formats to itself with no edits, and a messy copy formats to the same text.
+- **Tests** (CPU, here): new group `WebStyle` (9: CSS, SCSS and LESS fixtures with expected spans; rule vs declaration and
+  .sass, rules, toggle comment; random edits equal a fresh session; a warm screen at 0 B, lines re-lexed per keystroke, the
+  bench file; the formatter's exact outputs, white space only, idempotent, malformed left with the line and column; through
+  the editor: the caret kept, one undo step, Format Selection and Ctrl+K Ctrl+F, malformed with its message, the format
+  setting off, .sass not formatted; folding of CSS and SCSS and the provider; versions, the settings, browserslist and the
+  project's version landing on an open session, the setting winning); `WebPlugins` extended (the CSS plug-in from its own
+  folder with its Craft.Web copy named in its deps.json, its languages, colours, folding, settings and icons; removed and
+  disabled, .css, .scss, .sass and .less open as plain text; in the test host the context shares the host's Craft.Web, as it
+  shares any `Craft.*` the host carries: the app carries none, so there the plug-in's copy loads). First run: 13 of 17
+  passed; the four failures were the tests' (the load-context rule above, a timing text left unbalanced by the edits, a
+  malformed SCSS case whose `}` closed its interpolation) and one real one (SCSS's `@function` was version-gated as CSS's),
+  fixed. The full filter `WebStyle|WebKit|WebPlugins|WebFiles|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|ApiGuard|Inventory`:
+  149 of 149 passed. Dumps: Craft.Abstractions (and its contract list, one line added), Craft.Editor, Craft.Web regenerated,
+  `api/Craft.Plugins.Css.txt` added.
+- **Android and AOT**: Craft.Web's style lexers and Craft.Plugins.Css are pure C# with no reflection and nothing native
+  (`IsAotCompatible`, trim-safe); JSON is read with `Utf8JsonReader` only.
+- **Left, for later**: the indented Sass syntax's own lexer and formatter (.sass is SCSS-like and not formatted today); a
+  selector list or a value longer than the line length is not broken (the formatter changes white space only, it never
+  wraps); "baseline widely available" in a browserslist names no year; the icons move to W-files' vector icons on merge.
+- **The owner's check** on `test-output\CarftTestPOC` (add a `site.css`, an `app.scss` and a `theme.less`, or open the
+  Angular project's `.scss` under `test-output\WebTestPOC`): the colours of nesting, `@layer`, `@container`, `:has()`,
+  `oklch()`, `$var`, `#{}`, `@mixin`/`@include`, LESS's `@var:` and guards; folding of blocks and `/* #region */`;
+  Ctrl+/ (CSS wraps in `/* */`, SCSS uses `//`); Shift+Alt+F and Ctrl+K Ctrl+F on a messy rule; a missing `}` leaves the
+  file unchanged with a toast; Settings › Editor › CSS, SCSS, LESS: version 2023 makes `@starting-style` plain; Settings ›
+  Plug-ins: disable Craft.Plugins.Css and restart, the files open as plain text.
+  ```powershell
+  cd D:\Projects\Craft; git checkout main; git pull origin main
+  dotnet build -c Release tests\Craft.Tests
+  dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt --filter "WebStyle|WebKit|WebPlugins|WebFiles|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|ApiGuard|Inventory"
+  dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+  $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+  ```
+
+### W-script as built (2026-11-01)
+
+Slot w2, on Craft `main` dff114e and Idrak `main` e3d656c. Craft only: no cause was found in Idrak (the kit, `LineStates`,
+the registries and `Utf8JsonReader` did all that was needed).
+- **Main's failing test first**: `LookAndFeel.NoPlatformMessageBoxIsLeft` matched Craft's own `PanelMessageBox` block
+  (`MessageBox(box)`). Its pattern now catches only the platform's boxes: MAUI's `DisplayAlert`/`DisplayActionSheet`/
+  `DisplayPrompt`, WinUI's `ContentDialog` and `MessageDialog`, `MessageBox.Show`, Win32's `MessageBoxW`/`MessageBoxA` and a
+  `MessageBox` P/Invoke declaration (`extern`, a `LibraryImport` partial, an `EntryPoint`); a new fixture test
+  (`LookAndFeel.ThePlatformDialogPatternCatchesOnlyThePlatformsBoxes`) proves both sides.
+- **The lexer** (`src/Craft.Web/Script/ScriptTokenizer.cs`, public `ScriptTokenizer : LineTokenizer`): one incremental lexer
+  with five dialects (`ScriptDialect`: JavaScript, Jsx, TypeScript, Tsx and the AngularExpression stub W-markup builds on),
+  one state per line, a stack of frames (code, a template's `${ }`, a JSX `{ }`, a template's text, a JSX tag, a JSX
+  element's children) to any depth across lines, more than one frame interned in its `LineStates` table. The token before
+  (carried in the state across lines) decides a `/` (regex or division), a `{` (block or object), a `<` (JSX or less-than)
+  and the class of the next name. Keywords from a `FrozenDictionary` by span (rule 15), specials in `SearchValues` (rule
+  17), no generic range search and no boxing (rules 88, 89), nothing allocated per token. Covers: hashbang, `/// <reference>`,
+  JSDoc and its `@tags`, standard decorators (`@a.b(...)`), private names and `#x in obj`, numeric separators, BigInt,
+  `using`/`await using`, `accessor`, `async *m()`, import attributes (`with { type: "json" }`), `import defer`/`import source`
+  (confirm), regexes with classes (nested in the v flag's), escapes (`\p{L}`, `\k<n>`, `\u{...}`), named groups and the
+  ES2025 modifiers `(?i:...)`, flags `d` `v`; templates nested across lines; JSX elements, fragments, attributes, spreads,
+  entities, children and `{expr}` as frames; TypeScript's `satisfies`, `accessor`, `const` and `in`/`out` type parameters,
+  `declare`, `declare global`, `namespace`, `module`, `abstract`, `override`, `readonly`, `keyof`, `infer`, `unique symbol`,
+  `asserts x is T`, `import type`, `export type *`, `import x = require()`, template literal types, `enum`, the predefined
+  types; `<T,>`, `<T extends U>` and `<const T,>` generics in .tsx; .ts never lexes JSX.
+- **Colours** through the theme's existing classes: decorators `PreprocessorKeyword`, a regex's body `String` with escapes and
+  group openers `StringEscape` and flags `Keyword`, `${` `}` `Punctuation`, private names `FieldName`, `class`/`new`/`extends`
+  names `ClassName`, `interface`/`implements` names `InterfaceName`, `enum` names `EnumName`, `type` alias names `ClassName`,
+  `namespace` names `NamespaceName`, a name before `(` `MethodName`, a member after `.` `PropertyName`, `/// <reference>` and
+  the hashbang `PreprocessorText`, JSDoc `DocComment`/`DocCommentTag`, JSX tags `Keyword`, components (capitalised or dotted)
+  `ClassName`, attributes `PropertyName`, entities `StringEscape`.
+- **Versions** (`ScriptVersion`, `ScriptProjects`): per language `version` (latest) and `projectVersion` (true); read from
+  `jsconfig.json`/`tsconfig.json` (`compilerOptions.target`, `extends` followed as a path or a package's config in
+  `node_modules`, arrays too, 8 deep, cycles cut) and `node_modules/typescript/package.json`, else `devDependencies`/
+  `dependencies`, as UTF-8 bytes with `Utf8JsonReader` (comments and trailing commas allowed, a BOM taken off), off the UI
+  thread, once per folder (bounded cache of 4,096 folders). A file whose project was not read opens at once at the latest;
+  the read switches its session through `ChangeDialect`, so `Reclassified` repaints it. An older version reads a newer word
+  as a name.
+- **The formatter** (`ScriptFormatter`, JS, TS, JSX, TSX): only white space between tokens changes; lines indented by brackets
+  and JSX nesting (several brackets opened on a line indent the next once), a continued expression one step more; one space
+  after keywords and around binary operators, none inside `()`/`[]`, one inside `{ }`, after `,` and `;`; trailing spaces
+  off, at most one empty line kept; a template's text, a continued string and JSX text kept; JSDoc's ` * ` lines under their
+  `/**`; no line broken unless `CRAFT_PLUGIN_TYPESCRIPT_FORMATLINEWIDTH`/`CRAFT_PLUGIN_JAVASCRIPT_FORMATLINEWIDTH` is set
+  (then after commas, greedy and idempotent); a malformed file unchanged with "line, column: what" (a bracket, template,
+  comment, string or regex not closed, `</span>` closing `<div>`); Format Selection through the kit; the caret kept.
+- **Folding** (`ScriptFolding : IFoldingRangeProvider`): `{}` `[]` `()` over several lines, JSX elements (from `<` to the
+  closing tag), multi-line templates, `//#region`/`/* #region */` to `#endregion` (Marked), block comments and runs of `//`
+  lines (Comment), a run of imports (Imports). Inside JSX, `RulesAt` gives `{/* */}` (toggle comment wraps lines in it).
+- **The plug-ins** (contract 1.1, pre-installed and removable, each carrying `Craft.Web` as a copied reference):
+  `plugins/Craft.Plugins.JavaScript` ("javascript": .js .mjs .cjs .jsx; jsconfig.json stays JSON) and
+  `plugins/Craft.Plugins.TypeScript` ("typescript": .ts .mts .cts .tsx .d.ts): the language (`ScriptLanguage`, a
+  `LineStateLanguage`), folding, a project selector (`ScriptProjectSelector`), the icons (W-files' drawn shapes), and an
+  editor part declaring the settings (`ScriptEditorPlugin`), Settings › Editor under "JavaScript" and "TypeScript":
+  `CRAFT_PLUGIN_JAVASCRIPT_{VERSION,PROJECTVERSION,JSX,FORMATLINEWIDTH,STATECAPACITY,STATEDEPTH}` and
+  `CRAFT_PLUGIN_TYPESCRIPT_{VERSION,PROJECTVERSION,FORMATLINEWIDTH,STATECAPACITY,STATEDEPTH}`, each also in `.craft/settings.json`.
+  `ScriptRules`: `//` and `/* */`, `{}` `[]` `()`, strings `" ' \``.
+- **Android and AOT**: `Craft.Web` (Script/) and both plug-ins are pure C#, no reflection, nothing native, `Utf8JsonReader`
+  only (`IsAotCompatible`, trim-safe); the working stack is stack-allocated and bounded (at most 128 frames, rule 45).
+
+**Decisions on the recommendation (the owner away; one line each).**
+- One `ScriptTokenizer` per (dialect, version, table capacity, depth), shared by its sessions, each with its own `LineStates` table.
+- A frame is 64 bits (kind, what continues, the token before, 255 braces with 24 kinds, 31 parens with 12 kinds); the lexer's stack holds the table's depth plus one, so a deeper stack reaches the table, gets its fallback and is counted in `Overflows`.
+- A regex follows `)` of if/while/for/with, a block's `}`, an operator, `(` `,` `[` `;`, `=>`, return/typeof/case/yield/await/else/do; a name, a literal, `)` `]` and an object's `}` divide; `++`/`--` keep what was before them.
+- A `{` is an object after an operator, a return-like keyword or import/export, else a block.
+- JSX starts only where an expression may start and a name or `>` follows; `<T,>`, `<T extends U>` (not `extends=`) and `<const T>` are generics in .jsx and .tsx alike.
+- Contextual words are read from what follows on the same line (`using x`, `accessor x`, `type X =`, `async *m`, `from "`, `x as T`); a predefined type is a keyword in a type's place (after `:` `|` `&` `<`) or when not followed by `=` `(` `:` `.`.
+- The version gates words only (`satisfies` TS 4.9, `using` TS 5.2 / ES2026, `accessor` TS 4.9 / ESNext, `override` 4.3, `out` 4.7, `infer` 2.8, `keyof` 2.1, `unique` 2.7, `asserts` 3.7, `import type` 3.8, `export type *` 5.0, `import defer` TS 5.9 / ESNext (confirm), `import source` ESNext (confirm)); separators, BigInt, `#x` and regex flags lex alike in every version.
+- In TypeScript the target gates nothing (TypeScript parses and downlevels); JavaScript reads jsconfig.json's target, else tsconfig.json's.
+- TypeScript's version is the installed one (`node_modules/typescript`) before the one package.json asks for; the setting wins over both.
+- `with` after a module's string is the import attributes' keyword (its `{` an object), not the old `with` statement.
+- A regex's flags are their own `Keyword` span; `undefined` is a `Keyword` like `null`.
+- Each session has its own formatter holding its dialect (.tsx vs .ts), switched with the session; `LineStateLanguage.Formatter` stays the default dialect's.
+- `ScriptLanguage` re-implements `ILanguage.Open` to start the project read, so the kit needed no change.
+- The selectors pick no language (the names do) but read a folder's project when it opens, so files opened after start in their dialect.
+- `jsx` = auto|on|off for .js (auto: react or preact in dependencies, devDependencies or peerDependencies); .jsx and .tsx always, .ts never.
+- The formatter keeps `<` `>` `>>` `>>>` `?` and the space before `:` as written (generics or comparisons), and JSX children's spaces.
+- A continued expression indents one more step only inside braces (not inside `()`/`[]`, which already indent); `case x:` bodies indent by it.
+- Line width breaks only after commas, greedily, measuring the formatted text, so a second format changes nothing; no line is ever joined.
+- Folding hides through the closing line, as JSON's does; a comment run needs two `//` lines alone on their lines.
+- Settings go to the Editor section grouped "JavaScript"/"TypeScript" (no new section constant, which another slot may add).
+- The plug-ins register their icons over the library's with its drawn shapes (as JSON's), so removing one leaves the library's.
+- In the tests Craft.Web is shared (a Craft.Web.dll sits beside the runner and the loader shares Craft.* assemblies the host has); in the app each plug-in loads its own copy.
+
+**Tests**: new group `WebScript` (12): the latest JavaScript, TypeScript, JSX and TSX with expected spans; the regex-or-division
+table (36 cases); templates nested across lines, 40 deep, and past the table's depth counted; 4,500 random edits (weighted to
+`` ` `` `${ } / * < >`, quotes, line breaks) equal a fresh session in three dialects; 0 bytes over 200 warm 60-line screens; a
+keystroke settles; the worst flip; the version gate and the parsers; the project read once and the session switched through
+`Reclassified`, the setting's precedence, JSX by project; the formatter (expected output, idempotent on every fixture, only
+white space changed, tabs and CRLF, seven malformed cases with where and what), its line width, the caret kept, one undo
+step, Format Selection; folding (11 ranges of every kind); JSX's rules and the Angular stub. `WebPlugins` extended (2): both
+plug-ins from their folders, their files, colours from the loaded copy, folding, selectors, settings and variables, icons,
+removed and disabled; the settings through the host (`CRAFT_PLUGIN_JAVASCRIPT_JSX=on`, `CRAFT_PLUGIN_TYPESCRIPT_VERSION=4.8`,
+the line width) and back to defaults when the host closes. `LookAndFeel` (+1, the fixture above). First run: 38 of 41 passed;
+the three failures were the tests' expectations (a regex's flags and a comment's continued line are their own spans; in the
+test host Craft.Web is shared, so the plug-in's language is told by its instance, not its assembly). Rerun: two real lexer
+gaps found and fixed (a stack deeper than the table was cut off without reaching its `Overflows`; `async *m()` was a name);
+then all passed, and the full filter
+(`WebScript|WebKit|WebPlugins|WebFiles|WebStyle|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|LookAndFeel|ApiGuard|Inventory`):
+172 of 172. API dumps: `api/Craft.Web.txt` (additions), `api/Craft.Plugins.JavaScript.txt` and `api/Craft.Plugins.TypeScript.txt`
+(new); the inventory and the contract list unchanged (no contract added).
+
+**Measured** (here, 4 cores, Release; `test-output/benches/web-script.txt`): a 100,000-line TypeScript file (5.8 MiB): the
+first screen of 60 lines 0.12 ms (cold for the file; the lexer was already compiled by the group's earlier tests), the rest
+of the file's states on first read 108 ms (off the screen's path), a warm screen of 60 lines 0.075 ms and 0 bytes (target
+0.5 ms); a backtick typed on line 1 then the screen 0.09 ms, only the screen's 60 lines lexed and none below; a letter typed
+in a name: its line, the states below settle at once. A 2,000-line TSX file: Format document 3.7 ms cold, 3.5 ms warm
+(113 edits); folding 1.3 ms (336 ranges).
+
+**Left, for later**: the semantic layer (W-semantic: completion, diagnostics, go to definition); re-reading a project when its
+files change (W-npm's `WorkspaceChanged`); a contextual word whose partner is on the next line reads as a name; generics in a
+JSX tag (`<Foo<T> />`) lex `<T>` plainly; the formatter neither joins lines nor breaks them anywhere but after commas (no
+Prettier-style layout; Prettier waits for W-tools); the Angular dialect is the stub W-markup completes.
+
+**The owner's check** on `test-output\CarftTestPOC`: add `scratch.ts`, `scratch.tsx` and `scratch.js` there (git ignores the
+folder) with a template over several lines, a regex after `if (x)`, a JSX element; check their colours and icons, folding,
+Ctrl+/ inside JSX (`{/* */}`), Shift+Alt+F (and a malformed file's message); Settings › Editor › JavaScript/TypeScript; type
+a backtick at the top of a long .ts and watch the paint.
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebScript|WebKit|WebPlugins|WebFiles|WebStyle|ProjectLanguages|Plugins|Folding|BracketColors|Editor|Settings|LookAndFeel|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+
+### W-tools as built (2026-11-01)
+
+Slot w3, Craft only: Idrak needed nothing more (W-npm's `CommandLimits.Requester` and `Purpose` carry the lint plug-in's
+questions); no cause was found in Idrak.
+
+**Contracts** (`Craft.Abstractions`, additive, contract 1.1; the dumps and the contract list grew by lines only):
+- (6) `IEditorHost.PublishDiagnostics(path, source, snapshot or null, items)` and `ClearDiagnostics(source)` (default: false,
+  nothing); `FileDiagnostic` (lines and UTF-16 columns from 1, end exclusive; `In(snapshot)`, `Of(snapshot, diagnostic)`,
+  `PositionIn`); `EditorDiagnostic.Source`. The host (`EditorHost.Diagnostics.cs`) gives each item the id "source(id)"
+  ("eslint(no-unused-vars)"): an open document's lists live in `DocumentDiagnostics` (Craft.Editor, per document, shared by
+  its editors, moved through every edit; a list published for an older text is moved through the edits since, 512 kept,
+  else placed by line and column), a closed file's are kept by line and column (`ClosedProblemFiles`,
+  `PublishedDiagnosticsChanged`) and go onto the text when it opens and back when it closes; a plug-in's diagnostics leave
+  every file when it is deactivated. `EditorModel` joins the language's own with the published ones (both sorted, one
+  merge, only once the published ones are in the current text's positions), so squiggles, the hover's problem text, the
+  line-end message ("Missing semicolon.  eslint(semi)", cut per line and kept: a warm frame makes no string), the
+  lightbulb, the counts and Problems take them, also for a file with no semantic session (a .ts today). `ProblemSource`
+  takes a closed file (`ForClosedFile(path, lines)`: no snapshot, no text read); its rows open the file at their line and
+  column, and Fix on such a row opens it first.
+- (7) `ILinter : IKind` (`Title`, `Languages`, `Extensions`, `Unavailable`, `DetectAsync(path, root)` off the UI thread,
+  `LintAsync(LintRequest)`), `LinterProject` (folder, config, version, problem, note, variables, program), `LintRequest`
+  (the project, the files, the sandbox and limits its driver chose, a scratch folder), `LintResult`, `LintFileResult`,
+  `LintFix` (UTF-16 range, title, its diagnostic, `Suggestion`), and the registry `Linters` (`ForFile` by extension).
+- (8) `IDocumentFormatter : IKind` (`Formats`, `Cached`, `FitAsync`, `FormatAsync` returning the whole text; FormatException
+  for a text it cannot format), `DocumentFormatterFit`, `DocumentFormatRequest` (tab size, spaces, `Automatic`), and
+  `DocumentFormatters` (`Handles`, `ChooseAsync`, `Describe`). `EditorModel.FormatDocumentAsync` asks them first, turns the
+  text into one edit per changed run of lines (`LineEdits.Between`) as one undo step, then falls back to the language's
+  own; `CanFormat`, `FormatterDescription`; format on save passes `automatic: true`; the status bar's language tooltip
+  says "Formatter: Prettier 3.8.1, the project's (.prettierrc)" (`ShellText.FormatterTooltip`).
+
+**The lint plug-in** (`plugins/Craft.Plugins.Lint`, pre-installed and removable, package `Craft.Plugins.Lint` with the
+plug-ins "lint" and "prettier", contract 1.1, capabilities files and sandbox; it carries a copy of the npm plug-in's
+assembly for Node: `CRAFT_PLUGIN_NPM_NODE` honoured when the npm plug-in is there, else Node on PATH):
+- **ESLint** ("eslint"): the nearest `eslint.config.{js,mjs,cjs,ts,mts,cts}` from the file up to the workspace's root
+  first; only without one an `.eslintrc*` or package.json's `eslintConfig`, run on ESLint 9 with
+  `ESLINT_USE_FLAT_CONFIG=false` (said once, with `npx @eslint/migrate-config`), refused on ESLint 10 (said, with the
+  migration), as is on ESLint 8; the project's own `node_modules/eslint/bin/eslint.js` (hoisted folders up to the root),
+  a global one beside Node only with `CRAFT_PLUGIN_LINT_ALLOWGLOBAL` (machine-only); its version read from its
+  package.json as bytes. Run as `node eslint.js --format json --output-file <data folder>/lint/tmp/eslint-<id>.json
+  [--no-warn-ignored] FILES` (or `.`) in the configuration's folder; exit 0 and 1 are results, 2 a failure said with its
+  first lines; the report read as bytes (`LintJson.ReadEslint`, `Utf8JsonReader`: messages, `fix.range`, suggestions,
+  fatal parse errors; `source` and the deprecated rules skipped unread) and deleted.
+- **TSLint** ("tslint"): only `tslint.json`/`tslint.yaml` where ESLint found no configuration (registered after ESLint,
+  the first that detects a project wins), `node tslint --format json --out REPORT --project tsconfig.json FILES`, exit 0
+  and 2 are results; said deprecated once per workspace (with `npx tslint-to-eslint-config`).
+- **Runs**: `linter` = auto|eslint|tslint|off, `runOn` = save|manual; saves of linted files (by extension, inside the
+  workspace) within `delayMs` (500) are one run per project; a newer run cancels the older and takes its files; each run
+  an activity "ESLint: 2 files" with Cancel, its time `timeLimitSeconds` (120), telemetry `lint.run`. What a run found is
+  published per file (a clean file's empty list clears it; a requested file the report left out, and a whole project's
+  file it no longer lists, cleared); a failure is a status entry per linter with "Lint workspace". Commands: "Lint: Lint
+  this file", "Lint: Lint workspace" (every folder with a configuration, `ignore` never walked, each project linted whole:
+  Problems lists the closed files), "Lint: Fix ESLint problems in file", "Lint: Set up ESLint", "Lint: Forget this
+  workspace's approvals".
+- **Fixes**: the code action provider "lint": for a problem at the caret its fix ("Fix: Missing semicolon. (semi)") and
+  its suggestions ("Remove unused variable 'x'."), and "Fix ESLint problems in file" (every automatic fix in order, one
+  that overlaps an earlier one left out, as one ESLint pass does); each a diff the user accepts, one undo step, offered
+  only while the document's text is the one linted (a file linted while closed takes the text it opens with).
+- **The sandbox and the approval**: a run the user asked for goes through `sandbox` (approve-each, asking each time, as
+  "the lint plug-in"); a run on save asks once per workspace and program ("Let ESLint run on its own in this workspace?":
+  Allow in this workspace, Not now), the approval written to the user's settings in the data folder as
+  `CRAFT_PLUGIN_LINT_ALLOWED` = "folder|program;…" (machine-only: a workspace's file cannot allow itself), shown and
+  removable on the settings page (Editor › Lint), or taken back by "Lint: Forget this workspace's approvals"; once
+  allowed, that program's runs there go through `autoSandbox` (process). "Not now" holds for the window.
+- **Set up ESLint**: a saved JS/TS file of a workspace with a package.json and no configuration shows a status entry once
+  per workspace with "Set up ESLint", which runs `node npm-cli.js init @eslint/config@latest` in the workspace through the
+  asking sandbox's interactive start, in the program tab "Lint: set up ESLint" (no time limit: it asks questions), its
+  end said; the projects are read again after it.
+- **Prettier** ("prettier", `PrettierFormatter`): the project's own `node_modules/prettier` (a global one only with
+  `CRAFT_PLUGIN_PRETTIER_ALLOWGLOBAL`) and a Prettier configuration (`.prettierrc*`, `prettier.config.*`, or "prettier" in
+  package.json; `requireConfig`, on) make it the formatter of `.js .mjs .cjs .jsx .ts .mts .cts .tsx .css .scss .less .html
+  .htm .json .jsonc .json5 .md .markdown .yaml .yml` (`extensions`); found once per folder off the UI thread (when the
+  active file changes), forgotten when the workspace changes or a configuration or package.json is saved; Craft's built-in
+  formatters otherwise. A format writes the text to `<data folder>/lint/tmp` and runs Craft's runner script
+  (`craft-prettier.cjs`, written there once) with Node: Prettier's own `getFileInfo` (.prettierignore), `resolveConfig`
+  (with .editorconfig) and `format` for the file's path; through the same gate (Format Document asks through `sandbox`;
+  format on save asks once per workspace; declined, the file is saved as it is).
+- **Options** (each with its shape; Editor › Lint and Editor › Prettier): `CRAFT_PLUGIN_LINT_LINTER` (auto), `_RUNON`
+  (save), `_DELAYMS` (500), `_ALLOWGLOBAL` (false, machine-only), `_TIMELIMITSECONDS` (120), `_SANDBOX` (approve-each,
+  machine-only), `_AUTOSANDBOX` (process, machine-only), `_ALLOWED` (machine-only list), `_IGNORE`;
+  `CRAFT_PLUGIN_PRETTIER_ENABLED` (true), `_REQUIRECONFIG` (true), `_ALLOWGLOBAL` (false, machine-only),
+  `_TIMELIMITSECONDS` (30), `_EXTENSIONS`.
+- **Android and AOT**: the plug-in is C# on `Utf8JsonReader` with no reflection; Node does not run on Android, so the
+  linters and Prettier say Unavailable there (`LintNode.DeviceProblem`) and nothing runs.
+
+**Decisions on the recommendation (the owner away; one line each).**
+- Prettier lives inside the lint package as a second plug-in "prettier" (its own `CRAFT_PLUGIN_PRETTIER_*`), sharing the lint plug-in's sandboxes and approvals.
+- The lint plug-in carries a copy of the npm plug-in's assembly (as each web plug-in carries Craft.Web) for one Node finder; it reads npm's settings only when that plug-in is registered.
+- A published diagnostic's id is "source(id)" and it keeps `Source`, so every surface (Problems, hover, quick fix titles) shows it with no change of its own; the line-end message adds the id after the message.
+- `IEditorHost.ClearDiagnostics(source)` was added beside `PublishDiagnostics` (a linter turned off, a workspace switched, a plug-in deactivated).
+- Closed files' diagnostics are kept by line and column and placed only when the file opens: no file is read to list a problem.
+- A linter returns the fixes its tool gives in the linted text's positions; the driver offers them only while the document's version is the one linted (no stale offsets), never by text search.
+- "Fix … problems in file" applies one pass of non-overlapping automatic fixes from the report (no second `--fix` run); suggestions only one at a time.
+- The linter is chosen per file by the first registered linter whose configuration is found (ESLint before TSLint); the lint plug-in drives any registered linter, a third party's too.
+- ESLint runs in its configuration's folder with paths relative to it; `--no-warn-ignored` from ESLint 9 (a saved ignored file is not a warning).
+- `.eslintrc` on ESLint 10 is refused with the migration command rather than guessed; on ESLint 8 a flat configuration gets `ESLINT_USE_FLAT_CONFIG=true`.
+- The question's requester is "the lint plug-in" (a phrase, as W-npm's "the npm plug-in"), not the bare word "lint".
+- Manual runs go through `sandbox` (approve-each asks); runs on save need the once-per-workspace approval and then go through `autoSandbox` (process); an allowed program's manual runs take the allowed path too.
+- The approval is a machine-only plug-in setting (a list) written to the user's settings file in the data folder: shown and removable on the settings page, never the workspace's.
+- "Not now", and an approval that could not be written, are kept for the process, shared by both plug-ins' gates.
+- Lint reports and Prettier's text go through files in the data folder's `lint/tmp` (the sandboxes take no standard input), deleted after each run.
+- A formatter returns the whole formatted text; the editor makes the line edits (so the caret on unchanged lines stays) and the undo step.
+- Format on save with Prettier not allowed saves the file as it is (no built-in formatter in Prettier's place, which would fight the project's style).
+- Lint as you type waits for W-semantic (as planned); only saved text is linted.
+
+**Measured** (the 4-core Linux container, Release, the real test): the project's ESLint 10.1.0 linting a two-file project
+whole ("Lint workspace", through the process sandbox, report read and published): 338 ms; Prettier 3.8.1 formatting one
+file through Craft's runner: 176 ms (both cold: one Node start each).
+
+**Tests**: new group `WebLint` (10): ESLint's and TSLint's JSON reports from fixtures (BOM, suggestions, a fatal parse
+error, fixes of two replacements, severities, a cut report, package.json's version and keys); the detection matrix (flat
+nearest, flat over a nearer .eslintrc, ESLint 9's legacy mode said, ESLint 10 refusing it, ESLint 8, no install said, a
+global one only when allowed, TSLint deprecated and its command, the walk stopping at the root, the projects of Lint
+workspace, the registry); published diagnostics merged per source with the language's, moved and dropped by edits, a list
+for an older text moved, the line-end message's source, Problems for a closed file by line and column, onto the text when
+opened and back when closed, ClearDiagnostics; a plug-in's diagnostics on a file with no language, gone with the plug-in;
+a fix as one diff of two hunks and one undo step, the lightbulb's actions and suggestions, none on a changed text; two saves
+joined, a newer run cancelling the older and taking its files; the approval asked once, Not now, a manual run through the
+asking sandbox, remembered in the user's settings as folder|program, machine-only (a workspace's value passed over), not
+asked again, revoked and asked again; Set up ESLint offered and run as `npm init @eslint/config@latest` through the
+sandbox, TSLint said deprecated once; Prettier only with a configuration (package.json's key, .prettierrc, requireConfig,
+read once per folder), chosen by the registry, Format Document through it as one undo step, the tooltip, format on save
+declined; the plug-in from its own folder (its copy of the npm assembly, no shared contracts) and removed; real ESLint and
+Prettier (linked into the test project from the machine's install or `CRAFT_TEST_ESLINT`/`CRAFT_TEST_PRETTIER`; skipped
+with the reason without them; they ran here). First run of the filter
+`WebLint|WebNpm|WebPlugins|ProblemsPanel|InlineDiagnostics|Lightbulb|Settings|ApiGuard|Inventory` (68): 62 passed; the six
+were the API dumps and the inventory (regenerated), one wrong expectation of the detection test, one real bug (the lint and
+Prettier plug-ins' gates kept separate in-window approvals, so an approval given through one was unknown to the other: now
+shared), and `WebNpm.InstallIsAnActivityAndYarnPnpmAndBunAreSaid` (npm's own test, untouched here; it passed on its rerun:
+a timing race between its install's own rescan and the test's). The rerun of the failed: 12 of 12. API dumps of
+Craft.Abstractions and Craft.Editor, the new `api/Craft.Plugins.Lint.txt`, the contract list (1.1) and `plans/inventory.md`
+(Linters, DocumentFormatters) regenerated, lines added only.
+
+**Not run here** (the owner's): the squiggles, line-end messages, lightbulb and Problems rows of a linted file on WinUI; the
+status bar's formatter tooltip; the approval and approve-each dialogs; "Set up ESLint" answering npm's questions in the
+program tab and installing over the network; Windows' global ESLint layout beside node.exe.
+
+**Left, for later**: lint as you type (W-semantic); a Problems row's Fix on a closed file opens it rather than fixing it;
+ESLint's multi-pass `--fix` (one pass of the report's fixes is applied); a yarn or pnpm project's setup runs npm; the Run
+view's problem parser does not read ESLint's or Angular's output (W-npm's line).
+
+**The owner's commands:**
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebLint|WebNpm|WebPlugins|ProblemsPanel|InlineDiagnostics|Lightbulb|Settings|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$p="D:\Projects\Craft\test-output\LintTestPOC"; New-Item -ItemType Directory -Force $p | Out-Null; cd $p; npm init -y; npm i -D eslint prettier; Set-Content eslint.config.mjs 'export default [{ rules: { "no-unused-vars": "error", "semi": ["warn", "always"] } }];'; Set-Content .prettierrc '{ "semi": false, "singleQuote": true }'; Set-Content a.js "const x = 1`nconsole.log(`"hi`")"; cd D:\Projects\Craft
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\LintTestPOC
+```
+In the app: open a.js and save (Ctrl+S): the question "Let ESLint run on its own in this workspace?" (Allow in this
+workspace), then the squiggles, "'x' is assigned a value but never used.  eslint(no-unused-vars)" at the line's end, the
+lightbulb (its "Fix ESLint problems in file": a diff, Accept, then Ctrl+Z once); Ctrl+Shift+P "Lint: Lint workspace" with
+a.js closed fills Problems; hover the status bar's language item: "Formatter: Prettier …, the project's (.prettierrc)";
+Shift+Alt+F (approve-each asks for node; Allow once): quotes and semicolons by .prettierrc; Settings › Editor › Lint ›
+"Allowed to run on their own" lists the folder (remove it: the next save asks again). In `test-output\WebTestPOC` (W's
+Angular project, no ESLint): save a .ts, the status entry "Set up ESLint", run it and answer npm's questions in its tab.
+
+### W-markup as built (2026-11-01)
+
+Slot w2, on Craft `main` f12282b (W0, W-files, W-npm, W-style, W-script, W-tools merged) and Idrak `main` e3d656c. Craft only:
+no cause was found in Idrak. Pushed to `slot/w-markup` for the main session to merge (not rebased).
+- **The HTML lexer** (`src/Craft.Web/Markup/HtmlTokenizer.cs`, public `HtmlTokenizer : LineTokenizer` with `HtmlOptions`): the
+  living standard's tags, attributes (quoted values may span lines), entities (named, decimal, hex), the doctype, comments,
+  `<!…>`/`<?…>`; raw text `<script>` and `<style>` ended by `</script`/`</style` followed by a space, `/`, `>` or the line's
+  end, in any case, also inside a script's string (as the browser does; `<\/script>` does not end it); RCDATA `<textarea>`
+  and `<title>` (entities as escapes, no tags). A script by its `type`: none, `module`, the JavaScript MIME types and
+  `text/babel` as JavaScript; `importmap`, `speculationrules` and any JSON type JSON-like (the JavaScript lexer: strings,
+  numbers, true/false/null); `text/x-template`, `text/ng-template`, `text/html` as HTML; others plain. `style="…"` as CSS
+  declarations and `on*="…"` as JavaScript (`CRAFT_PLUGIN_HTML_ATTRIBUTESASCODE`). The embedded lexer's state rides in
+  HTML's: one frame of HTML (mode, element, script type, attribute kind, Angular's block depth) and the embedded state,
+  interned in the tokenizer's `LineStates`, so a long `<script>` is incremental and its spans are the JavaScript session's own
+  (proven, shifted). Colours: tags `Keyword`, custom elements (a `-` in the name) `ClassName`, attributes `PropertyName`,
+  plain values one `String`, entities `StringEscape`, the doctype `PreprocessorKeyword`/`PreprocessorText`, comments,
+  `<` `>` `</` `/>` `Punctuation`, `=` `Operator`.
+- **The Angular dialect** (the same lexer, `HtmlOptions.AngularTemplate`): `{{ }}` in text (over lines) and in attributes;
+  `[x]`, `[(x)]`, `[class.x]`, `bind-`, `bindon-` (properties), `(x)`, `on-` (events, `EventName`), `#ref`, `ref-`, `let-`
+  (`LocalName`), `*ngIf`/`*ngFor` (`ControlKeyword`, microsyntax with `let`, `of`, `as`); `@if`/`@else if`/`@else`,
+  `@for (…; track …; let i = $index)`/`@empty`, `@switch`/`@case`/`@default`, `@defer (on …; prefetch on …; when …)`/
+  `@placeholder (minimum …)`/`@loading (after …; minimum …)`/`@error`, `@let x = expr;` (`ControlKeyword`, a parameter's
+  leading word and `@defer`'s triggers `Keyword`, `@let`'s name `LocalName`), a `}` in text closing the innermost block; the
+  expressions in W-script's Angular-expression dialect, completed here: pipes `| name:arg` as `MethodName`, `?.`, `!`,
+  template literals, `let x of xs` outside parentheses. Version gate: `@if`, `@for`, `@switch`, `@defer` from Angular 17,
+  `@let` from 18.1 (before, the text they are).
+- **Inline templates and styles** ("angular-typescript", `AngularTypeScriptTokenizer`): TypeScript's lexer, except that a
+  `template:` property's string or template literal is an Angular template and `styles:` (one literal, or each literal of its
+  array) the project's inline style language (angular.json's `inlineStyleLanguage`, else the component schematic's `style`:
+  CSS, SCSS or LESS); a key inside a string or a comment is TypeScript's; the states ride together, interned.
+- **The formatter** (`HtmlFormatter`, HTML and Angular templates): only white space between tokens changes. Lines indented
+  by the elements and blocks open at their start, void elements and optional end tags known (an `<li>` closes the open one,
+  a block element an open `<p>`, a cell the open cell, …); a start tag's attribute lines one step in, its `>` line back at
+  the tag; inside a tag runs of spaces made one, none around `=` nor before `>`, one before `/>`; `@if (…) {` and
+  `} @else {` spaced; trailing spaces off, one empty line kept. Text keeps its spaces; `<pre>`, `<textarea>`, comments,
+  multi-line values and interpolations kept as written. A `<script>`'s JavaScript and a `<style>`'s CSS are formatted by
+  W-script's and W-style's formatters one step inside their element (a `FormatStyle` whose line break carries the element's
+  indentation, so neither formatter changed), kept as written when they do not parse. Malformed (an element whose end tag is
+  required, a tag, a comment, a value, a block, an interpolation or `@let` not closed; an end tag that closes nothing or
+  would close a required one): unchanged, "line L, column C: …".
+- **Folding** (`HtmlFolding`): elements over several lines (an optional-end element closed by the next ends a line above
+  it), start tags over several lines (void elements), Angular's blocks (to the line before `} @else {`), comments,
+  `<!-- #region -->` to `<!-- #endregion -->` (marked). `RulesAt`: `//` inside a JavaScript `<script>`, `/* */` inside
+  `<style>`, HTML's `<!-- -->` elsewhere; in an inline template HTML's, in inline styles `/* */`.
+- **Angular workspaces** (`AngularWorkspaces`): angular.json's projects (their roots, the inline style language) and the
+  Angular installed (`node_modules/@angular/core/package.json`) else asked for (`package.json`), as UTF-8 bytes with
+  `Utf8JsonReader`, off the UI thread, once per folder (bounded at 1,024), forgotten and read again on the host's
+  `WorkspaceChanged` (open, switch, Refresh).
+- **The plug-ins** (contract 1.1, pre-installed and removable, each carrying its own Craft.Web): `plugins/Craft.Plugins.Html`
+  ("html": .html, .htm; `CRAFT_PLUGIN_HTML_EMBEDDED`, `CRAFT_PLUGIN_HTML_ATTRIBUTESASCODE`) and `plugins/Craft.Plugins.Angular`
+  ("angular-html": an angular.json project's .html by the selector "angular", every `*.component.html` by name;
+  "angular-typescript": an Angular project's .ts by the selector, so removing the plug-in gives them back to "html" and
+  "typescript"; `CRAFT_PLUGIN_ANGULAR_TEMPLATES` project|suffix|off, `_INLINETEMPLATES`, `_VERSION`, `_PROJECTVERSION`), on the
+  settings page (Editor › HTML, Editor › Angular), their foldings and icons (W-files' drawn set: .html, .htm,
+  .component.html, .component.ts).
+- **Android and AOT**: `Craft.Web` (Markup/) and both plug-ins are pure C#, no reflection, nothing native, `Utf8JsonReader`
+  only (`IsAotCompatible`, trim-safe).
+
+**Decisions on the recommendation (the owner away; one line each).**
+- One `HtmlTokenizer` per `HtmlOptions` (Angular or not, its version, embedded, attributes as code), shared, with its own `LineStates`; an embedded state is the second frame of an interned pair, a plain HTML state a plain number.
+- A script ends at its end tag even inside a string (the standard's tokenizer), so an editor colours a page as a browser reads it; the formatter then refuses the stray end tag.
+- JSON script types use the JavaScript lexer (JSON-like: strings, numbers, keywords), not the JSON plug-in's (another plug-in's internals).
+- A self-closing `/>` closes any element in the formatter and folding (Angular components, SVG); the lexer still enters raw text after `<script/>`, as the standard says.
+- Custom elements (a `-` in the name, Angular components) colour as classes, standard tags as keywords.
+- A plain attribute value is one `String` span; one with code (`style`, `on*`, Angular bindings, an Angular plain value with `{{ }}`) is lexed by its language.
+- Structural directives (`*ngIf`) are control keywords, events `EventName`, references `LocalName`, `{{ }}` and block braces `Punctuation`.
+- A block's parameters are split at `;`: each part's leading words (`track`, `let`, `on`, `when`, `prefetch`, `hydrate`, `minimum`, `after`, `as`, and triggers after `on`) are keywords, the rest an Angular expression.
+- Block parameters over several lines keep their parentheses' depth only (each line's expressions read from the start); `{{ }}` and `@let` carry the expression's state across lines.
+- The formatter formats `<script>` and `<style>` with the existing formatters through a `FormatStyle` whose line break carries the element's indentation (no change to either), and leaves them as written when they do not parse (the page still formats).
+- `<pre>` and `<textarea>` content, and the line their end tag starts, are kept as written (their white space is content).
+- Text keeps its spaces inside a line (inline formatting can matter); only line starts and tags change.
+- An end tag closes the optional-end elements above its element; one that would close a required one is malformed (strict, unlike a browser, so a format never moves text into another element).
+- Angular's version is the installed `@angular/core` before package.json's range; the setting wins over both; a file whose folder was not read opens at the latest and switches through `Reclassified`.
+- The selector picks "angular-html" for any .html under a project's root (Angular 20's `app.html` has no `.component.` part) and "angular-typescript" for any .ts but .d.ts; `templates = off` gives a `*.component.html` to "html".
+- `template:`/`styles:` are recognised anywhere in an Angular project's .ts (not only inside `@Component`), outside strings and comments.
+- The Angular plug-in follows `IEditorHost.WorkspaceChanged` (its editor part's `attach`) and reads angular.json again off the UI thread; the open tabs keep their language until reopened (the host re-picks on a folder's opening).
+- Settings in the Editor section grouped "HTML" and "Angular", as W-script's and W-style's.
+
+**Tests**: new groups `WebMarkup` (7: the page's colours, embedded on and off; embedded spans equal standalone JavaScript and
+CSS sessions shifted; `</script` inside a string and the script types; 3,000 random edits equal a fresh session in HTML and
+Angular; a warm screen at 0 B, a keystroke, the worst flip and the bench file; the formatter's exact output, idempotent, only
+white space, a script that does not parse kept, five malformed cases with where and what; through the editor the caret kept,
+one undo step, a malformed file's message, Format Selection; folding and the rules) and `WebAngular` (5: every block,
+binding, event, pipe, `@let`, `@defer` trigger and microsyntax; the version gate 16/17/18.1 and the settings' precedence;
+inline templates and styles, SCSS over lines, their rules; the language by angular.json (two projects, the longest root,
+SCSS and LESS inline styles, Angular 18.0 installed over ^19.2), by name, by `templates`/`inlineTemplates`, a session switched
+through `Reclassified`, the plug-in removed giving back "typescript" and "html", angular.json read again on
+`WorkspaceChanged`; blocks formatted, malformed and folded); `WebPlugins` (+1: both plug-ins from their folders with their
+Craft.Web, a script and style coloured with no JavaScript or CSS plug-in, folding, the selector, settings and variables,
+icons, removed and disabled). First run of `WebMarkup|WebAngular|WebPlugins|ApiGuard|Inventory` (32): 31 passed; the one
+failure was real (a plain attribute value came out as three spans): one span now. The full filter
+`WebMarkup|WebAngular|WebScript|WebStyle|WebPlugins|WebFiles|WebKit|Folding|Editor|Settings|ApiGuard|Inventory`: 159 of 159.
+Dumps: `api/Craft.Web.txt` (additions), `api/Craft.Plugins.Html.txt` and `api/Craft.Plugins.Angular.txt` (new); the
+inventory and the contract list unchanged (no contract added).
+
+**Measured** (this container, 4 cores, Release; `test-output/benches/web-markup.txt`): a 2,007-line Angular template with
+HTML pages: a 60-line screen at line 1,000, cold (1,000 states learned, JIT included) 7.8 ms; a warm screen 0.050 ms and
+**0 bytes** (target 0.5 ms); a letter typed in a tag's name: no line read beyond the screen, the rest settles. A 20,011-line
+page: its states on first read 9.9 ms; `<!--` typed on line 1, then the screen: 0.08 ms, nothing read beyond it. A 2,001-line
+page: Format document 20 ms cold, 3.0 ms warm (1,795 edits); folding 2.2 ms (345 ranges).
+
+**Left, for later**: linked tag rename and the semantic layers (W-semantic: Angular's language service, HTML completion);
+open tabs re-picked when angular.json changes (they take the new language when reopened); a JSON script read by the JSON
+plug-in's own lexer (property names coloured); `@`-blocks' parameters spanning lines read each line's expressions afresh;
+the formatter does not wrap long tags or text.
+
+**The owner's check** on `test-output\WebTestPOC` (W's Angular project; else add `site.html` to `test-output\CarftTestPOC`):
+open `src\index.html` (the doctype, `<script>`/`<style>` coloured, folding of elements, Ctrl+/ inside `<script>` uses `//`,
+elsewhere `<!-- -->`), `src\app\app.html` (bindings, `{{ }}`, `@if`/`@for` coloured and folded; Shift+Alt+F), `src\app\app.ts`
+(an inline `template:` coloured as Angular if you add one); Settings › Editor › Angular › "Angular templates" = suffix turns
+app.html to HTML on reopening; Settings › Plug-ins: disable Craft.Plugins.Angular and restart, app.html opens as HTML and
+app.ts as TypeScript.
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebMarkup|WebAngular|WebScript|WebStyle|WebPlugins|WebFiles|WebKit|Folding|Editor|Settings|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\WebTestPOC
+```
+
+**Phase W is complete** (W0, W-files, W-npm, W-style, W-script, W-tools, W-markup, 2026-11-01): the web languages are built;
+W-semantic and every other phase wait for the owner's word.
 
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 

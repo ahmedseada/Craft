@@ -608,7 +608,7 @@ public static class FoldingTests
         Check.SequenceEqual([new FoldingRange(1, 2, FoldingRangeKind.Comment), new FoldingRange(3, 5), new FoldingRange(6, 7), new FoldingRange(0, 8)], markup, "XML: the comment, the elements and the long tag");
 
         string json = "{\n  \"a\": [\n    1,\n    \"]\"\n  ],\n  /* x\n  y */\n  \"b\": {}\n}\n";
-        var objects = JsonFolding.Ranges(new StringBuffer(json).Current);
+        var objects = Craft.Plugins.Json.JsonFolding.Ranges(new StringBuffer(json).Current);
         Check.SequenceEqual([new FoldingRange(1, 4), new FoldingRange(5, 6, FoldingRangeKind.Comment), new FoldingRange(0, 8)], objects, "JSON: the array (a ']' in a string skipped), the comment, the object; '{}' on one line not");
     }
 

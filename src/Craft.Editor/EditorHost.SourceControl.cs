@@ -11,6 +11,7 @@ namespace Craft.Editor;
 public sealed partial class EditorHost
 {
     private readonly HandlerList<EventHandler> _workspaceChanged = new();
+    private readonly HandlerList<EventHandler<WorkspaceChangedEventArgs>> _workspaceChangedWith = new();
     private readonly HandlerList<EventHandler<LineMarkEventArgs>> _lineMarkClicked = new();
     private readonly List<ISourceControlRepository> _repositories = [];
     private string? _workspaceFolder;
@@ -24,14 +25,31 @@ public sealed partial class EditorHost
         {
             if (!string.Equals(_workspaceFolder, value, StringComparison.Ordinal))
             {
+                var change = WorkspaceChangedEventArgs.Between(_workspaceFolder, value);
                 _workspaceFolder = value;
                 Raise(_workspaceChanged, nameof(WorkspaceFolderChanged));
+                Raise(_workspaceChangedWith, change, nameof(WorkspaceChanged));
             }
         }
     }
 
     /// <inheritdoc />
     public event EventHandler? WorkspaceFolderChanged { add => _workspaceChanged.Add(value); remove => _workspaceChanged.Remove(value); }
+
+    /// <inheritdoc />
+    public event EventHandler<WorkspaceChangedEventArgs>? WorkspaceChanged { add => _workspaceChangedWith.Add(value); remove => _workspaceChangedWith.Remove(value); }
+
+    /// <summary>
+    /// The open folder is to be read again (the explorer's Refresh): raises <see cref="WorkspaceChanged"/> with
+    /// <see cref="WorkspaceChangeKind.Refreshed"/> (nothing when no folder is open).
+    /// </summary>
+    public void RefreshWorkspace()
+    {
+        if (_workspaceFolder is { } folder)
+        {
+            Raise(_workspaceChangedWith, new WorkspaceChangedEventArgs(folder, folder, WorkspaceChangeKind.Refreshed), nameof(WorkspaceChanged));
+        }
+    }
 
     /// <inheritdoc />
     public event EventHandler<LineMarkEventArgs>? LineMarkClicked { add => _lineMarkClicked.Add(value); remove => _lineMarkClicked.Remove(value); }
@@ -91,6 +109,38 @@ public sealed partial class EditorHost
         int limit = Options.DiffLineLimit;
         var diff = await Task.Run(() => TextDiff.OfTexts(before, after, context, limit), cancellationToken).ConfigureAwait(true);
         return await presenter.ShowDiffAsync(title, path, diff, cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ShowDiffAsync(string title, string path, string before, string after, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(notes);
+        if (Presenter is not { } presenter)
+        {
+            return false;
+        }
+
+        int context = Options.DiffContextLines;
+        int limit = Options.DiffLineLimit;
+        var diff = await Task.Run(() => TextDiff.OfTexts(before, after, context, limit), cancellationToken).ConfigureAwait(true);
+        return await presenter.ShowDiffAsync(title, path, diff, notes, cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Puts text on the system's clipboard for a plug-in (X part 11: a review's Copy all); set by the shell. Null: the host
+    /// reaches no clipboard.
+    /// </summary>
+    public Func<string, bool>? ClipboardWriter { get; set; }
+
+    /// <inheritdoc />
+    public bool CopyText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return ClipboardWriter is { } write && write(text);
     }
 
     internal IDisposable AddRepository(ISourceControlRepository repository, string source)

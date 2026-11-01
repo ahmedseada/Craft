@@ -675,7 +675,7 @@ public sealed class BreadcrumbView : ContentView
     private const string Separator = "›";
     private readonly HorizontalStackLayout _parts = new() { Spacing = Gap, Padding = new Thickness(SidePadding, 0), VerticalOptions = LayoutOptions.Center };
     private readonly Dictionary<string, double> _widths = new(StringComparer.Ordinal);
-    private readonly List<(Label Label, string Key)> _labels = [];
+    private readonly List<(View Label, string Key)> _labels = [];
     private IReadOnlyList<BreadcrumbPart> _all = [];
     private ShellPalette _palette;
     private double _width;
@@ -835,17 +835,25 @@ public sealed class BreadcrumbView : ContentView
                 : _palette.Secondary;
             var label = _palette.Label(part.Text, color, _palette.SmallSize);
             label.Padding = new Thickness(2, 1);
-            _labels.Add((label, part.Text));
+            View shown = label;
+            if (part.Kind == BreadcrumbPartKind.File)
+            {
+                // W: the file's drawn icon before its name (the tree's and the tab's), measured with it.
+                var icon = FileIconView.Of(FileIcons.For(part.Path ?? part.Text), _palette, 14);
+                shown = new HorizontalStackLayout { Spacing = 4, VerticalOptions = LayoutOptions.Center, Children = { icon, label } };
+            }
+
+            _labels.Add((shown, part.Text));
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) => PartClicked?.Invoke(this, part.Target);
-            label.GestureRecognizers.Add(tap);
+            shown.GestureRecognizers.Add(tap);
             ToolTipProperties.SetText(label, part.Kind switch
             {
                 BreadcrumbPartKind.Ellipsis => string.Join(" › ", part.Folded.Select(f => f.Text)),
                 BreadcrumbPartKind.Symbol => $"{SymbolKinds.Word(part.Scope)} {part.Text}: its siblings ('@')",
                 _ => part.Path is { } path ? path + ": its entries" : part.Text,
             });
-            _parts.Children.Add(label);
+            _parts.Children.Add(shown);
         }
     }
 }
@@ -867,6 +875,9 @@ public enum BottomTab
 
     /// <summary>The call and type hierarchies (X part 9).</summary>
     Hierarchy,
+
+    /// <summary>The TODO list (X part 9): the tags in the workspace's comments.</summary>
+    Todo,
 }
 
 /// <summary>
@@ -905,6 +916,8 @@ public sealed class BottomPanelView : ContentView, IDisposable
     private View? _terminalView;
     private IEditorViewPanel? _hierarchy;
     private PanelBlocksView? _hierarchyView;
+    private PanelView? _todoView;
+    private Craft.Editor.Tools.TodoListView? _todo;
     private ShellPalette _palette;
     private string _outputFilter = "";
     private string _metricsFilter = "";
@@ -931,7 +944,16 @@ public sealed class BottomPanelView : ContentView, IDisposable
             Options = OutputOptions(palette.Options),
             KeyHandler = new ReadOnlySurfaceKeys(() => WindowKeys),
         };
-        _output.ModelChanged += (_, _) => _log.Attach(_output.Model);
+        _output.ModelChanged += (_, _) =>
+        {
+            _log.Attach(_output.Model);
+            if (_output.Model is { } model)
+            {
+                // X part 9: file:line links in Output, a click opens the place (the page resolves and opens it).
+                model.DetectsLinks = true;
+                model.LinkActivated += (_, e) => LinkActivated?.Invoke(this, e);
+            }
+        };
         _output.Open(_log.Shown, LogSurface.Language);
         _output.FindRequested += (_, e) =>
         {
@@ -1036,6 +1058,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
         }
     }
 
+    /// <summary>Raised when a file:line link in Output was clicked (X part 9).</summary>
+    public event EventHandler<EditorLinkEventArgs>? LinkActivated;
+
     /// <summary>Output's log (the tests' and the page's way to it).</summary>
     public LogSurface Log => _log;
 
@@ -1095,6 +1120,36 @@ public sealed class BottomPanelView : ContentView, IDisposable
         RebuildTabs();
     });
 
+    /// <summary>The TODO tab's list (X part 9): drawn from its blocks; its count in the tab's title.</summary>
+    public Craft.Editor.Tools.TodoListView? Todo
+    {
+        get => _todo;
+        set
+        {
+            if (_todo is not null)
+            {
+                _todo.Changed -= OnTodoChanged;
+            }
+
+            _todoView?.Dispose();
+            _todo = value;
+            _todoView = null;
+            if (value is not null)
+            {
+                _todoView = new PanelView(_host, value);
+                _todoView.SetPalette(_palette);
+                value.Changed += OnTodoChanged;
+            }
+
+            if (Tab == BottomTab.Todo)
+            {
+                Select(BottomTab.Todo);
+            }
+
+            RebuildTabs();
+        }
+    }
+
     /// <summary>Shows <paramref name="tab"/>.</summary>
     public void Select(BottomTab tab)
     {
@@ -1110,6 +1165,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
             BottomTab.Terminal => _terminalView ?? _terminal,
             BottomTab.Output => _output,
             BottomTab.Hierarchy => (View?)_hierarchyView ?? _noMeasures,
+            BottomTab.Todo => _todoView ?? (View)_noMeasures,
             _ => _metrics.AllRows.Count == 0 ? _noMeasures : _metricsView,
         };
         UpdateTools();
@@ -1184,6 +1240,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         _metricsView.Apply(palette.Options, palette.Theme);
         _problemsView.Apply(palette.Options, palette.Theme);
         _hierarchyView?.Apply(palette);
+        _todoView?.SetPalette(palette);
         UpdateTools();
         RebuildTabs();
     }
@@ -1193,11 +1250,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
     {
         _host.KeyBindingsChanged -= OnKeyBindingsChanged;
         _host.Logged -= OnLogged;
-        if (_hierarchy is not null)
+        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Todo, BottomTab.Telemetry, BottomTab.Hierarchy])
         {
-            _hierarchy.Changed -= OnHierarchyChanged;
-        }
-
+            if ((tab == BottomTab.Hierarchy && _hierarchy is null) || (tab == BottomTab.Todo && _todo is null))
         _metrics.Recorded -= OnMeasured;
         _metrics.Dispose();
         _metricsView.Dispose();
@@ -1244,7 +1299,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
         bool output = Tab == BottomTab.Output;
         _filterField.IsVisible = output || Tab == BottomTab.Telemetry;
         _follow.IsVisible = output;
-        _copyAll.IsVisible = Tab != BottomTab.Terminal;
+        _copyAll.IsVisible = Tab is not (BottomTab.Terminal or BottomTab.Todo);
         ToolTipProperties.SetText(_copyAll, Tab == BottomTab.Output ? "Copy every line shown (Ctrl+C copies the selection)" : "Copy every row shown (Ctrl+C copies the rows picked)");
         _filling = true;
         try
@@ -1295,6 +1350,9 @@ public sealed class BottomPanelView : ContentView, IDisposable
         foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Telemetry, BottomTab.Hierarchy])
         {
             if (tab == BottomTab.Hierarchy && _hierarchy is null)
+        foreach (var tab in (ReadOnlySpan<BottomTab>)[BottomTab.Problems, BottomTab.Terminal, BottomTab.Output, BottomTab.Todo, BottomTab.Telemetry])
+        {
+            if (tab == BottomTab.Todo && _todo is null)
             {
                 continue;
             }
@@ -1305,6 +1363,7 @@ public sealed class BottomPanelView : ContentView, IDisposable
                 BottomTab.Problems => _problems.Count > 0 ? string.Create(CultureInfo.InvariantCulture, $"Problems {_problems.Count}") : "Problems",
                 BottomTab.Terminal => "Terminal",
                 BottomTab.Output => "Output",
+                BottomTab.Todo => _todo is { Count: > 0 } todo ? string.Create(CultureInfo.InvariantCulture, $"TODO {todo.Count}") : "TODO",
                 _ => "Idrak telemetry",
             };
             bool active = tab == Tab;
@@ -1328,6 +1387,19 @@ public sealed class BottomPanelView : ContentView, IDisposable
             cell.GestureRecognizers.Add(tap);
             ToolTipProperties.SetText(cell, title);
             _tabs.Children.Add(cell);
+        }
+    }
+
+    // The TODO list changed: its count in the tab's title (on the UI thread; the list raises it there).
+    private void OnTodoChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.IsDispatchRequired)
+        {
+            Dispatcher.DispatchLabelled("todo: the tab's count", RebuildTabs);
+        }
+        else
+        {
+            RebuildTabs();
         }
     }
 

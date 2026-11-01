@@ -235,16 +235,14 @@ public sealed partial class EditorModel
     {
         var all = Selections;
         var edge = direction == LineDirection.Up ? all[0] : all[^1];
-        var snapshot = Snapshot;
-        int line = snapshot.GetLineIndex(edge.Caret);
-        int row = TextRowOf(line) + (direction == LineDirection.Up ? -1 : 1);
-        if (row < 0 || row >= TextRowCount)
+        int row = SkipLensRows(VisualOf(edge.Caret).Row + (direction == LineDirection.Up ? -1 : 1), direction == LineDirection.Up ? -1 : 1);
+        if (row < 0 || row >= RowCount)
         {
             return true;
         }
 
-        int column = ColumnOf(_selection.Caret);
-        int position = PositionAtColumn(snapshot.GetLine(TextLineAt(row)), column, nearest: false);
+        int column = VisualOf(_selection.Caret).Column;
+        int position = PositionAtVisual(row, column, nearest: false);
         return AddSelection(SelectionState.At(position)) || true;
     }
 
@@ -266,16 +264,16 @@ public sealed partial class EditorModel
         switch (key)
         {
             case EditorKey.Up:
-                _boxLine = TextLineAt(Math.Max(0, TextRowOf(_boxLine) - 1));
+                _boxLine = LineAtRow(Math.Max(0, SkipLensRows(RowOfLine(_boxLine) - 1, -1)));
                 break;
             case EditorKey.Down:
-                _boxLine = TextLineAt(Math.Min(TextRowCount - 1, TextRowOf(_boxLine) + 1));
+                _boxLine = LineAtRow(Math.Min(RowCount - 1, RowOfLine(_boxLine) + RowsOfLine(_boxLine)));
                 break;
             case EditorKey.PageUp:
-                _boxLine = TextLineAt(Math.Max(0, TextRowOf(_boxLine) - PageLines()));
+                _boxLine = LineAtRow(Math.Max(0, RowOfLine(_boxLine) - PageLines()));
                 break;
             case EditorKey.PageDown:
-                _boxLine = TextLineAt(Math.Min(TextRowCount - 1, TextRowOf(_boxLine) + PageLines()));
+                _boxLine = LineAtRow(Math.Min(RowCount - 1, RowOfLine(_boxLine) + PageLines()));
                 break;
             case EditorKey.Left:
                 _boxColumn = Math.Max(0, _boxColumn - 1);

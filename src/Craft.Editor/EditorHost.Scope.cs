@@ -15,6 +15,7 @@ public sealed partial class EditorHost
     private sealed class PluginScope(EditorHost host, string name) : IEditorHost
     {
         private readonly List<Action> _undo = [];
+        private readonly HashSet<string> _published = new(StringComparer.Ordinal);
         private ScopedActivities? _activities;
         private bool _closed;
 
@@ -128,6 +129,12 @@ public sealed partial class EditorHost
             remove => host._workspaceChanged.Remove(value);
         }
 
+        public event EventHandler<WorkspaceChangedEventArgs>? WorkspaceChanged
+        {
+            add => Track(host._workspaceChangedWith, value);
+            remove => host._workspaceChangedWith.Remove(value);
+        }
+
         public event EventHandler<LineMarkEventArgs>? LineMarkClicked
         {
             add => Track(host._lineMarkClicked, value);
@@ -154,10 +161,39 @@ public sealed partial class EditorHost
 
         public bool ShowInlineCard(IEditorDocument document, InlineCard card) => !_closed && host.ShowInlineCard(document, card);
 
+        public bool PublishDiagnostics(string path, string source, ITextSnapshot? snapshot, IReadOnlyList<FileDiagnostic> items)
+        {
+            if (_closed || !host.PublishDiagnostics(path, source, snapshot, items))
+            {
+                return false;
+            }
+
+            // Taken back with the plug-in: every diagnostic of its sources leaves the files when it is deactivated.
+            if (_published.Add(source))
+            {
+                _undo.Add(() => host.ClearDiagnostics(source));
+            }
+
+            return true;
+        }
+
+        public void ClearDiagnostics(string source)
+        {
+            if (!_closed)
+            {
+                host.ClearDiagnostics(source);
+            }
+        }
+
         public IDisposable AddRepository(ISourceControlRepository repository) => Keep(() => host.AddRepository(repository, name), "a repository");
 
         public Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ShowDiffAsync(title, path, before, after, cancellationToken);
+
+        public Task<bool> ShowDiffAsync(string title, string path, string before, string after, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken = default) =>
+            _closed ? Task.FromResult(false) : host.ShowDiffAsync(title, path, before, after, notes, cancellationToken);
+
+        public bool CopyText(string text) => !_closed && host.CopyText(text);
 
         public Task<bool> ProposeWorkspaceAsync(WorkspaceEdit edit, string title, CancellationToken cancellationToken = default) =>
             _closed ? Task.FromResult(false) : host.ProposeWorkspaceAsync(edit, $"{name}: {title}", cancellationToken);

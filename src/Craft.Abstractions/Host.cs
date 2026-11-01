@@ -347,6 +347,18 @@ public interface IEditorHost
     }
 
     /// <summary>
+    /// The workspace changed (W, contract 10), on the UI thread: a folder opened, closed or took the open one's place
+    /// (with <see cref="WorkspaceFolderChanged"/>), or the user asked for it to be read again (the explorer's Refresh), so a
+    /// plug-in that keeps what it found in the folder (the npm plug-in's scripts) finds it again. The arguments say which
+    /// folder it was and is. Never by default.
+    /// </summary>
+    event EventHandler<WorkspaceChangedEventArgs>? WorkspaceChanged
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
     /// Shows <paramref name="marks"/> in the gutter and on the overview ruler of every editor of <paramref name="document"/>
     /// (X part 8: the lines added, changed and removed against the repository's index), in place of the marks
     /// <paramref name="source"/> set before; an empty list takes them away. False when the host draws no marks (the default).
@@ -380,6 +392,74 @@ public interface IEditorHost
     /// <paramref name="title"/>; completes when the user closed it. False when the host has no diff view (the default).
     /// </summary>
     Task<bool> ShowDiffAsync(string title, string path, string before, string after, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <summary>
+    /// <see cref="ShowDiffAsync(string, string, string, string, CancellationToken)"/> with <paramref name="notes"/> under
+    /// their lines (X part 11 item 4: a review's findings on the changes). By default the diff alone.
+    /// </summary>
+    Task<bool> ShowDiffAsync(string title, string path, string before, string after, IReadOnlyList<DiffNote> notes, CancellationToken cancellationToken = default) =>
+        ShowDiffAsync(title, path, before, after, cancellationToken);
+
+    /// <summary>
+    /// Puts <paramref name="text"/> on the system's clipboard (a plug-in's Copy all: a review's findings); false when the
+    /// host reaches no clipboard (the default).
+    /// </summary>
+    bool CopyText(string text) => false;
+
+    /// <summary>
+    /// Publishes <paramref name="items"/> as <paramref name="source"/>'s diagnostics of the file <paramref name="path"/> (W,
+    /// contract 6: a linter's findings), in place of what that source published for it before; none takes them away. The
+    /// items are in the lines and columns of <paramref name="snapshot"/> (the open document's text they were found in; the
+    /// editor moves them through the edits made since) or, when it is null, of the file as it is on disk. An open document
+    /// shows them beside its language's own (squiggles, the line-end message, the lightbulb, its Problems rows), each id
+    /// read "source(id)" ("eslint(no-unused-vars)"); a closed file's are listed in Problems by line and column. False when
+    /// the host shows no published diagnostics (the default).
+    /// </summary>
+    bool PublishDiagnostics(string path, string source, ITextSnapshot? snapshot, IReadOnlyList<FileDiagnostic> items) => false;
+
+    /// <summary>Takes every diagnostic <paramref name="source"/> published away, from every file (a linter turned off, another folder opened). Nothing by default.</summary>
+    void ClearDiagnostics(string source)
+    {
+    }
+}
+
+/// <summary>How the workspace changed (<see cref="IEditorHost.WorkspaceChanged"/>).</summary>
+public enum WorkspaceChangeKind
+{
+    /// <summary>A folder opened where none was.</summary>
+    Opened,
+
+    /// <summary>The folder closed; none is open now.</summary>
+    Closed,
+
+    /// <summary>Another folder took the open one's place.</summary>
+    Switched,
+
+    /// <summary>The same folder, asked to be read again (the explorer's Refresh): what is on its disk may have changed.</summary>
+    Refreshed,
+}
+
+/// <summary>The workspace's change: the folder it was, the folder it is (full paths, or null for none), and how.</summary>
+/// <param name="previous">The folder open before, or null.</param>
+/// <param name="current">The folder open now, or null.</param>
+/// <param name="kind">How it changed.</param>
+public sealed class WorkspaceChangedEventArgs(string? previous, string? current, WorkspaceChangeKind kind) : EventArgs
+{
+    /// <summary>The folder open before, or null.</summary>
+    public string? Previous { get; } = previous;
+
+    /// <summary>The folder open now, or null.</summary>
+    public string? Current { get; } = current;
+
+    /// <summary>How it changed.</summary>
+    public WorkspaceChangeKind Kind { get; } = kind;
+
+    /// <summary>The change from <paramref name="previous"/> to <paramref name="current"/>: opened, closed, switched, or (the same folder) refreshed.</summary>
+    public static WorkspaceChangedEventArgs Between(string? previous, string? current) => new(previous, current,
+        previous is null ? WorkspaceChangeKind.Opened
+        : current is null ? WorkspaceChangeKind.Closed
+        : string.Equals(previous, current, StringComparison.Ordinal) ? WorkspaceChangeKind.Refreshed
+        : WorkspaceChangeKind.Switched);
 }
 
 /// <summary>What <see cref="IEditorHost.AddRepository"/> gives when the host shows no repository.</summary>

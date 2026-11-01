@@ -38,6 +38,41 @@ public interface IEditorCanvas
     void DrawText(string text, float x, float top, in TextStyle style);
 }
 
+/// <summary>
+/// A canvas that draws file icons' shapes (W: rich icons): the platform's parses each layer's path once and keeps it per
+/// size (MAUI Graphics' own parser), so a warm frame draws without allocating. A drawing that meets a canvas without it
+/// draws the icon's badge as text (<see cref="FileIconDrawing.Draw"/>).
+/// </summary>
+public interface IIconCanvas
+{
+    /// <summary>
+    /// Draws <paramref name="icon"/> (its open shape when <paramref name="open"/>, in its <paramref name="dark"/> or light
+    /// colours) in the square of <paramref name="size"/> at (<paramref name="x"/>, <paramref name="y"/>); false when it has
+    /// no shape this canvas can draw (the caller draws the badge).
+    /// </summary>
+    bool DrawIcon(FileIcon icon, float x, float y, float size, bool open, bool dark);
+}
+
+/// <summary>Draws a file icon on any <see cref="IEditorCanvas"/>: its shape where the canvas can (<see cref="IIconCanvas"/>), else its badge.</summary>
+public static class FileIconDrawing
+{
+    /// <summary>
+    /// Draws <paramref name="icon"/> at (<paramref name="x"/>, <paramref name="top"/>) in a square of <paramref name="size"/>:
+    /// the shape through <see cref="IIconCanvas"/>, else the badge's text in its colour. Allocates nothing.
+    /// </summary>
+    public static void Draw(IEditorCanvas canvas, FileIcon icon, float x, float top, float size, bool open, bool dark)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(icon);
+        if (canvas is IIconCanvas icons && icon.ShapeFor(open) is not null && icons.DrawIcon(icon, x, top, size, open, dark))
+        {
+            return;
+        }
+
+        canvas.DrawText(icon.Badge, x, top, new TextStyle(icon.BadgeArgb(dark)));
+    }
+}
+
 /// <summary>A run of a <see cref="StyledLine"/>: its characters (tabs already expanded) from <paramref name="Column"/> on, in one style.</summary>
 /// <param name="Text">The run's characters.</param>
 /// <param name="Column">The column its first character is drawn at.</param>

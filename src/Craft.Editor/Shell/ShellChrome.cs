@@ -222,6 +222,45 @@ public static class ShellText
         return string.Create(CultureInfo.InvariantCulture, $"{(options.InsertSpaces ? "Spaces" : "Tab size")}: {options.TabSize}");
     }
 
+    /// <summary>
+    /// The indentation item's tooltip: where the tab size and the indentation come from, a file's <c>.editorconfig</c> (which
+    /// wins over the options) or the settings.
+    /// </summary>
+    public static string IndentationTooltip(EditorModel? model)
+    {
+        if (model?.IndentationOverride is not null)
+        {
+            return model.FileSettings is { Sources.Count: > 0 } picked && (picked.TabSize is not null || picked.InsertSpaces is not null)
+                ? $"Indentation picked for this editor; {picked.Sources[^1]} wins again when the file is opened again. Click to change it."
+                : "Indentation picked for this editor (CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES when the file is opened again). Click to change it.";
+        }
+
+        if (model?.FileSettings is { } settings && (settings.TabSize is not null || settings.InsertSpaces is not null) && settings.Sources.Count > 0)
+        {
+            return $"Indentation from {settings.Sources[^1]} (.editorconfig wins over CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES)";
+        }
+
+        return "Indentation: CRAFT_TAB_SIZE and CRAFT_INSERT_SPACES (Settings, Editor)";
+    }
+
+    /// <summary>
+    /// What formats the file, for the language item's tooltip (W, contract 8): "Formatter: Prettier 3.6.2, the project's
+    /// (.prettierrc.json)", "Formatter: the css language's own", or "No formatter for this file".
+    /// </summary>
+    public static string FormatterTooltip(EditorModel? model) =>
+        model?.FormatterDescription is { } formatter ? "Formatter: " + formatter : "No formatter for this file";
+
+    /// <summary>The line ending item's tooltip: the file's breaks are kept; new lines take a file's <c>.editorconfig</c> end_of_line, else the setting.</summary>
+    public static string LineEndingTooltip(EditorModel? model)
+    {
+        if (model?.FileSettings is { NewLine: { } newLine } settings && settings.Sources.Count > 0)
+        {
+            return $"New lines are {LineEnding(newLine)}: end_of_line in {settings.Sources[^1]} (.editorconfig wins over CRAFT_LINE_ENDING); the file's own breaks are kept";
+        }
+
+        return "The file's line breaks (kept when it is saved; CRAFT_LINE_ENDING for new files)";
+    }
+
     /// <summary>"CRLF", "LF", "CR" for a line break.</summary>
     public static string LineEnding(string lineEnding) => lineEnding switch { "\r\n" => "CRLF", "\n" => "LF", "\r" => "CR", var other => other };
 
@@ -765,7 +804,7 @@ public sealed class ShellEditCommands : IDisposable
     [
         ("craft.cut", 0, 0), ("craft.copy", 0, 1), ("craft.paste", 0, 2),
         ("craft.goToDefinition", 1, 0),
-        ("craft.formatDocument", 2, 0), (StandardShortcuts.QuickFix, 2, 1),
+        ("craft.formatDocument", 2, 0), (StandardShortcuts.QuickFix, 2, 1), (StandardShortcuts.InlineChat, 2, 2),
     ];
 
     /// <summary>The read-only text's context menu items (<see cref="EditorContextMenus.ReadOnlyText"/>: Output's): copy, select all, find.</summary>

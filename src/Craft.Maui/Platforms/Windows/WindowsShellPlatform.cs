@@ -54,6 +54,9 @@ public sealed class WindowsShellPlatform : IShellPlatform
     public IPointerCursor? PointerCursor { get; } = new WindowsPointerCursor();
 
     /// <inheritdoc />
+    public IWindowFullScreen? FullScreen { get; } = new WindowsFullScreen();
+
+    /// <inheritdoc />
     public ITerminalProfileSource? TerminalProfiles { get; } = WindowsTerminalProfiles.Create();
 
     /// <inheritdoc />

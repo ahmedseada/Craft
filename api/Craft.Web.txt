@@ -1,0 +1,264 @@
+sealed class Craft.Web.Markup.AngularHtmlLanguage : Craft.Abstractions.LineStateLanguage, Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> FilePatterns { get; }
+  System.Func<Craft.Web.Markup.AngularSettings> Settings { get; set; }
+  ctor(System.String name = "angular-html")
+  protected Craft.Abstractions.LineStateSession OpenSession(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
+  protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
+  static Craft.Web.Markup.HtmlTokenizer TokenizerOf(System.Int32 version)
+sealed class Craft.Web.Markup.AngularProject : System.IEquatable<Craft.Web.Markup.AngularProject>
+  Craft.Web.Markup.AngularProject <Clone>$()
+  Craft.Web.Style.StyleDialect InlineStyles { get; init; }
+  System.Boolean Equals(Craft.Web.Markup.AngularProject other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Name { get; init; }
+  System.String Root { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Name, out System.String Root, out Craft.Web.Style.StyleDialect InlineStyles)
+  ctor(System.String Name, System.String Root, Craft.Web.Style.StyleDialect InlineStyles)
+sealed class Craft.Web.Markup.AngularSelector : Craft.Abstractions.ILanguageSelector, Idrak.Abstraction.IKind
+  Craft.Abstractions.ILanguage Select(System.String path, System.String workspaceRoot)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task PrepareAsync(System.String workspaceRoot, System.Threading.CancellationToken cancellationToken)
+  ctor(System.String name, System.Func<Craft.Web.Markup.AngularSettings> settings, Craft.Abstractions.ILanguage templates, Craft.Abstractions.ILanguage typeScript)
+sealed class Craft.Web.Markup.AngularSettings : System.IEquatable<Craft.Web.Markup.AngularSettings>
+  Craft.Web.Markup.AngularSettings <Clone>$()
+  System.Boolean Equals(Craft.Web.Markup.AngularSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean InlineTemplates { get; init; }
+  System.Boolean ProjectVersion { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 VersionFor(Craft.Web.Markup.AngularWorkspace workspace)
+  System.String Templates { get; init; }
+  System.String ToString()
+  System.String Version { get; init; }
+  ctor()
+  static Craft.Web.Markup.AngularSettings Read(System.Func<System.String, System.String> get)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+sealed class Craft.Web.Markup.AngularTypeScriptLanguage : Craft.Abstractions.LineStateLanguage, Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
+  System.Func<Craft.Web.Markup.AngularSettings> Settings { get; set; }
+  ctor(System.String name = "angular-typescript")
+  protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
+sealed class Craft.Web.Markup.AngularTypeScriptTokenizer : Craft.Abstractions.LineTokenizer
+  Craft.Abstractions.LanguageRules RulesAt(System.ReadOnlySpan<System.Char> line, System.Int32 column, System.UInt64 state)
+  Craft.Abstractions.LineStates States { get; }
+  Craft.Web.Markup.HtmlTokenizer Html { get; }
+  Craft.Web.Script.ScriptTokenizer TypeScript { get; }
+  Craft.Web.Style.StyleDialect StyleDialect { get; }
+  Craft.Web.Style.StyleTokenizer Css { get; }
+  System.Int32 AngularVersion { get; }
+  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
+  ctor(System.Int32 angularVersion, Craft.Web.Style.StyleDialect styles, Craft.Abstractions.LineStates states = null)
+  static Craft.Web.Markup.AngularTypeScriptTokenizer For(System.Int32 angularVersion, Craft.Web.Style.StyleDialect styles = Css)
+sealed class Craft.Web.Markup.AngularWorkspace : System.IEquatable<Craft.Web.Markup.AngularWorkspace>
+  Craft.Web.Markup.AngularProject ProjectOf(System.String path)
+  Craft.Web.Markup.AngularWorkspace <Clone>$()
+  System.Boolean Equals(Craft.Web.Markup.AngularWorkspace other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Web.Markup.AngularProject> Projects { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32? Version { get; init; }
+  System.String Folder { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Folder, out System.Collections.Generic.IReadOnlyList<Craft.Web.Markup.AngularProject> Projects, out System.Int32? Version)
+  ctor(System.String Folder, System.Collections.Generic.IReadOnlyList<Craft.Web.Markup.AngularProject> Projects, System.Int32? Version)
+static class Craft.Web.Markup.AngularWorkspaces
+  const System.Int32 Capacity = 1024
+  static Craft.Web.Markup.AngularWorkspace Find(System.String folder)
+  static Craft.Web.Markup.AngularWorkspace Read(System.String folder)
+  static System.Int64 Reads { get; }
+  static System.Threading.Tasks.Task<Craft.Web.Markup.AngularWorkspace> ReadAsync(System.String folder, System.Threading.CancellationToken cancellationToken = null)
+  static System.Void Forget(System.String folder = null)
+sealed class Craft.Web.Markup.HtmlFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
+  ctor(System.String name, System.Collections.Generic.IReadOnlyList<System.String> languages, System.Func<System.String, Craft.Web.Markup.HtmlTokenizer> tokenizer)
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Web.Markup.HtmlTokenizer tokenizer, Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Web.Markup.HtmlFormatter : Craft.Abstractions.ITextFormatter
+  System.Void Format(System.ReadOnlySpan<System.Char> text, Craft.Abstractions.FormatStyle style, System.Collections.Generic.List<Craft.Abstractions.TextEdit> edits)
+  ctor(Craft.Web.Markup.HtmlTokenizer tokenizer)
+sealed class Craft.Web.Markup.HtmlLanguage : Craft.Abstractions.LineStateLanguage, Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
+  System.Func<Craft.Web.Markup.HtmlSettings> Settings { get; set; }
+  ctor(System.String name = "html", System.Collections.Generic.IReadOnlyList<System.String> extensions = null)
+  protected Craft.Abstractions.LineStateSession OpenSession(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
+  protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
+  static Craft.Web.Markup.HtmlTokenizer TokenizerOf(Craft.Web.Markup.HtmlSettings settings)
+struct Craft.Web.Markup.HtmlOptions : System.IEquatable<Craft.Web.Markup.HtmlOptions>
+  System.Boolean Angular { get; init; }
+  System.Boolean AttributesAsCode { get; init; }
+  System.Boolean Embedded { get; init; }
+  System.Boolean Equals(Craft.Web.Markup.HtmlOptions other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 AngularVersion { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Void Deconstruct(out System.Boolean Angular, out System.Int32 AngularVersion, out System.Boolean Embedded, out System.Boolean AttributesAsCode)
+  ctor(System.Boolean Angular, System.Int32 AngularVersion, System.Boolean Embedded, System.Boolean AttributesAsCode)
+  static Craft.Web.Markup.HtmlOptions AngularTemplate { get; }
+  static Craft.Web.Markup.HtmlOptions Html { get; }
+sealed class Craft.Web.Markup.HtmlSettings : System.IEquatable<Craft.Web.Markup.HtmlSettings>
+  Craft.Web.Markup.HtmlSettings <Clone>$()
+  System.Boolean AttributesAsCode { get; init; }
+  System.Boolean Embedded { get; init; }
+  System.Boolean Equals(Craft.Web.Markup.HtmlSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String ToString()
+  ctor()
+  static Craft.Web.Markup.HtmlSettings Read(System.Func<System.String, System.String> get)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared { get; }
+sealed class Craft.Web.Markup.HtmlTokenizer : Craft.Abstractions.LineTokenizer
+  Craft.Abstractions.LanguageRules RulesAt(System.ReadOnlySpan<System.Char> line, System.Int32 column, System.UInt64 state)
+  Craft.Abstractions.LineStates States { get; }
+  Craft.Web.Markup.HtmlOptions Options { get; }
+  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
+  ctor(Craft.Web.Markup.HtmlOptions options, Craft.Abstractions.LineStates states = null)
+  static Craft.Abstractions.LanguageRules HtmlRules { get; }
+  static Craft.Abstractions.LanguageRules StyleRules { get; }
+  static Craft.Web.Markup.HtmlTokenizer For(Craft.Web.Markup.HtmlOptions options)
+sealed class Craft.Web.Markup.MarkupEditorPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor(System.String name, System.String summary, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> settings, System.Action<System.Func<System.String, System.String>> apply, System.Func<Craft.Abstractions.IEditorHost, System.IDisposable> attach = null)
+  static System.IDisposable RereadAngularOnWorkspaceChanged(Craft.Abstractions.IEditorHost host)
+enum Craft.Web.Script.ScriptDialect : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  AngularExpression = 4
+  JavaScript = 0
+  Jsx = 1
+  Tsx = 3
+  TypeScript = 2
+sealed class Craft.Web.Script.ScriptEditorPlugin : Craft.Abstractions.IEditorPlugin, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Settings { get; }
+  System.IDisposable Activate(Craft.Abstractions.IEditorHost host)
+  System.String Name { get; }
+  System.String Summary { get; }
+  ctor(System.String name, System.String summary, Craft.Web.Script.ScriptLanguage language, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> settings)
+sealed class Craft.Web.Script.ScriptFolding : Craft.Abstractions.IFoldingRangeProvider, Idrak.Abstraction.IKind
+  System.Collections.Generic.IReadOnlyList<System.String> Languages { get; }
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Craft.Abstractions.FoldingRange>> GetRangesAsync(Craft.Abstractions.FoldingRequest request, System.Threading.CancellationToken cancellationToken)
+  ctor(System.String name, System.Collections.Generic.IReadOnlyList<System.String> languages, System.Func<System.String, Craft.Web.Script.ScriptTokenizer> tokenizer)
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Web.Script.ScriptTokenizer tokenizer, Craft.Abstractions.ITextSnapshot snapshot, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Web.Script.ScriptFormatter : Craft.Abstractions.ITextFormatter
+  Craft.Web.Script.ScriptTokenizer Tokenizer { get; set; }
+  System.Int32 LineWidth { get; }
+  System.Void Format(System.ReadOnlySpan<System.Char> text, Craft.Abstractions.FormatStyle style, System.Collections.Generic.List<Craft.Abstractions.TextEdit> edits)
+  ctor(Craft.Web.Script.ScriptTokenizer tokenizer, System.Func<System.Int32> lineWidth = null)
+sealed class Craft.Web.Script.ScriptLanguage : Craft.Abstractions.LineStateLanguage, Craft.Abstractions.ILanguage, Idrak.Abstraction.IKind
+  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer)
+  Craft.Abstractions.ILanguageSession Open(Craft.Abstractions.ITextBuffer buffer, Craft.Abstractions.LanguageOpenContext context)
+  Craft.Web.Script.ScriptDialect DialectFor(System.String path, Craft.Web.Script.ScriptProject project, Craft.Web.Script.ScriptSettings settings)
+  Craft.Web.Script.ScriptTokenizer TokenizerFor(System.String path, Craft.Web.Script.ScriptProject project, Craft.Web.Script.ScriptSettings settings)
+  Craft.Web.Script.ScriptVersion VersionFor(Craft.Web.Script.ScriptProject project, Craft.Web.Script.ScriptSettings settings)
+  System.Boolean IsTypeScript { get; }
+  System.Func<Craft.Web.Script.ScriptSettings> Settings { get; set; }
+  ctor(System.String name, System.String summary, System.Collections.Generic.IReadOnlyList<System.String> extensions, System.Boolean typeScript, System.Func<Craft.Web.Script.ScriptSettings> settings = null)
+  protected Craft.Abstractions.LineTokenizer TokenizerFor(Craft.Abstractions.LanguageOpenContext context)
+  static Craft.Abstractions.LanguageRules ScriptRules { get; }
+sealed class Craft.Web.Script.ScriptProject : System.IEquatable<Craft.Web.Script.ScriptProject>
+  Craft.Web.Script.ScriptProject <Clone>$()
+  System.Boolean Equals(Craft.Web.Script.ScriptProject other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean UsesJsx { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32? EcmaScript { get; init; }
+  System.Int32? TypeScript { get; init; }
+  System.String Folder { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Folder, out System.Int32? EcmaScript, out System.Int32? TypeScript, out System.Boolean UsesJsx)
+  ctor(System.String Folder, System.Int32? EcmaScript, System.Int32? TypeScript, System.Boolean UsesJsx)
+sealed class Craft.Web.Script.ScriptProjectSelector : Craft.Abstractions.ILanguageSelector, Idrak.Abstraction.IKind
+  Craft.Abstractions.ILanguage Select(System.String path, System.String workspaceRoot)
+  System.String Name { get; }
+  System.String Summary { get; }
+  System.Threading.Tasks.Task PrepareAsync(System.String workspaceRoot, System.Threading.CancellationToken cancellationToken)
+  ctor(System.String name)
+static class Craft.Web.Script.ScriptProjects
+  const System.Int32 Capacity = 4096
+  static Craft.Web.Script.ScriptProject Find(System.String filePath)
+  static Craft.Web.Script.ScriptProject ReadFolder(System.String folder, System.String workspaceRoot)
+  static System.Int64 Reads { get; }
+  static System.Threading.Tasks.Task PrepareAsync(System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  static System.Threading.Tasks.Task<Craft.Web.Script.ScriptProject> ReadAsync(System.String filePath, System.String workspaceRoot, System.Threading.CancellationToken cancellationToken = null)
+  static System.Void Forget()
+sealed class Craft.Web.Script.ScriptSettings : System.IEquatable<Craft.Web.Script.ScriptSettings>
+  Craft.Web.Script.ScriptSettings <Clone>$()
+  System.Boolean Equals(Craft.Web.Script.ScriptSettings other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean ProjectVersion { get; init; }
+  System.Int32 FormatLineWidth { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 StateCapacity { get; init; }
+  System.Int32 StateDepth { get; init; }
+  System.String Jsx { get; init; }
+  System.String ToString()
+  System.String Version { get; init; }
+  ctor()
+  static Craft.Web.Script.ScriptSettings Read(System.Func<System.String, System.String> get)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSetting> Declared(System.Boolean javaScript, System.String group)
+sealed class Craft.Web.Script.ScriptTokenizer : Craft.Abstractions.LineTokenizer
+  Craft.Abstractions.LanguageRules RulesAt(System.ReadOnlySpan<System.Char> line, System.Int32 column, System.UInt64 state)
+  Craft.Abstractions.LineStates States { get; }
+  Craft.Web.Script.ScriptDialect Dialect { get; }
+  Craft.Web.Script.ScriptVersion Version { get; }
+  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
+  ctor(Craft.Web.Script.ScriptDialect dialect, Craft.Web.Script.ScriptVersion version, Craft.Abstractions.LineStates states = null)
+  static Craft.Abstractions.LanguageRules JsxRules { get; }
+  static Craft.Web.Script.ScriptTokenizer For(Craft.Web.Script.ScriptDialect dialect, Craft.Web.Script.ScriptVersion version, System.Int32 capacity = 4096, System.Int32 maxDepth = 64)
+struct Craft.Web.Script.ScriptVersion : System.IEquatable<Craft.Web.Script.ScriptVersion>
+  System.Boolean Equals(Craft.Web.Script.ScriptVersion other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 EcmaScript { get; init; }
+  System.Int32 GetHashCode()
+  System.Int32 TypeScript { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.Int32 EcmaScript, out System.Int32 TypeScript)
+  const System.Int32 Latest = 9999
+  ctor(System.Int32 EcmaScript, System.Int32 TypeScript)
+  static Craft.Web.Script.ScriptVersion Newest { get; }
+  static System.Int32? ParseEcmaScript(System.ReadOnlySpan<System.Char> text)
+  static System.Int32? ParseTypeScript(System.ReadOnlySpan<System.Char> text)
+enum Craft.Web.Style.StyleDialect : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Css = 0
+  Less = 2
+  Sass = 3
+  Scss = 1
+static class Craft.Web.Style.StyleFolding
+  static System.Collections.Generic.List<Craft.Abstractions.FoldingRange> Ranges(Craft.Abstractions.ITextSnapshot snapshot, Craft.Abstractions.LineTokenizer tokenizer, System.Threading.CancellationToken cancellationToken = null)
+sealed class Craft.Web.Style.StyleFormatter : Craft.Abstractions.ITextFormatter
+  Craft.Web.Style.StyleDialect Dialect { get; }
+  System.Void Format(System.ReadOnlySpan<System.Char> text, Craft.Abstractions.FormatStyle style, System.Collections.Generic.List<Craft.Abstractions.TextEdit> edits)
+  ctor(Craft.Web.Style.StyleDialect dialect)
+static class Craft.Web.Style.StyleNames
+  const System.Int32 Future = 9999
+  const System.Int32 Latest = 2147483647
+  static System.Boolean IsColor(System.ReadOnlySpan<System.Char> name)
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllAtRules { get; }
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllFunctions { get; }
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllProperties { get; }
+  static System.Collections.Generic.IReadOnlyCollection<System.String> AllPseudos { get; }
+  static System.Int32 AtRuleYear(System.ReadOnlySpan<System.Char> name)
+  static System.Int32 FunctionYear(System.ReadOnlySpan<System.Char> name)
+  static System.Int32 PropertyYear(System.ReadOnlySpan<System.Char> name)
+  static System.Int32 PseudoYear(System.ReadOnlySpan<System.Char> name)
+  static System.ReadOnlySpan<System.Char> WithoutVendor(System.ReadOnlySpan<System.Char> name)
+static class Craft.Web.Style.StyleProjectVersion
+  const System.Int32 MaxFileBytes = 1048576
+  const System.Int32 MaxLevels = 32
+  static System.Boolean FromPackage(System.ReadOnlySpan<System.Byte> json, out System.Int32? year)
+  static System.Int32? FromQuery(System.ReadOnlySpan<System.Char> query)
+  static System.Int32? Read(System.String folder, System.String workspaceRoot)
+sealed class Craft.Web.Style.StyleTokenizer : Craft.Abstractions.LineTokenizer
+  Craft.Web.Style.StyleDialect Dialect { get; }
+  System.Int32 Year { get; }
+  System.UInt64 Tokenize(System.ReadOnlySpan<System.Char> line, System.Int32 lineStart, System.UInt64 state, Craft.Abstractions.TokenSpanBuffer into)
+  const System.Int32 MaxFrames = 5
+  static Craft.Web.Style.StyleTokenizer For(Craft.Web.Style.StyleDialect dialect, System.Int32 year = 2147483647)
+  static System.Boolean IsAtStatement(System.UInt64 state)
+  static System.Boolean IsInComment(System.UInt64 state)

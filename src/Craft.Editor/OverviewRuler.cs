@@ -209,6 +209,11 @@ public sealed class OverviewRuler : IDisposable
         int lines = snapshot.LineCount;
         foreach (ref readonly var mark in model.LineMarks)
         {
+            if (mark.IsGlyph || mark.Kind == LineMarkKind.Bookmark)
+            {
+                continue;                                    // a test's glyph and a bookmark stay in the gutter (X part 9: the ruler's lanes are full)
+            }
+
             byte kind = mark.Kind switch
             {
                 LineMarkKind.Added => Added,

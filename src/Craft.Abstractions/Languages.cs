@@ -17,6 +17,15 @@ public sealed record LanguageRules(string? LineComment, string? BlockCommentOpen
 {
     /// <summary>No comments; (), [] and {} as brackets: the rules of a file of no language.</summary>
     public static LanguageRules Plain { get; } = new(null, null, null, [new('(', ')'), new('[', ']'), new('{', '}')]);
+
+    /// <summary>
+    /// The characters that open a string and close it on the same line ("\"'" for C#; empty for none): the editor's bracket
+    /// pair colours (X part 9) skip the brackets inside them, as they skip comments.
+    /// </summary>
+    public string StringDelimiters { get; init; } = "";
+
+    /// <summary>The character that escapes the next one inside a string ('\\'), or '\0' for none.</summary>
+    public char StringEscape { get; init; } = '\\';
 }
 
 /// <summary>
@@ -27,6 +36,14 @@ public interface ILanguage : IKind
 {
     /// <summary>The file extensions it opens, with their dot, ignoring case (".cs", ".csx").</summary>
     IReadOnlyList<string> Extensions { get; }
+
+    /// <summary>
+    /// The file names it opens beyond its extensions (W, contract 3), ignoring case: exact names ("Dockerfile",
+    /// "tsconfig.json") and globs ('*' any run, '?' one character: "tsconfig.*.json", "*.component.html"). An exact name
+    /// ranks above every pattern, a longer pattern above a shorter one, and every pattern above an extension
+    /// (<see cref="EditorLanguages.ForFile(string, string?)"/>). None by default.
+    /// </summary>
+    IReadOnlyList<string> FilePatterns => [];
 
     /// <summary>Its comments and brackets.</summary>
     LanguageRules Rules { get; }
@@ -135,6 +152,13 @@ public interface ILanguageSession : IDisposable
     /// holds (its tokenizer's line states), looking at most <paramref name="maxLines"/> lines away (contract 1.1).
     /// </summary>
     LinkedEditingRanges? GetLinkedEditingRanges(ITextSnapshot snapshot, int position, int maxLines) => null;
+
+    /// <summary>
+    /// The editing rules at <paramref name="position"/> (phase W, contract 1.1): an embedded language's there (an HTML
+    /// file's <c>&lt;script&gt;</c> toggles <c>//</c>, its <c>&lt;style&gt;</c> <c>/* */</c>), or null for the language's
+    /// own <see cref="ILanguage.Rules"/> (the default). Asked on the UI thread when a command needs them; it never waits.
+    /// </summary>
+    LanguageRules? RulesAt(ITextSnapshot snapshot, int position) => null;
 }
 
 /// <summary>A range of a document's text: where it starts and its characters.</summary>
@@ -262,27 +286,155 @@ public static class EditorLanguages
     /// <exception cref="NotRegisteredException">None is registered under it (the message lists those that are).</exception>
     public static ILanguage Get(ReadOnlySpan<char> name) => Table.Get(name);
 
-    /// <summary>The language that opens <paramref name="path"/> by its extension, or null for plain text.</summary>
-    public static ILanguage? ForFile(string path)
+    /// <summary>
+    /// The language that opens <paramref name="path"/> by its name alone (<see cref="ForFile(string, string?)"/> with no
+    /// workspace), or null for plain text.
+    /// </summary>
+    public static ILanguage? ForFile(string path) => ForFile(path, null);
+
+    /// <summary>
+    /// The language that opens <paramref name="path"/> (W, contracts 3 and 4): the first registered
+    /// <see cref="LanguageSelectors"/> that answers for it in the workspace at <paramref name="workspaceRoot"/> (an Angular
+    /// project's templates), else by its name: a language's exact <see cref="ILanguage.FilePatterns"/> name, then its longest
+    /// pattern, then its extension (<see cref="ILanguage.Extensions"/>); the first language registered wins a tie. Null
+    /// for plain text. From memory, on any thread: the patterns are matched by a walk of the name's dots with alternate
+    /// lookups, allocating nothing (rules 15, 17), and a selector answers from its own cache.
+    /// </summary>
+    public static ILanguage? ForFile(string path, string? workspaceRoot)
     {
         ArgumentNullException.ThrowIfNull(path);
-        var extension = Path.GetExtension(path.AsSpan());
-        if (extension.IsEmpty)
+        var selectors = LanguageSelectors.All;
+        for (int i = 0; i < selectors.Count; i++)
         {
-            return null;
+            if (selectors[i].Select(path, workspaceRoot) is { } selected)
+            {
+                return selected;
+            }
         }
 
-        foreach (var language in Table.Kinds)
+        return Patterns().FindForPath(path);
+    }
+
+    // The table of every language's names, patterns and extensions, made again only when a registration changed the
+    // languages (the registry's list is then a new array).
+    private static FilePatternTable<ILanguage> Patterns()
+    {
+        var kinds = Table.Kinds;
+        var made = Volatile.Read(ref _patterns);
+        if (made is not null && ReferenceEquals(made.Source, kinds))
         {
-            foreach (var claimed in language.Extensions)
+            return made.Table;
+        }
+
+        var entries = new List<KeyValuePair<string, ILanguage>>();
+        foreach (var language in kinds)
+        {
+            foreach (var pattern in language.FilePatterns)
             {
-                if (extension.Equals(claimed, StringComparison.OrdinalIgnoreCase))
+                entries.Add(KeyValuePair.Create(pattern, language));
+            }
+        }
+
+        foreach (var language in kinds)
+        {
+            foreach (var extension in language.Extensions)
+            {
+                if (extension.Length > 1)
                 {
-                    return language;
+                    // An extension always counts as one, even where its shape reads as a suffix (".d.ts").
+                    entries.Add(KeyValuePair.Create(FilePatternTable<ILanguage>.KindOf(extension) == FilePatternKind.Extension ? extension : "*" + extension, language));
                 }
             }
         }
 
-        return null;
+        made = new LanguagePatterns(kinds, new FilePatternTable<ILanguage>(entries));
+        Volatile.Write(ref _patterns, made);
+        return made.Table;
+    }
+
+    private static LanguagePatterns? _patterns;
+
+    private sealed record LanguagePatterns(IReadOnlyList<ILanguage> Source, FilePatternTable<ILanguage> Table);
+}
+
+/// <summary>
+/// Picks a file's language from what the workspace is (W, contract 4): an Angular project's <c>.html</c> as Angular
+/// templates, say, where the name alone says HTML. Registered in <see cref="LanguageSelectors"/>; asked by
+/// <see cref="EditorLanguages.ForFile(string, string?)"/> before the names. <see cref="Select"/> answers from the
+/// selector's own cache, with no I/O on the call (it is asked on the UI thread when a file opens);
+/// <see cref="PrepareAsync"/> reads what it needs of a workspace off the UI thread.
+/// </summary>
+public interface ILanguageSelector : IKind
+{
+    /// <summary>
+    /// The language of <paramref name="path"/> in the workspace at <paramref name="workspaceRoot"/> (null for a file
+    /// outside one), or null to leave it to the names. From memory: no file is read here.
+    /// </summary>
+    ILanguage? Select(string path, string? workspaceRoot);
+
+    /// <summary>
+    /// Reads what <see cref="Select"/> needs of the workspace at <paramref name="workspaceRoot"/> (an <c>angular.json</c>),
+    /// off the calling thread; the host calls it when a folder opens and re-picks the open files' languages after it. Done
+    /// at once by default.
+    /// </summary>
+    Task PrepareAsync(string workspaceRoot, CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+/// <summary>The language selectors, by name (ignoring case). The library registers none; a language plug-in registers its own.</summary>
+public static class LanguageSelectors
+{
+    private static readonly KindTable<ILanguageSelector> Table = new(nameof(LanguageSelectors), "Language selector", "add it with LanguageSelectors.Register",
+        comparer: StringComparer.OrdinalIgnoreCase, unguarded: "a selector answers from its own cache");
+
+    /// <summary>Registers <paramref name="selector"/> under its name.</summary>
+    public static void Register(ILanguageSelector selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        Table.Register(selector, System.Reflection.Assembly.GetCallingAssembly());
+    }
+
+    /// <summary>Removes the app's selector of that name; false when none was registered by the app.</summary>
+    public static bool Unregister(string name) => Table.Unregister(name);
+
+    /// <summary>The registered names, in order.</summary>
+    public static IReadOnlyList<string> Names => Table.Names;
+
+    /// <summary>The registered selectors, in the order of <see cref="Names"/> (the order they are asked in).</summary>
+    public static IReadOnlyList<ILanguageSelector> All => Table.Kinds;
+
+    /// <summary>The selector of that name, or null.</summary>
+    public static ILanguageSelector? Find(ReadOnlySpan<char> name) => Table.Find(name);
+
+    /// <summary>The selector of that name.</summary>
+    /// <exception cref="NotRegisteredException">None is registered under it.</exception>
+    public static ILanguageSelector Get(ReadOnlySpan<char> name) => Table.Get(name);
+
+    /// <summary>
+    /// Prepares every selector for the workspace at <paramref name="workspaceRoot"/> (<see cref="ILanguageSelector.PrepareAsync"/>),
+    /// together, off the calling thread; a selector that fails is left out and named in the result ("name: reason"), the
+    /// others still prepared.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> PrepareAsync(string workspaceRoot, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceRoot);
+        var selectors = All;
+        if (selectors.Count == 0)
+        {
+            return [];
+        }
+
+        var problems = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        await Task.WhenAll(selectors.Select(selector => Task.Run(async () =>
+        {
+            try
+            {
+                await selector.PrepareAsync(workspaceRoot, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                problems.Enqueue($"{selector.Name}: {e.Message}");
+            }
+        }, cancellationToken))).ConfigureAwait(false);
+        return [.. problems];
     }
 }

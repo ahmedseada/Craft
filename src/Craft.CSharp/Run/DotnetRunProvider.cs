@@ -361,6 +361,6 @@ public sealed class DotnetRunProvider : IRunProvider
         return merged;
     }
 
-    private static string? Dotnet() => TerminalProgram.FindOnPath("dotnet", Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator,
+    internal static string? Dotnet() => TerminalProgram.FindOnPath("dotnet", Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator,
         OperatingSystem.IsWindows() ? Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD" : null);
 }

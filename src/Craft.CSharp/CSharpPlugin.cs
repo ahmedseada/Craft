@@ -21,7 +21,7 @@ namespace Craft.CSharp;
 public sealed class CSharpPlugin() : IdrakPlugin("csharp")
 {
     /// <summary>What it brings.</summary>
-    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig, .json; the Run view's projects, solutions and launch profiles (run, build, test, publish with the .NET SDK); snippets, inlay hints, code lenses (references, Run test), call and type hierarchies";
+    public static string Summary => "C# on Roslyn: classification, diagnostics, completion, signature help, hover, go to definition and formatting of .cs and .csx files; the csproj and loose workspace readers; the colours (and XML and JSON formatting) of a C# project's other files: .csproj, .props, .targets, .sln, .slnx, .xml, .xaml, .config, .resx, .razor, .cshtml, .editorconfig (JSON is its own plug-in since phase W); the Run view's projects, solutions and launch profiles (run, build, test, publish with the .NET SDK); the Test explorer's xUnit, NUnit and MSTest tests; Markdown's colours and folding; snippets, inlay hints, code lenses (references, Run test), call and type hierarchies";
 
     /// <inheritdoc />
     protected override void RegisterParts()
@@ -36,10 +36,9 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
             Part(() => EditorLanguages.Register(language), () => EditorLanguages.Unregister(language.Name));
         }
 
-        // Folding (phase X): C#'s from its syntax tree, the project languages' from their elements, objects and arrays.
+        // Folding (phase X): C#'s from its syntax tree, the project languages' from their elements and blocks.
         Part(() => FoldingRangeProviders.Register(new CSharpFolding()), () => FoldingRangeProviders.Unregister(CSharpFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new MarkupFolding()), () => FoldingRangeProviders.Unregister(MarkupFolding.ProviderName));
-        Part(() => FoldingRangeProviders.Register(new JsonFolding()), () => FoldingRangeProviders.Unregister(JsonFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new RazorFolding()), () => FoldingRangeProviders.Unregister(RazorFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new SolutionFolding()), () => FoldingRangeProviders.Unregister(SolutionFolding.ProviderName));
         Part(() => FoldingRangeProviders.Register(new EditorConfigFolding()), () => FoldingRangeProviders.Unregister(EditorConfigFolding.ProviderName));
@@ -50,6 +49,13 @@ public sealed class CSharpPlugin() : IdrakPlugin("csharp")
         // X part 9: C#'s snippets and code lenses (references, Run test and Debug test).
         Part(() => SnippetProviders.Register(new CSharpSnippets()), () => SnippetProviders.Unregister(CSharpSnippets.ProviderName));
         Part(() => CodeLensProviders.Register(new CSharpCodeLens()), () => CodeLensProviders.Unregister(CSharpCodeLens.ProviderName));
+
+        // The Test explorer (X part 9): xUnit, NUnit and MSTest tests found in the syntax, run with dotnet test --filter.
+        Part(() => TestProviders.Register(new DotnetTestProvider()), () => TestProviders.Unregister(DotnetTestProvider.ProviderName));
+
+        // Markdown (X part 9): README.md and the docs beside a project, coloured and folded by their headings.
+        Part(() => EditorLanguages.Register(ProjectLanguages.MarkdownLanguage), () => EditorLanguages.Unregister(ProjectLanguages.Markdown));
+        Part(() => FoldingRangeProviders.Register(new MarkdownFolding()), () => FoldingRangeProviders.Unregister(MarkdownFolding.ProviderName));
 
         // Dictation's C# words (phase V): what they type in a C# document, over the voice plug-in's every-language table.
         foreach (var symbol in SpokenSymbolsOfCSharp)

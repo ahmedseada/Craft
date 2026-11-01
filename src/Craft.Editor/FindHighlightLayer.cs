@@ -16,20 +16,21 @@ internal static class FindHighlightLayer
     /// <summary>Whether a frame draws the layer at all (a query that searches, shown).</summary>
     public static bool IsShown(EditorFind find) => find.IsHighlighting && find.Searchable;
 
-    /// <summary>Fills the matches of <paramref name="text"/> (one line, drawn from <paramref name="left"/> at <paramref name="top"/>).</summary>
-    public static void DrawLine(IEditorCanvas canvas, EditorFind find, ReadOnlySpan<char> text, float left, float top, float cell, float height, int tabSize, uint argb) =>
-        DrawLine(canvas, find, text, left, top, cell, height, tabSize, argb, default);
+    /// <summary>Fills the matches of <paramref name="text"/> (one line, drawn from <paramref name="left"/> at <paramref name="top"/>, row by row when <paramref name="wrapped"/>).</summary>
+    public static void DrawLine(IEditorCanvas canvas, EditorFind find, ReadOnlySpan<char> text, WrappedLine? wrapped, float left, float top, float cell, float height, int tabSize, uint argb) =>
+        DrawLine(canvas, find, text, wrapped, left, top, cell, height, tabSize, argb, default);
 
-    /// <summary>As <see cref="DrawLine(IEditorCanvas, EditorFind, ReadOnlySpan{char}, float, float, float, float, int, uint)"/>, the matches moved past the line's inlay hints (X part 9).</summary>
-    public static void DrawLine(IEditorCanvas canvas, EditorFind find, ReadOnlySpan<char> text, float left, float top, float cell, float height, int tabSize, uint argb, scoped in HintColumns hints)
+    /// <summary>As the overload without hints, the matches moved past the line's inlay hints (X part 9).</summary>
+    public static void DrawLine(IEditorCanvas canvas, EditorFind find, ReadOnlySpan<char> text, WrappedLine? wrapped, float left, float top, float cell, float height, int tabSize, uint argb,
+        scoped in HintColumns hints)
     {
         int from = 0;
         int found;
         while ((found = find.NextIn(text, from, out int length)) >= 0)
         {
-            int start = hints.Char(TextReading.ColumnOf(text, found, tabSize));
-            int end = hints.Caret(TextReading.ColumnOf(text, found + length, tabSize));
-            canvas.FillRect(left + (start * cell), top, (end - start) * cell, height, argb);
+            int start = TextReading.ColumnOf(text, found, tabSize);
+            int end = TextReading.ColumnOf(text, found + length, tabSize);
+            EditorRenderer.FillColumns(canvas, wrapped, found, start, found + length, end, left, top, cell, height, argb, hints);
             from = found + Math.Max(1, length);
         }
     }

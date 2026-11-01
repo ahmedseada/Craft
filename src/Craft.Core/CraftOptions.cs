@@ -59,7 +59,7 @@ public sealed record CraftOptions
     /// <summary>Whether Tab inserts spaces rather than a tab character (<c>CRAFT_INSERT_SPACES</c>).</summary>
     public bool InsertSpaces { get; init; } = true;
 
-    /// <summary>The theme's name in <c>EditorThemes</c> (<c>CRAFT_THEME</c>).</summary>
+    /// <summary>The theme's name in <c>EditorThemes</c>, or "system" for the system's light or dark (<c>CRAFT_THEME</c>).</summary>
     public string Theme { get; init; } = "dark";
 
     /// <summary>Seconds between autosaves of a recovery copy; 0 turns autosave off (<c>CRAFT_AUTOSAVE_SECONDS</c>).</summary>
@@ -68,7 +68,7 @@ public sealed record CraftOptions
     /// <summary>Typing with pauses shorter than this many milliseconds is one undo step (<c>CRAFT_UNDO_GROUP_MS</c>).</summary>
     public int UndoGroupMilliseconds { get; init; } = 1000;
 
-    /// <summary>Where recovery copies are kept; null for the user's local application data folder, under "Craft/recovery" (<c>CRAFT_RECOVERY_FOLDER</c>).</summary>
+    /// <summary>Where recovery copies are kept; null for the data folder's "recovery" (the user's local application data, "Craft/recovery", unless <c>CRAFT_DATA_FOLDER</c> moves it; <c>CRAFT_RECOVERY_FOLDER</c>).</summary>
     public string? RecoveryFolder { get; init; }
 
     /// <summary>Where crash reports are written; null for the user's local application data folder, under "Craft/crashes" (<c>CRAFT_CRASH_FOLDER</c>).</summary>
@@ -88,6 +88,15 @@ public sealed record CraftOptions
 
     /// <summary>The folder names a workspace skips by default.</summary>
     public static IReadOnlyList<string> DefaultWorkspaceIgnore { get; } = ["bin", "obj", ".git", ".vs", "node_modules", "test-output"];
+
+    /// <summary>
+    /// Whether the folder tree shows the folders the workspace skips (<see cref="WorkspaceIgnore"/>: node_modules, bin, obj,
+    /// .git), dimmed and closed, which are still never indexed or searched (W; <c>CRAFT_WORKSPACE_SHOW_IGNORED</c>).
+    /// </summary>
+    public bool WorkspaceShowIgnored { get; init; } = true;
+
+    /// <summary>The file and folder icons' theme (W; <c>CRAFT_ICON_THEME</c>): "craft", Craft's own, or one a plug-in registered.</summary>
+    public string IconTheme { get; init; } = "craft";
     /// <summary>Milliseconds between the caret's blinks; 0 shows it solid (<c>CRAFT_CARET_BLINK_MS</c>).</summary>
     public int CaretBlinkMilliseconds { get; init; } = 530;
 
@@ -402,6 +411,54 @@ public sealed record CraftOptions
 
     /// <summary>The most items one level of a call or type hierarchy lists (<c>CRAFT_HIERARCHY_LIMIT</c>).</summary>
     public int HierarchyLimit { get; init; } = 500;
+
+    // X part 9: the editing helpers (word wrap, bracket pair colours, diagnostics at the line end, the lightbulb, rendered
+    // white space, rulers, trimming and the final newline on save, .editorconfig).
+
+    /// <summary>
+    /// How long lines wrap (<c>CRAFT_WORD_WRAP</c>): "off", "on" (at the editor's width) or "column" (at
+    /// <see cref="WordWrapColumn"/>); Alt+Z switches it for the editor in hand.
+    /// </summary>
+    public string WordWrap { get; init; } = "off";
+
+    /// <summary>The column lines wrap at when <see cref="WordWrap"/> is "column" (<c>CRAFT_WORD_WRAP_COLUMN</c>).</summary>
+    public int WordWrapColumn { get; init; } = 80;
+
+    /// <summary>Whether brackets are coloured by their nesting depth, an unmatched one in the error colour (<c>CRAFT_BRACKET_COLORS</c>).</summary>
+    public bool BracketColors { get; init; } = true;
+
+    /// <summary>
+    /// The lines one frame reads ahead for bracket depths it does not know yet (a jump deep into a long file colours the
+    /// brackets over a few frames instead of one long one; <c>CRAFT_BRACKET_COLORS_SCAN_LINES</c>).
+    /// </summary>
+    public int BracketColorsScanLines { get; init; } = 20_000;
+
+    /// <summary>Which diagnostics show their message after the line's text (<c>CRAFT_INLINE_DIAGNOSTICS</c>): "off", "errors" or "all".</summary>
+    public string InlineDiagnostics { get; init; } = "errors";
+
+    /// <summary>Whether a lightbulb in the gutter marks the caret's line when code actions exist there (<c>CRAFT_LIGHTBULB</c>).</summary>
+    public bool Lightbulb { get; init; } = true;
+
+    /// <summary>Milliseconds after the caret or the diagnostics stop changing before the code actions are asked for the lightbulb (<c>CRAFT_LIGHTBULB_DELAY_MS</c>).</summary>
+    public int LightbulbDelayMilliseconds { get; init; } = 250;
+
+    /// <summary>
+    /// Which white space is drawn, a dot for a space and an arrow for a tab (<c>CRAFT_RENDER_WHITESPACE</c>): "none",
+    /// "boundary" (leading, trailing and runs of two or more), "selection" (inside the selections) or "all".
+    /// </summary>
+    public string RenderWhitespace { get; init; } = "selection";
+
+    /// <summary>The columns vertical rulers mark, separated by commas ("80,120"; <c>CRAFT_RULERS</c>); empty for none.</summary>
+    public string Rulers { get; init; } = "";
+
+    /// <summary>Whether Save removes the white space at the ends of the lines first, as one undo step (<c>CRAFT_TRIM_TRAILING_WHITESPACE</c>).</summary>
+    public bool TrimTrailingWhitespace { get; init; }
+
+    /// <summary>Whether Save ends the text with a line break when it has none, as one undo step (<c>CRAFT_INSERT_FINAL_NEWLINE</c>).</summary>
+    public bool InsertFinalNewline { get; init; }
+
+    /// <summary>Whether a file's <c>.editorconfig</c> settings apply to it, over these options (<c>CRAFT_EDITORCONFIG</c>).</summary>
+    public bool EditorConfig { get; init; } = true;
 
     /// <summary>The lines of the editor host's log kept for the log view (<c>CRAFT_HOST_LOG_LINES</c>); 0 keeps none.</summary>
     public int HostLogLines { get; init; } = 500;
@@ -760,6 +817,89 @@ public sealed record CraftOptions
     /// <summary>The user's snippets folder as a full path: <see cref="SnippetsFolder"/>, else the data folder's "snippets".</summary>
     public string ResolveSnippetsFolder() => Path.GetFullPath(SnippetsFolder ?? Path.Combine(ResolveDataFolder(), "snippets"));
 
+    // X part 9, the tools: the Test explorer, the Markdown and image previews, the TODO list and the spell check.
+
+    /// <summary>Whether the gutter shows a test's ▶ (a click runs it) and its last result's ✓ or ✗ (<c>CRAFT_TEST_GUTTER</c>).</summary>
+    public bool TestGutter { get; init; } = true;
+
+    /// <summary>Whether a test run's failures go to Problems, a group per file (<c>CRAFT_TEST_PROBLEMS</c>).</summary>
+    public bool TestProblems { get; init; } = true;
+
+    /// <summary>Milliseconds the Markdown preview waits after the last keystroke before it renders again, off the UI thread (<c>CRAFT_MARKDOWN_PREVIEW_DELAY_MS</c>).</summary>
+    public int MarkdownPreviewDelayMilliseconds { get; init; } = 300;
+
+    /// <summary>Whether the Markdown preview follows its source's scroll (<c>CRAFT_MARKDOWN_PREVIEW_FOLLOW</c>).</summary>
+    public bool MarkdownPreviewFollow { get; init; } = true;
+
+    /// <summary>The largest image, in megabytes, the image preview reads (<c>CRAFT_IMAGE_PREVIEW_MAX_MB</c>); a larger one is said, not read.</summary>
+    public int ImagePreviewMaxMegabytes { get; init; } = 64;
+
+    /// <summary>The words the TODO list finds in comments (<c>CRAFT_TODO_TAGS</c>, separated by ','), matched as whole words with their case.</summary>
+    public IReadOnlyList<string> TodoTags { get; init; } = DefaultTodoTags;
+
+    /// <summary>The TODO list's words when none are set.</summary>
+    public static IReadOnlyList<string> DefaultTodoTags { get; } = ["TODO", "FIXME", "HACK", "NOTE"];
+
+    /// <summary>The most entries the TODO list keeps; it stops there and says so (<c>CRAFT_TODO_MAX_RESULTS</c>).</summary>
+    public int TodoMaxResults { get; init; } = 5_000;
+
+    /// <summary>Whether comments and strings are spell checked (<c>CRAFT_SPELL_CHECK</c>): a faint squiggle under a word no dictionary knows.</summary>
+    public bool SpellCheck { get; init; } = true;
+
+    /// <summary>The spell check's dictionary, a language tag registered in SpellDictionaries (<c>CRAFT_SPELL_LANGUAGE</c>).</summary>
+    public string SpellLanguage { get; init; } = "en";
+
+    /// <summary>The suggestions a misspelled word's quick fix offers at most (<c>CRAFT_SPELL_SUGGESTIONS</c>).</summary>
+    public int SpellSuggestions { get; init; } = 5;
+
+    /// <summary>Words shorter than this are not spell checked (<c>CRAFT_SPELL_MIN_LENGTH</c>).</summary>
+    public int SpellMinLength { get; init; } = 4;
+
+    // X part 9, navigation (13-17): bookmarks, preview tabs, the last session, local history, links in output.
+
+    /// <summary>Whether Next and Previous bookmark go round from the last to the first (<c>CRAFT_BOOKMARKS_WRAP</c>).</summary>
+    public bool BookmarksWrap { get; init; } = true;
+
+    /// <summary>
+    /// Whether a single click on a file in the explorer opens it in a preview tab (italic) that the next one replaces until
+    /// it is edited, double-clicked or pinned (<c>CRAFT_PREVIEW_TABS</c>).
+    /// </summary>
+    public bool PreviewTabs { get; init; } = true;
+
+    /// <summary>
+    /// Whether opening a folder at start reopens its last session: the editor groups, tabs, active tabs, carets, scroll,
+    /// folds and pins (<c>CRAFT_RESTORE_SESSION</c>).
+    /// </summary>
+    public bool RestoreSession { get; init; } = true;
+
+    /// <summary>The megabytes the local history keeps in all, its oldest snapshots dropped past it (<c>CRAFT_LOCAL_HISTORY_MAX_MB</c>); 0 turns it off.</summary>
+    public int LocalHistoryMaxMegabytes { get; init; } = 256;
+
+    /// <summary>The days a local history snapshot is kept (<c>CRAFT_LOCAL_HISTORY_DAYS</c>).</summary>
+    public int LocalHistoryDays { get; init; } = 30;
+
+    /// <summary>A file larger than this many megabytes gets no local history snapshot when saved (<c>CRAFT_LOCAL_HISTORY_FILE_MB</c>).</summary>
+    public int LocalHistoryFileMegabytes { get; init; } = 16;
+
+    /// <summary>
+    /// How links (<c>file(line,col)</c>, <c>file:line</c>) in the terminal and Output show (<c>CRAFT_LINKS_UNDERLINE</c>):
+    /// "hover" (the link under the pointer, in the terminal while Ctrl is held), "always" (every link on screen), "off"
+    /// (no links).
+    /// </summary>
+    public string LinksUnderline { get; init; } = "hover";
+
+    /// <summary>
+    /// Whether the start offers the recovery copies an unclean end left (<c>CRAFT_RECOVERY_PROMPT</c>): a card in the editor
+    /// area and a notification, with Restore, Compare and Discard; off, the copies stay in the recovery folder.
+    /// </summary>
+    public bool RecoveryPrompt { get; init; } = true;
+
+    /// <summary>The width Zen mode centres the editor in, in units (<c>CRAFT_ZEN_WIDTH</c>); 0 uses the whole width.</summary>
+    public int ZenWidth { get; init; } = 960;
+
+    /// <summary>Whether Zen mode also puts the window in full screen, and takes it back out when it ends (<c>CRAFT_ZEN_FULL_SCREEN</c>).</summary>
+    public bool ZenFullScreen { get; init; } = true;
+
     /// <summary>The data folder as a full path: <see cref="DataFolder"/>, else the local application data folder's "Craft".</summary>
     public string ResolveDataFolder() =>
         Path.GetFullPath(DataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create), "Craft"));
@@ -776,16 +916,18 @@ public sealed record CraftOptions
         new("CRAFT_ACCENT", "(the theme's)", "The accent: amber, teal, blue, rose, or #RRGGBB; moved until it reads at 4.5:1 on the theme.") { Shape = SettingShape.From(SettingSections.Appearance, "Accent", SettingChoiceSources.Accents, [""], true, "Theme") },
         new("CRAFT_TAB_SIZE", "4", "The columns a tab spans.") { Shape = SettingShape.Whole(SettingSections.Editor, "Tab size", 1, 32, "columns", "Typing") },
         new("CRAFT_INSERT_SPACES", "true", "Whether Tab inserts spaces rather than a tab character.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Insert spaces for Tab", "Typing") },
-        new("CRAFT_THEME", "dark", "The theme's name (dark, light, or a registered one).") { Shape = SettingShape.From(SettingSections.Appearance, "Theme", SettingChoiceSources.Themes, null, false, "Theme") },
+        new("CRAFT_THEME", "dark", "The theme's name (dark, light, dusk, dawn, high-contrast-dark, high-contrast-light, a plug-in's), or system to follow the system's light or dark; Ctrl+K Ctrl+T picks one with a live preview.") { Shape = SettingShape.From(SettingSections.Appearance, "Theme", SettingChoiceSources.Themes, ["system"], false, "Theme") },
+        new("CRAFT_ICON_THEME", "craft", "The file and folder icons' theme: craft (Craft's own), or one a plug-in registered.") { Shape = SettingShape.From(SettingSections.Appearance, "File icon theme", SettingChoiceSources.IconThemes, null, false, "Theme") },
         new("CRAFT_AUTOSAVE_SECONDS", "30", "Seconds between autosaves of a recovery copy; 0 turns autosave off.") { Shape = SettingShape.Whole(SettingSections.Files, "Autosave a recovery copy every", 0, 86_400, "s", "Recovery") },
         new("CRAFT_UNDO_GROUP_MS", "1000", "Typing with pauses shorter than this is one undo step.") { Shape = SettingShape.Whole(SettingSections.Editor, "Undo groups typing paused less than", 0, 60_000, "ms", "Typing", step: 100) },
-        new("CRAFT_RECOVERY_FOLDER", "(local app data)/Craft/recovery", "Where recovery copies are kept.") { Shape = SettingShape.PathTo(SettingSections.Files, "Recovery folder", "Recovery") },
+        new("CRAFT_RECOVERY_FOLDER", "(data folder)/recovery", "Where recovery copies are kept (the data folder's recovery by default).") { Shape = SettingShape.PathTo(SettingSections.Files, "Recovery folder", "Recovery") },
         new("CRAFT_CRASH_FOLDER", "(local app data)/Craft/crashes", "Where crash reports are written (the crash dialog names the file).") { Shape = SettingShape.PathTo(SettingSections.Files, "Crash reports folder", "Recovery") },
         new("CRAFT_BUFFER_CHUNK", "65536", "The characters of each block a text buffer's add buffer grows by.") { Shape = SettingShape.Whole(SettingSections.Editor, "Text buffer block", 16, 64 * 1024 * 1024, "characters", "Advanced", step: 4096) },
         new("CRAFT_LINE_ENDING", "auto", "The line break of a new document: lf, crlf, or auto (the running system's).") { Shape = SettingShape.Choice(SettingSections.Files, "Line ending of a new file", ["auto", "lf", "crlf"], "Files") },
         new("CRAFT_PLUGIN_FOLDERS", "(none)", "Folders of user plug-ins (a Name/Name.dll folder each), loaded after the app's own; separated by ';'.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Plug-in folders", "Loading") },
         new("CRAFT_PLUGINS_DISABLED", "(none)", "Plug-ins not loaded, by folder name (Craft.CSharp), the pre-installed ones included; separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Plugins, "Disabled plug-ins", "Loading") },
         new("CRAFT_WORKSPACE_IGNORE", "bin;obj;.git;.vs;node_modules;test-output", "The folder names a workspace skips when it lists its files, separated by ';' or ','.") { Shape = SettingShape.ListOf(SettingSections.Files, "Folders the workspace skips", "Workspace") },
+        new("CRAFT_WORKSPACE_SHOW_IGNORED", "true", "Whether the explorer shows the folders the workspace skips (node_modules, bin, obj), dimmed and closed; they are never indexed or searched.") { Shape = SettingShape.Toggle(SettingSections.Files, "Show skipped folders in the explorer, dimmed", "Workspace") },
         new("CRAFT_CARET_BLINK_MS", "530", "Milliseconds between the caret's blinks; 0 shows it solid.") { Shape = SettingShape.Whole(SettingSections.Editor, "Caret blink", 0, 10_000, "ms", "Caret", step: 10) },
         new("CRAFT_CARET_WIDTH", "2", "The caret bar's width, in device-independent units.") { Shape = SettingShape.Number(SettingSections.Editor, "Caret width", 0.5, 50, 0.5, "units", "Caret") },
         new("CRAFT_DOUBLE_CLICK_MS", "500", "Clicks closer in time than this count as a double or triple click.") { Shape = SettingShape.Whole(SettingSections.Editor, "Double-click time", 0, 10_000, "ms", "Mouse", step: 10) },
@@ -930,6 +1072,19 @@ public sealed record CraftOptions
         new("CRAFT_OUTLINE_FOLLOW_CARET", "true", "Whether the Outline view highlights and reveals the symbol at the caret.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Outline follows the caret", "Navigation") },
         new("CRAFT_HIERARCHY_LIMIT", "500", "The most items one level of a call or type hierarchy lists.") { Shape = SettingShape.Whole(SettingSections.Editor, "Hierarchy lists at most a level", 1, 1_000_000, "items", "Navigation") },
         new("CRAFT_COMPLETION_ALL_CARETS", "true", "Whether the completion list and ghost text work at several carets: asked at the primary caret, applied at every caret whose text before it matches (the rest left and said); off closes them while there are several carets.") { Shape = SettingShape.Toggle(SettingSections.Completion, "Complete at every matching caret", "Completion list") },
+        // X part 9: the editing helpers.
+        new("CRAFT_WORD_WRAP", "off", "How long lines wrap: off, on (at the editor's width) or column (at CRAFT_WORD_WRAP_COLUMN); Alt+Z switches it for the editor in hand.") { Shape = SettingShape.Choice(SettingSections.Editor, "Word wrap", ["off", "on", "column"], "Display") },
+        new("CRAFT_WORD_WRAP_COLUMN", "80", "The column lines wrap at when CRAFT_WORD_WRAP is column.") { Shape = SettingShape.Whole(SettingSections.Editor, "Wrap at column", 10, 10_000, "columns", "Display") },
+        new("CRAFT_BRACKET_COLORS", "true", "Whether brackets are coloured by their nesting depth (strings and comments skipped), an unmatched one in the error colour.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Bracket pair colours", "Display") },
+        new("CRAFT_BRACKET_COLORS_SCAN_LINES", "20000", "The lines one frame reads ahead for bracket depths it does not know yet (a jump deep into a long file colours over a few frames).") { Shape = SettingShape.Whole(SettingSections.Editor, "Bracket depths read a frame", 100, 10_000_000, "lines", "Advanced", step: 1000) },
+        new("CRAFT_INLINE_DIAGNOSTICS", "errors", "Which diagnostics show their message, faded, after the line's text: off, errors or all.") { Shape = SettingShape.Choice(SettingSections.Editor, "Diagnostics at the line end", ["off", "errors", "all"], "Display") },
+        new("CRAFT_LIGHTBULB", "true", "Whether a lightbulb in the gutter marks the caret's line when code actions exist there (a click opens Quick fix).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Lightbulb for code actions", "Display") },
+        new("CRAFT_LIGHTBULB_DELAY_MS", "250", "Milliseconds after the caret or the diagnostics stop changing before the code actions are asked for the lightbulb.") { Shape = SettingShape.Whole(SettingSections.Editor, "Lightbulb asks after", 0, 60_000, "ms", "Display", step: 50) },
+        new("CRAFT_RENDER_WHITESPACE", "selection", "Which white space is drawn (a dot a space, an arrow a tab): none, boundary (leading, trailing, runs of two or more), selection or all.") { Shape = SettingShape.Choice(SettingSections.Editor, "Render white space", ["none", "boundary", "selection", "all"], "Display") },
+        new("CRAFT_RULERS", "", "The columns vertical rulers mark, separated by commas (80,120); empty for none (a file's .editorconfig max_line_length adds one).") { Shape = SettingShape.Text(SettingSections.Editor, "Vertical rulers at columns", "Display") },
+        new("CRAFT_TRIM_TRAILING_WHITESPACE", "false", "Whether Save removes the white space at the ends of the lines first, as one undo step (a file's .editorconfig wins).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Trim trailing white space on save", "Files") },
+        new("CRAFT_INSERT_FINAL_NEWLINE", "false", "Whether Save ends the text with a line break when it has none, as one undo step (a file's .editorconfig wins).") { Shape = SettingShape.Toggle(SettingSections.Editor, "Insert a final newline on save", "Files") },
+        new("CRAFT_EDITORCONFIG", "true", "Whether a file's .editorconfig (indentation, line ending, charset, trimming, final newline, max_line_length as a ruler) applies to it, over these settings.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Apply .editorconfig", "Files") },
         // Phase X slice 3: inline, not modal; the welcome page.
         new("CRAFT_WELCOME_AT_START", "true", "Whether the welcome page (open a folder, a new file, the recent folders, the main shortcuts) opens at start when no folder is open; Help › Welcome opens it any time.") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Show the welcome page at start", "Welcome") },
         new("CRAFT_UNDO_BAR_MS", "5000", "Milliseconds the inline bar with Undo stays after a change that can be taken back (the notification centre cleared, a recent folder removed).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Undo bar stays for", 500, 600_000, "ms", "Notifications", step: 500) },
@@ -958,6 +1113,28 @@ public sealed record CraftOptions
         new("CRAFT_MENU_TYPE_AHEAD_MS", "700", "Milliseconds within which letters typed in an open menu add up to jump to the row they start.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Menu typing joins letters within", 100, 5000, "ms", "Menus", step: 50) },
         new("CRAFT_MENU_SUBMENU_DELAY_MS", "200", "Milliseconds the pointer rests on a menu's row before its submenu opens (or an open one closes).") { Shape = SettingShape.Whole(SettingSections.Appearance, "Submenus open after", 0, 2000, "ms", "Menus", step: 50) },
         new("CRAFT_RUN_INTERACTIVE", "auto", "Whether a run takes the keyboard in its terminal tab (its program reads what you type): auto (when it reads input: a console program, a script), on (every run) or off (output only); a configuration's own interactive wins.") { Shape = SettingShape.Choice(SettingSections.Terminal, "Runs take the keyboard", ["auto", "on", "off"], "Run") },
+        new("CRAFT_TEST_GUTTER", "true", "Whether the gutter shows a test's ▶ (a click runs it) and its last result's ✓ or ✗.") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Test marks in the gutter", "Tests") },
+        new("CRAFT_TEST_PROBLEMS", "true", "Whether a test run's failures go to Problems, a group per file (the place of the failure's first frame in the workspace).") { Shape = SettingShape.Toggle(SettingSections.Terminal, "Failed tests in Problems", "Tests") },
+        new("CRAFT_MARKDOWN_PREVIEW_DELAY_MS", "300", "Milliseconds the Markdown preview waits after the last keystroke before it renders again (off the UI thread).") { Shape = SettingShape.Whole(SettingSections.Editor, "Markdown preview renders after a pause of", 0, 10_000, "ms", "Markdown", step: 50) },
+        new("CRAFT_MARKDOWN_PREVIEW_FOLLOW", "true", "Whether the Markdown preview follows its source's scroll.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Markdown preview follows the scroll", "Markdown") },
+        new("CRAFT_IMAGE_PREVIEW_MAX_MB", "64", "The largest image the image preview reads; a larger one is said, not read.") { Shape = SettingShape.Whole(SettingSections.Files, "Preview images up to", 1, 2047, "MB", "Images") },
+        new("CRAFT_TODO_TAGS", "TODO,FIXME,HACK,NOTE", "The words the TODO list finds in comments (in plain text files on any line), as whole words with their case, separated by ','.") { Shape = SettingShape.ListOf(SettingSections.Files, "TODO list words", "TODO list") },
+        new("CRAFT_TODO_MAX_RESULTS", "5000", "The most entries the TODO list keeps; it stops there and says so.") { Shape = SettingShape.Whole(SettingSections.Files, "TODO list keeps at most", 1, 1_000_000, "entries", "TODO list", step: 500) },
+        new("CRAFT_SPELL_CHECK", "true", "Whether comments and strings are spell checked (only the lines on screen): a faint squiggle under a word no dictionary knows, its quick fix (Ctrl+.) with suggestions, Add to dictionary and Ignore in workspace.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Spell check comments and strings", "Spelling") },
+        new("CRAFT_SPELL_LANGUAGE", "en", "The spell check's dictionary (a language registered in SpellDictionaries; en is bundled).") { Shape = SettingShape.Text(SettingSections.Editor, "Spelling dictionary", "Spelling") },
+        new("CRAFT_SPELL_SUGGESTIONS", "5", "The suggestions a misspelled word's quick fix offers at most.") { Shape = SettingShape.Whole(SettingSections.Editor, "Spelling suggestions", 1, 50, null, "Spelling") },
+        new("CRAFT_SPELL_MIN_LENGTH", "4", "Words shorter than this many letters are not spell checked.") { Shape = SettingShape.Whole(SettingSections.Editor, "Spell check words from", 1, 64, "letters", "Spelling") },
+        new("CRAFT_BOOKMARKS_WRAP", "true", "Whether Next and Previous bookmark go round from the last bookmark to the first.") { Shape = SettingShape.Toggle(SettingSections.Editor, "Bookmarks go round", "Bookmarks") },
+        new("CRAFT_PREVIEW_TABS", "true", "Whether a single click on a file in the explorer opens it in an italic preview tab the next one replaces (an edit, a double-click or a pin keeps it).") { Shape = SettingShape.Toggle(SettingSections.Files, "Preview tabs", "Tabs") },
+        new("CRAFT_RESTORE_SESSION", "true", "Whether opening a folder at start reopens its last session: groups, tabs, carets, scroll, folds and pins (a file with a recovery copy is left for its recovery).") { Shape = SettingShape.Toggle(SettingSections.Files, "Restore the last session", "Session") },
+        new("CRAFT_LOCAL_HISTORY_MAX_MB", "256", "The megabytes the local history keeps in all (a snapshot per save, in the data folder); its oldest go past it; 0 turns it off.") { Shape = SettingShape.Whole(SettingSections.Files, "Local history keeps up to", 0, 65_536, "MB", "Local history") },
+        new("CRAFT_LOCAL_HISTORY_DAYS", "30", "The days a local history snapshot is kept.") { Shape = SettingShape.Whole(SettingSections.Files, "Keep local history for", 1, 3650, "days", "Local history") },
+        new("CRAFT_LOCAL_HISTORY_FILE_MB", "16", "A file larger than this gets no local history snapshot when saved.") { Shape = SettingShape.Whole(SettingSections.Files, "Local history skips files over", 1, 4096, "MB", "Local history") },
+        new("CRAFT_LINKS_UNDERLINE", "hover", "How file:line links show in the terminal and Output: hover (the link under the pointer; in the terminal while Ctrl is held), always (every link on screen), off (no links).") { Shape = SettingShape.Choice(SettingSections.Terminal, "Links in output", ["hover", "always", "off"], "Links") },
+        // X part 9, items 24-26 and the recovery prompt.
+        new("CRAFT_RECOVERY_PROMPT", "true", "Whether the start offers the recovery copies of files an unclean end left unsaved (a card and a notification with Restore, Compare and Discard).") { Shape = SettingShape.Toggle(SettingSections.Files, "Offer recovered files at start", "Recovery") },
+        new("CRAFT_ZEN_WIDTH", "960", "The width Zen mode (Ctrl+K Z) centres the editor in, in units; 0 uses the whole width.") { Shape = SettingShape.Whole(SettingSections.Appearance, "Zen mode's text width", 0, 10_000, "units", "Zen mode", step: 20) },
+        new("CRAFT_ZEN_FULL_SCREEN", "true", "Whether Zen mode also puts the window in full screen (and takes it back out when it ends).") { Shape = SettingShape.Toggle(SettingSections.Appearance, "Zen mode goes full screen", "Zen mode") },
     ];
 
     /// <summary>
@@ -995,6 +1172,16 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_INSERT_SPACES") is { } spaces)
         {
             options = options with { InsertSpaces = Flag(spaces, "CRAFT_INSERT_SPACES") };
+        }
+
+        if (Text(read, "CRAFT_ICON_THEME") is { } iconTheme)
+        {
+            options = options with { IconTheme = iconTheme };
+        }
+
+        if (Text(read, "CRAFT_WORKSPACE_SHOW_IGNORED") is { } showIgnored)
+        {
+            options = options with { WorkspaceShowIgnored = Flag(showIgnored, "CRAFT_WORKSPACE_SHOW_IGNORED") };
         }
 
         if (Text(read, "CRAFT_THEME") is { } theme)
@@ -1350,6 +1537,66 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_HIERARCHY_LIMIT") is { } hierarchyLimit)
         {
             options = options with { HierarchyLimit = Whole(hierarchyLimit, "CRAFT_HIERARCHY_LIMIT", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_WORD_WRAP") is { } wrap)
+        {
+            options = options with { WordWrap = OneOf(wrap, "CRAFT_WORD_WRAP", "off", "on", "column") };
+        }
+
+        if (Text(read, "CRAFT_WORD_WRAP_COLUMN") is { } wrapColumn)
+        {
+            options = options with { WordWrapColumn = Whole(wrapColumn, "CRAFT_WORD_WRAP_COLUMN", 10, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_BRACKET_COLORS") is { } bracketColors)
+        {
+            options = options with { BracketColors = Flag(bracketColors, "CRAFT_BRACKET_COLORS") };
+        }
+
+        if (Text(read, "CRAFT_BRACKET_COLORS_SCAN_LINES") is { } bracketScan)
+        {
+            options = options with { BracketColorsScanLines = Whole(bracketScan, "CRAFT_BRACKET_COLORS_SCAN_LINES", 100, 10_000_000) };
+        }
+
+        if (Text(read, "CRAFT_INLINE_DIAGNOSTICS") is { } inline)
+        {
+            options = options with { InlineDiagnostics = OneOf(inline, "CRAFT_INLINE_DIAGNOSTICS", "off", "errors", "all") };
+        }
+
+        if (Text(read, "CRAFT_LIGHTBULB") is { } lightbulb)
+        {
+            options = options with { Lightbulb = Flag(lightbulb, "CRAFT_LIGHTBULB") };
+        }
+
+        if (Text(read, "CRAFT_LIGHTBULB_DELAY_MS") is { } lightbulbDelay)
+        {
+            options = options with { LightbulbDelayMilliseconds = Whole(lightbulbDelay, "CRAFT_LIGHTBULB_DELAY_MS", 0, 60_000) };
+        }
+
+        if (Text(read, "CRAFT_RENDER_WHITESPACE") is { } whitespace)
+        {
+            options = options with { RenderWhitespace = OneOf(whitespace, "CRAFT_RENDER_WHITESPACE", "none", "boundary", "selection", "all") };
+        }
+
+        if (read("CRAFT_RULERS") is { } rulers)
+        {
+            options = options with { Rulers = RulerColumns(rulers) };
+        }
+
+        if (Text(read, "CRAFT_TRIM_TRAILING_WHITESPACE") is { } trim)
+        {
+            options = options with { TrimTrailingWhitespace = Flag(trim, "CRAFT_TRIM_TRAILING_WHITESPACE") };
+        }
+
+        if (Text(read, "CRAFT_INSERT_FINAL_NEWLINE") is { } finalNewline)
+        {
+            options = options with { InsertFinalNewline = Flag(finalNewline, "CRAFT_INSERT_FINAL_NEWLINE") };
+        }
+
+        if (Text(read, "CRAFT_EDITORCONFIG") is { } editorConfig)
+        {
+            options = options with { EditorConfig = Flag(editorConfig, "CRAFT_EDITORCONFIG") };
         }
 
         if (Text(read, "CRAFT_HOST_LOG_LINES") is { } logLines)
@@ -1898,6 +2145,113 @@ public sealed record CraftOptions
             options = options with { RunInteractive = OneOf(runInteractive, "CRAFT_RUN_INTERACTIVE", "auto", "on", "off") };
         }
 
+        if (Text(read, "CRAFT_TEST_GUTTER") is { } testGutter)
+        {
+            options = options with { TestGutter = Flag(testGutter, "CRAFT_TEST_GUTTER") };
+        }
+
+        if (Text(read, "CRAFT_TEST_PROBLEMS") is { } testProblems)
+        {
+            options = options with { TestProblems = Flag(testProblems, "CRAFT_TEST_PROBLEMS") };
+        }
+
+        if (Text(read, "CRAFT_MARKDOWN_PREVIEW_DELAY_MS") is { } previewDelay)
+        {
+            options = options with { MarkdownPreviewDelayMilliseconds = Whole(previewDelay, "CRAFT_MARKDOWN_PREVIEW_DELAY_MS", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_MARKDOWN_PREVIEW_FOLLOW") is { } previewFollow)
+        {
+            options = options with { MarkdownPreviewFollow = Flag(previewFollow, "CRAFT_MARKDOWN_PREVIEW_FOLLOW") };
+        }
+
+        if (Text(read, "CRAFT_IMAGE_PREVIEW_MAX_MB") is { } imageMax)
+        {
+            options = options with { ImagePreviewMaxMegabytes = Whole(imageMax, "CRAFT_IMAGE_PREVIEW_MAX_MB", 1, 2047) };
+        }
+
+        if (Text(read, "CRAFT_TODO_TAGS") is { } todoTags)
+        {
+            var tags = todoTags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            options = options with { TodoTags = tags.Length > 0 && Array.TrueForAll(tags, static t => t.AsSpan().IndexOfAnyExcept(TagCharacters) < 0) ? tags
+                : throw new ArgumentException($"CRAFT_TODO_TAGS is '{todoTags}': it takes words of letters, digits, '_' or '-', separated by ','.", "CRAFT_TODO_TAGS") };
+        }
+
+        if (Text(read, "CRAFT_TODO_MAX_RESULTS") is { } todoMax)
+        {
+            options = options with { TodoMaxResults = Whole(todoMax, "CRAFT_TODO_MAX_RESULTS", 1, 1_000_000) };
+        }
+
+        if (Text(read, "CRAFT_SPELL_CHECK") is { } spellCheck)
+        {
+            options = options with { SpellCheck = Flag(spellCheck, "CRAFT_SPELL_CHECK") };
+        }
+
+        if (Text(read, "CRAFT_SPELL_LANGUAGE") is { } spellLanguage)
+        {
+            options = options with { SpellLanguage = spellLanguage };
+        }
+
+        if (Text(read, "CRAFT_SPELL_SUGGESTIONS") is { } spellSuggestions)
+        {
+            options = options with { SpellSuggestions = Whole(spellSuggestions, "CRAFT_SPELL_SUGGESTIONS", 1, 50) };
+        }
+
+        if (Text(read, "CRAFT_SPELL_MIN_LENGTH") is { } spellMin)
+        {
+            options = options with { SpellMinLength = Whole(spellMin, "CRAFT_SPELL_MIN_LENGTH", 1, 64) };
+        }
+
+        if (Text(read, "CRAFT_BOOKMARKS_WRAP") is { } bookmarksWrap)
+        {
+            options = options with { BookmarksWrap = Flag(bookmarksWrap, "CRAFT_BOOKMARKS_WRAP") };
+        }
+
+        if (Text(read, "CRAFT_PREVIEW_TABS") is { } previewTabs)
+        {
+            options = options with { PreviewTabs = Flag(previewTabs, "CRAFT_PREVIEW_TABS") };
+        }
+
+        if (Text(read, "CRAFT_RESTORE_SESSION") is { } restoreSession)
+        {
+            options = options with { RestoreSession = Flag(restoreSession, "CRAFT_RESTORE_SESSION") };
+        }
+
+        if (Text(read, "CRAFT_LOCAL_HISTORY_MAX_MB") is { } historyMax)
+        {
+            options = options with { LocalHistoryMaxMegabytes = Whole(historyMax, "CRAFT_LOCAL_HISTORY_MAX_MB", 0, 65_536) };
+        }
+
+        if (Text(read, "CRAFT_LOCAL_HISTORY_DAYS") is { } historyDays)
+        {
+            options = options with { LocalHistoryDays = Whole(historyDays, "CRAFT_LOCAL_HISTORY_DAYS", 1, 3650) };
+        }
+
+        if (Text(read, "CRAFT_LOCAL_HISTORY_FILE_MB") is { } historyFile)
+        {
+            options = options with { LocalHistoryFileMegabytes = Whole(historyFile, "CRAFT_LOCAL_HISTORY_FILE_MB", 1, 4096) };
+        }
+
+        if (Text(read, "CRAFT_LINKS_UNDERLINE") is { } linksUnderline)
+        {
+            options = options with { LinksUnderline = OneOf(linksUnderline, "CRAFT_LINKS_UNDERLINE", "hover", "always", "off") };
+        }
+
+        if (Text(read, "CRAFT_RECOVERY_PROMPT") is { } recoveryPrompt)
+        {
+            options = options with { RecoveryPrompt = Flag(recoveryPrompt, "CRAFT_RECOVERY_PROMPT") };
+        }
+
+        if (Text(read, "CRAFT_ZEN_WIDTH") is { } zenWidth)
+        {
+            options = options with { ZenWidth = Whole(zenWidth, "CRAFT_ZEN_WIDTH", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_ZEN_FULL_SCREEN") is { } zenFullScreen)
+        {
+            options = options with { ZenFullScreen = Flag(zenFullScreen, "CRAFT_ZEN_FULL_SCREEN") };
+        }
+
         if (Text(read, "CRAFT_PLUGIN_FOLDERS") is { } folders)
         {
             options = options with { PluginFolders = folders.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) };
@@ -1935,6 +2289,45 @@ public sealed record CraftOptions
         return [.. entries];
     }
 
+    /// <summary>
+    /// The columns of <paramref name="text"/> ("80, 120") as the rulers keep them ("80,120"), in order, each 1 to 10,000;
+    /// empty for none.
+    /// </summary>
+    /// <exception cref="ArgumentException">A part is not such a whole number (the message names CRAFT_RULERS).</exception>
+    public static string RulerColumns(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var columns = new List<int>();
+        foreach (var part in text.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            columns.Add(Whole(part, "CRAFT_RULERS", 1, 10_000));
+        }
+
+        columns.Sort();
+        return string.Join(',', columns.Distinct().Select(c => c.ToString(CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>The columns of <see cref="Rulers"/>, in order (parsed by the caller once per value, never per frame).</summary>
+    public static int[] ParseRulers(string? rulers)
+    {
+        if (string.IsNullOrWhiteSpace(rulers))
+        {
+            return [];
+        }
+
+        var columns = new List<int>();
+        foreach (var part in rulers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out int column) && column > 0)
+            {
+                columns.Add(column);
+            }
+        }
+
+        columns.Sort();
+        return [.. columns];
+    }
+
     private static string OneOf(string value, string name, params ReadOnlySpan<string> choices)
     {
         foreach (var choice in choices)
@@ -1947,6 +2340,8 @@ public sealed record CraftOptions
 
         throw new ArgumentException($"{name} is '{value}': it takes {string.Join(", ", choices.ToArray())}.", name);
     }
+
+    private static readonly System.Buffers.SearchValues<char> TagCharacters = System.Buffers.SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-");
 
     private static string? Text(Func<string, string?> read, string name) => read(name) is { Length: > 0 } value ? value.Trim() : null;
 

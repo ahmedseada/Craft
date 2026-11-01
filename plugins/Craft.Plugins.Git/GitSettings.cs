@@ -57,11 +57,14 @@ public sealed record GitSettings
     /// <summary>The recent subjects shown to the model as the repository's style (<c>commitExamples</c>).</summary>
     public int CommitExamples { get; init; } = 10;
 
+    /// <summary>The most tokens of changes a review reads (<c>reviewDiffTokens</c>, X part 11); the model's context bounds it, the largest files summarised beyond it.</summary>
+    public int ReviewDiffTokens { get; init; } = 6000;
+
     /// <summary>The settings this plug-in declares, with their shapes on the settings page.</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
         Setting("path", "", "The git program (found on PATH when empty); this machine's only, never a workspace's",
-            SettingShape.PathTo(SettingSections.SourceControl, "Git program", "Git")),
+            SettingShape.PathTo(SettingSections.SourceControl, "Git program", "Git"), machineOnly: true),
         Setting("refreshMs", "500", "The pause after a change on disk or a save before the status is read again",
             SettingShape.Whole(SettingSections.SourceControl, "Refresh after", 50, 60_000, "ms", "Git", 50)),
         Setting("autofetchMinutes", "0", "Minutes between fetches in the background (0: never)",
@@ -86,6 +89,8 @@ public sealed record GitSettings
             SettingShape.Whole(SettingSections.SourceControl, "Changes budget", 200, 200_000, "tokens", "Generate commit message", 100)),
         Setting("commitExamples", "10", "The recent subjects shown to the model as the repository's style",
             SettingShape.Whole(SettingSections.SourceControl, "Style examples", 0, 100, "subjects", "Generate commit message")),
+        Setting("reviewDiffTokens", "6000", "The most tokens of changes Review changes reads (within the model's context; the largest files summarised and not reviewed beyond it)",
+            SettingShape.Whole(SettingSections.SourceControl, "Changes budget", 200, 1_000_000, "tokens", "Review changes", 100)),
     ];
 
     /// <summary>The settings as <paramref name="settings"/> holds them now; a value that does not parse keeps its default.</summary>
@@ -109,6 +114,7 @@ public sealed record GitSettings
             CommitMaxTokens = Whole(Get("commitMaxTokens"), defaults.CommitMaxTokens, 0),
             CommitDiffTokens = Whole(Get("commitDiffTokens"), defaults.CommitDiffTokens, 1),
             CommitExamples = Whole(Get("commitExamples"), defaults.CommitExamples, 0),
+            ReviewDiffTokens = Whole(Get("reviewDiffTokens"), defaults.ReviewDiffTokens, 1),
         };
     }
 
@@ -118,7 +124,8 @@ public sealed record GitSettings
         return style is "conventional" or "plain" or "auto" ? style : fallback;
     }
 
-    private static PluginSetting Setting(string key, string value, string description, SettingShape shape) => new(key, value, description) { Shape = shape };
+    private static PluginSetting Setting(string key, string value, string description, SettingShape shape, bool machineOnly = false) =>
+        new(key, value, description) { Shape = shape, MachineOnly = machineOnly };
 
     private static int Whole(string text, int fallback, int least) =>
         int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) && value >= least ? value : fallback;

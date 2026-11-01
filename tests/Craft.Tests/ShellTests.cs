@@ -193,9 +193,12 @@ public static class ShellTests
         File.WriteAllText(folder.File("src/Program.cs"), "");
         File.WriteAllText(folder.File("src/Inner/Deep.cs"), "");
         File.WriteAllText(folder.File("bin/out.dll"), "");
-        var workspace = new Workspace(folder.Path);
+        // W-files: by default a skipped folder shows, dimmed and closed (CRAFT_WORKSPACE_SHOW_IGNORED); off, it is left out.
+        var shown = new FolderTree(new Workspace(folder.Path));
+        Check.True(shown.Rows is [{ Entry: { Name: "bin", IsIgnored: true }, IsExpanded: false }, { Entry.Name: "Docs" }, ..], "by default bin shows first among the folders, marked ignored (dimmed) and closed");
+        var workspace = new Workspace(folder.Path, new CraftOptions { WorkspaceShowIgnored = false });
         var tree = new FolderTree(workspace);
-        Check.SequenceEqual(["Docs", "src", "A.txt", "b.cs"], [.. tree.Rows.Select(r => r.Entry.Name)], "folders first, each sorted ignoring case; bin ignored");
+        Check.SequenceEqual(["Docs", "src", "A.txt", "b.cs"], [.. tree.Rows.Select(r => r.Entry.Name)], "folders first, each sorted ignoring case; bin left out when skipped folders are not shown");
         int changes = 0;
         tree.Changed += (_, _) => changes++;
         Check.True(!tree.Toggle(3), "a file's row does not toggle");
@@ -271,7 +274,7 @@ public static class ShellTests
         Directory.CreateDirectory(folder.File(".craft"));
         await File.WriteAllTextAsync(folder.File(".craft/settings.json"), """{ "CRAFT_TAB_SIZE": "2" }""");
         var user = SettingsFile.Load(folder.File("data/settings.json"));
-        var settings = new CraftSettings(_ => null, user);
+        var settings = new CraftSettings(folder.Isolated(), user);
         var recent = RecentList.Load(folder.File("data/recent.json"), 10);
         var dialogs = new FakeDialogs { Folder = folder.Path, File = folder.File("Program.cs"), SavePath = folder.File("Saved.txt") };
         var ui = new FakeShellUi();
@@ -352,7 +355,7 @@ public static class ShellTests
         // The owner's Windows run: Save did nothing on the agent's new file (a tab with no file, made for a path in a folder
         // that did not exist yet), and a save dialog that failed said nothing.
         using var folder = new TempFolder();
-        var settings = new CraftSettings(_ => null, SettingsFile.Load(folder.File("data/settings.json")));
+        var settings = new CraftSettings(folder.Isolated(), SettingsFile.Load(folder.File("data/settings.json")));
         var recent = RecentList.Load(folder.File("data/recent.json"), 10);
         var dialogs = new FakeDialogs { Folder = folder.Path, SavePath = folder.File("picked/Untitled.txt") };
         var ui = new FakeShellUi();

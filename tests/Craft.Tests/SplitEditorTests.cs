@@ -102,7 +102,7 @@ internal sealed class SplitFixture : IDisposable
     public SplitFixture(TempFolder folder, Func<string, string?>? variables = null, Func<string, CraftOptions, CancellationToken, Task<ITextDocument>>? openDocument = null)
     {
         Folder = folder;
-        var settings = new CraftSettings(variables ?? (_ => null), SettingsFile.Load(folder.File("data/settings.json")));
+        var settings = new CraftSettings(folder.Isolated(variables), SettingsFile.Load(folder.File("data/settings.json")));
         Host = new EditorHost(new CraftOptions { ActivityMinimumMilliseconds = 0 });      // every operation's activity is kept, however quick
         Shell = new ShellModel(Host, settings, RecentList.Load(folder.File("data/recent.json"), 10), new NoDialogs(), Ui, openDocument);
         Shell.EditorOf = EditorOf;
@@ -203,6 +203,21 @@ internal sealed class SplitFixture : IDisposable
         }
 
         public Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default) => Task.FromResult(-1);
+
+        /// <summary>X part 9: answers a quick pick (the theme and status bar pickers), seeing its request; null answers -1 (Escape).</summary>
+        public Func<QuickPickRequest, int>? QuickPicks { get; set; }
+
+        public List<QuickPickRequest> QuickPickRequests { get; } = [];
+
+        public bool ConfirmAnswer { get; set; }
+
+        public Task<int> QuickPickAsync(QuickPickRequest request, CancellationToken cancellationToken = default)
+        {
+            QuickPickRequests.Add(request);
+            return Task.FromResult(QuickPicks?.Invoke(request) ?? -1);
+        }
+
+        public Task<bool> ConfirmAsync(string title, string text, string action, bool danger = false, CancellationToken cancellationToken = default) => Task.FromResult(ConfirmAnswer);
 
         public Task ShowMessageAsync(string title, string message)
         {

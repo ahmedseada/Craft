@@ -145,7 +145,7 @@ public sealed class EditorGroupNode
 /// (<see cref="LanguageSessionPool"/>) and keep their own carets, scroll and folds. Split right, split down, a tab moved to
 /// the next group or dropped on a group's zone, close a group, focus a group by its number; at most <see cref="Max"/>
 /// groups (<c>CRAFT_EDITOR_GROUPS_MAX</c>). The layout (a tree of rows and columns with each child's share) is kept per
-/// workspace (<see cref="Capture"/>, <see cref="EditorLayoutFile"/>). Used on the UI thread.
+/// workspace (<see cref="Capture()"/>, <see cref="EditorLayoutFile"/>). Used on the UI thread.
 /// </summary>
 public sealed class EditorGroups : IDisposable
 {
@@ -630,14 +630,27 @@ public sealed class EditorGroups : IDisposable
     }
 
     /// <summary>The layout now, for the workspace's file: each group's files (new documents are not kept) and active file, the shares and the focus.</summary>
-    public EditorLayoutState Capture() => new(CaptureNode(_root), Math.Max(0, _groups.IndexOf(_focused)));
+    public EditorLayoutState Capture() => Capture(null);
+
+    /// <summary>
+    /// The layout now, as <see cref="Capture()"/>, with each file's tab state (<paramref name="tabState"/>: its pin, caret,
+    /// scroll and folds) beside it when given: the last session (X part 9).
+    /// </summary>
+    public EditorLayoutState Capture(Func<DocumentTab, EditorTabState?>? tabState) => new(CaptureNode(_root, tabState), Math.Max(0, _groups.IndexOf(_focused)));
 
     /// <summary>
     /// Shapes the groups as <paramref name="state"/> (a later session's restore): with one group open, the splits are made
     /// (at most <see cref="Max"/> groups; its first group is the one open) and each new group returned with the files it
     /// is to open, in order, and its active file; the caller opens them. Null when more than one group is open.
     /// </summary>
-    public IReadOnlyList<(EditorGroup Group, IReadOnlyList<string> Files, string? Active)>? Restore(EditorLayoutState state)
+    public IReadOnlyList<(EditorGroup Group, IReadOnlyList<string> Files, string? Active)>? Restore(EditorLayoutState state) =>
+        Shape(state) is { } shaped ? [.. shaped.Select(s => (s.Group, s.Node.Files, s.Node.Active))] : null;
+
+    /// <summary>
+    /// Shapes the groups as <paramref name="state"/>, as <see cref="Restore"/> does, each new group returned with its node
+    /// (its files, active file and the files' tab states); null when more than one group is open.
+    /// </summary>
+    public IReadOnlyList<(EditorGroup Group, EditorLayoutNodeState Node)>? Shape(EditorLayoutState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         if (_groups.Count != 1)
@@ -646,7 +659,7 @@ public sealed class EditorGroups : IDisposable
         }
 
         var first = _groups[0];
-        var opened = new List<(EditorGroup, IReadOnlyList<string>, string?)>();
+        var opened = new List<(EditorGroup, EditorLayoutNodeState)>();
         bool usedFirst = false;
         EditorGroupNode Build(EditorLayoutNodeState node)
         {
@@ -663,7 +676,7 @@ public sealed class EditorGroups : IDisposable
                     group = NewGroup();
                 }
 
-                opened.Add((group, node.Files, node.Active));
+                opened.Add((group, node));
                 return new EditorGroupNode(group);
             }
 
@@ -776,26 +789,28 @@ public sealed class EditorGroups : IDisposable
         }
     }
 
-    private static EditorLayoutNodeState CaptureNode(EditorGroupNode node)
+    private static EditorLayoutNodeState CaptureNode(EditorGroupNode node, Func<DocumentTab, EditorTabState?>? tabState)
     {
         if (node.Group is { } group)
         {
             var files = new List<string>();
+            var states = tabState is null ? null : new List<EditorTabState>();
             foreach (var tab in group.Tabs.Tabs)
             {
                 if (tab.FilePath is { } path)
                 {
                     files.Add(path);
+                    states?.Add(tabState!(tab) ?? new EditorTabState(path));
                 }
             }
 
-            return new EditorLayoutNodeState(GroupOrientation.Row, [], [], files, group.Tabs.Active?.FilePath);
+            return new EditorLayoutNodeState(GroupOrientation.Row, [], [], files, group.Tabs.Active?.FilePath) { Tabs = states ?? [] };
         }
 
         var children = new List<EditorLayoutNodeState>(node.Children.Count);
         foreach (var child in node.Children)
         {
-            children.Add(CaptureNode(child));
+            children.Add(CaptureNode(child, tabState));
         }
 
         return new EditorLayoutNodeState(node.Orientation, children, [.. node.Weights], [], null);
@@ -809,7 +824,48 @@ public sealed class EditorGroups : IDisposable
 /// <param name="Files">A group's files, in its tabs' order.</param>
 /// <param name="Active">A group's active file, or null.</param>
 public sealed record EditorLayoutNodeState(GroupOrientation Orientation, IReadOnlyList<EditorLayoutNodeState> Children, IReadOnlyList<double> Weights,
-    IReadOnlyList<string> Files, string? Active);
+    IReadOnlyList<string> Files, string? Active)
+{
+    /// <summary>A group's tabs' states in the order of <see cref="Files"/> (the last session's), or none (the workspace's layout keeps none).</summary>
+    public IReadOnlyList<EditorTabState> Tabs { get; init; } = [];
+
+    /// <summary>The state kept for <paramref name="path"/>'s tab, or null.</summary>
+    public EditorTabState? TabOf(string path)
+    {
+        foreach (var tab in Tabs)
+        {
+            if (Core.Workspaces.PathKeys.Comparer.Equals(tab.Path, path))
+            {
+                return tab;
+            }
+        }
+
+        return null;
+    }
+}
+
+/// <summary>
+/// A tab as the last session left it (X part 9): its file, its pin, its selection, its scroll offsets and its folded
+/// lines (each a fold's first line).
+/// </summary>
+/// <param name="Path">Its file.</param>
+public sealed record EditorTabState(string Path)
+{
+    /// <summary>Whether it was pinned.</summary>
+    public bool Pinned { get; init; }
+
+    /// <summary>Its selection (the caret where it was).</summary>
+    public SelectionState Selection { get; init; }
+
+    /// <summary>Its horizontal scroll offset.</summary>
+    public float ScrollX { get; init; }
+
+    /// <summary>Its vertical scroll offset.</summary>
+    public float ScrollY { get; init; }
+
+    /// <summary>The first lines of its folds, in order.</summary>
+    public IReadOnlyList<int> Folds { get; init; } = [];
+}
 
 /// <summary>The editor area's layout as kept per workspace: the tree of groups and the focused group's number (from 0).</summary>
 /// <param name="Root">The layout's root.</param>
@@ -846,6 +902,7 @@ public sealed class EditorLayoutFile
     public const string FileName = "editor-layout.json";
 
     private readonly object _writing = new();
+    private readonly bool _outside;
     private long _version;
     private long _written;
 
@@ -855,6 +912,19 @@ public sealed class EditorLayoutFile
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         Root = Path.GetFullPath(root);
         FilePath = Path.Combine(Root, Core.Settings.CraftSettings.WorkspaceFolderName, FileName);
+    }
+
+    /// <summary>
+    /// A layout of the workspace <paramref name="root"/> kept at <paramref name="filePath"/> (X part 9: the last session, in
+    /// the user's data folder), its tabs' states written too.
+    /// </summary>
+    public EditorLayoutFile(string root, string filePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        Root = Path.GetFullPath(root);
+        FilePath = Path.GetFullPath(filePath);
+        _outside = true;
     }
 
     /// <summary>The workspace's folder.</summary>
@@ -914,6 +984,11 @@ public sealed class EditorLayoutFile
         {
             writer.WriteStartObject();
             writer.WriteNumber("version", 1);
+            if (_outside)
+            {
+                writer.WriteString("workspace", Root);          // the session's file names its workspace (never the workspace's own file)
+            }
+
             writer.WriteNumber("focused", state.Focused);
             writer.WritePropertyName("root");
             WriteNode(writer, state.Root);
@@ -938,6 +1013,39 @@ public sealed class EditorLayoutFile
             if (node.Active is { } active)
             {
                 writer.WriteString("active", Relative(active));
+            }
+
+            if (node.Tabs.Count > 0)
+            {
+                writer.WriteStartArray("tabs");
+                foreach (var tab in node.Tabs)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("file", Relative(tab.Path));
+                    if (tab.Pinned)
+                    {
+                        writer.WriteBoolean("pinned", true);
+                    }
+
+                    writer.WriteNumber("anchor", tab.Selection.Anchor);
+                    writer.WriteNumber("caret", tab.Selection.Caret);
+                    writer.WriteNumber("scrollX", Math.Round(tab.ScrollX, 1));
+                    writer.WriteNumber("scrollY", Math.Round(tab.ScrollY, 1));
+                    if (tab.Folds.Count > 0)
+                    {
+                        writer.WriteStartArray("folds");
+                        foreach (int line in tab.Folds)
+                        {
+                            writer.WriteNumberValue(line);
+                        }
+
+                        writer.WriteEndArray();
+                    }
+
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
             }
         }
         else
@@ -999,8 +1107,47 @@ public sealed class EditorLayoutFile
         }
 
         string? activeFile = element.TryGetProperty("active", out var a) && a.GetString() is { Length: > 0 } active ? Absolute(active) : null;
-        return new EditorLayoutNodeState(GroupOrientation.Row, [], [], files, activeFile);
+        var tabs = new List<EditorTabState>();
+        if (element.TryGetProperty("tabs", out var kept) && kept.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var tab in kept.EnumerateArray())
+            {
+                if (tab.ValueKind != JsonValueKind.Object || !tab.TryGetProperty("file", out var file) || file.GetString() is not { Length: > 0 } name)
+                {
+                    continue;
+                }
+
+                var folds = new List<int>();
+                if (tab.TryGetProperty("folds", out var lines) && lines.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var line in lines.EnumerateArray())
+                    {
+                        if (line.TryGetInt32(out int number) && number >= 0)
+                        {
+                            folds.Add(number);
+                        }
+                    }
+                }
+
+                tabs.Add(new EditorTabState(Absolute(name))
+                {
+                    Pinned = tab.TryGetProperty("pinned", out var pinned) && pinned.ValueKind == JsonValueKind.True,
+                    Selection = new SelectionState(Whole(tab, "anchor"), Whole(tab, "caret")),
+                    ScrollX = Offset(tab, "scrollX"),
+                    ScrollY = Offset(tab, "scrollY"),
+                    Folds = folds,
+                });
+            }
+        }
+
+        return new EditorLayoutNodeState(GroupOrientation.Row, [], [], files, activeFile) { Tabs = tabs };
     }
+
+    private static int Whole(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.TryGetInt32(out int number) ? Math.Max(0, number) : 0;
+
+    private static float Offset(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.TryGetDouble(out double number) && double.IsFinite(number) ? (float)Math.Max(0, number) : 0;
 
     private string Relative(string path)
     {

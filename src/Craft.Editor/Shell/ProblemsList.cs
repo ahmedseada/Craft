@@ -9,10 +9,22 @@ namespace Craft.Editor.Shell;
 /// <summary>A document's problems for the Problems list: its key (its path, or its title), its title, its text and its diagnostics, and what it belongs to.</summary>
 /// <param name="Key">What tells it from the others (its full path, or its title for a new document).</param>
 /// <param name="Title">Its name as the list shows it and the copy writes it ("Program.cs").</param>
-/// <param name="Snapshot">The text the diagnostics are in.</param>
+/// <param name="Snapshot">The text the diagnostics are in, or null for a closed file's (<see cref="Lines"/>).</param>
 /// <param name="Diagnostics">Its diagnostics (the hidden ones are left out).</param>
 /// <param name="Owner">What the page finds it by (its tab), or null.</param>
-public sealed record ProblemSource(string Key, string Title, ITextSnapshot Snapshot, IReadOnlyList<EditorDiagnostic> Diagnostics, object? Owner = null);
+public sealed record ProblemSource(string Key, string Title, ITextSnapshot? Snapshot, IReadOnlyList<EditorDiagnostic> Diagnostics, object? Owner = null)
+{
+    /// <summary>A closed file's problems by line and column (W, contract 6: no text read), used when <see cref="Snapshot"/> is null.</summary>
+    public IReadOnlyList<FileDiagnostic> Lines { get; init; } = [];
+
+    /// <summary>The problems of the closed file <paramref name="path"/>, by line and column, its title its name.</summary>
+    public static ProblemSource ForClosedFile(string path, IReadOnlyList<FileDiagnostic> lines, object? owner = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(lines);
+        return new ProblemSource(path, Path.GetFileName(path), null, [], owner) { Lines = lines };
+    }
+}
 
 /// <summary>A file's header in the Problems list: its title, its count, whether it is folded.</summary>
 public sealed class ProblemGroup
@@ -22,6 +34,7 @@ public sealed class ProblemGroup
         Key = key;
         Title = title;
         Owner = owner;
+        Icon = FileIcons.For(key);
     }
 
     /// <summary>Its source's key.</summary>
@@ -29,6 +42,9 @@ public sealed class ProblemGroup
 
     /// <summary>Its title.</summary>
     public string Title { get; }
+
+    /// <summary>Its file's icon (W: the tree's, by the file's name), drawn before the header.</summary>
+    public FileIcon Icon { get; }
 
     /// <summary>Its source's owner.</summary>
     public object? Owner { get; internal set; }
@@ -99,6 +115,7 @@ public sealed class ProblemItem
 public sealed class ProblemsList : PanelList
 {
     private const string FixTitle = "Fix";
+    private const string BuildFixTitle = "Fix with AI";
     private const string ExplainTitle = "Explain";
     private readonly List<ProblemGroup> _groups = [];
     private readonly List<object> _rows = [];
@@ -148,6 +165,12 @@ public sealed class ProblemsList : PanelList
         int left = Math.Max(0, limit);
         foreach (var source in sources)
         {
+            if (source.Snapshot is null)
+            {
+                ListClosed(source, groups, ref count, ref errors, ref left);
+                continue;
+            }
+
             var shown = new List<EditorDiagnostic>();
             foreach (var diagnostic in source.Diagnostics)
             {
@@ -231,6 +254,45 @@ public sealed class ProblemsList : PanelList
         return true;
     }
 
+    // A closed file's problems (W, contract 6): by line and column as published, no position in a text.
+    private void ListClosed(ProblemSource source, List<ProblemGroup> groups, ref int count, ref int errors, ref int left)
+    {
+        var shown = new List<FileDiagnostic>();
+        foreach (var item in source.Lines)
+        {
+            if (item.Severity != DiagnosticSeverity.Hidden)
+            {
+                shown.Add(item);
+            }
+        }
+
+        if (shown.Count == 0)
+        {
+            return;
+        }
+
+        shown.Sort(static (a, b) => a.Severity != b.Severity ? b.Severity.CompareTo(a.Severity) : a.Line != b.Line ? a.Line.CompareTo(b.Line) : a.Column.CompareTo(b.Column));
+        count += shown.Count;
+        var group = new ProblemGroup(source.Key, source.Title, source.Owner)
+        {
+            Collapsed = _collapsed.Contains(source.Key),
+            Header = string.Create(CultureInfo.InvariantCulture, $"{source.Title}  {shown.Count}"),
+        };
+        foreach (var item in shown)
+        {
+            errors += item.Severity == DiagnosticSeverity.Error ? 1 : 0;
+            if (left == 0)
+            {
+                continue;
+            }
+
+            group.Items.Add(new ProblemItem(group, new EditorDiagnostic(0, 0, item.Severity, item.Id, item.Message), Math.Max(1, item.Line), Math.Max(1, item.Column), -1));
+            left--;
+        }
+
+        groups.Add(group);
+    }
+
     /// <summary>Folds or unfolds <paramref name="group"/>'s rows (kept across updates by its file).</summary>
     public void Toggle(ProblemGroup group)
     {
@@ -275,7 +337,7 @@ public sealed class ProblemsList : PanelList
                 Toggle(group);
                 break;
             case ProblemItem item:
-                if (HasActions && (index == Hover || ReferenceEquals(item, Selection.Focus)) && ButtonAt(metrics, viewX, width) is { } kind)
+                if (HasActions && (index == Hover || ReferenceEquals(item, Selection.Focus)) && ButtonAt(metrics, viewX, width, FixTitleOf(item)) is { } kind)
                 {
                     ActionRequested?.Invoke(this, (item, kind));
                     return;
@@ -336,6 +398,8 @@ public sealed class ProblemsList : PanelList
         var text = new TextStyle(colors.Text);
         var quiet = new TextStyle(colors.SecondaryText);
         canvas.FillRect(0, 0, width, height, colors.Surface);
+        bool dark = ColorContrast.Luminance(colors.Surface) < 0.18;
+        float icon = MathF.Min(metrics.LineHeight, 16);
         var (first, last) = Visible(metrics, scrollY, height);
         for (int index = first; index <= last; index++)
         {
@@ -346,7 +410,8 @@ public sealed class ProblemsList : PanelList
                 case ProblemGroup group:
                     canvas.FillRect(0, top, width, rowHeight, RowFill(colors, index == Hover, false));
                     canvas.DrawText(group.Collapsed ? "▸" : "▾", cell, y, quiet);
-                    canvas.DrawText(group.Header, 3 * cell, y, text);
+                    FileIconDrawing.Draw(canvas, group.Icon, 3 * cell, top + ((rowHeight - icon) / 2), icon, false, dark);
+                    canvas.DrawText(group.Header, (4 * cell) + icon, y, text);
                     break;
                 case ProblemItem item:
                     bool picked = Selection.Contains(item);
@@ -362,14 +427,15 @@ public sealed class ProblemsList : PanelList
                     canvas.DrawText(item.Text, 5 * cell, y, text);
                     // The place at the right, over the message's end; the buttons on the hovered or keyboard's row.
                     bool buttons = HasActions && (index == Hover || ReferenceEquals(item, Selection.Focus));
-                    float right = buttons ? ButtonsLeft(cell, width) : width - cell;
+                    string fix = FixTitleOf(item);
+                    float right = buttons ? ButtonsLeft(cell, width, fix) : width - cell;
                     float place = right - ((item.Place.Length + 2) * cell);
                     canvas.FillRect(place - cell, top, width - place + cell, rowHeight, fill);
                     canvas.DrawText(item.Place, place, y, quiet);
                     if (buttons)
                     {
-                        DrawButton(canvas, colors, FixTitle, ButtonsLeft(cell, width), top, rowHeight, cell, y);
-                        DrawButton(canvas, colors, ExplainTitle, ButtonsLeft(cell, width) + ((FixTitle.Length + 3) * cell), top, rowHeight, cell, y);
+                        DrawButton(canvas, colors, fix, ButtonsLeft(cell, width, fix), top, rowHeight, cell, y);
+                        DrawButton(canvas, colors, ExplainTitle, ButtonsLeft(cell, width, fix) + ((fix.Length + 3) * cell), top, rowHeight, cell, y);
                     }
 
                     if (picked && ReferenceEquals(item, Selection.Focus))
@@ -383,19 +449,29 @@ public sealed class ProblemsList : PanelList
     }
 
     /// <summary>The code action kind of the button at <paramref name="viewX"/> on a row with buttons, or null.</summary>
-    public static string? ButtonAt(FontMetrics metrics, float viewX, float width)
+    public static string? ButtonAt(FontMetrics metrics, float viewX, float width) => ButtonAt(metrics, viewX, width, FixTitle);
+
+    /// <summary>
+    /// The code action kind of the button at <paramref name="viewX"/> on a row whose Fix button reads <paramref name="fixTitle"/>
+    /// ("Fix with AI" on a build's row, X part 11), or null.
+    /// </summary>
+    public static string? ButtonAt(FontMetrics metrics, float viewX, float width, string fixTitle)
     {
+        ArgumentNullException.ThrowIfNull(fixTitle);
         float cell = metrics.CellWidth;
-        float left = ButtonsLeft(cell, width);
-        float fixEnd = left + ((FixTitle.Length + 2) * cell);
-        float explainStart = left + ((FixTitle.Length + 3) * cell);
+        float left = ButtonsLeft(cell, width, fixTitle);
+        float fixEnd = left + ((fixTitle.Length + 2) * cell);
+        float explainStart = left + ((fixTitle.Length + 3) * cell);
         float explainEnd = explainStart + ((ExplainTitle.Length + 2) * cell);
         return viewX >= left && viewX < fixEnd ? CodeActionKinds.Fix
             : viewX >= explainStart && viewX < explainEnd ? CodeActionKinds.Explain
             : null;
     }
 
-    private static float ButtonsLeft(float cell, float width) => width - ((FixTitle.Length + ExplainTitle.Length + 6) * cell);
+    private static float ButtonsLeft(float cell, float width, string fixTitle) => width - ((fixTitle.Length + ExplainTitle.Length + 6) * cell);
+
+    /// <summary>What a row's Fix button says: "Fix with AI" on a build's or test's row (X part 11 item 5), else "Fix".</summary>
+    public static string FixTitleOf(ProblemItem item) => (item ?? throw new ArgumentNullException(nameof(item))).Group.Owner is Run.RunProblemFile ? BuildFixTitle : FixTitle;
 
     private static void DrawButton(IEditorCanvas canvas, EditorColors colors, string title, float left, float top, float rowHeight, float cell, float y)
     {

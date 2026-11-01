@@ -246,6 +246,32 @@ public sealed partial class EditorModel
         _hintsStale = true;
     }
 
+    // The visual column of `row` a click at drawn column `drawn` means, past the inlay hints drawn before it there.
+    private float HintedColumn(int row, float drawn)
+    {
+        var snapshot = Snapshot;
+        int index = LineAtRow(Math.Clamp(row, 0, Math.Max(0, RowCount - 1)));
+        var line = snapshot.GetLine(index);
+        var hints = InlayHintsBetween(line.Start, line.End);
+        if (hints.IsEmpty)
+        {
+            return drawn;
+        }
+
+        char[]? buffer = null;
+        try
+        {
+            var text = TextReading.ReadLine(snapshot, line, ref buffer);
+            var wrapped = WordWrap.IsActive ? WordWrap.Line(index, text) : null;
+            int sub = wrapped is { Rows: > 1 } ? Math.Clamp(row - RowOfLine(index), 0, wrapped.Rows - 1) : 0;
+            return new HintColumns(hints, text, line.Start, Options.TabSize, wrapped).FromDrawn((int)MathF.Round(drawn), sub);
+        }
+        finally
+        {
+            TextReading.Return(buffer);
+        }
+    }
+
     private void DisposeHints()
     {
         _hintsTimer?.Dispose();
@@ -256,24 +282,27 @@ public sealed partial class EditorModel
 }
 
 /// <summary>
-/// The columns of one drawn line with its inlay hints (X part 9): a character's or a caret's column moved right by the
-/// cells of the hints before it, so the renderer draws the text, the selection, the carets and the marks after a hint
-/// further right while the editor's own columns stay the text's. A hint is drawn before the character at its position;
-/// a caret at that position is drawn before the hint.
+/// The columns of one drawn line with its inlay hints (X part 9): a character's or a caret's visual column moved right by
+/// the cells of the hints before it on its row, so the renderer draws the text, the selection, the carets and the marks
+/// after a hint further right while the editor's own columns stay the text's. A hint is drawn before the character at its
+/// position; a caret at that position is drawn before the hint. On a wrapped line (main's word wrap) each row is its own:
+/// a hint moves only what follows it on its row, in that row's visual columns (the wrap itself is unchanged).
 /// </summary>
 internal readonly ref struct HintColumns
 {
     private readonly ReadOnlySpan<InlayHint> _hints;
     private readonly ReadOnlySpan<char> _text;
+    private readonly WrappedLine? _wrapped;
     private readonly int _lineStart;
     private readonly int _tabSize;
 
-    public HintColumns(ReadOnlySpan<InlayHint> hints, ReadOnlySpan<char> text, int lineStart, int tabSize)
+    public HintColumns(ReadOnlySpan<InlayHint> hints, ReadOnlySpan<char> text, int lineStart, int tabSize, WrappedLine? wrapped = null)
     {
         _hints = hints;
         _text = text;
         _lineStart = lineStart;
         _tabSize = tabSize;
+        _wrapped = wrapped is { Rows: > 1 } ? wrapped : null;
     }
 
     /// <summary>Whether the line has hints.</summary>
@@ -282,16 +311,51 @@ internal readonly ref struct HintColumns
     /// <summary>The hints of the line.</summary>
     public ReadOnlySpan<InlayHint> Hints => _hints;
 
-    /// <summary>The text column of hint <paramref name="index"/>.</summary>
-    public int ColumnOf(int index) => TextReading.ColumnOf(_text, Math.Clamp(_hints[index].Position - _lineStart, 0, _text.Length), _tabSize);
+    private int IndexOf(int i) => Math.Clamp(_hints[i].Position - _lineStart, 0, _text.Length);
 
-    /// <summary>Where the character at text column <paramref name="column"/> is drawn.</summary>
-    public int Char(int column)
+    /// <summary>The row (of a wrapped line; 0 otherwise) hint <paramref name="i"/> stands on.</summary>
+    public int RowOf(int i) => _wrapped is { } wrapped ? wrapped.RowOf(IndexOf(i)) : 0;
+
+    /// <summary>The visual column on its row of hint <paramref name="i"/> (its text column on a line that does not wrap).</summary>
+    public int ColumnOf(int i)
+    {
+        int column = TextReading.ColumnOf(_text, IndexOf(i), _tabSize);
+        return _wrapped is { } wrapped ? wrapped.VisualColumn(wrapped.RowOf(IndexOf(i)), column) : column;
+    }
+
+    /// <summary>The cells the hints of <paramref name="row"/> take.</summary>
+    public int CellsOn(int row)
+    {
+        int cells = 0;
+        for (int i = 0; i < _hints.Length; i++)
+        {
+            if (RowOf(i) == row)
+            {
+                cells += _hints[i].Cells;
+            }
+        }
+
+        return cells;
+    }
+
+    /// <summary>Where the character at visual column <paramref name="column"/> of <paramref name="row"/> is drawn.</summary>
+    public int Char(int column, int row = 0) => column + Shift(column, row, inclusive: true);
+
+    /// <summary>Where a caret at visual column <paramref name="column"/> of <paramref name="row"/> is drawn (before a hint at its own column).</summary>
+    public int Caret(int column, int row = 0) => column + Shift(column, row, inclusive: false);
+
+    private int Shift(int column, int row, bool inclusive)
     {
         int shift = 0;
         for (int i = 0; i < _hints.Length; i++)
         {
-            if (ColumnOf(i) > column)
+            if (RowOf(i) != row)
+            {
+                continue;
+            }
+
+            int at = ColumnOf(i);
+            if (inclusive ? at > column : at >= column)
             {
                 break;
             }
@@ -299,32 +363,20 @@ internal readonly ref struct HintColumns
             shift += _hints[i].Cells;
         }
 
-        return column + shift;
+        return shift;
     }
 
-    /// <summary>Where a caret at text column <paramref name="column"/> is drawn (before a hint at its own column).</summary>
-    public int Caret(int column)
+    /// <summary>The visual column of <paramref name="row"/> drawn at <paramref name="drawn"/> (a click's), the hint's own place when it falls on one.</summary>
+    public int FromDrawn(int drawn, int row = 0)
     {
         int shift = 0;
         for (int i = 0; i < _hints.Length; i++)
         {
-            if (ColumnOf(i) >= column)
+            if (RowOf(i) != row)
             {
-                break;
+                continue;
             }
 
-            shift += _hints[i].Cells;
-        }
-
-        return column + shift;
-    }
-
-    /// <summary>The text column drawn at <paramref name="drawn"/> (a click's), the nearer side of a hint it falls on.</summary>
-    public int FromDrawn(int drawn)
-    {
-        int shift = 0;
-        for (int i = 0; i < _hints.Length; i++)
-        {
             int column = ColumnOf(i);
             int start = column + shift;
             if (drawn < start)

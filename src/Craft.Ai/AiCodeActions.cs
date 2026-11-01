@@ -138,6 +138,17 @@ public sealed class AiCodeActions : ICodeActionProvider
         _chat.AskAsync("Write unit tests for the selected code, in the project's test style, in one fenced block.", token,
             $"The code, from {DocumentName(document)}:\n```\n{document.Document.Buffer.Current.GetText(start, end - start)}\n```");
 
+    /// <summary>
+    /// Fix for <paramref name="diagnostic"/> of <paramref name="document"/> (X part 11: a failed build's one error): its
+    /// lines rewritten by the chat's model and proposed as a diff; true when the user accepted it.
+    /// </summary>
+    public async Task<bool> FixProblemAsync(IEditorDocument document, EditorDiagnostic diagnostic, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        await FixAsync(document, diagnostic, cancellationToken).ConfigureAwait(true);
+        return LastAccepted == true;
+    }
+
     private Task FixAsync(IEditorDocument document, EditorDiagnostic diagnostic, CancellationToken token)
     {
         var (start, end) = Lines(document.Document.Buffer.Current, diagnostic.Start, diagnostic.End);
@@ -147,6 +158,7 @@ public sealed class AiCodeActions : ICodeActionProvider
     // The lines of [start, end) rewritten by the chat model, proposed as a diff the user accepts.
     private async Task RewriteAsync(IEditorDocument document, int start, int end, string instruction, string title, CancellationToken token)
     {
+        LastAccepted = null;
         var snapshot = document.Document.Buffer.Current;
         (start, end) = Lines(snapshot, start, end);
         string original = snapshot.GetText(start, end - start);

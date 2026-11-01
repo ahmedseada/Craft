@@ -120,7 +120,14 @@ public sealed class AiCommitMessages(Func<AiSettings> settings, AiModels models)
 
     // The loaded role a choice takes: "loaded" the first loaded of chat, agent, completion; a role's key that role when
     // loaded; a model's name the first loaded role whose model it is. Null when none.
-    private string? RoleFor(AiSettings now, string choice)
+    private string? RoleFor(AiSettings now, string choice) => LoadedRole(now, models, choice);
+
+    /// <summary>
+    /// The loaded role <paramref name="choice"/> takes ("loaded": the first loaded of chat, agent, completion; a role's key:
+    /// that role when loaded; a model's name: the first loaded role whose model it is), or null when none (X part 8; the
+    /// review's choice, X part 11, reads it the same way).
+    /// </summary>
+    internal static string? LoadedRole(AiSettings now, AiModels models, string choice)
     {
         switch (choice.ToLowerInvariant())
         {
@@ -150,7 +157,7 @@ public sealed class AiCommitMessages(Func<AiSettings> settings, AiModels models)
         }
     }
 
-    private static string Title(string role) => role switch
+    internal static string Title(string role) => role switch
     {
         ModelRoleKeys.Chat => "Chat",
         ModelRoleKeys.Agent => "Agent",

@@ -265,6 +265,33 @@ public sealed record AiSettings
     /// <summary>The largest image a chat may carry, MB (<c>chatImageMaxMb</c>); a larger one dropped on the chat is not added, said so.</summary>
     public int ChatImageMaxMegabytes { get; init; } = 20;
 
+    /// <summary>Whether Ctrl+I opens the inline chat in the editor (<c>inlineChat</c>, X part 9 item 23); off: the box says so.</summary>
+    public bool InlineChat { get; init; } = true;
+
+    /// <summary>The lines of the file before and after the inline chat's lines its model is given (<c>inlineChatContextLines</c>).</summary>
+    public int InlineChatContextLines { get; init; } = 40;
+
+    /// <summary>The most tokens an inline chat's answer takes (<c>inlineChatMaxTokens</c>); 0: the chat role's reply limit.</summary>
+    public int InlineChatMaxTokens { get; init; }
+
+    /// <summary>
+    /// The model that reviews changes before a commit (<c>reviewModel</c>, X part 11 item 4): chat (the default), agent,
+    /// completion, loaded (the first loaded of the three), or a model's name; only a model already loaded reviews.
+    /// </summary>
+    public string ReviewModel { get; init; } = ModelRoleKeys.Chat;
+
+    /// <summary>The instructions a review is written with (<c>reviewPrompt</c>); empty: the plug-in's own.</summary>
+    public string ReviewPrompt { get; init; } = "";
+
+    /// <summary>The most tokens a review's reply takes (<c>reviewMaxTokens</c>); 0: the role's reply limit.</summary>
+    public int ReviewMaxTokens { get; init; }
+
+    /// <summary>Whether a failed build or test offers "Fix with AI" (<c>buildFix</c>, X part 11 item 5).</summary>
+    public bool BuildFix { get; init; } = true;
+
+    /// <summary>The lines of code before and after each error the build fix sends (<c>buildFixContextLines</c>).</summary>
+    public int BuildFixContextLines { get; init; } = 8;
+
     /// <summary>The chat's model settings, resolved (note 25).</summary>
     public AiRoleSettings ChatRole => new(ModelRoleKeys.Chat, ChatEnabled, Model.Trim(), DeviceOf(Device), Context, WeightsOf(Weights), KeepAliveMinutes, ChatTemperature, ChatMaxTokens)
     {
@@ -385,6 +412,14 @@ public sealed record AiSettings
         new("agentSaveOnAccept", "true", "Save an existing file's accepted agent change to the workspace at once (never over your own unsaved edits)."),
         new("agentNudges", "2", "Corrections in a row the agent sends when the model writes tool calls it cannot read (0-20); 0: none, the run ends."),
         new("agentCallsInText", "true", "Read tool calls the model writes as text (markdown fences, JSON) naming an offered tool; off: only its template's format."),
+        new("inlineChat", "true", "Ctrl+I opens the inline chat in the editor: the chat's loaded model rewrites the lines, shown as a ghost diff to accept."),
+        new("inlineChatContextLines", "40", "Lines of the file before and after the inline chat's lines its model is given."),
+        new("inlineChatMaxTokens", "0", "The most tokens an inline chat's answer takes; 0: the chat's reply limit."),
+        new("reviewModel", "chat", "The model that reviews changes before a commit (Source Control's Review changes): chat, agent, completion, loaded (the first loaded), or a model's name; only a loaded model reviews."),
+        new("reviewPrompt", "", "The instructions a review is written with (empty: the plug-in's own)."),
+        new("reviewMaxTokens", "0", "The most tokens a review's reply takes; 0: the role's reply limit."),
+        new("buildFix", "true", "A failed build or test offers Fix with AI in the Run view and on its Problems rows (one error to the chat's model, several to the agent)."),
+        new("buildFixContextLines", "8", "Lines of code before and after each error the build fix sends."),
     ];
 
     /// <summary>The settings from the environment (a process outside the app).</summary>
@@ -511,6 +546,14 @@ public sealed record AiSettings
             AgentSaveOnAccept = Flag("agentSaveOnAccept", defaults.AgentSaveOnAccept),
             AgentNudges = Whole("agentNudges", defaults.AgentNudges, 0, 20),
             AgentCallsInText = Flag("agentCallsInText", defaults.AgentCallsInText),
+            InlineChat = Flag("inlineChat", defaults.InlineChat),
+            InlineChatContextLines = Whole("inlineChatContextLines", defaults.InlineChatContextLines, 0, 100_000),
+            InlineChatMaxTokens = Whole("inlineChatMaxTokens", 0, 0, 1_000_000),
+            ReviewModel = Text("reviewModel") ?? defaults.ReviewModel,
+            ReviewPrompt = Text("reviewPrompt") ?? "",
+            ReviewMaxTokens = Whole("reviewMaxTokens", 0, 0, 1_000_000),
+            BuildFix = Flag("buildFix", defaults.BuildFix),
+            BuildFixContextLines = Whole("buildFixContextLines", defaults.BuildFixContextLines, 0, 10_000),
         };
     }
 }

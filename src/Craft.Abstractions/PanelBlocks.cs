@@ -417,6 +417,9 @@ public sealed record PanelResultGroup(string Id, string Title, IReadOnlyList<Pan
     /// <summary>An icon before the title (SVG path data), when there is no <see cref="Glyph"/>, or null.</summary>
     public string? Icon { get; init; }
 
+    /// <summary>The file's icon before the title (W: drawn where the view can, over <see cref="Glyph"/>), or null.</summary>
+    public FileIcon? FileIcon { get; init; }
+
     /// <summary>Whether its rows are folded under its header.</summary>
     public bool Collapsed { get; init; }
 

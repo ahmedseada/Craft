@@ -31,6 +31,7 @@ public sealed partial class EditorModel
     private bool _lensRowsDirty = true;
     private int _lensRowsFolds = -1;
     private int _lensRowsLineCount = -1;
+    private bool _lensRowsWrapping;
     private readonly Dictionary<int, LensRow> _lensRowText = [];
     private int _lensResolveFrom = -1;
     private int _lensResolveTo = -1;
@@ -101,7 +102,7 @@ public sealed partial class EditorModel
     {
         EnsureLensRows();
         var rows = _lensBaseRows;
-        if (rows.Length == 0)
+        if (rows.Length == 0 || WordWrap.IsActive)
         {
             return TextLineAt(row);
         }
@@ -130,6 +131,22 @@ public sealed partial class EditorModel
         return TextLineAt(row - low);
     }
 
+    // A vertical move's target row stepped past lens rows in its direction (they hold no text).
+    private int SkipLensRows(int row, int direction)
+    {
+        if (_lensLines.Length == 0 || direction == 0)
+        {
+            return row;
+        }
+
+        while (row >= 0 && row < RowCount && IsLensRow(row))
+        {
+            row += direction;
+        }
+
+        return row;
+    }
+
     /// <summary>Whether <paramref name="row"/> of the view is a lens row (the line below it then is <see cref="LineAtRow"/>).</summary>
     public bool IsLensRow(int row)
     {
@@ -141,17 +158,20 @@ public sealed partial class EditorModel
     private void EnsureLensRows()
     {
         var snapshot = Snapshot;
-        if (!_lensRowsDirty && _lensRowsFolds == FoldsStamp && _lensRowsLineCount == snapshot.LineCount)
+        bool wrapping = WordWrap.IsActive;
+        if (!_lensRowsDirty && _lensRowsFolds == FoldsStamp && _lensRowsLineCount == snapshot.LineCount && _lensRowsWrapping == wrapping)
         {
             return;
         }
 
         _lensRowsDirty = false;
+        _lensRowsWrapping = wrapping;
         _lensRowsFolds = FoldsStamp;
         _lensRowsLineCount = snapshot.LineCount;
         _lensRowText.Clear();
-        if (_lenses.Length == 0 || !Options.CodeLens)
+        if (_lenses.Length == 0 || !Options.CodeLens || wrapping)
         {
+            // While word wrap is on, the rows are the wrap's (main's, unchanged): lenses wait for it to be off (left for later).
             _lensLines = [];
             _lensBaseRows = [];
             return;

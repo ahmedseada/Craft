@@ -413,6 +413,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
         _documents.Add(open);
         document.Buffer.Changed += open.OnBufferChanged;
         WatchLineMarks(open);
+        ApplyClosedDiagnostics(open);
         Raise(_opened, new EditorDocumentEventArgs(open), nameof(DocumentOpened));
         if (_activeDocument is null)
         {
@@ -432,6 +433,7 @@ public sealed partial class EditorHost : IEditorHost, IEditorKeyHandler, IDispos
 
         open.Document.Buffer.Changed -= open.OnBufferChanged;
         UnwatchLineMarks(open);
+        KeepClosedDiagnostics(open);
         open.IsClosed = true;
         Raise(_closed, new EditorDocumentEventArgs(open), nameof(DocumentClosed));
         if (ReferenceEquals(_activeDocument, open))

@@ -52,7 +52,7 @@ public sealed record RunProblemFile(string Path, ITextSnapshot Snapshot, IReadOn
 /// compilers' <c>file(line,col): error CODE:</c> lines go to Problems. No debugging. Headless; every member is called on
 /// the UI thread.
 /// </summary>
-public sealed class RunView : IEditorViewPanel, IDisposable
+public sealed partial class RunView : IEditorViewPanel, IDisposable
 {
     /// <summary>Its panel id (and its rail item's).</summary>
     public const string PanelId = "craft.run";
@@ -90,6 +90,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _host.DocumentSaved += OnDocumentSaved;
         RunProviders.Changed += OnProvidersChanged;
+        BuildFixProviders.Changed += OnFixProvidersChanged;
         Publish();
     }
 
@@ -330,11 +331,53 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 var built = await StepAsync(item, provider, target, RunActions.Build, configuration, root, cancellationToken).ConfigureAwait(true);
                 if (built.End != RunEnd.Succeeded)
                 {
+                    NoteOutcome(configuration, RunActions.Build, built);
                     return built;
                 }
             }
 
-            return await StepAsync(item, provider, target, configuration.Action, configuration, root, cancellationToken).ConfigureAwait(true);
+            var outcome = await StepAsync(item, provider, target, configuration.Action, configuration, root, cancellationToken).ConfigureAwait(true);
+            NoteOutcome(configuration, configuration.Action, outcome);
+            return outcome;
+        }
+        finally
+        {
+            _running.Remove(name);
+            item.Dispose();
+            Changed2();
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="command"/> (another view's: the Test explorer's <c>dotnet test</c>) as a run named
+    /// <paramref name="name"/>: approved by the user, through the registered sandbox, its output in its own terminal tab
+    /// ("Test: NAME"), an activity whose Cancel (and Stop) ends its tree, its compilers' problems in Problems; each output
+    /// line also handed to <paramref name="tap"/> (on the sandbox's thread). It never takes the keyboard.
+    /// </summary>
+    public async Task<RunOutcome> RunCommandAsync(string name, RunCommand command, RunActions action, Action<string>? tap = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(command);
+        if (_root() is not { } root)
+        {
+            return NotStarted("Open a folder to run what it holds.");
+        }
+
+        if (_running.ContainsKey(name))
+        {
+            string why = $"'{name}' runs already: stop it first (Shift+F5).";
+            Say(why, NotificationSeverity.Information);
+            return NotStarted(why);
+        }
+
+        var item = new RunningItem(name);
+        _running[name] = item;
+        Changed2();
+        try
+        {
+            var target = new RunTarget(CommandOnly.ProviderName, name, name, "", action);
+            var configuration = new RunConfiguration(name, CommandOnly.ProviderName, name) { Action = action, Interactive = RunInteractive.Off };
+            return await StepAsync(item, CommandOnly.Instance, target, action, configuration, root, cancellationToken, command, tap).ConfigureAwait(true);
         }
         finally
         {
@@ -579,6 +622,19 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 _draft = null;
                 Publish();
                 break;
+            case FixWithAiAction:
+                await FixWithAiAsync(null, cancellationToken).ConfigureAwait(true);
+                break;
+            case StopFixAction:
+                if (_fixing is { } fixing)
+                {
+                    await fixing.CancelAsync().ConfigureAwait(true);
+                }
+
+                break;
+            case RunAgainAction:
+                await RunAgainAsync(cancellationToken).ConfigureAwait(true);
+                break;
         }
     }
 
@@ -593,6 +649,8 @@ public sealed class RunView : IEditorViewPanel, IDisposable
         _disposed = true;
         _host.DocumentSaved -= OnDocumentSaved;
         RunProviders.Changed -= OnProvidersChanged;
+        BuildFixProviders.Changed -= OnFixProvidersChanged;
+        _fixing?.Cancel();
         _watch?.Dispose();
         _finding?.Cancel();
         _finding?.Dispose();
@@ -603,7 +661,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
     // ---- one step of a run: approve, sandbox, terminal, activity, problems ----
 
     private async Task<RunOutcome> StepAsync(RunningItem item, IRunProvider provider, RunTarget target, RunActions action, RunConfiguration configuration, string root, CancellationToken cancellationToken,
-        RunCommand? given = null)
+        RunCommand? given = null, Action<string>? tap = null)
     {
         var options = _options();
         var command = given ?? provider.Command(target, action, configuration, root);
@@ -692,6 +750,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                 }
 
                 output.Line(text, error);
+                tap?.Invoke(text);
                 item.Activity?.Report(null, text.Length <= 80 ? text.Trim() : string.Concat(text.AsSpan(0, 79), "…").Trim());
             },
         };
@@ -1248,6 +1307,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
             new PanelButton("Add configuration", "run.add", PanelButtonKind.Flat) { Icon = RailIcons.Add, Enabled = _targets.Count > 0, Tooltip = "A configuration: arguments, variables, folder, build first; saved in .craft/run.json" },
             new PanelButton("Refresh", "run.refresh", PanelButtonKind.Flat) { Icon = RailIcons.Refresh, Tooltip = "Find again what the workspace runs" },
         ]));
+        AddFailure(blocks);
         foreach (var problem in _providerProblems)
         {
             blocks.Add(new PanelText(problem, PanelTextStyle.Secondary) { Tone = PanelTone.Warning });
@@ -1416,6 +1476,7 @@ public sealed class RunView : IEditorViewPanel, IDisposable
                     Badge = rows.Count.ToString(Culture),
                     Glyph = icon.Badge,
                     GlyphArgb = icon.Argb,
+                    FileIcon = icon,
                     Tooltip = provider.Summary,
                 });
             }
@@ -1426,6 +1487,27 @@ public sealed class RunView : IEditorViewPanel, IDisposable
 
     // A configuration being edited in the view (Original: the name it had, null for a new one).
     private sealed record Draft(string? Original, string Name, string Target, string Action, string Arguments, string Environment, string Folder, bool BuildFirst, string Interactive);
+
+    // The provider of a command another view hands over (RunCommandAsync): its problems read as MSBuild's, its command given.
+    private sealed class CommandOnly : IRunProvider
+    {
+        public const string ProviderName = "command";
+
+        public static readonly CommandOnly Instance = new();
+
+        public string Name => ProviderName;
+
+        public string Title => "Command";
+
+        public string Summary => "a command another view hands to the Run view";
+
+        public bool Watches(ReadOnlySpan<char> fileName) => false;
+
+        public IReadOnlyList<RunTarget> Find(RunWorkspace workspace, CancellationToken cancellationToken = default) => [];
+
+        public RunCommand Command(RunTarget target, RunActions action, RunConfiguration? configuration, string root) =>
+            RunCommand.Unavailable("A handed command has no command of its own.", root);
+    }
 
     // A run under way: its stop and its activity.
     private sealed class RunningItem(string name) : IDisposable

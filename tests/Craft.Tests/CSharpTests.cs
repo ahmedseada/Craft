@@ -603,8 +603,9 @@ public static class PluginTests
             foreach (var (file, name) in ProjectLanguageTests.ProjectFiles)
             {
                 var project = EditorLanguages.ForFile(file);
-                Check.True(project?.Name == name && AssemblyLoadContext.GetLoadContext(project.GetType().Assembly) != AssemblyLoadContext.Default,
-                    $"with the plug-in, {file} opens as {name}, from the plug-in's own context ({project?.Name})");
+                // The language is the public kit's LineStateLanguage (the host's type, phase W); its tokenizer is the plug-in's.
+                Check.True(project is LineStateLanguage { Tokenizer: var tokenizer } && project.Name == name && AssemblyLoadContext.GetLoadContext(tokenizer.GetType().Assembly) != AssemblyLoadContext.Default,
+                    $"with the plug-in, {file} opens as {name}, its tokenizer from the plug-in's own context ({project?.Name})");
             }
 
             Check.True(IdrakPlugins.Unregister("csharp"), "the plug-in unregisters");
@@ -666,6 +667,7 @@ public static class PluginTests
         Check.True(failed.Count == 0, $"every plug-in starts: {string.Join("; ", failed)}");
         Check.Equal("language .cs: csharp", Line("language .cs:"), "with every plug-in loaded, .cs still opens as C# (Craft.CSharp's language survives the plug-ins loaded after it)");
         Check.Equal("language .csx: csharp-script", Line("language .csx:"), "and .csx as a C# script");
+        Check.Equal("language .json: json", Line("language .json:"), "and package.json as JSON, from the JSON plug-in (phase W), not the C# plug-in");
         var idrak = Line("idrak plugins:");
         Check.True(idrak.Contains("csharp=Craft.CSharp", StringComparison.Ordinal), $"Idrak's plug-in registry holds Craft.CSharp's \"csharp\" ({idrak})");
         Check.True(idrak.Contains("csharp-coding=Idrak.Reinforcement.Plugins", StringComparison.Ordinal), $"beside the learning plug-in's C# coding environment under its own name ({idrak})");
@@ -720,7 +722,7 @@ public static class PluginTests
     }
 
     /// <summary>Copies Craft.CSharp's build output (its dll, its deps.json and Roslyn's dlls) into <paramref name="folder"/>.</summary>
-    private static void CopyCSharpPlugin(string folder)
+    internal static void CopyCSharpPlugin(string folder)
     {
         // tests/Craft.Tests/bin/<Configuration>/net10.0/ -> src/Craft.CSharp/bin/<Configuration>/net10.0/
         var testOutput = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));

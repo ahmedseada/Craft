@@ -257,7 +257,12 @@ public sealed partial class EditorModel
             return null;
         }
 
-        int columns = ColumnOf(Snapshot.GetLine(line).End);
+        var (markerRow, columns) = VisualOf(Snapshot.GetLine(line).End);
+        if (markerRow != row)
+        {
+            return null;                                          // a wrapped header's "..." is after its last row
+        }
+
         float column = (viewX + ScrollX - TextLeft) / Metrics.CellWidth;
         return column >= columns + 1 && column < columns + 1 + FoldMarkerColumns ? line : null;
     }

@@ -96,6 +96,14 @@ public static class ProgramTerminalTests
 
         await pipe.WriteAsync("Name? "u8.ToArray());
         await pipe.FlushAsync();
+        string prompt = "";
+        for (var until = DateTime.UtcNow + Wait; DateTime.UtcNow < until && !prompt.Contains("Name?", StringComparison.Ordinal);)
+        {
+            await Task.Delay(10);
+            prompt = Text(program);
+        }
+
+        Check.True(prompt.Contains("Name?", StringComparison.Ordinal), $"the program's prompt reaches the screen before anything is typed ({prompt.Trim()})");
         manager.Input.OnText("Ada");
         Check.True(manager.Input.OnKey(EditorKey.Enter, KeyModifiers.None), "Enter goes to the program's tab");
         for (int i = 0; i < 300 && input.Text != "Ada\n"; i++)

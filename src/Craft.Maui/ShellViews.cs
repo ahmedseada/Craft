@@ -25,14 +25,18 @@ public static class ThemeColors
 /// <param name="Active">Whether it is the active file's row (on the selection's fill).</param>
 /// <param name="FontFamily">The interface's font.</param>
 /// <param name="IsFolder">Whether it is a folder's row.</param>
-/// <param name="Badge">The file type's icon (<see cref="FileIcons"/>, as quick open shows it), or a folder's chevron.</param>
-/// <param name="BadgeColor">The icon's colour.</param>
+/// <param name="Badge">A folder's chevron ("▸", "▾"), or "" for a file.</param>
+/// <param name="BadgeColor">The chevron's colour.</param>
 /// <param name="StateLetter">The file's source control state's letter (X part 8: "M", "U"), or "".</param>
 /// <param name="StateColor">The name's and the letter's colour for that state, or null for the row's own.</param>
 /// <param name="Editing">Whether its name is being typed in place (X part 7: rename, or a new entry's row).</param>
 /// <param name="EditText">The name the field starts with.</param>
+/// <param name="Icon">The file's or the folder's icon (W: <see cref="FileIcons.For"/>, <see cref="FileIcons.ForFolder"/>, as quick open shows it).</param>
+/// <param name="Open">Whether a folder's icon is drawn open.</param>
+/// <param name="Dark">Whether the theme is dark (the icon's colours).</param>
+/// <param name="Dimmed">Whether it is a folder the workspace skips or lies in one (W: node_modules, bin, obj), drawn dimmed.</param>
 public sealed record FolderTreeItem(string Text, Thickness Indent, Color Color, string Path, bool Active, string? FontFamily, bool IsFolder = false, string Badge = "", Color? BadgeColor = null,
-    string StateLetter = "", Color? StateColor = null, bool Editing = false, string EditText = "");
+    string StateLetter = "", Color? StateColor = null, bool Editing = false, string EditText = "", FileIcon? Icon = null, bool Open = false, bool Dark = true, bool Dimmed = false);
 
 /// <summary>
 /// The folder tree (<see cref="FolderTree"/>) as a virtualized list (only the rows on screen are made): a folder's row
@@ -233,6 +237,9 @@ public sealed class FolderTreeView : ContentView
     /// <summary>Raised with a file's full path when its row is picked.</summary>
     public event EventHandler<string>? FileActivated;
 
+    /// <summary>Raised with a file's full path when its row is double-clicked (X part 9: its tab kept, not a preview).</summary>
+    public event EventHandler<string>? FileKept;
+
     /// <summary>
     /// Raised when a row is right-clicked (its item, null for the tree's empty space) with where: the page opens the tree's
     /// context menu (<see cref="EditorContextMenus.Tree"/>) on it.
@@ -262,17 +269,22 @@ public sealed class FolderTreeView : ContentView
         var label = new Label { FontSize = 13, LineBreakMode = LineBreakMode.TailTruncation, Padding = new Thickness(0, 4), VerticalOptions = LayoutOptions.Center };
         label.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Text);
         label.SetBinding(Label.FontFamilyProperty, static (FolderTreeItem item) => item.FontFamily);
-        // The file's icon by its type, as quick open shows it (FileIcons: a plug-in's types too); a folder's chevron.
-        var badge = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, WidthRequest = 22, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center };
+        // A folder's chevron, then the file's or the folder's drawn icon (W: FileIcons, a plug-in's too; quick open's).
+        var badge = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, WidthRequest = 14, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center };
         badge.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.Badge);
         badge.SetBinding(Label.TextColorProperty, static (FolderTreeItem item) => item.BadgeColor);
+        var icon = new FileIconView(16);
+        icon.SetBinding(FileIconView.IconProperty, static (FolderTreeItem item) => item.Icon);
+        icon.SetBinding(FileIconView.OpenProperty, static (FolderTreeItem item) => item.Open);
+        icon.SetBinding(FileIconView.DarkProperty, static (FolderTreeItem item) => item.Dark);
+        var lead = new HorizontalStackLayout { Spacing = 4, VerticalOptions = LayoutOptions.Center, Children = { badge, icon } };
         // X part 8: the file's source control letter at the row's right, in its state's colour.
         var state = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(4, 0, 0, 0) };
         state.SetBinding(Label.TextProperty, static (FolderTreeItem item) => item.StateLetter);
         state.SetBinding(Label.TextColorProperty, static (FolderTreeItem item) => item.StateColor);
         var line = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 4 };
         line.SetBinding(MarginProperty, static (FolderTreeItem item) => item.Indent);
-        line.Add(badge, 0, 0);
+        line.Add(lead, 0, 0);
         line.Add(label, 1, 0);
         line.Add(state, 2, 0);
         // X part 7: the name typed in place (rename, new file, new folder) over the label, on the row's own line.
@@ -325,6 +337,7 @@ public sealed class FolderTreeView : ContentView
             states.Apply(palette);
             states.SetText(item.StateColor);                 // a changed file's name in its state's colour
             states.Selected = item.Active;
+            line.Opacity = item.Dimmed ? 0.5 : 1;             // W: a skipped folder (node_modules) and what is in it, dimmed
             label.IsVisible = !item.Editing;
             field.IsVisible = item.Editing;
             if (item.Editing && !ReferenceEquals(_editor, field))
@@ -355,6 +368,16 @@ public sealed class FolderTreeView : ContentView
             }
         };
         row.GestureRecognizers.Add(open);
+        // X part 9: a double click on a file keeps its tab (a single click previews it).
+        var keep = new TapGestureRecognizer { Buttons = ButtonsMask.Primary, NumberOfTapsRequired = 2 };
+        keep.Tapped += (_, _) =>
+        {
+            if (row.BindingContext is FolderTreeItem { IsFolder: false } item)
+            {
+                FileKept?.Invoke(this, item.Path);
+            }
+        };
+        row.GestureRecognizers.Add(keep);
         var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
         context.Tapped += (_, e) => ContextRequested?.Invoke(this, (row.BindingContext as FolderTreeItem, e));
         row.GestureRecognizers.Add(context);
@@ -444,21 +467,24 @@ public sealed class FolderTreeView : ContentView
             string badge;
             Color badgeColor;
             var state = row.Entry.IsFolder ? null : StateOf?.Invoke(row.Entry.FullPath);
+            FileIcon icon;
             if (row.Entry.IsFolder)
             {
                 badge = row.IsExpanded ? "▾" : "▸";
                 badgeColor = _textColor;
+                icon = FileIcons.ForFolder(row.Entry.Name);
             }
             else
             {
-                var icon = FileIcons.For(row.Entry.Name);
-                badge = icon.Badge;
-                badgeColor = ThemeColors.Of(icon.Argb);
+                badge = "";
+                badgeColor = _textColor;
+                icon = FileIcons.For(row.Entry.Name);
             }
 
             bool editing = _edit is { } edit && string.Equals(edit.RowPath, row.Entry.FullPath, StringComparison.OrdinalIgnoreCase);
             items[i] = new FolderTreeItem(row.Entry.Name, new Thickness(8 + (row.Depth * _indent), 0, 14, 0), _textColor, row.Entry.FullPath,
-                active, _fontFamily, row.Entry.IsFolder, badge, badgeColor, state?.Letter ?? "", state?.Color, editing, editing ? _edit!.Name : "");
+                active, _fontFamily, row.Entry.IsFolder, badge, badgeColor, state?.Letter ?? "", state?.Color, editing, editing ? _edit!.Name : "",
+                icon, row.Entry.IsFolder && row.IsExpanded, Palette?.IsDark ?? true, row.Entry.IsIgnored);
         }
 
         // Only the run that differs is replaced; the rows before and after it stay the same items on screen.
@@ -667,6 +693,9 @@ public sealed class TabStripView : ContentView, IDisposable
     /// <summary>Raised when a pinned tab's pin is clicked (X part 7: the page unpins it).</summary>
     public event EventHandler<DocumentTab>? UnpinRequested;
 
+    /// <summary>Raised when a preview tab is double-clicked (X part 9: the page keeps it).</summary>
+    public event EventHandler<DocumentTab>? KeepRequested;
+
     /// <summary>Raised when the compact switcher's title is clicked (the page lists the tabs).</summary>
     public event EventHandler? ListRequested;
 
@@ -723,6 +752,7 @@ public sealed class TabStripView : ContentView, IDisposable
         else if (_titles.TryGetValue(tab, out var shown))
         {
             shown.Title.Text = tab.Title;
+            shown.Title.FontAttributes = tab.IsPreview ? FontAttributes.Italic : FontAttributes.None;
             shown.Dot.IsVisible = tab.IsDirty;
         }
     }
@@ -791,6 +821,7 @@ public sealed class TabStripView : ContentView, IDisposable
         {
             bool isActive = page is null && ReferenceEquals(tab, _tabs.Active);
             var title = palette.Label(tab.Title, isActive ? palette.Text : palette.Secondary);
+            title.FontAttributes = tab.IsPreview ? FontAttributes.Italic : FontAttributes.None;   // X part 9: a preview tab's title is italic
             var dot = new Ellipse { WidthRequest = 8, HeightRequest = 8, Fill = new SolidColorBrush(palette.Text), IsVisible = tab.IsDirty, VerticalOptions = LayoutOptions.Center };
             View close;
             if (tab.IsPinned)
@@ -814,7 +845,10 @@ public sealed class TabStripView : ContentView, IDisposable
                 close = button;
             }
 
-            var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(14, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { title, dot, close } };
+            // W: the file's drawn icon before its title (the tree's and quick open's).
+            var icon = FileIconView.Of(FileIcons.For(tab.FilePath ?? tab.Title), palette, 15);
+            icon.Opacity = isActive ? 1 : 0.8;
+            var row = new HorizontalStackLayout { Spacing = 8, Padding = new Thickness(12, 0, 6, 0), VerticalOptions = LayoutOptions.Center, Children = { icon, title, dot, close } };
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) =>
             {
@@ -826,6 +860,13 @@ public sealed class TabStripView : ContentView, IDisposable
             var context = new TapGestureRecognizer { Buttons = ButtonsMask.Secondary };
             context.Tapped += (_, e) => ContextRequested?.Invoke(this, (tab, e));
             cell.GestureRecognizers.Add(context);
+            var keep = new TapGestureRecognizer { NumberOfTapsRequired = 2 };
+            keep.Tapped += (_, _) => KeepRequested?.Invoke(this, tab);
+            cell.GestureRecognizers.Add(keep);
+            if (tab.IsPreview)
+            {
+                ToolTipProperties.SetText(cell, (tab.FilePath ?? tab.Title) + "\nPreview: the next file opened from the explorer takes its place; double-click or edit to keep it");
+            }
             Draggable(cell, tab);
             _strip.Children.Add(cell);
         }
@@ -910,6 +951,16 @@ public sealed class MauiShellUi(CraftDialog dialog) : IShellUi
     /// <inheritdoc />
     public Task<int> PickAsync(string title, IReadOnlyList<string> items, CancellationToken cancellationToken = default) => _dialog.PickAsync(title, items, cancellationToken);
 
+    /// <summary>The window's quick-open list for a quick pick (the page sets it); null asks with the dialog's list.</summary>
+    public Func<QuickPickRequest, CancellationToken, Task<int>>? QuickPick { get; set; }
+
+    /// <inheritdoc />
+    public Task<int> QuickPickAsync(QuickPickRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return QuickPick is { } pick ? pick(request, cancellationToken) : _dialog.PickAsync(request.Title, request.Texts(), cancellationToken);
+    }
+
     /// <inheritdoc />
     public Task ShowMessageAsync(string title, string message) => _dialog.ShowMessageAsync(title, message);
 
@@ -976,6 +1027,9 @@ public interface IShellPlatform
 
     /// <summary>The pointer's shape and captured drags (B8: the splitters' resize arrows), or null (MAUI's pan gesture serves).</summary>
     IPointerCursor? PointerCursor => null;
+
+    /// <summary>The window's own full screen (X part 9: F11, Zen mode), or null when the platform has none (the shell says so).</summary>
+    IWindowFullScreen? FullScreen => null;
 
     /// <summary>
     /// The platform's terminal profiles (B9: Windows reads the registry for WSL and Git for Windows), registered in

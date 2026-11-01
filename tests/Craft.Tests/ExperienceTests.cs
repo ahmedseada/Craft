@@ -295,8 +295,8 @@ public static class ExperienceTests
         var one = shell.Tabs.Find(folder.File("one.txt"))!;
         menu.Open(EditorContextMenus.Tab, new ContextMenuTarget(EditorContextMenus.Tab, one.FilePath, false, one));
         Check.SequenceEqual(["Close", "Close others", "Close to the right", "Close saved", "Close all", "Reopen closed tab", "Pin", "Split right", "Split down", "Move to the other group",
-            "Copy name", "Copy path", "Copy relative path", "Reveal in the explorer", "Reveal in Test Files", "Open in terminal", "Format file", "Compare with saved", "Revert file"],
-            menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal) && !r.CommandId.StartsWith("git.", StringComparison.Ordinal)).Select(r => r.Title).ToList(), "the tab's menu (X part 7)");
+            "Copy name", "Copy path", "Copy relative path", "Reveal in the explorer", "Reveal in Test Files", "Open in terminal", "Format file", "Compare with saved", "Revert file", "Open timeline"],
+            menu.Rows.Where(r => !r.CommandId.StartsWith("ai.", StringComparison.Ordinal) && !r.CommandId.StartsWith("git.", StringComparison.Ordinal)).Select(r => r.Title).ToList(), "the tab's menu (X part 7; X part 9's Open timeline, Keep open only on a preview)");
         string? revealed = null;
         shell.RevealRequested += (_, path) => revealed = path;
         await menu.RunAsync(Index(menu, ShellCommandIds.RevealInTree));
@@ -494,7 +494,7 @@ public static class ExperienceTests
     {
         public ShellFixture(TempFolder folder)
         {
-            var settings = new CraftSettings(_ => null, SettingsFile.Load(folder.File("data/settings.json")));
+            var settings = new CraftSettings(folder.Isolated(), SettingsFile.Load(folder.File("data/settings.json")));
             Host = new EditorHost();
             Shell = new ShellModel(Host, settings, RecentList.Load(folder.File("data/recent.json"), 10), new NoDialogs(), Ui, null, Files, Clipboard);
         }

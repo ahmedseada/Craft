@@ -101,6 +101,17 @@ public static class StandardShortcuts
     /// <summary>Fold: Unfold all (Ctrl+K Ctrl+J; Visual Studio: Ctrl+M Ctrl+L and Ctrl+M Ctrl+P).</summary>
     public const string UnfoldAll = "craft.editor.unfoldAll";
 
+    /// <summary>View: Toggle word wrap (Alt+Z; Visual Studio: Ctrl+E Ctrl+W).</summary>
+    public const string ToggleWordWrap = "craft.editor.toggleWordWrap";
+
+    /// <summary>Edit: Trim the trailing white space (one undo step).</summary>
+    public const string TrimTrailingWhitespace = "craft.editor.trimTrailingWhitespace";
+
+    /// <summary>Edit: Inline chat (Ctrl+I, X part 9 item 23): a box at the caret or over the selection, the answer a ghost diff to accept.</summary>
+    public const string InlineChat = "craft.editor.inlineChat";
+    /// <summary>Edit: Format the selection's lines (Ctrl+K Ctrl+F, in VS Code and Visual Studio alike).</summary>
+    public const string FormatSelection = "craft.editor.formatSelection";
+
     /// <summary>Edit: Quick fix (the code actions at the caret).</summary>
     public const string QuickFix = "craft.quickFix";
 
@@ -135,6 +146,10 @@ public static class StandardShortcuts
         (ToggleFold, "Fold: Toggle the fold at the caret", static m => (m.Folding.Unfold(m.CaretLine) || m.Folding.Fold(m.CaretLine)) || true, false),
         (FoldAll, "Fold: Fold all", static m => m.Folding.FoldAll() >= 0, true),
         (UnfoldAll, "Fold: Unfold all", static m => m.Folding.UnfoldAll() || true, true),
+        (ToggleWordWrap, "View: Toggle word wrap", static m => m.ToggleWordWrap(), false),
+        (TrimTrailingWhitespace, "Edit: Trim trailing white space", static m => m.TrimTrailingWhitespace() || true, false),
+        (InlineChat, "Edit: Inline chat (ask the model to edit here)", static m => m.OpenInlineChat(), true),
+        (FormatSelection, "Edit: Format selection", static m => m.FormatSelection(), true),
     ];
 
     /// <summary>
@@ -157,6 +172,7 @@ public static class StandardShortcuts
         Editor("Shift+Alt+Right", ExpandSelection),
         Editor("Shift+Alt+Left", ShrinkSelection),
         Editor("Ctrl+K Ctrl+D", "craft.formatDocument"),
+        Editor("Ctrl+K Ctrl+F", FormatSelection),
         Editor("Ctrl+D", AddNextOccurrence),
         Editor("Ctrl+Shift+L", SelectAllOccurrences),
         Editor("Ctrl+Alt+Up", AddCaretAbove),
@@ -169,6 +185,8 @@ public static class StandardShortcuts
         Editor("Ctrl+Shift+]", Unfold),
         Editor("Ctrl+K Ctrl+0", FoldAll),
         Editor("Ctrl+K Ctrl+J", UnfoldAll),
+        Editor("Alt+Z", ToggleWordWrap),
+        Editor("Ctrl+I", InlineChat),
         Anywhere("Ctrl+.", QuickFix),
         Anywhere("F1", ShellCommandIds.CommandPalette),
         Anywhere("Ctrl+F4", ShellCommandIds.CloseTab),
@@ -204,6 +222,7 @@ public static class StandardShortcuts
         Editor("Ctrl+M Ctrl+O", FoldAll),
         Editor("Ctrl+M Ctrl+L", UnfoldAll),
         Editor("Ctrl+M Ctrl+P", UnfoldAll),
+        Editor("Ctrl+E Ctrl+W", ToggleWordWrap),
         Editor("Ctrl+K Ctrl+/", ToggleComment),
         Editor("Shift+Alt+=", ExpandSelection),
         Editor("Shift+Alt+-", ShrinkSelection),
@@ -220,6 +239,9 @@ public static class StandardShortcuts
         Anywhere("Alt+Enter", QuickFix),
         Editor("Ctrl+R Ctrl+R", ShellCommandIds.RenameSymbol),
         Editor("Alt+\\", ShellCommandIds.GoToSymbol),
+        Anywhere("Ctrl+F2", BookmarkCommands.Toggle),
+        Anywhere("Ctrl+K Ctrl+W", BookmarkCommands.Show),
+        Anywhere("Ctrl+K Ctrl+L", BookmarkCommands.Clear),
     ]);
 
     /// <summary>A binding of <paramref name="keys"/> to <paramref name="commandId"/> in the text editor only.</summary>

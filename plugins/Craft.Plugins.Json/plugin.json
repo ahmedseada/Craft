@@ -1,0 +1,7 @@
+{
+  "name": "Craft.Plugins.Json",
+  "version": "0.1.0",
+  "summary": "JSON: colours, brackets, folding and format of .json and .jsonc files (package.json, tsconfig.json, appsettings.json), comments and trailing commas allowed; their icons [EditorLanguages \"json\", FoldingRangeProviders \"json\"]",
+  "contractVersion": "1.1",
+  "capabilities": []
+}

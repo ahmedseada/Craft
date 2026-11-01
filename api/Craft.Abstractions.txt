@@ -803,6 +803,7 @@ interface Craft.Abstractions.IEditorHost
   Craft.Abstractions.IPluginSettings Settings { get; }
   Craft.Abstractions.SelectionState Selection { get; }
   System.Boolean Select(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.SelectionState selection)
+  System.Boolean ShowUndo(System.String text, System.Action undo, System.Action kept = null)
   System.Boolean TypeText(Craft.Abstractions.IEditorDocument document, System.String text)
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorCommand> Commands { get; }
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.IEditorDocument> Documents { get; }
@@ -819,6 +820,7 @@ interface Craft.Abstractions.IEditorHost
   System.Threading.Tasks.Task<System.Boolean> ProposeAsync(Craft.Abstractions.IEditorDocument document, Craft.Abstractions.ProposedEdits proposal, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Boolean> ProposeEditsAsync(Craft.Abstractions.IEditorDocument document, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.TextEdit> edits, System.String title, System.Threading.CancellationToken cancellationToken = null)
   System.Threading.Tasks.Task<System.Int32> AskAsync(Craft.Abstractions.EditorQuestion question, System.Threading.CancellationToken cancellationToken = null)
+  System.Threading.Tasks.Task<System.String> PickFolderAsync(System.String startFolder = null, System.Threading.CancellationToken cancellationToken = null)
   System.Void Dispatch(System.Action action)
   System.Void Dispatch(System.String label, System.Action action)
   System.Void Log(Craft.Abstractions.EditorLogLevel level, System.String message, System.Exception error = null)
@@ -869,6 +871,9 @@ interface Craft.Abstractions.IEditorTerminals
 interface Craft.Abstractions.IEditorToolSet : Idrak.Abstraction.IKind
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Folder(System.String folder)
   System.Collections.Generic.IReadOnlyList<Idrak.Abstraction.Generation.ITool> Live(Craft.Abstractions.IEditorHost host)
+interface Craft.Abstractions.IEditorViewPanel : Craft.Abstractions.IEditorPanel
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
+  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
 interface Craft.Abstractions.IFolderWatcher : Idrak.Abstraction.IKind
   System.IDisposable Watch(System.String folder, System.Action<Craft.Abstractions.FolderChange> changed)
 interface Craft.Abstractions.IFoldingRangeProvider : Idrak.Abstraction.IKind
@@ -910,6 +915,7 @@ interface Craft.Abstractions.IMultiSelectionDocument : Craft.Abstractions.ITextD
 interface Craft.Abstractions.IPluginSettings
   System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PluginSettingValue> All { get; }
   System.String Get(System.String plugin, System.String key)
+  System.Threading.Tasks.Task<System.String> SetAsync(System.String plugin, System.String key, System.String value)
 interface Craft.Abstractions.ISemanticLanguageSession : Craft.Abstractions.IFormattingLanguageSession, Craft.Abstractions.ILanguageSession, System.IDisposable
   Craft.Abstractions.DiagnosticSet Diagnostics { get; }
   Craft.Abstractions.SemanticTelemetry Telemetry { get; }
@@ -1326,6 +1332,165 @@ sealed class Craft.Abstractions.PanelAction : System.IEquatable<Craft.Abstractio
   System.String ToString()
   System.Void Deconstruct(out System.String Label, out System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> RunAsync, out System.Boolean Primary)
   ctor(System.String Label, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task> RunAsync, System.Boolean Primary = false)
+abstract class Craft.Abstractions.PanelBlock : System.IEquatable<Craft.Abstractions.PanelBlock>
+  Craft.Abstractions.PanelBlock <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.String Tooltip { get; init; }
+  System.String Variable { get; init; }
+  System.Type EqualityContract { get; }
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+  protected ctor(Craft.Abstractions.PanelBlock original)
+static class Craft.Abstractions.PanelBlocks
+  static System.Collections.Generic.IEnumerable<Craft.Abstractions.PanelBlock> All(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> blocks)
+  static System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> AsItems(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> blocks)
+  static System.String Describe(Craft.Abstractions.PanelBlock block)
+sealed class Craft.Abstractions.PanelButton : System.IEquatable<Craft.Abstractions.PanelButton>
+  Craft.Abstractions.PanelButton <Clone>$()
+  Craft.Abstractions.PanelButtonKind Kind { get; init; }
+  System.Boolean Enabled { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelButton other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String ActionId { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.String Tooltip { get; init; }
+  System.String Value { get; init; }
+  System.Void Deconstruct(out System.String Title, out System.String ActionId, out Craft.Abstractions.PanelButtonKind Kind)
+  ctor(System.String Title, System.String ActionId, Craft.Abstractions.PanelButtonKind Kind = Secondary)
+enum Craft.Abstractions.PanelButtonKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Danger = 3
+  Flat = 2
+  Primary = 0
+  Secondary = 1
+sealed class Craft.Abstractions.PanelButtons : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelButtons>
+  Craft.Abstractions.PanelButtons <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelButtons other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelButton> Buttons { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelButton> Buttons)
+  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelButton> Buttons)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelCard : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelCard>
+  Craft.Abstractions.PanelCard <Clone>$()
+  Craft.Abstractions.PanelTone Tone { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelCard other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; init; }
+  System.Int32 GetHashCode()
+  System.String Badge { get; init; }
+  System.String Icon { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String Title, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks)
+  ctor(System.String Title, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelChart : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelChart>
+  Craft.Abstractions.PanelChart <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelChart other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<System.Boolean> Marks { get; init; }
+  System.Collections.Generic.IReadOnlyList<System.Double> Values { get; init; }
+  System.Int32 GetHashCode()
+  System.String Detail { get; init; }
+  System.String Legend { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String Title, out System.Collections.Generic.IReadOnlyList<System.Double> Values)
+  ctor(System.String Title, System.Collections.Generic.IReadOnlyList<System.Double> Values)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelCheck : System.IEquatable<Craft.Abstractions.PanelCheck>
+  Craft.Abstractions.PanelButton Action { get; init; }
+  Craft.Abstractions.PanelCheck <Clone>$()
+  System.Boolean Done { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelCheck other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Detail { get; init; }
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Text, out System.Boolean Done, out Craft.Abstractions.PanelButton Action)
+  ctor(System.String Text, System.Boolean Done, Craft.Abstractions.PanelButton Action = null)
+sealed class Craft.Abstractions.PanelChecklist : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelChecklist>
+  Craft.Abstractions.PanelChecklist <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelChecklist other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelCheck> Items { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelCheck> Items)
+  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelCheck> Items)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelDisclosure : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelDisclosure>
+  Craft.Abstractions.PanelDisclosure <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelDisclosure other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Open { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; init; }
+  System.Int32 GetHashCode()
+  System.String Id { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String Id, out System.String Title, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks)
+  ctor(System.String Id, System.String Title, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelFact : System.IEquatable<Craft.Abstractions.PanelFact>
+  Craft.Abstractions.PanelFact <Clone>$()
+  Craft.Abstractions.PanelTone Tone { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelFact other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Label { get; init; }
+  System.String ToString()
+  System.String Value { get; init; }
+  System.Void Deconstruct(out System.String Label, out System.String Value)
+  ctor(System.String Label, System.String Value)
+sealed class Craft.Abstractions.PanelFacts : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelFacts>
+  Craft.Abstractions.PanelFacts <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelFacts other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelFact> Facts { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelFact> Facts)
+  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelFact> Facts)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelInput : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelInput>
+  Craft.Abstractions.PanelInput <Clone>$()
+  System.Boolean Code { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelInput other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean Numeric { get; init; }
+  System.Int32 GetHashCode()
+  System.String ActionId { get; init; }
+  System.String Placeholder { get; init; }
+  System.String Submit { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.String Unit { get; init; }
+  System.String Value { get; init; }
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String ActionId, out System.String Title, out System.String Value)
+  ctor(System.String ActionId, System.String Title, System.String Value)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
 sealed class Craft.Abstractions.PanelItem : System.IEquatable<Craft.Abstractions.PanelItem>
   Craft.Abstractions.PanelItem <Clone>$()
   System.Boolean Equals(Craft.Abstractions.PanelItem other)
@@ -1337,6 +1502,118 @@ sealed class Craft.Abstractions.PanelItem : System.IEquatable<Craft.Abstractions
   System.String ToString()
   System.Void Deconstruct(out System.String Text, out System.String Detail, out System.String CommandId)
   ctor(System.String Text, System.String Detail = null, System.String CommandId = null)
+sealed class Craft.Abstractions.PanelMeter : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelMeter>
+  Craft.Abstractions.PanelMeter <Clone>$()
+  Craft.Abstractions.PanelTone Tone { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelMeter other)
+  System.Boolean Equals(System.Object obj)
+  System.Double Fraction { get; init; }
+  System.Int32 GetHashCode()
+  System.String Detail { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String Title, out System.Double Fraction)
+  ctor(System.String Title, System.Double Fraction)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelOption : System.IEquatable<Craft.Abstractions.PanelOption>
+  Craft.Abstractions.PanelOption <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelOption other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Detail { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.String Value { get; init; }
+  System.Void Deconstruct(out System.String Value, out System.String Title)
+  ctor(System.String Value, System.String Title)
+sealed class Craft.Abstractions.PanelPicker : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelPicker>
+  Craft.Abstractions.PanelPicker <Clone>$()
+  System.Boolean Enabled { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelPicker other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelOption> Options { get; init; }
+  System.Int32 GetHashCode()
+  System.String ActionId { get; init; }
+  System.String Selected { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String ActionId, out System.String Title, out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelOption> Options, out System.String Selected)
+  ctor(System.String ActionId, System.String Title, System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelOption> Options, System.String Selected)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelStep : System.IEquatable<Craft.Abstractions.PanelStep>
+  Craft.Abstractions.PanelStep <Clone>$()
+  Craft.Abstractions.PanelStepState State { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelStep other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Detail { get; init; }
+  System.String Icon { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Void Deconstruct(out System.String Title, out System.String Icon, out Craft.Abstractions.PanelStepState State)
+  ctor(System.String Title, System.String Icon, Craft.Abstractions.PanelStepState State)
+enum Craft.Abstractions.PanelStepState : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Current = 1
+  Done = 2
+  Next = 0
+sealed class Craft.Abstractions.PanelSteps : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelSteps>
+  Craft.Abstractions.PanelSteps <Clone>$()
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelSteps other)
+  System.Boolean Equals(System.Object obj)
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelStep> Steps { get; init; }
+  System.Int32 GetHashCode()
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelStep> Steps)
+  ctor(System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelStep> Steps)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelSwitch : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelSwitch>
+  Craft.Abstractions.PanelSwitch <Clone>$()
+  System.Boolean Enabled { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelSwitch other)
+  System.Boolean Equals(System.Object obj)
+  System.Boolean On { get; init; }
+  System.Int32 GetHashCode()
+  System.String ActionId { get; init; }
+  System.String Detail { get; init; }
+  System.String Title { get; init; }
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String ActionId, out System.String Title, out System.Boolean On)
+  ctor(System.String ActionId, System.String Title, System.Boolean On)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+sealed class Craft.Abstractions.PanelText : Craft.Abstractions.PanelBlock, System.IEquatable<Craft.Abstractions.PanelBlock>, System.IEquatable<Craft.Abstractions.PanelText>
+  Craft.Abstractions.PanelText <Clone>$()
+  Craft.Abstractions.PanelTextStyle Style { get; init; }
+  Craft.Abstractions.PanelTone Tone { get; init; }
+  System.Boolean Equals(Craft.Abstractions.PanelBlock other)
+  System.Boolean Equals(Craft.Abstractions.PanelText other)
+  System.Boolean Equals(System.Object obj)
+  System.Int32 GetHashCode()
+  System.String Text { get; init; }
+  System.String ToString()
+  System.Type EqualityContract { get; }
+  System.Void Deconstruct(out System.String Text, out Craft.Abstractions.PanelTextStyle Style)
+  ctor(System.String Text, Craft.Abstractions.PanelTextStyle Style = Body)
+  protected System.Boolean PrintMembers(System.Text.StringBuilder builder)
+enum Craft.Abstractions.PanelTextStyle : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Body = 0
+  Caption = 2
+  Code = 4
+  Heading = 3
+  Secondary = 1
+enum Craft.Abstractions.PanelTone : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Accent = 1
+  Error = 4
+  Normal = 0
+  Success = 2
+  Warning = 3
 static class Craft.Abstractions.PluginCapabilities
   const System.String Files = files
   const System.String Input = input
@@ -1887,6 +2164,15 @@ sealed class Craft.Abstractions.TokenSpanBuffer : System.IDisposable
   System.Void Clear()
   System.Void Dispose()
   ctor(System.Int32 capacity = 256)
+sealed class Craft.Abstractions.ViewPanel : Craft.Abstractions.IEditorPanel, Craft.Abstractions.IEditorViewPanel
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelBlock> Blocks { get; }
+  System.Collections.Generic.IReadOnlyList<Craft.Abstractions.PanelItem> Items { get; }
+  System.String Id { get; }
+  System.String Title { get; set; }
+  System.Threading.Tasks.Task ActAsync(System.String actionId, System.String value, System.Threading.CancellationToken cancellationToken = null)
+  System.Void SetBlocks(System.Collections.Generic.IEnumerable<Craft.Abstractions.PanelBlock> blocks)
+  ctor(System.String id, System.String title, System.Func<System.String, System.String, System.Threading.CancellationToken, System.Threading.Tasks.Task> act)
+  event System.EventHandler Changed
 sealed class Craft.Abstractions.WorkspaceModel : System.IEquatable<Craft.Abstractions.WorkspaceModel>
   Craft.Abstractions.WorkspaceModel <Clone>$()
   System.Boolean Equals(Craft.Abstractions.WorkspaceModel other)

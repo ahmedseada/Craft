@@ -3919,3 +3919,108 @@ $env:CRAFT_FILTER="Layout|Terminal|Notifications|Activities|Settings|Shell|Ui|De
 dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
 $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
 ```
+
+## B11 as built (2026-11-01)
+
+Slot s2. The Learning side view was a list of text rows ("Learn on this machine: off — nothing is recorded · click to
+choose", "Episodes: 0 (0 B of 64 MiB)", …). It is now a view that says what learning does, shows where you are and
+guides the first steps, with real controls. Idrak is unchanged (no cause was in the library).
+
+- **A contract for views drawn from blocks** (Craft.Abstractions, additive, contract 1.0 kept): `IEditorViewPanel`
+  (an `IEditorPanel` with `Blocks` and `ActAsync(actionId, value)`), the blocks `PanelCard` (tone, icon, badge),
+  `PanelText` (body, secondary, caption, heading, code; a tone), `PanelSteps`/`PanelStep` (an illustration of steps, each
+  next, current or done, with an SVG icon), `PanelChecklist`/`PanelCheck`, `PanelButtons`/`PanelButton` (primary,
+  secondary, flat, danger; enabled, tooltip, value), `PanelSwitch`, `PanelMeter` (a fraction, or work without a known
+  end), `PanelChart` (a sparkline with marked points and a legend), `PanelPicker`/`PanelOption`, `PanelInput` (numeric,
+  unit, code font, its button), `PanelFacts`/`PanelFact`, `PanelDisclosure`; every block carries a tooltip and the
+  variable that sets it. `ViewPanel` is the usual way to make one; `PanelBlocks` gives the blocks as lines (`Items`, for
+  a host that draws only lines) and as text. Any plug-in can use it: the learning plug-in uses nothing a third party
+  cannot.
+- **What a plug-in reaches through its host** (default members, so older hosts and plug-ins are unaffected):
+  `IEditorHost.ShowUndo(text, undo, kept)` (the shell's inline Undo bar; `kept` runs when the bar goes without an Undo:
+  its time, ×, a newer bar, the window's end), `IEditorHost.PickFolderAsync` (the shell's folder dialog),
+  `IPluginSettings.SetAsync(plugin, key, value)` (writes the setting as the settings page does: the user's file, else
+  the workspace's; held at once, the file written off the UI thread; a refusal in words). `EditorHost` takes them as
+  `UndoPresenter`, `FolderPicker` and `SettingWriter`, set by `ShellModel` (`StoreSettingAsync`); the plug-in scope
+  forwards them. `UndoBar.Show` takes the `kept` callback.
+- **The shell draws the blocks** (`Craft.Maui.PanelBlocksView`, from `PanelView.SetPalette`, two lines in `ShellPage`):
+  cards in the design's form (raised fill, 10-unit radius, the border or the tone's colour), a card inside a card as a
+  titled section (no box inside a box), the palette's buttons with their hover, pressed, focus and disabled states
+  (`InteractiveStates`), `CraftInput` around fields, MAUI's `Switch` and `Picker` in the accent, the steps as circles with
+  stroke icons joined by lines, the checklist's numbered badges (a check once done), meters and sparklines drawn on a
+  `GraphicsView`; each block's tooltip with its variable, and the variable small under it as on the settings page. Only
+  the top-level blocks whose signature changed are drawn again (`Craft.Editor.Shell.PanelBlockLayout`, headless: the
+  signatures, which to redraw, a chart's points, a meter's width), so a training step redraws its card only; text typed
+  in a field and an open disclosure stay across redraws.
+- **The Learning view** (`Craft.Plugins.Learning.LearningView`, headless: `LearningViewState` → blocks; the session
+  builds the state from what it already read, the folder and episode figures off the UI thread as before):
+  - a header card "Learn from your edits" with the two sentences and Record → Train → Better suggestions, each step's
+    state and figure (the episodes, the rounds, the adapter in use), and the phase as its badge (`LearningPhase`: off,
+    recording, ready, training, trained);
+  - an error card when a round failed: "Training failed at its step stage", the trainer's words (B7: what to change,
+    the variables), what the stage does, Learning settings and Dismiss;
+  - "Getting started" until the first round: 1 turn on recording (Turn on), 2 code with the AI (Open the chat), 3 train
+    when there are `CRAFT_PLUGIN_LEARNING_MINEPISODES` episodes ("7 of 20 so far", Train now), and "What is recorded?"
+    opening a sample episode exactly as the folder keeps it;
+  - "Recording and sharing": the recording switch with the consent's words under it (on: its scope and date; off by the
+    setting: says which variable), the sharing switch (no destination: asks for it inline, then the consent; on: Share
+    now…), the folder in the code font with Open and Change… (the folder dialog);
+  - "Storage": a meter of the bytes used of `capMb` (warning colour past 90%), the verdicts, the three newest episodes,
+    Export, and Delete with Undo (moved aside at once to `episodes.jsonl.held`, the shell's bar "Deleted 12 episodes
+    (34 KB)." with Undo; deleted for good when the bar goes; Undo puts them back before any recorded since; a host
+    without the bar asks first);
+  - "Training": the model picker (the chat's model first, then the provider's models with "loaded", each option saying
+    what a round does with it under B7's rule: the chat's copy trained in place, or loaded by the provider), the device,
+    weights and adapter's settings as facts, the method picker with its line (preference, practice tasks, both), Train
+    now as the primary button in its state (waiting for episodes as a meter with the count; ready; training as a meter
+    with the stage, step of steps, loss, time left, device and Cancel), the idle-training switch with its minutes; after
+    rounds, the loss and the preference margin as sparklines over the rounds (promoted filled, kept back hollow) and the
+    last round in words ("v3 was better (−1.20 → −0.40) and was promoted: it answers now" or "v4 was kept back …"), Roll back;
+  - "Adapter": which answers (an adapter, or the base model), its age, how much better it scored on how many held-out
+    pairs, its base model, Use base model / Use adapter (new: `AdapterVersions.UseBase`, `use-base.txt`; a new promotion
+    clears it), Roll back, Delete a version…;
+  - "Practice tasks from tests": the line "Turn failing tests into practice tasks the model is rewarded for solving.",
+    the failing tests the last run found and the tasks written, Make tasks (the sandbox said, "each command asks you
+    first" for approve-each), and "Mark Class.Method as a task" only while the caret is in a test (`TestAtCaret`: the
+    nearest [Fact], [Theory], [Test], [TestMethod], [TestCase], [DataTestMethod], [SkippableFact] whose body the caret has
+    not left, read from at most 8,192 characters before the caret through a pooled buffer, only when the caret's line or
+    the text changed; a mark names the class and the method).
+  - The Learning view has its own rail icon (a cap) through the plug-in's `RailItem`.
+- **Decisions (each the recommended option, the owner asleep):**
+  - A general contract (`IEditorViewPanel` and blocks in Craft.Abstractions) rather than a learning-only view in the shell: plug-ins first, any plug-in can draw such a view.
+  - Delete with Undo through the shell's own bar (`IEditorHost.ShowUndo`) rather than a bar inside the panel: one Undo bar in the window.
+  - The recording switch still asks the consent question with every detail (the stored yes keeps its text's version); a switch never says yes alone.
+  - The model and when training runs are in the consent's words (R), so a change of them from the view asks the consent again at once with the new words (so recording never stops unseen); a folder change too.
+  - Train now is enabled from `minEpisodes` episodes (any count for the tasks trainer); the command "Learning: train now" still trains on demand as before.
+  - The view's Train now shows the outcome in place (no message box); the command keeps its message.
+  - Getting started shows until the first round has run, then the view is the training's.
+  - Change folder: what is kept from now on goes to the new folder; the old folder's data stays there (said), nothing is moved.
+  - Use base model is a kept switch (`use-base.txt`), not a rollback: the adapter comes back with Use adapter; a new promotion answers at once.
+  - The meter for work without a known end is a still third of the bar (no animation: reduced motion needs nothing).
+- **Tests**: `Learning.TheViewSaysWhereLearningStandsFromOffToReadyAndTheChecklistActs` (off, recording with too few
+  episodes, ready; the checklist's Open the chat and Turn on; a failed round's error card with its stage and no message
+  box), `Learning.TheTrainingCardShowsProgressAndEachRoundPromotedOrKeptBack` (training with progress and Cancel; a round
+  promoted and one kept back, the charts, the adapter card, Use base model), `Learning.DeleteTakesTheEpisodesAwayWithUndoAndTheBarsEndDeletesThem`,
+  `Learning.ThePickerListsTheLoadedModelsAndAPickWritesTheSetting` (a fake provider's models and loaded copy, a model it
+  loads joining the picker, a pick and the idle switch written, the consent asked again, a refused write said),
+  `Learning.MarkTheTestAtTheCaretShowsOnlyWhileTheCaretIsInATest`, `Experience.AViewPanelsBlocksRedrawOnlyWhatChangedAndThePluginReachesTheShell`,
+  `Inline.TheUndoBarKeepsTheChangeWhenItsTimeIsUp` (the kept callback). The new tests: 5 of 7 passed on the first run; the
+  two failures (a block's line repeated its variable; a model pick changed the consent's words and recording stopped
+  unseen) were fixed as above; then the full filter (`Learning`, `Plugins`, `PluginKit`, `PhaseP`, `Settings`, `Ui`, `Design`,
+  `LookAndFeel`, `Experience`, `Inline`, `Shell`, `Layout`, `ApiGuard`, `Inventory`): 122 passed, 0 failed. API dumps regenerated: `Craft.Abstractions`, `Craft.Editor`, `Craft.Plugins.Learning`, and the
+  contract list `api/Craft.Abstractions.contract.txt` (additions only).
+- **Not compiled here**: nothing; no file under `Platforms/` changed, and `Craft.Maui` compiled on its net10.0 target.
+  Not run here: the window (the view's look on both themes, the switches, pickers and the folder dialog on WinUI).
+
+**Commands for the owner** (Craft only; Idrak unchanged):
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="Learning.|Plugins.|PluginKit.|PhaseP.|Settings.|Ui.|Design.|LookAndFeel.|Experience.|Inline.|Shell.|Layout.|ApiGuard.|Inventory."; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
+In the app: the rail's cap opens Learning: the header's three steps, Getting started's checklist (Turn on asks the
+consent), What is recorded?, the switches, Delete with Undo at the window's bottom, the model picker listing the
+loaded model, Train now with its progress and Cancel, after a round the two sparklines and the adapter card; the view
+on the light and dark themes.

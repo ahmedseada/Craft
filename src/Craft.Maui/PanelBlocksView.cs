@@ -504,7 +504,7 @@ public sealed class PanelBlocksView : ContentView
         stack.Children.Add(row);
         if (_focused == input.ActionId)
         {
-            Dispatcher.Dispatch(() => entry.Focus());               // drawn again while typing: the caret stays in the field
+            Dispatcher?.Dispatch(() => entry.Focus());              // drawn again while typing: the caret stays in the field
         }
 
         return stack;

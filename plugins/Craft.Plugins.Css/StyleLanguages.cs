@@ -119,7 +119,7 @@ public sealed class StyleLanguage : LineStateLanguage
             }
         }
 
-        var session = new LineStateSession(buffer, StyleTokenizer.For(dialect, year), formatter, context.Settings);
+        var session = new LineStateSession(buffer, StyleTokenizer.For(dialect, year), formatter, context.Settings, settings.Completion ? StyleCompletion.Instance : null);
         if (learn)
         {
             string workspace = context.WorkspaceRoot ?? "";

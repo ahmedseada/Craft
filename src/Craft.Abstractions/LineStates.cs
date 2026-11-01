@@ -265,6 +265,31 @@ public interface ITextFormatter
     }
 }
 
+/// <summary>
+/// A line-state language's completion (contract 1.1, additions; W's HTML and CSS): asked by its <see cref="LineStateSession"/>
+/// on the thread pool with the state the caret's line starts in, so it reads the context at the caret by lexing that line's
+/// text up to it (and, when it needs more, the text around). It holds nothing per document; one instance serves every session.
+/// </summary>
+public interface ILineCompletion
+{
+    /// <summary>Whether typing <paramref name="c"/> (not a word's letter) asks for a list ('&lt;', ':', '@').</summary>
+    bool IsTriggerCharacter(char c);
+
+    /// <summary>Whether <paramref name="c"/> is part of a completed word beyond letters, digits and '_' ('-').</summary>
+    bool IsWordCharacter(char c);
+
+    /// <summary>The list at <paramref name="request"/>'s position, or null when nothing completes there.</summary>
+    CompletionList? Complete(LineCompletionRequest request, CancellationToken cancellationToken);
+}
+
+/// <summary>What a <see cref="LineStateSession"/> asks its language's <see cref="ILineCompletion"/>.</summary>
+/// <param name="Snapshot">The text.</param>
+/// <param name="Position">The caret.</param>
+/// <param name="Trigger">Why it is asked (invoked, or the character typed).</param>
+/// <param name="Tokenizer">The session's tokenizer (its dialect).</param>
+/// <param name="LineState">The state the caret's line starts in.</param>
+public sealed record LineCompletionRequest(ITextSnapshot Snapshot, int Position, CompletionTrigger Trigger, LineTokenizer Tokenizer, ulong LineState);
+
 /// <summary>How a formatter lays text out: one indentation step, and the line break it inserts. Two styles are equal when both are.</summary>
 /// <param name="Indent">One indentation step (spaces of the tab size, or a tab).</param>
 /// <param name="NewLine">The line break.</param>
@@ -329,11 +354,12 @@ public sealed record FormatStyle(string Indent, string NewLine)
 /// tokenizer: a language version a project's files name, learned after the session opened) can change
 /// (<see cref="ChangeDialect"/>): the states are dropped and <see cref="Reclassified"/> is raised.
 /// </summary>
-public sealed class LineStateSession : IFormattingLanguageSession
+public sealed class LineStateSession : IFormattingLanguageSession, ICompletingLanguageSession
 {
     private const int KeptLineBuffer = 4096;
     private readonly ITextBuffer _buffer;
     private readonly ITextFormatter? _formatter;
+    private readonly ILineCompletion? _completion;
     private readonly LanguageSettings _settings;
     private readonly Lock _gate = new();
     private LineTokenizer _tokenizer;
@@ -352,7 +378,19 @@ public sealed class LineStateSession : IFormattingLanguageSession
     /// <param name="formatter">Its formatter, or null when the language does not format.</param>
     /// <param name="settings">The editor's settings for the language (the formatter's indentation and line break).</param>
     public LineStateSession(ITextBuffer buffer, LineTokenizer tokenizer, ITextFormatter? formatter, LanguageSettings settings)
+        : this(buffer, tokenizer, formatter, settings, null)
     {
+    }
+
+    /// <summary>A session over <paramref name="buffer"/> that completes through <paramref name="completion"/> (none when null).</summary>
+    /// <param name="buffer">The document's buffer.</param>
+    /// <param name="tokenizer">The language's (or dialect's) tokenizer.</param>
+    /// <param name="formatter">Its formatter, or null when the language does not format.</param>
+    /// <param name="settings">The editor's settings for the language.</param>
+    /// <param name="completion">Its completion, or null when the language does not complete.</param>
+    public LineStateSession(ITextBuffer buffer, LineTokenizer tokenizer, ITextFormatter? formatter, LanguageSettings settings, ILineCompletion? completion)
+    {
+        _completion = completion;
         ArgumentNullException.ThrowIfNull(buffer);
         ArgumentNullException.ThrowIfNull(tokenizer);
         ArgumentNullException.ThrowIfNull(settings);
@@ -457,6 +495,94 @@ public sealed class LineStateSession : IFormattingLanguageSession
                     Learn(index, state);
                 }
             }
+        }
+    }
+
+    /// <inheritdoc />
+    public bool CanComplete => _completion is not null;
+
+    /// <inheritdoc />
+    public bool IsTriggerCharacter(char c) => _completion?.IsTriggerCharacter(c) ?? false;
+
+    /// <inheritdoc />
+    public bool IsWordCharacter(char c) => _completion?.IsWordCharacter(c) ?? false;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// On the thread pool: the state the caret's line starts in (the session's, learned as for colours, when the snapshot is
+    /// the current one; read from the top without the session's lock for an older one), then the language's completion.
+    /// </remarks>
+    public Task<CompletionList?> GetCompletionsAsync(ITextSnapshot snapshot, int position, CompletionTrigger trigger, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (_completion is not { } completion)
+        {
+            return Task.FromResult<CompletionList?>(null);
+        }
+
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int at = Math.Clamp(position, 0, snapshot.Length);
+            int index = snapshot.GetLineIndex(at);
+            LineTokenizer tokenizer;
+            ulong state = 0;
+            bool known = false;
+            lock (_gate)
+            {
+                if (_disposed)
+                {
+                    return null;
+                }
+
+                tokenizer = _tokenizer;
+                if (ReferenceEquals(snapshot, _snapshot))
+                {
+                    Known(index);
+                    state = index == 0 ? tokenizer.Initial : _ends[index - 1];
+                    known = true;
+                }
+            }
+
+            if (!known)
+            {
+                state = StateAlone(tokenizer, snapshot, index, cancellationToken);
+            }
+
+            return completion.Complete(new LineCompletionRequest(snapshot, at, trigger, tokenizer, state), cancellationToken);
+        }, cancellationToken);
+    }
+
+    // The state line `index` of an older snapshot starts in, read from the top with a buffer of its own (no lock held).
+    private static ulong StateAlone(LineTokenizer tokenizer, ITextSnapshot snapshot, int index, CancellationToken cancellationToken)
+    {
+        ulong state = tokenizer.Initial;
+        char[] buffer = ArrayPool<char>.Shared.Rent(256);
+        try
+        {
+            for (int line = 0; line < index; line++)
+            {
+                if ((line & 1023) == 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                var text = snapshot.GetLine(line);
+                if (buffer.Length < text.Length)
+                {
+                    ArrayPool<char>.Shared.Return(buffer);
+                    buffer = ArrayPool<char>.Shared.Rent(text.Length);
+                }
+
+                snapshot.CopyTo(text.Start, buffer.AsSpan(0, text.Length));
+                state = tokenizer.Tokenize(buffer.AsSpan(0, text.Length), text.Start, state, null);
+            }
+
+            return state;
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(buffer);
         }
     }
 

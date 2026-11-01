@@ -66,8 +66,8 @@ public static class WebMarkupPluginTests
 
             var htmlPlugin = EditorPlugins.Find(HtmlParts.LanguageName);
             var angularPlugin = EditorPlugins.Find(AngularParts.PluginName);
-            Check.True(htmlPlugin is not null && htmlPlugin.Settings.Select(s => s.Key).SequenceEqual(["embedded", "attributesAsCode"]), "HTML's settings");
-            Check.True(angularPlugin is not null && angularPlugin.Settings.Select(s => s.Key).SequenceEqual(["templates", "inlineTemplates", "version", "projectVersion"]), "Angular's settings");
+            Check.True(htmlPlugin is not null && htmlPlugin.Settings.Select(s => s.Key).SequenceEqual(["embedded", "attributesAsCode", "completion"]), "HTML's settings");
+            Check.True(angularPlugin is not null && angularPlugin.Settings.Select(s => s.Key).SequenceEqual(["templates", "inlineTemplates", "version", "projectVersion", "completion"]), "Angular's settings");
             Check.True(htmlPlugin!.Settings.Concat(angularPlugin!.Settings).All(s => s.Shape is { Section: SettingSections.Editor }), "on the settings page's Editor section");
             Check.Equal("CRAFT_PLUGIN_HTML_EMBEDDED", PluginSetting.VariableName(HtmlParts.LanguageName, "embedded"), "embedded's variable");
             Check.Equal("CRAFT_PLUGIN_HTML_ATTRIBUTESASCODE", PluginSetting.VariableName(HtmlParts.LanguageName, "attributesAsCode"), "attributesAsCode's variable");

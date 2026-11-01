@@ -52,7 +52,8 @@ drew a warm frame in 172 ms against 0.8 ms), Enter asks for ghost text (the code
    whole window (NumCtx 32768: about 1.9 GB a context for Qwen2.5-Coder-1.5B in float32), and Craft never drafts with the
    target itself (chat and completion naming the same model made a second full cache for no gain).
 2. **HTML and CSS completion, built in** (no Node): tags, attributes and their values, closing tags, CSS properties and
-   values, Angular's blocks; W-semantic (the language servers) still waits for the owner's word.
+   values, Angular's blocks; W-semantic (the language servers) still waits for the owner's word. **Built** (`slot/web-completion`): see
+   "HTML and CSS completion as built".
 Open: the device switch crash (its report wanted), "Ambiguity between 'TestClass.MyProperty' and 'TestClass.MyProperty'"
 (Program.cs twice in the workspace, to trace), the lint plug-in's 1.5 s start on the UI thread.
 
@@ -6087,6 +6088,106 @@ $env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; src\Craft.App\b
 
 **Phase W is complete** (W0, W-files, W-npm, W-style, W-script, W-tools, W-markup, 2026-11-01): the web languages are built;
 W-semantic and every other phase wait for the owner's word.
+
+### HTML and CSS completion as built (2026-11-01, the owner's pick "3a")
+
+Slot w2, on Craft `main` c4c78bb and Idrak `main` b6afa64. Craft only, no Node and no language server; Idrak needed nothing.
+Pushed to `slot/web-completion` for the main session to merge.
+- **The contract** (`Craft.Abstractions`, contract 1.1, additions only): `ICompletingLanguageSession` (a session that completes
+  without a semantic layer: `CanComplete`, `IsTriggerCharacter`, `IsWordCharacter`, `GetCompletionsAsync`), and for the kit
+  `ILineCompletion` and `LineCompletionRequest` (the snapshot, the caret, the trigger, the session's tokenizer and the state
+  the caret's line starts in). `LineStateSession` gains a constructor taking an `ILineCompletion` (the old one kept) and
+  implements the new interface: on the thread pool it takes the caret line's state (learned as for colours when the snapshot
+  is the current one, read from the top without the session's lock for an older one) and asks the language.
+- **The editor** (`Craft.Editor`): `EditorModel.CompletingSession` (when there is no semantic session); the completion
+  controller asks it as it asks a semantic one, a list opens on the language's trigger characters as well as on a word's
+  first letter, and its word characters (`-` in `aria-label`, `background-color`) filter an open list. Nothing else of a
+  semantic layer lights up (rename, references, outline, Problems' semantic status stay as they were); ghost text keeps
+  working beside it (it hides while the list is open, as with C#).
+- **HTML and Angular templates** (`Craft.Web/Markup/HtmlCompletion`, data in `HtmlData`, built once into frozen tables):
+  element names after `<` (the living standard's elements; Angular's `ng-container`, `ng-template`, `ng-content`,
+  `router-outlet`); in a start tag the element's own attributes, the global ones, `aria-*`, `data-` and the event handlers
+  (a value's attribute inserted with `=""` and the caret between the quotes, a boolean one bare); a fixed list's values
+  (`type` of input, button, ol and script, `rel`, `target`, `dir`, `loading`, `crossorigin`, `method`, `autocomplete`,
+  `inputmode`, `popover`, `role`, the ARIA states, the booleans), with their quotes after a bare `=`; after `</` the open
+  elements, the innermost first (optional end tags implied, an auto-closed `>` taken); after a start tag's `>` its end tag,
+  inserted after the caret (not for void elements, nor when one follows); entities after `&`; the CSS of a `<style>` and of
+  `style="…"` (as CSS, through the CSS completion). Angular: the blocks after `@` as snippets (`@if`, `@for`, `@switch`,
+  `@defer`, `@let`, and `@else`, `@empty`, `@case`, `@default`, `@placeholder`, `@loading`, `@error`; none before 17,
+  `@let` from 18.1), and after `[`, `(`, `[(` and `*` the element's properties (its attributes, `class`, `style`,
+  `ngClass`, `ngStyle`, `attr.`/`class.`/`style.`, and `ngModel`, `formControl` on form controls), its events (the DOM's,
+  `keydown.enter`, `ngModelChange`) and the structural directives, each with its `]=""` / `)=""` and an auto-closed bracket
+  taken. The context is the HTML lexer's at the caret, lexed from the caret line's state; the document is read from the top
+  only when it needs what lies above (the open elements, a tag begun on an earlier line, a style's start), names kept as a
+  known element's own string or a place in the snapshot (no string per tag read).
+- **CSS, SCSS and LESS** (`Craft.Web/Style/StyleCompletion`): property names in a rule's body (and the file's custom
+  properties), `: ` added unless a `:` follows; values per property (its keywords from a data list of about 130 properties,
+  its functions: colours `oklch()`, `color-mix()`, `light-dark()`…, images, transforms, filters, timing, grid; the named
+  colours where a colour goes; `var()`, `calc()`, `clamp()`, `min()`, `max()`…; the CSS-wide keywords; `var(--x)` from the
+  file's own custom properties); at-rules after `@` (SCSS's only in SCSS, LESS's only in LESS); pseudo-classes after `:`
+  and pseudo-elements after `::` in a selector (a functional one inserted with `()`, the caret inside); SCSS's `$variables`
+  and the `@mixin` names after `@include`. A name newer than the session's Baseline year is not offered (W-style's years).
+  The context is one forward pass over the sheet (blocks, statements, comments, strings): a style state carries no block
+  depth, so the caret line's state alone cannot tell a rule's body from the top level.
+- **Settings** (each on the settings page, Editor section, and in `.craft/settings.json`): `CRAFT_PLUGIN_HTML_COMPLETION`,
+  `CRAFT_PLUGIN_CSS_COMPLETION` and `CRAFT_PLUGIN_ANGULAR_COMPLETION`, all on; off, the language's sessions do not complete.
+- **Android and AOT**: pure C#, no reflection, frozen tables built once; nothing native.
+
+**Decisions on the recommendation (the owner away; one line each).**
+- A new small contract (`ICompletingLanguageSession`) rather than a line-state session posing as a semantic one, which would have switched on rename, references, the outline and the semantic status with nothing behind them.
+- The completion source rides in the kit's `LineStateSession` (a new constructor; the old one kept), so a third party's line-state language completes the same way.
+- Each language says its trigger characters (HTML `< / & @ [ ( * " ' = space >`, CSS `: @ $ (`) and its word characters (`-`, and `:` `.` in HTML); the editor asks on them as on a word's first letter.
+- HTML completion reads the caret line from its state first and the whole document only when the context needs what lies above.
+- CSS completion reads the whole sheet once per request (blocks and definitions); its numbers stay a few milliseconds at 10,000 lines.
+- Data lists: the living standard's elements and attributes, WAI-ARIA 1.3's attributes and the common named character references (about 150 of the 2,231), as of 2026-11-01 (confirm on day one); CSS's names are W-style's `StyleNames` (one list, with its Baseline years).
+- An attribute is inserted with `=""` and the caret inside; a boolean or `data-` bare; a value after a bare `=` with its quotes.
+- The end tag after `>` is offered as a one-item list (Enter takes it), not inserted on its own: no edit the user did not take.
+- Angular's blocks are snippets (`Snippet` as the item's data), so their stops work as the C# snippets' do.
+- Angular has its own `completion` toggle (CRAFT_PLUGIN_ANGULAR_COMPLETION) beside HTML's and CSS's, one per plug-in.
+- A `<style>` and `style="…"` complete as CSS at the latest Baseline year (HTML carries no browserslist).
+
+**Tests**: new group `WebCompletion` (8): elements, attributes (the element's own, globals, ARIA, events, data-, a tag begun
+on an earlier line), values (with and without quotes, booleans, none for a free value); end tags after `</` (the innermost
+first, an implied `<li>`, an auto-closed `>`, a typed name) and after `>` (not for void or already closed), entities; CSS in
+`<style>` and `style="…"`; CSS properties (custom ones too, no second `:`), values (functions with the caret inside, named
+colours, the CSS-wide keywords, `var(--x)` from the file), at-rules per dialect and per Baseline year, pseudo-classes and
+pseudo-elements (inside `@media` too), nothing in a comment or a string, SCSS's variables and mixins, LESS; Angular's
+blocks as snippets by version, property, event and two-way bindings and structural directives; through the editor (`<`
+opens, typing and `-` filter, Enter commits, the setting off completes nothing, the variables and the settings page);
+ghost text shown, hidden while the list is open, shown again after; the bench. Touched: `WebPlugins` (HTML's, Angular's and
+CSS's settings now four or five), `WebStyle` (CSS's variables). First run of `WebCompletion|WebMarkup|WebStyle|WebAngular|WebPlugins|ApiGuard|Inventory`:
+48 of 50, the two the CSS settings' count (expectations updated); then the full filter
+`WebCompletion|WebMarkup|WebStyle|WebAngular|WebPlugins|Editor|Inline|AiPlugins|Settings|ApiGuard|Inventory`: 167 of 167.
+After it, one batch: the read from the top kept names as positions (a list after `</` in a 2,000-line page allocated 125 KB
+of names; now 1.3 KB, its two items) and the CSS bench file made 10,000 lines; `WebCompletion` again: 8 of 8. Dumps:
+Craft.Abstractions (and its contract list, lines added), Craft.Editor, Craft.Web, Craft.Plugins.Css; the inventory unchanged.
+
+**Measured** (this container, 4 cores, Release; `test-output/benches/web-completion.txt`; through
+`LineStateSession.GetCompletionsAsync` on the thread pool; "cold" is a session's first ask, the frozen tables' one-time
+build and the JIT included): a 2,018-line HTML page, the caret in a start tag at its end (221 attributes): 33 ms cold,
+0.07 ms warm, 46 KB a list (its items); `</` at its end (the page read for the open elements): 2.0 ms cold, 0.93 ms warm,
+1.3 KB; a 10,000-line CSS file, a colour's value at its end (the sheet read for its blocks): 9.2 ms cold, 2.5 ms warm,
+183 items, 30 KB a list.
+
+**Left, for later**: W-semantic (TypeScript, JavaScript and Angular expressions, a class name from the project's styles, a
+component's own inputs and outputs, `id` and `href="#…"` targets); all 2,231 named character references; SCSS's module
+members (`math.div`) and LESS's variables and mixins; CSS completion cached between keystrokes (each request reads the
+sheet again); the end tag inserted as you type `>` (a setting, if the owner wants it automatic).
+
+**The owner's check** on `test-output\CarftTestPOC` (add a `site.html`, a `site.css` and an `app.scss`; or the Angular project
+under `test-output\WebTestPOC`): in the .html type `<` (the elements), `<input ` (attributes; `type="` its values), `>` after
+a `<section>` (its end tag offered), `</` (the innermost open element), `&` (entities), inside `<style>` and `style="…"` CSS;
+in the .css `col` in a rule (properties), `color: ` (values, `oklch()` with the caret inside), `var(--` (the file's custom
+properties), `@` (at-rules), `a:` (pseudo-classes); in the .scss `$` and `@include `; in an Angular template `@` (the blocks,
+Tab through a snippet's stops), `[`, `(` and `[(` on an `<input>`; ghost text still appears with a model loaded; Settings ›
+Editor › HTML › Completion off stops it.
+```powershell
+cd D:\Projects\Craft; git checkout main; git pull origin main
+dotnet build -c Release tests\Craft.Tests
+$env:CRAFT_FILTER="WebCompletion|WebMarkup|WebStyle|WebAngular|WebPlugins|Editor|Inline|AiPlugins|Settings|ApiGuard|Inventory"; dotnet run -c Release --no-build --project tests\Craft.Tests -- --progress --failures-only --failures-file test-output\fails.txt; Remove-Item Env:CRAFT_FILTER
+dotnet build -c Release src\Craft.App -f net10.0-windows10.0.19041.0
+$env:CRAFT_CRASH_FOLDER="D:\Projects\Craft\test-output\crashes"; .\src\Craft.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\Craft.App.exe D:\Projects\Craft\test-output\CarftTestPOC
+```
 
 ## P batch 2 resumed (planned 2026-11-01; last, once W is done)
 

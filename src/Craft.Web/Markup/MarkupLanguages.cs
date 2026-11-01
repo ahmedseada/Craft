@@ -19,11 +19,15 @@ public sealed record HtmlSettings
     /// <summary>Whether <c>style="…"</c> reads as CSS and <c>on*="…"</c> as JavaScript.</summary>
     public bool AttributesAsCode { get; init; } = true;
 
+    /// <summary>Whether the built-in completion offers elements, attributes, values, end tags and entities (<c>completion</c>).</summary>
+    public bool Completion { get; init; } = true;
+
     /// <summary>The settings the HTML plug-in declares.</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
         new("embedded", "true", "Colour and format <script> as JavaScript and <style> as CSS") { Shape = SettingShape.Toggle(SettingSections.Editor, "Embedded scripts and styles", "HTML") },
         new("attributesAsCode", "true", "Colour style=\"…\" as CSS and on*=\"…\" as JavaScript") { Shape = SettingShape.Toggle(SettingSections.Editor, "Attributes as code", "HTML") },
+        new("completion", "true", "Complete elements, attributes, values, end tags and entities (built in, no Node), and CSS in <style> and style=\"…\"") { Shape = SettingShape.Toggle(SettingSections.Editor, "Completion", "HTML") },
     ];
 
     /// <summary>The settings <paramref name="get"/> gives by key (null: the defaults).</summary>
@@ -39,6 +43,7 @@ public sealed record HtmlSettings
         {
             Embedded = MarkupSettings.Toggle(get("embedded"), defaults.Embedded),
             AttributesAsCode = MarkupSettings.Toggle(get("attributesAsCode"), defaults.AttributesAsCode),
+            Completion = MarkupSettings.Toggle(get("completion"), defaults.Completion),
         };
     }
 }
@@ -63,6 +68,9 @@ public sealed record AngularSettings
     /// <summary>Whether the project's <c>@angular/core</c> names the version when <see cref="Version"/> is latest.</summary>
     public bool ProjectVersion { get; init; } = true;
 
+    /// <summary>Whether a template completes (HTML's names, the blocks after '@', bindings after '[' and '(') (<c>completion</c>).</summary>
+    public bool Completion { get; init; } = true;
+
     /// <summary>The settings the Angular plug-in declares.</summary>
     public static IReadOnlyList<PluginSetting> Declared { get; } =
     [
@@ -70,6 +78,7 @@ public sealed record AngularSettings
         new("inlineTemplates", "true", "An Angular project's .ts reads its template: as an Angular template and styles: as its style language") { Shape = SettingShape.Toggle(SettingSections.Editor, "Inline templates and styles", "Angular") },
         new("version", "latest", "The Angular version read: latest, or 16.2, 17.3, ...; before 17 @if and @for are text, before 18.1 @let") { Shape = SettingShape.Text(SettingSections.Editor, "Angular version", "Angular") },
         new("projectVersion", "true", "When the version is latest, read it from the project (@angular/core)") { Shape = SettingShape.Toggle(SettingSections.Editor, "Version from the project", "Angular") },
+        new("completion", "true", "Complete a template's elements, attributes, the blocks after @ and the bindings after [ and ( (built in, no Node)") { Shape = SettingShape.Toggle(SettingSections.Editor, "Completion", "Angular") },
     ];
 
     /// <summary>The settings <paramref name="get"/> gives by key (null: the defaults).</summary>
@@ -88,6 +97,7 @@ public sealed record AngularSettings
             InlineTemplates = MarkupSettings.Toggle(get("inlineTemplates"), defaults.InlineTemplates),
             Version = get("version") is { Length: > 0 } version ? version.Trim() : defaults.Version,
             ProjectVersion = MarkupSettings.Toggle(get("projectVersion"), defaults.ProjectVersion),
+            Completion = MarkupSettings.Toggle(get("completion"), defaults.Completion),
         };
     }
 
@@ -148,8 +158,9 @@ public sealed class HtmlLanguage : LineStateLanguage
     protected override LineStateSession OpenSession(ITextBuffer buffer, LanguageOpenContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var tokenizer = TokenizerOf(Settings());
-        return new LineStateSession(buffer, tokenizer, new HtmlFormatter(tokenizer), context.Settings);
+        var settings = Settings();
+        var tokenizer = TokenizerOf(settings);
+        return new LineStateSession(buffer, tokenizer, new HtmlFormatter(tokenizer), context.Settings, settings.Completion ? HtmlCompletion.Instance : null);
     }
 }
 
@@ -199,7 +210,7 @@ public sealed class AngularHtmlLanguage : LineStateLanguage, ILanguage
         var settings = Settings();
         var workspace = WorkspaceOf(context);
         var tokenizer = TokenizerOf(settings.VersionFor(workspace));
-        var session = new LineStateSession(buffer, tokenizer, new HtmlFormatter(tokenizer), context.Settings);
+        var session = new LineStateSession(buffer, tokenizer, new HtmlFormatter(tokenizer), context.Settings, settings.Completion ? HtmlCompletion.Instance : null);
         if (workspace is null && settings.WantsProject && FolderOf(context) is { } folder)
         {
             LastRead = Learn(session, folder);

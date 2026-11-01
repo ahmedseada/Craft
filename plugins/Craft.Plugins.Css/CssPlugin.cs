@@ -122,6 +122,9 @@ public sealed record CssSettings
     /// <summary>Whether the built-in formatter formats (<c>format</c>); off, Format document changes nothing.</summary>
     public bool Format { get; init; } = true;
 
+    /// <summary>Whether the built-in completion offers properties, values, at-rules, pseudo-classes and SCSS's names (<c>completion</c>).</summary>
+    public bool Completion { get; init; } = true;
+
     /// <summary>The versions the setting offers.</summary>
     public static IReadOnlyList<string> Versions { get; } = ["latest", "2026", "2025", "2024", "2023", "2022", "2021", "2020"];
 
@@ -139,6 +142,10 @@ public sealed record CssSettings
         new("format", "true", "Format document and selection (and format on save) with the built-in formatter")
         {
             Shape = SettingShape.Toggle(SettingSections.Editor, "Built-in format", "CSS, SCSS, LESS"),
+        },
+        new("completion", "true", "Complete properties, values, at-rules, pseudo-classes and SCSS's variables and mixins (built in, no Node)")
+        {
+            Shape = SettingShape.Toggle(SettingSections.Editor, "Completion", "CSS, SCSS, LESS"),
         },
     ];
 
@@ -169,6 +176,7 @@ public sealed record CssSettings
             Year = ParseYear(Get("version")),
             ProjectVersion = Toggle(Get("projectVersion"), Default.ProjectVersion),
             Format = Toggle(Get("format"), Default.Format),
+            Completion = Toggle(Get("completion"), Default.Completion),
         };
     }
 

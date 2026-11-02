@@ -83,6 +83,20 @@ public sealed class DiffHunkGroup : ObservableCollection<DiffRow>, INotifyProper
     /// <summary>"Accepted" or "Rejected", for the header.</summary>
     public string State => _accepted ? "Accepted" : "Rejected";
 
+    /// <summary>
+    /// Whether the user answered this hunk with its own Accept or Reject (<see cref="Answer"/>): once every hunk is, the
+    /// review ends with those answers (the owner, 2026-11-02: a hunk's Accept left the view open with no way out).
+    /// </summary>
+    public bool Answered { get; private set; }
+
+    /// <summary>The user's answer for this hunk: <see cref="Accepted"/> set and <see cref="Answered"/> raised.</summary>
+    public void Answer(bool accepted)
+    {
+        Accepted = accepted;
+        Answered = true;
+        Changed(nameof(Answered));
+    }
+
     /// <inheritdoc cref="INotifyPropertyChanged.PropertyChanged" />
     public new event PropertyChangedEventHandler? PropertyChanged;
 
@@ -162,7 +176,28 @@ public sealed class ProposalDiffPage : ContentPage
         var apply = Button("Apply accepted hunks", colors, primary: false);
         apply.Clicked += (_, _) => _answer.TrySetResult(Answers());
         apply.IsVisible = _groups.Count > 1;
-        var buttons = new HorizontalStackLayout { Spacing = 8, Children = { rejectAll, apply, acceptAll }, VerticalOptions = LayoutOptions.Center };
+        // A way out at any time (the owner, 2026-11-02: "I can't exit this view or close it"): closing leaves the document as
+        // it was, as Reject all does.
+        var close = Button("✕", colors, primary: false);
+        close.Padding = new Thickness(10, 6);
+        ToolTipProperties.SetText(close, "Close without changing the document (the same as Reject all)");
+        SemanticProperties.SetDescription(close, "Close the review without changing the document");
+        close.Clicked += (_, _) => Reject();
+        ToolTipProperties.SetText(rejectAll, "Keep the document as it is and close");
+        ToolTipProperties.SetText(acceptAll, "Apply every hunk as one undo step and close");
+        ToolTipProperties.SetText(apply, "Apply the hunks marked Accepted as one undo step and close");
+        var buttons = new HorizontalStackLayout { Spacing = 8, Children = { rejectAll, apply, acceptAll, close }, VerticalOptions = LayoutOptions.Center };
+        // Each hunk answered with its own Accept or Reject: the review ends with those answers (one hunk's Accept applies it).
+        foreach (var group in _groups)
+        {
+            group.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(DiffHunkGroup.Answered) && EveryHunkAnswered(_groups))
+                {
+                    _answer.TrySetResult(Answers());
+                }
+            };
+        }
         var header = new Grid
         {
             Padding = new Thickness(16, 12),
@@ -198,6 +233,26 @@ public sealed class ProposalDiffPage : ContentPage
 
     /// <summary>The user's answers, one list a file (one answer a hunk).</summary>
     public Task<IReadOnlyList<IReadOnlyList<bool>>> FileAnswers => _answer.Task;
+
+    /// <summary>Whether every hunk of <paramref name="groups"/> was answered with its own Accept or Reject (the review then ends).</summary>
+    public static bool EveryHunkAnswered(IReadOnlyList<DiffHunkGroup> groups)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        if (groups.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var group in groups)
+        {
+            if (!group.Answered)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>Answers Reject all (a cancelled request, the page closed another way).</summary>
     public void Reject() => _answer.TrySetResult(Fill(false));
@@ -359,7 +414,7 @@ public sealed class ProposalDiffPage : ContentPage
         {
             if (sender is BindableObject { BindingContext: DiffHunkGroup group })
             {
-                group.Accepted = accepted;
+                group.Answer(accepted);
             }
         }
     }

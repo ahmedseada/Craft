@@ -27,6 +27,24 @@ namespace Craft.Tests;
 public static class AiTests
 {
     [Test]
+    public static void TheReviewEndsWhenEveryHunkIsAnswered()
+    {
+        // The owner, 2026-11-02: a hunk's Accept left the review open with no way out. Each hunk answered with its own
+        // Accept or Reject ends it with those answers; the page also has ✕ (Reject all) for any time.
+        var diff = TextDiff.OfTexts("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n", "a\nb\nC\nd\ne\nf\ng\nh\nI\nj\nk\n", contextLines: 1);
+        var groups = Craft.Maui.ProposalDiffPage.Groups(diff, null, EditorThemes.Get(EditorThemes.Dark).Colors);
+        Check.True(groups.Count == 2 && groups.All(g => g is { Accepted: true, Answered: false }), "every hunk starts accepted, not yet answered");
+        Check.True(!Craft.Maui.ProposalDiffPage.EveryHunkAnswered(groups), "unanswered: the review stays open");
+        groups[0].Answer(false);
+        Check.True(groups[0] is { Accepted: false, Answered: true, State: "Rejected" } && !Craft.Maui.ProposalDiffPage.EveryHunkAnswered(groups), "one of two answered: still open");
+        groups[1].Answer(true);
+        Check.True(Craft.Maui.ProposalDiffPage.EveryHunkAnswered(groups), "the last hunk answered: the review ends with those answers");
+        var single = Craft.Maui.ProposalDiffPage.Groups(TextDiff.OfTexts("x\n", "y\n", 0), null, EditorThemes.Get(EditorThemes.Dark).Colors);
+        single[0].Answer(true);
+        Check.True(Craft.Maui.ProposalDiffPage.EveryHunkAnswered(single), "one hunk: its Accept applies it and closes the review");
+    }
+
+    [Test]
     public static void DiffShowsTheChangedLinesWithContext()
     {
         var diff = TextDiff.OfTexts("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n", "a\nb\nC\nd\ne\nf\ng\nh\nI\nj\nk\n", contextLines: 1);

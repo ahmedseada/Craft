@@ -262,10 +262,7 @@ public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<IThe
         await using var cancel = cancellationToken.Register(view.Reject);
         await _page.Navigation.PushModalAsync(view);
         var answers = await view.Answer;
-        if (_page.Navigation.ModalStack.Contains(view))
-        {
-            await _page.Navigation.PopModalAsync();
-        }
+        await CloseAsync(view);
 
         return answers;
     }
@@ -284,10 +281,7 @@ public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<IThe
         await using var cancel = cancellationToken.Register(view.Reject);
         await _page.Navigation.PushModalAsync(view);
         var answers = await view.FileAnswers;
-        if (_page.Navigation.ModalStack.Contains(view))
-        {
-            await _page.Navigation.PopModalAsync();
-        }
+        await CloseAsync(view);
 
         return answers;
     }
@@ -301,10 +295,7 @@ public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<IThe
         await using var cancel = cancellationToken.Register(view.Close);
         await _page.Navigation.PushModalAsync(view);
         await view.Closed;
-        if (_page.Navigation.ModalStack.Contains(view))
-        {
-            await _page.Navigation.PopModalAsync();
-        }
+        await CloseAsync(view);
 
         return true;
     }
@@ -319,12 +310,28 @@ public sealed class MauiEditorPresenter(Page page, CraftDialog dialog, Func<IThe
         await using var cancel = cancellationToken.Register(view.Close);
         await _page.Navigation.PushModalAsync(view);
         await view.Closed;
-        if (_page.Navigation.ModalStack.Contains(view))
-        {
-            await _page.Navigation.PopModalAsync();
-        }
+        await CloseAsync(view);
 
         return true;
+    }
+
+    // The modal view taken down once answered; a failure to take it down is reported (Craft's dialog) instead of leaving
+    // the answer waiting behind a view that cannot close (the owner, 2026-11-02).
+    private async Task CloseAsync(Page view)
+    {
+        try
+        {
+            if (_page.Navigation.ModalStack.Contains(view))
+            {
+                await _page.Navigation.PopModalAsync();
+            }
+        }
+#pragma warning disable CA1031 // The answer is given whatever the platform does with the page: reported, never thrown.
+        catch (Exception error)
+#pragma warning restore CA1031
+        {
+            Craft.Core.Diagnostics.CallbackGuard.Report("the review view: closing it", error);
+        }
     }
 
     private ITheme Theme() => theme?.Invoke()

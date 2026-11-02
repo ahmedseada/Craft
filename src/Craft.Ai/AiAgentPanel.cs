@@ -69,8 +69,13 @@ public sealed class AiAgentPanel : ConversationPanel, IModelSessionHost, IDispos
         AgentEngines.Asked += OnEngineAsked;
     }
 
-    /// <summary>The agent engine's model the next task runs with (asked through <see cref="AgentEngines.Ask"/>, or the run continued), or null.</summary>
-    public string? EngineModel => _engineOverride ?? (Continues && _engineSession is not null ? _engineModel : null);
+    /// <summary>
+    /// The agent engine's model the next task runs with (asked through <see cref="AgentEngines.Ask"/>, or the run
+    /// continued), or null. A run continues on an engine only while the agent's model is still that engine's (the owner,
+    /// 2026-11-02: "Claude Code is an option, not a must"): another model picked at the chip runs the next task.
+    /// </summary>
+    public string? EngineModel => _engineOverride
+        ?? (Continues && _engineSession is not null && string.Equals(_settings().AgentRole.Model, _engineModel, StringComparison.OrdinalIgnoreCase) ? _engineModel : null);
 
     // A plug-in asks for a task with an engine's model (a report's "Ask Claude Code"): the panel shows and runs it.
     private void OnEngineAsked(object? sender, AgentEngineAskEventArgs e)

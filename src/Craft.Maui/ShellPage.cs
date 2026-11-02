@@ -1474,10 +1474,14 @@ public sealed class ShellPage : ContentPage, IDisposable
         _ = ShellMotion.ShowAsync(_menuView, -4);
     }
 
-    // An empty state's action: its command, or its folder opened.
+    // An empty state's action: its command, or its folder or file opened.
     private void RunEmptyAction(EmptyAction action)
     {
-        if (action.Path is { } folder)
+        if (action.Path is { } file && action.IsFile)
+        {
+            _ = _shell.OpenFileAsync(file);
+        }
+        else if (action.Path is { } folder)
         {
             _ = _shell.OpenFolderAsync(folder);
         }
@@ -1487,9 +1491,9 @@ public sealed class ShellPage : ContentPage, IDisposable
         }
     }
 
-    // The explorer with no folder says what to do (phase X).
+    // The explorer with no folder says what to do (phase X): Open folder, Open a file, the recent folders and files.
     private void UpdateExplorerEmpty() =>
-        _explorer.SetEmpty(_shell.Workspace is null ? ShellEmptyStates.Explorer(_host, _shell.Recent) : null);
+        _explorer.SetEmpty(_shell.Workspace is null ? ShellEmptyStates.Explorer(_host, _shell.Recent, _shell.Options.ExplorerRecent) : null);
 
     private void OnRecentChanged(object? sender, EventArgs e) => _host.Dispatch("shell: the recent folders", UpdateExplorerEmpty);
 
@@ -1840,8 +1844,9 @@ public sealed class ShellPage : ContentPage, IDisposable
             return;
         }
 
-        // An agent engine's model (Claude Code with an account) is remembered per workspace, as its pick belongs to the project.
-        var layer = write.IsEngine && _shell.Workspace is not null ? SettingLayer.Workspace : SettingLayer.User;
+        // Every pick, an engine's (Claude Code) or a local model's, goes to the file in effect for its variable (the owner,
+        // 2026-11-02: Claude Code was written to the workspace's file, which then hid every later pick written to the user's).
+        var layer = _shell.LayerInEffect(write.Variable);
         if (_shell.ApplySetting(layer, write.Variable, write.Value) is { } problem)
         {
             await _dialog.ShowMessageAsync(pick.Kind == ModelPickKind.Model ? "The model was not set" : "The device was not set", problem);

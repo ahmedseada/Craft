@@ -70,7 +70,7 @@ public static class InventoryTests
             // Phase A1: the diff view.
             ["CRAFT_DIFF_CONTEXT_LINES"] = "1", ["CRAFT_DIFF_LINE_LIMIT"] = "50", ["CRAFT_DIFF_CHECK"] = "false",
             // Phase E4: the shell.
-            ["CRAFT_DATA_FOLDER"] = "data", ["CRAFT_RECENT_LIMIT"] = "5", ["CRAFT_NARROW_WIDTH"] = "600", ["CRAFT_PANEL_EXPLORER_WIDTH"] = "300",
+            ["CRAFT_DATA_FOLDER"] = "data", ["CRAFT_RECENT_LIMIT"] = "5", ["CRAFT_EXPLORER_RECENT"] = "4", ["CRAFT_NARROW_WIDTH"] = "600", ["CRAFT_PANEL_EXPLORER_WIDTH"] = "300",
             ["CRAFT_TREE_INDENT"] = "10",
             ["CRAFT_DIAGNOSTICS_DELAY_MS"] = "250", ["CRAFT_SEMANTIC_MAX_CHARS"] = "1000", ["CRAFT_WORKSPACE_READERS"] = "loose, csproj",
             ["CRAFT_WORKSPACE_CONFIGURATION"] = "Release", ["CRAFT_SEARCH_DELAY_MS"] = "75", ["CRAFT_COMPLETION_DELAY_MS"] = "0", ["CRAFT_COMPLETION_ROWS"] = "7",
@@ -161,7 +161,7 @@ public static class InventoryTests
             PluginFolders = options.PluginFolders, DisabledPlugins = options.DisabledPlugins,
             KeyBindings = options.KeyBindings, HostLogLines = 20, ProposalPreviewCharacters = 40,
             DiffContextLines = 1, DiffLineLimit = 50, DiffCheck = false,
-            DataFolder = "data", RecentLimit = 5, NarrowWidth = 600, TreeWidth = 300, TreeIndent = 10,
+            DataFolder = "data", RecentLimit = 5, ExplorerRecent = 4, NarrowWidth = 600, TreeWidth = 300, TreeIndent = 10,
             DiagnosticsDelayMilliseconds = 250, SemanticMaxCharacters = 1000, WorkspaceReaders = options.WorkspaceReaders, WorkspaceConfiguration = "Release",
             SearchDelayMilliseconds = 75, CompletionDelayMilliseconds = 0, CompletionRows = 7, ProblemsListLimit = 20, HoverDelayMilliseconds = 100,
             SourceGenerators = false, SemanticColorsDelayMilliseconds = -1, MemoryMonitor = "none",

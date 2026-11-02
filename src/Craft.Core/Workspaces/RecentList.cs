@@ -23,7 +23,7 @@ public enum RecentKind
 public sealed record RecentEntry(string Path, RecentKind Kind, DateTimeOffset Opened);
 
 /// <summary>
-/// The recent files and folders, most recent first, at most <see cref="Limit"/> (<see cref="CraftOptions.RecentLimit"/>;
+/// The recent files and folders, most recent first, at most <see cref="Limit"/> of each kind (<see cref="CraftOptions.RecentLimit"/>;
 /// 0 keeps none), kept in a JSON file under the app's data folder (<c>recent.json</c>), written on every change. A path
 /// opened again moves to the front; paths compare ignoring case where the file system does (Windows, macOS). A file that
 /// does not parse starts the list empty and says why in <see cref="Problems"/>. Used on the UI thread.
@@ -56,7 +56,7 @@ public sealed class RecentList
     /// <summary>What was wrong with the file when it was read; empty when nothing was.</summary>
     public IReadOnlyList<string> Problems => _problems;
 
-    /// <summary>The entries kept; lowering it drops the oldest (and saves).</summary>
+    /// <summary>The entries kept of each kind (files, folders); lowering it drops the oldest (and saves).</summary>
     public int Limit
     {
         get => _limit;
@@ -290,14 +290,28 @@ public sealed class RecentList
         return -1;
     }
 
+    // At most the limit of each kind (the owner, 2026-11-02: the explorer lists 10 recent folders and 10 recent files, so
+    // opening many files never pushes the folders out); the oldest of a kind past it fall off.
     private bool Trim()
     {
-        if (_entries.Count <= _limit)
+        int files = 0, folders = 0;
+        int kept = 0;
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            var entry = _entries[i];
+            int count = entry.Kind == RecentKind.Folder ? ++folders : ++files;
+            if (count <= _limit)
+            {
+                _entries[kept++] = entry;
+            }
+        }
+
+        if (kept == _entries.Count)
         {
             return false;
         }
 
-        _entries.RemoveRange(_limit, _entries.Count - _limit);
+        _entries.RemoveRange(kept, _entries.Count - kept);
         return true;
     }
 

@@ -728,6 +728,12 @@ public static class AiPluginTests
             await panel.SubmitAsync("And the tests");
             await panel.Run.WaitAsync(TimeSpan.FromSeconds(20));
             Check.True(engine.Requests[1].Resume == "session-1" && engine.Requests[1].Folder == first.Folder, "a follow-up resumes the engine's session on the same copy");
+            var engineSettings = fixture.Settings;
+            fixture.Settings = engineSettings with { AgentModel = "fake" };
+            Check.True(panel.Continues && panel.EngineModel is null,
+                "another model picked at the agent's chip runs the next task: the engine's session is not continued (the owner, 2026-11-02: Claude Code is an option, not a must)");
+            fixture.Settings = engineSettings;
+            Check.Equal(ScriptedEngine.Model, panel.EngineModel, "the engine's model picked again: its session continues");
             Check.True(await panel.ReviewAsync(), "Review diff: each change is proposed and accepted");
             Check.Equal(2, presenter.Proposals.Count, "one diff per file");
             Check.True(AgentEngines.Ask(ScriptedEngine.Model, "") && panel.EngineModel == ScriptedEngine.Model, "a plug-in's Ask is taken by the agent panel, for its next task");

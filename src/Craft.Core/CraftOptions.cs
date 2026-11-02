@@ -494,8 +494,14 @@ public sealed record CraftOptions
     /// </summary>
     public string? DataFolder { get; init; }
 
-    /// <summary>The recent files and folders kept; 0 keeps none (<c>CRAFT_RECENT_LIMIT</c>).</summary>
+    /// <summary>The recent files and folders kept, at most this many of each kind; 0 keeps none (<c>CRAFT_RECENT_LIMIT</c>).</summary>
     public int RecentLimit { get; init; } = 20;
+
+    /// <summary>
+    /// The recent folders and the recent files the explorer lists with no folder open, at most this many of each
+    /// (<c>CRAFT_EXPLORER_RECENT</c>); 0 lists none.
+    /// </summary>
+    public int ExplorerRecent { get; init; } = 10;
 
     /// <summary>
     /// The window width, in device-independent units, below which the shell shows its narrow (phone) layout: the folder
@@ -960,7 +966,8 @@ public sealed record CraftOptions
         new("CRAFT_DIFF_LINE_LIMIT", "2000", "Changed lines a diff aligns line by line; a longer run is shown removed then added.") { Shape = SettingShape.Whole(SettingSections.Agent, "Diff aligns at most", 0, 100_000, "lines", "Diff view", step: 100) },
         new("CRAFT_DIFF_CHECK", "true", "Whether the diff view shows the language's errors and warnings after the change before it is accepted.") { Shape = SettingShape.Toggle(SettingSections.Agent, "Check the change before accepting", "Diff view") },
         new("CRAFT_DATA_FOLDER", "(local app data)/Craft", "The folder of the app's own files (the recent list, the user's settings.json); from the environment only.") { Shape = SettingShape.PathTo(SettingSections.Files, "Data folder", "Files") },
-        new("CRAFT_RECENT_LIMIT", "20", "The recent files and folders kept; 0 keeps none.") { Shape = SettingShape.Whole(SettingSections.Files, "Recent files and folders kept", 0, 10_000, null, "Files") },
+        new("CRAFT_RECENT_LIMIT", "20", "The recent files and folders kept, at most this many of each kind; 0 keeps none.") { Shape = SettingShape.Whole(SettingSections.Files, "Recent files and folders kept (each)", 0, 10_000, null, "Files") },
+        new("CRAFT_EXPLORER_RECENT", "10", "The recent folders and the recent files the explorer lists with no folder open, at most this many of each; 0 lists none.") { Shape = SettingShape.Whole(SettingSections.Files, "Recent folders and files the explorer lists (each)", 0, 1_000, null, "Files") },
         new("CRAFT_NARROW_WIDTH", "720", "The window width (device-independent units) below which the narrow (phone) layout shows.") { Shape = SettingShape.Number(SettingSections.Appearance, "Narrow layout below", 0, 100_000, 10, "units", "Layout") },
         new("CRAFT_PANEL_EXPLORER_WIDTH", "260", "The explorer's (the rail's side views') width in the wide layout, device-independent units; a splitter drag writes it to the workspace's settings.") { Shape = SettingShape.Number(SettingSections.Appearance, "Explorer width", 40, 10_000, 10, "units", "Layout") },
         new("CRAFT_TREE_INDENT", "14", "The indent of each level of the folder tree (device-independent units).") { Shape = SettingShape.Number(SettingSections.Files, "Tree indent", 0, 200, 1, "units", "Tree") },
@@ -1649,6 +1656,11 @@ public sealed record CraftOptions
         if (Text(read, "CRAFT_RECENT_LIMIT") is { } recent)
         {
             options = options with { RecentLimit = Whole(recent, "CRAFT_RECENT_LIMIT", 0, 10_000) };
+        }
+
+        if (Text(read, "CRAFT_EXPLORER_RECENT") is { } explorerRecent)
+        {
+            options = options with { ExplorerRecent = Whole(explorerRecent, "CRAFT_EXPLORER_RECENT", 0, 1_000) };
         }
 
         if (Text(read, "CRAFT_NARROW_WIDTH") is { } narrow)

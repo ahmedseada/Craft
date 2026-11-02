@@ -85,8 +85,11 @@ public sealed class ShellLayout
         }
     }
 
-    /// <summary>Whether the folder tree shows.</summary>
-    public bool TreeVisible => _hasFolder && (IsNarrow ? _narrowTree : _wideTree);
+    /// <summary>
+    /// Whether the explorer shows: the folder's tree, or with no folder its empty state (Open folder, Open a file, the
+    /// recent folders and files; the owner, 2026-11-02: the explorer opens with no folder too).
+    /// </summary>
+    public bool TreeVisible => IsNarrow ? _narrowTree : _wideTree;
 
     /// <summary>Whether the editor shows (in the narrow layout the tree takes its place).</summary>
     public bool EditorVisible => !IsNarrow || !TreeVisible;

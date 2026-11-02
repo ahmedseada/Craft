@@ -655,7 +655,7 @@ public sealed class ModelsPage : ContentView, IDisposable
     // A card's writes, each the role's own setting through the shell (the chip and the status bar follow); a problem said.
     private void Write(IEnumerable<ModelPickWrite?> writes)
     {
-        string? problem = ModelRoleCards.Apply(writes, (variable, value) => _shell.ApplySetting(SettingLayer.User, variable, value));
+        string? problem = ModelRoleCards.Apply(writes, (variable, value) => _shell.ApplySetting(_shell.LayerInEffect(variable), variable, value));
         _notice.Text = problem ?? "";
         _notice.TextColor = _palette.Error;
         if (problem is null)
@@ -719,7 +719,7 @@ public sealed class ModelsPage : ContentView, IDisposable
         error.IsVisible = false;
         input.Completed += (_, _) =>
         {
-            string? problem = _shell.ApplySetting(SettingLayer.User, field.Variable, string.IsNullOrWhiteSpace(input.Text) ? null : input.Text.Trim());
+            string? problem = _shell.ApplySetting(_shell.LayerInEffect(field.Variable), field.Variable, string.IsNullOrWhiteSpace(input.Text) ? null : input.Text.Trim());
             error.Text = problem ?? "";
             error.IsVisible = problem is not null;
         };
@@ -730,7 +730,7 @@ public sealed class ModelsPage : ContentView, IDisposable
 
     private async Task UseModelAsync(ModelSettingField setting, string? name, string? loadCommand)
     {
-        string? problem = _shell.ApplySetting(SettingLayer.User, setting.Variable, string.IsNullOrWhiteSpace(name) ? null : name.Trim());
+        string? problem = _shell.ApplySetting(_shell.LayerInEffect(setting.Variable), setting.Variable, string.IsNullOrWhiteSpace(name) ? null : name.Trim());
         _notice.Text = problem ?? (string.IsNullOrWhiteSpace(name) ? "The model is cleared." : $"{name!.Trim()} is the model ({setting.Variable}).");
         _notice.TextColor = problem is null ? _palette.Secondary : _palette.Error;
         if (problem is null && loadCommand is not null && !string.IsNullOrWhiteSpace(name))

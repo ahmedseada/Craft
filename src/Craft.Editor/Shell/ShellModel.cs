@@ -1172,6 +1172,17 @@ public sealed partial class ShellModel : IDisposable
     }
 
     /// <summary>
+    /// The settings file a pick of <paramref name="variable"/> takes effect in: the workspace's when it sets the variable
+    /// (it overrides the user's, so a pick written to the user's would not change what runs: the owner's agent model stayed
+    /// Claude Code, 2026-11-02), else the user's (the workspace's when there is no user file).
+    /// </summary>
+    public SettingLayer LayerInEffect(string variable)
+    {
+        ArgumentNullException.ThrowIfNull(variable);
+        return Settings.SourceOf(variable) == SettingSource.Workspace || Settings.User is null ? SettingLayer.Workspace : SettingLayer.User;
+    }
+
+    /// <summary>
     /// Writes <paramref name="value"/> for <paramref name="variable"/> as <see cref="ApplySetting"/> does, into the user's
     /// settings (the workspace's when there is no user file), the file written on the thread pool (the value held at once):
     /// a plug-in's <see cref="IPluginSettings.SetAsync(string, string, string?)"/>. Null when written, else why not.
@@ -1583,7 +1594,7 @@ public sealed partial class ShellModel : IDisposable
         Command(ShellCommandIds.ZoomOut, "View: Zoom out", (_, _) => ZoomCommandAsync(-1), null, "Ctrl+-");
         Command(ShellCommandIds.ZoomReset, "View: Reset the zoom", (_, _) => ZoomCommandAsync(0), null, "Ctrl+0");
         Command(ShellCommandIds.GoToLine, "Go: Go to line", (_, _) => View(ShellViewNames.GoToLine), _ => Tabs.Active is not null, "Ctrl+G");
-        Command(ShellCommandIds.ToggleTree, "View: Show or hide the folder tree", (_, _) => ToggleTree(), _ => Workspace is not null || !Layout.IsNarrow, "Ctrl+B");
+        Command(ShellCommandIds.ToggleTree, "View: Show or hide the folder tree", (_, _) => ToggleTree(), null, "Ctrl+B");
         Command(ShellCommandIds.RefreshTree, "View: Refresh the folder tree", (_, token) => RefreshTreeAsync(token), _ => Tree is not null, null, NoFolder);
         Command(ShellCommandIds.ToggleTheme, "View: Switch light and dark", (_, _) => { ToggleTheme(); return Task.CompletedTask; }, null, null);
         Command(ShellCommandIds.QuickOpen, "Go: Open a file by name ('>' for a command)", (_, _) => View(ShellViewNames.QuickOpen), null, "Ctrl+P");

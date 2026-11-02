@@ -1935,6 +1935,7 @@ sealed class Craft.Editor.Shell.EmptyAction : System.IEquatable<Craft.Editor.She
   Craft.Editor.Shell.EmptyAction <Clone>$()
   System.Boolean Equals(Craft.Editor.Shell.EmptyAction other)
   System.Boolean Equals(System.Object obj)
+  System.Boolean IsFile { get; init; }
   System.Boolean Primary { get; init; }
   System.Int32 GetHashCode()
   System.String CommandId { get; init; }
@@ -1948,10 +1949,12 @@ sealed class Craft.Editor.Shell.EmptyState : System.IEquatable<Craft.Editor.Shel
   System.Boolean Equals(Craft.Editor.Shell.EmptyState other)
   System.Boolean Equals(System.Object obj)
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Actions { get; init; }
+  System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> MoreRecent { get; init; }
   System.Collections.Generic.IReadOnlyList<Craft.Editor.Shell.EmptyAction> Recent { get; init; }
   System.Int32 GetHashCode()
   System.String Icon { get; init; }
   System.String ListTitle { get; init; }
+  System.String MoreListTitle { get; init; }
   System.String Text { get; init; }
   System.String Title { get; init; }
   System.String ToString()
@@ -2856,7 +2859,7 @@ sealed class Craft.Editor.Shell.ShellEditCommands : System.IDisposable
   static System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String, Craft.Abstractions.EditorKey, Craft.Abstractions.KeyModifiers>> MoreKeys { get; }
 static class Craft.Editor.Shell.ShellEmptyStates
   static Craft.Editor.Shell.EmptyState Conversation(Craft.Abstractions.IConversationPanel panel, Craft.Abstractions.ModelProviderStatus model)
-  static Craft.Editor.Shell.EmptyState Explorer(Craft.Editor.EditorHost host, Craft.Core.Workspaces.RecentList recent, System.Int32 recentLimit = 5)
+  static Craft.Editor.Shell.EmptyState Explorer(Craft.Editor.EditorHost host, Craft.Core.Workspaces.RecentList recent, System.Int32 recentLimit = 10)
   static Craft.Editor.Shell.EmptyState Notifications()
   static Craft.Editor.Shell.EmptyState Problems(Craft.Editor.EditorModel model, System.String fileName)
   static Craft.Editor.Shell.EmptyState Search(Craft.Editor.EditorHost host, System.String query, System.Boolean hasFolder, System.Boolean hasEditor, System.Boolean indexing)
@@ -2898,6 +2901,7 @@ sealed class Craft.Editor.Shell.ShellModel : System.IDisposable
   Craft.Core.Documents.RecoveryStore RecoveryStore { get; }
   Craft.Core.Documents.RecoveryStore StartRecovery()
   Craft.Core.Settings.CraftSettings Settings { get; }
+  Craft.Core.Settings.SettingLayer LayerInEffect(System.String variable)
   Craft.Core.Workspaces.RecentList Recent { get; }
   Craft.Core.Workspaces.Workspace Workspace { get; }
   Craft.Editor.Abstractions.IFileDialogs FileDialogs { get; }

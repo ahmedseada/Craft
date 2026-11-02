@@ -256,8 +256,8 @@ public static class ShellMotion
 
 /// <summary>
 /// An empty state (phase X: <see cref="ShellEmptyStates"/>): its title, what to do, its actions as buttons (the first
-/// thing to do in the accent) and a list of recent folders; <see cref="ActionChosen"/> says which was picked (the page
-/// runs its command or opens its folder).
+/// thing to do in the accent) and its lists (the recent folders, the recent files); <see cref="ActionChosen"/> says which
+/// was picked (the page runs its command, or opens its folder or file).
 /// </summary>
 public sealed class EmptyStateView : ContentView
 {
@@ -280,7 +280,8 @@ public sealed class EmptyStateView : ContentView
     {
         ArgumentNullException.ThrowIfNull(state);
         if (state == _shown || (_shown is not null && state.Title == _shown.Title && state.Text == _shown.Text && state.Icon == _shown.Icon && state.ListTitle == _shown.ListTitle
-            && state.Actions.SequenceEqual(_shown.Actions) && state.Recent.SequenceEqual(_shown.Recent)))
+            && state.Actions.SequenceEqual(_shown.Actions) && state.Recent.SequenceEqual(_shown.Recent)
+            && state.MoreListTitle == _shown.MoreListTitle && state.MoreRecent.SequenceEqual(_shown.MoreRecent)))
         {
             return;
         }
@@ -332,23 +333,33 @@ public sealed class EmptyStateView : ContentView
             _stack.Children.Add(buttons);
         }
 
-        if (state.Recent.Count > 0)
+        AddList(state.ListTitle, state.Recent);
+        AddList(state.MoreListTitle, state.MoreRecent);
+    }
+
+    // A list under the actions (the recent folders, the recent files): its caption, then a row per entry.
+    private void AddList(string title, IReadOnlyList<EmptyAction> entries)
+    {
+        if (entries.Count == 0)
         {
-            var caption = p.Label(state.ListTitle, p.Secondary, p.CaptionSize, FontWeight.SemiBold);
-            caption.CharacterSpacing = 0.6;
-            caption.Margin = new Thickness(0, 6, 0, 0);
-            _stack.Children.Add(caption);
-            foreach (var recent in state.Recent)
-            {
-                var row = p.Flat(recent.Label, p.Text, 26, p.SmallSize);
-                InteractiveStates.Attach(row, p, InteractionKind.Row);
-                row.HorizontalOptions = LayoutOptions.Fill;
-                row.ClassId = CraftDialog.RowClassId;
-                ToolTipProperties.SetText(row, recent.Path ?? recent.Label);
-                var chosen = recent;
-                row.Clicked += (_, _) => ActionChosen?.Invoke(this, chosen);
-                _stack.Children.Add(row);
-            }
+            return;
+        }
+
+        var p = _palette;
+        var caption = p.Label(title, p.Secondary, p.CaptionSize, FontWeight.SemiBold);
+        caption.CharacterSpacing = 0.6;
+        caption.Margin = new Thickness(0, 6, 0, 0);
+        _stack.Children.Add(caption);
+        foreach (var recent in entries)
+        {
+            var row = p.Flat(recent.Label, p.Text, 26, p.SmallSize);
+            InteractiveStates.Attach(row, p, InteractionKind.Row);
+            row.HorizontalOptions = LayoutOptions.Fill;
+            row.ClassId = CraftDialog.RowClassId;
+            ToolTipProperties.SetText(row, recent.Path ?? recent.Label);
+            var chosen = recent;
+            row.Clicked += (_, _) => ActionChosen?.Invoke(this, chosen);
+            _stack.Children.Add(row);
         }
     }
 }

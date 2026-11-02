@@ -6,12 +6,16 @@ using Craft.Core.Workspaces;
 
 namespace Craft.Editor.Shell;
 
-/// <summary>An action an empty state offers: a command to run, or a folder to open (a recent one).</summary>
+/// <summary>An action an empty state offers: a command to run, or a folder or a file to open (a recent one).</summary>
 /// <param name="Label">What it shows ("Open folder… (Ctrl+K Ctrl+O)").</param>
 /// <param name="CommandId">The command it runs, or null.</param>
-/// <param name="Path">The folder it opens, or null.</param>
+/// <param name="Path">The folder (or, with <see cref="IsFile"/>, the file) it opens, or null.</param>
 /// <param name="Primary">Whether it is the first thing to do (drawn as the primary button).</param>
-public sealed record EmptyAction(string Label, string? CommandId = null, string? Path = null, bool Primary = false);
+public sealed record EmptyAction(string Label, string? CommandId = null, string? Path = null, bool Primary = false)
+{
+    /// <summary>Whether <see cref="Path"/> is a file to open in a tab rather than a folder to open as the workspace.</summary>
+    public bool IsFile { get; init; }
+}
 
 /// <summary>What a place with nothing in it says (phase X: empty states that say what to do).</summary>
 /// <param name="Title">The line in front ("No folder is open").</param>
@@ -24,6 +28,12 @@ public sealed record EmptyState(string Title, string Text, IReadOnlyList<EmptyAc
 
     /// <summary>The second list's caption ("RECENT", "PROFILES").</summary>
     public string ListTitle { get; init; } = "RECENT";
+
+    /// <summary>A third list under the second (the explorer's recent files), with its caption; empty for none.</summary>
+    public IReadOnlyList<EmptyAction> MoreRecent { get; init; } = [];
+
+    /// <summary>The third list's caption ("RECENT FILES").</summary>
+    public string MoreListTitle { get; init; } = "";
 
     /// <summary>An icon over the title (SVG path data on a 24 by 24 box), or null.</summary>
     public string? Icon { get; init; }
@@ -60,27 +70,45 @@ public static class ShellEmptyStates
         };
     }
 
-    /// <summary>The explorer with no folder: Open folder, Open a file, and up to <paramref name="recentLimit"/> recent folders.</summary>
-    public static EmptyState Explorer(EditorHost host, RecentList recent, int recentLimit = 5)
+    /// <summary>
+    /// The explorer with no folder (the owner, 2026-11-02: it opens with none): Open folder, Open a file, and up to
+    /// <paramref name="recentLimit"/> recent folders and as many recent files (<see cref="Craft.Core.CraftOptions.ExplorerRecent"/>,
+    /// <c>CRAFT_EXPLORER_RECENT</c>), the most recent first.
+    /// </summary>
+    public static EmptyState Explorer(EditorHost host, RecentList recent, int recentLimit = 10)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(recent);
-        var folders = new List<EmptyAction>();
+        var folders = new List<EmptyAction>(Math.Max(0, recentLimit));
+        var files = new List<EmptyAction>(Math.Max(0, recentLimit));
         foreach (var entry in recent.Entries)
         {
-            if (entry.Kind == RecentKind.Folder && folders.Count < recentLimit)
+            bool folder = entry.Kind == RecentKind.Folder;
+            var list = folder ? folders : files;
+            if (list.Count < recentLimit)
             {
-                folders.Add(new EmptyAction(Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)) is { Length: > 0 } name ? name : entry.Path, Path: entry.Path));
+                string name = Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)) is { Length: > 0 } last ? last : entry.Path;
+                list.Add(new EmptyAction(name, Path: entry.Path) { IsFile = !folder });
+            }
+
+            if (folders.Count >= recentLimit && files.Count >= recentLimit)
+            {
+                break;
             }
         }
 
         return new EmptyState("No folder is open",
-            "Open a folder to see its files here, find them by name (Ctrl+P) and let the C# plug-in read its projects.",
+            "Select a folder or a file to start: a folder's files show here, found by name with Ctrl+P, and the C# plug-in reads its projects.",
             [
                 new EmptyAction(Label(host, "Open folder…", ShellCommandIds.OpenFolder), ShellCommandIds.OpenFolder, Primary: true),
                 new EmptyAction(Label(host, "Open a file…", ShellCommandIds.OpenFile), ShellCommandIds.OpenFile),
             ])
-        { Recent = folders };
+        {
+            Recent = folders,
+            ListTitle = "RECENT FOLDERS",
+            MoreRecent = files,
+            MoreListTitle = "RECENT FILES",
+        };
     }
 
     /// <summary>

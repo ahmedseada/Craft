@@ -320,11 +320,21 @@ public static class ExperienceTests
         using var fixture = new ShellFixture(folder);
         var host = fixture.Host;
         fixture.Shell.Recent.Add(folder.File("Work"), RecentKind.Folder);
+        fixture.Shell.Recent.Add(folder.File("notes.txt"), RecentKind.File);
         var explorer = ShellEmptyStates.Explorer(host, fixture.Shell.Recent);
         Check.Equal("No folder is open", explorer.Title, "the explorer with no folder");
         Check.True(explorer.Actions[0] is { Primary: true, CommandId: ShellCommandIds.OpenFolder } open && open.Label.Contains(host.KeysOf(ShellCommandIds.OpenFolder)!, StringComparison.Ordinal),
             $"offers Open folder first, with its keys ({explorer.Actions[0].Label})");
-        Check.True(explorer.Recent is [{ Label: "Work", Path: { } recent }] && recent == folder.File("Work"), "and the recent folders");
+        Check.True(explorer.Recent is [{ Label: "Work", Path: { } recent, IsFile: false }] && recent == folder.File("Work") && explorer.ListTitle == "RECENT FOLDERS", "and the recent folders");
+        Check.True(explorer.MoreRecent is [{ Label: "notes.txt", Path: { } recentFile, IsFile: true }] && recentFile == folder.File("notes.txt") && explorer.MoreListTitle == "RECENT FILES",
+            "and the recent files, each opened as a file (the owner, 2026-11-02: 10 recent folders and 10 recent files)");
+        for (int i = 0; i < 12; i++)
+        {
+            fixture.Shell.Recent.Add(folder.File($"f{i}.txt"), RecentKind.File);
+        }
+
+        var full = ShellEmptyStates.Explorer(host, fixture.Shell.Recent, 10);
+        Check.True(full.MoreRecent.Count == 10 && full.MoreRecent[0].Label == "f11.txt" && full.Recent.Count == 1, "at most 10 recent files, the latest first; the folders are still listed");
 
         Check.Equal("No problems to show", ShellEmptyStates.Problems(null, null).Title, "Problems with no file");
         var (plain, _, _) = Editors.Make("text");

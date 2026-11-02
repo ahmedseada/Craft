@@ -123,21 +123,23 @@ public static class ShellTests
         Check.SequenceEqual([a, folder.Path, b], [.. list.Entries.Select(e => e.Path)], "opened again moves first");
         list.Add(c, RecentKind.File);
         list.Add(d, RecentKind.File);
-        Check.SequenceEqual([d, c, a], [.. list.Entries.Select(e => e.Path)], "the oldest fall off past the limit");
+        Check.SequenceEqual([d, c, a, folder.Path], [.. list.Entries.Select(e => e.Path)],
+            "the oldest file falls off past the limit of each kind; the folder, of the other kind, stays (10 recent folders and 10 recent files)");
         Check.Equal(6, changes, "each change is raised");
 
         list.FlushAsync().GetAwaiter().GetResult();             // a change is written off the UI thread
         var read = RecentList.Load(path, 3);
         Check.Equal(0, read.Problems.Count, "the file reads back clean");
-        Check.SequenceEqual([d, c, a], [.. read.Entries.Select(e => e.Path)], "in the same order");
+        Check.SequenceEqual([d, c, a, folder.Path], [.. read.Entries.Select(e => e.Path)], "in the same order");
         Check.Equal(2, read.RemoveMissing(), "c and d do not exist");
-        Check.SequenceEqual([a], [.. read.Entries.Select(e => e.Path)], "the one that exists stays");
+        Check.SequenceEqual([a, folder.Path], [.. read.Entries.Select(e => e.Path)], "the ones that exist stay");
         read.Add(folder.Path, RecentKind.Folder);
         read.FlushAsync().GetAwaiter().GetResult();
         Check.Equal(RecentKind.Folder, RecentList.Load(path, 3).Entries[0].Kind, "a folder is stored as one");
+        read.Add(b, RecentKind.File);
         read.Limit = 1;
         read.FlushAsync().GetAwaiter().GetResult();
-        Check.Equal(1, RecentList.Load(path, 10).Entries.Count, "lowering the limit drops the oldest and saves");
+        Check.SequenceEqual([b, folder.Path], [.. RecentList.Load(path, 10).Entries.Select(e => e.Path)], "lowering the limit drops the oldest of each kind and saves");
         Check.True(read.Remove(folder.Path) && read.Entries.Count == 0, "removed");
 
         var off = RecentList.Load(folder.File("off.json"), 0);
@@ -159,7 +161,13 @@ public static class ShellTests
         var layout = new ShellLayout(new CraftOptions());
         int changes = 0;
         layout.Changed += (_, _) => changes++;
-        Check.True(!layout.TreeVisible && layout.EditorVisible, "wide, no folder: no tree");
+        Check.True(layout.TreeVisible && layout.EditorVisible, "wide, no folder: the explorer shows beside the editor (its empty state: open a folder or a file, the recent ones)");
+        Check.True(layout.UpdateWidth(500) && !layout.TreeVisible && layout.EditorVisible, "narrow, no folder: the editor until the explorer is asked for");
+        layout.ToggleTree();
+        Check.True(layout.TreeVisible && !layout.EditorVisible, "narrow, no folder: Ctrl+B shows the explorer in the editor's place");
+        layout.ToggleTree();
+        Check.True(layout.UpdateWidth(1200) && !layout.IsNarrow, "wide again");
+        changes = 0;
         layout.HasFolder = true;
         Check.True(layout.TreeVisible && layout.EditorVisible, "wide with a folder: the tree beside the editor");
         Check.True(layout.UpdateWidth(500) && layout.IsNarrow, "a narrow window: the narrow layout");
@@ -310,6 +318,9 @@ public static class ShellTests
             int optionsChanged = 0;
             shell.OptionsChanged += (_, _) => optionsChanged++;
             Check.Equal(null, shell.ApplySetting(SettingLayer.Workspace, "CRAFT_TAB_SIZE", "6"), "a setting written to the workspace");
+            Check.Equal(SettingLayer.Workspace, shell.LayerInEffect("CRAFT_TAB_SIZE"),
+                "a pick of a variable the workspace's file sets goes there, where it takes effect (a pick written to the user's file would stay hidden behind it)");
+            Check.Equal(SettingLayer.User, shell.LayerInEffect("CRAFT_THEME"), "a pick of a variable no workspace file sets goes to the user's file");
             Check.True(shell.Options.TabSize == 6 && optionsChanged == 1, "applied at once");
             Check.True(shell.ApplySetting(SettingLayer.Workspace, "CRAFT_TAB_SIZE", "wide") is { } refused && refused.Contains("CRAFT_TAB_SIZE", StringComparison.Ordinal), "a bad value refused with the reason");
             Check.Equal(null, shell.ApplySetting(SettingLayer.User, "CRAFT_THEME", "light"), "the user's theme");
@@ -343,6 +354,9 @@ public static class ShellTests
             Check.True(ui.Picked.Count == 3 && ui.Picked[1].StartsWith("File: ", StringComparison.Ordinal), "the recent list is offered, kinds named");
             shell.CloseFolder();
             Check.True(shell.Workspace is null && shell.Options.TabSize == 4 && !shell.Layout.HasFolder, "the folder closed: its settings no longer apply");
+            Check.Equal(SettingLayer.User, shell.LayerInEffect("CRAFT_TAB_SIZE"), "with no folder a pick goes to the user's file");
+            Check.True(host.Commands.First(c => c.Name == ShellCommandIds.ToggleTree).CanExecute(host), "with no folder Ctrl+B can still run");
+            Check.True(await host.ExecuteCommandAsync(ShellCommandIds.ToggleTree) && shell.Layout.TreeVisible, "and opens the explorer (its empty state) with no folder open");
         }
 
         Check.Equal(commandsBefore, EditorCommands.Names.Count, "the shell's commands are taken back");

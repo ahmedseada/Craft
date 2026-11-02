@@ -125,6 +125,7 @@ sealed class Craft.Core.CraftOptions : System.IEquatable<Craft.Core.CraftOptions
   System.Int32 DiffLineLimit { get; init; }
   System.Int32 DoubleClickMilliseconds { get; init; }
   System.Int32 EditorGroupsMax { get; init; }
+  System.Int32 ExplorerRecent { get; init; }
   System.Int32 FindBackgroundCharacters { get; init; }
   System.Int32 FindCountLimit { get; init; }
   System.Int32 FindRegexTimeoutMilliseconds { get; init; }

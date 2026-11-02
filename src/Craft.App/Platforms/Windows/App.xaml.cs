@@ -15,4 +15,12 @@ public partial class App : MauiWinUIApplication
 
     /// <inheritdoc />
     protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+
+    /// <inheritdoc />
+    protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
+    {
+        // Again at launch, in case the platform set the UI thread's context after the constructor (once: a guarded one stays).
+        Craft.Core.Diagnostics.GuardedSynchronizationContext.Install();
+        base.OnLaunched(args);
+    }
 }

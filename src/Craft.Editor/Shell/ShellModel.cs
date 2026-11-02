@@ -676,7 +676,8 @@ public sealed partial class ShellModel : IDisposable
         _memoryWatch = null;
         try
         {
-            _memoryWatch = MemoryPressureMonitors.Get(Options.MemoryMonitor).Watch(OnMemoryPressure);
+            // The monitor reports on a pool thread, where a throw would end the process: guarded and reported.
+            _memoryWatch = MemoryPressureMonitors.Get(Options.MemoryMonitor).Watch(level => Craft.Core.Diagnostics.CallbackGuard.Run("memory pressure: the monitor's report", () => OnMemoryPressure(level)));
         }
         catch (NotRegisteredException e)
         {

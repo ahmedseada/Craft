@@ -937,7 +937,8 @@ public sealed class ShellPage : ContentPage, IDisposable
             return;
         }
 
-        _watchdog = new UiWatchdog(action => Dispatcher.Dispatch(action), _host.Labels, options.UiWatchdogMilliseconds, options.UiStallMilliseconds)
+        // The tick goes straight to the dispatcher (no label, so it never names a stall), guarded like every UI callback.
+        _watchdog = new UiWatchdog(action => Dispatcher.Dispatch(() => CallbackGuard.Run("the UI watchdog's tick", action)), _host.Labels, options.UiWatchdogMilliseconds, options.UiStallMilliseconds)
         {
             WriteReport = _stallReports.Write,
         };

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Ahmed Seada
 // Licensed under the Apache License, Version 2.0. See LICENSE in the repository root.
 
+using Craft.Core.Diagnostics;
 using Craft.Editor.Activities;
 using Microsoft.Maui.Dispatching;
 
@@ -32,17 +33,31 @@ internal static class UiDispatch
         dispatcher.DispatchDelayed(delay, () => Run(label, action));
     }
 
-    /// <summary>Runs <paramref name="action"/> now under <paramref name="label"/> (a window event's handler).</summary>
+    /// <summary>
+    /// Runs <paramref name="action"/> now under <paramref name="label"/> (a window event's handler, a dispatched callback).
+    /// What it throws is reported (<see cref="CallbackGuard"/>: a report written off the UI thread, Craft's dialog, Output)
+    /// and the UI thread goes on: an exception left to the dispatcher's callback ends the process with WinUI's native
+    /// fail-fast, which no handler sees (the owner's run 2026-11-02: the Models page's refresh threw, the app closed).
+    /// </summary>
     public static void Run(string label, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        if (Labels is { } labels)
+        try
         {
-            labels.Run(label, action);
+            if (Labels is { } labels)
+            {
+                labels.Run(label, action);
+            }
+            else
+            {
+                action();
+            }
         }
-        else
+#pragma warning disable CA1031 // Nothing may leave a UI callback: reported, and the UI thread goes on.
+        catch (Exception error)
+#pragma warning restore CA1031
         {
-            action();
+            CallbackGuard.Report("the UI dispatcher: " + label, error);
         }
     }
 

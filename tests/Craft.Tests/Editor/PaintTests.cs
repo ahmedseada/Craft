@@ -324,6 +324,7 @@ public static class PaintTests
             bool rethrow = PaintGuard.Handle("editor: paint", "render: draw the lines", error);
             Check.True(!rethrow, "an ordinary failure is swallowed: the frame is skipped");
             Check.Equal(before + 1, PaintGuard.Failures, "counted");
+            Check.True(CallbackGuard.WhenReported().Wait(TimeSpan.FromSeconds(10)), "the failure is delivered off the painting thread");
             Check.True(failures.Count == 1 && failures[0].Where.Contains("editor: paint", StringComparison.Ordinal) && failures[0].Where.Contains("render: draw the lines", StringComparison.Ordinal),
                 $"reported with the surface and its step: {string.Join(" / ", failures.Select(f => f.Where))}");
             Check.True(ReferenceEquals(error, failures[0].Error), "the exception itself goes to Output (its type: rule 90)");
@@ -331,6 +332,7 @@ public static class PaintTests
             Check.True(PaintGuard.Handle("editor: paint", "render", lost), "a lost device is let through to Win2D's control, which makes it again");
             Check.True(PaintGuard.IsDeviceLost(new InvalidOperationException("wrapped", new COMException("reset", unchecked((int)0x8899000C)))), "also inside another exception");
             Check.True(!PaintGuard.IsDeviceLost(new COMException("other", unchecked((int)0x80004005))), "another COM failure is not a lost device");
+            Check.True(CallbackGuard.WhenReported().Wait(TimeSpan.FromSeconds(10)), "nothing more pending");
             Check.Equal(1, failures.Count, "a lost device is noted in the trail, not reported as a failure");
         }
         finally

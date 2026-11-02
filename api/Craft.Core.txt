@@ -302,6 +302,7 @@ static class Craft.Core.Diagnostics.CallbackGuard
   event System.EventHandler<Craft.Core.Diagnostics.CallbackFailure> Failed
   static Craft.Core.CraftOptions Options { get; set; }
   static System.Boolean Run(System.String where, System.Action action)
+  static System.Threading.Tasks.Task WhenReported()
   static System.Void Report(System.String where, System.Exception error)
   static System.Void Reset()
 static class Craft.Core.Diagnostics.CrashReports
@@ -358,6 +359,15 @@ static class Craft.Core.Diagnostics.EventLogCrashXml
   static Craft.Core.Abstractions.CrashRecord Parse(System.String xml, Craft.Core.Abstractions.CrashRecordQuery query)
   static System.String Meaning(System.String code)
   static System.String XPath(Craft.Core.Abstractions.CrashRecordQuery query)
+sealed class Craft.Core.Diagnostics.GuardedSynchronizationContext : System.Threading.SynchronizationContext
+  System.Threading.SynchronizationContext CreateCopy()
+  System.Threading.SynchronizationContext Inner { get; }
+  System.Void OperationCompleted()
+  System.Void OperationStarted()
+  System.Void Post(System.Threading.SendOrPostCallback d, System.Object state)
+  System.Void Send(System.Threading.SendOrPostCallback d, System.Object state)
+  ctor(System.Threading.SynchronizationContext inner, System.String where)
+  static Craft.Core.Diagnostics.GuardedSynchronizationContext Install()
 static class Craft.Core.Diagnostics.PaintGuard
   static System.Boolean Handle(System.String surface, System.String step, System.Exception error)
   static System.Boolean IsDeviceLost(System.Exception error)

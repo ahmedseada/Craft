@@ -247,6 +247,7 @@ public static class CrashWatchTests
             Check.True(!CallbackGuard.Run("a test callback", static () => throw new InvalidOperationException("thrown in a callback")), "the guard catches and says so");
             Check.True(!CallbackGuard.Run("a test callback", static () => throw new InvalidOperationException("again")), "and again");
             Check.True(CallbackGuard.Run("a test callback", static () => { }), "a callback that does not throw");
+            Check.True(CallbackGuard.WhenReported().Wait(TimeSpan.FromSeconds(10)), "the reports are written and raised off the failed thread, in order");
             Check.True(failures is [{ ReportPath: { } report }, { ReportPath: null }] && File.ReadAllText(report).Contains("thrown in a callback", StringComparison.Ordinal),
                 "both raised, the report written once for the place and type");
             Check.True(Path.GetFileName(failures[0].ReportPath!).StartsWith("callback-", StringComparison.Ordinal), "a callback-<time>.txt the problem report folds in");
@@ -257,6 +258,61 @@ public static class CrashWatchTests
             CallbackGuard.Options = previous;
             CallbackGuard.Reset();
         }
+    }
+
+    [Test]
+    public static void TheGuardedContextReportsWhatAPostedCallbackThrowsAndGoesOn()
+    {
+        using var folder = new TempFolder();
+        CallbackGuard.Reset();
+        var previousOptions = CallbackGuard.Options;
+        CallbackGuard.Options = new CraftOptions { CrashFolder = folder.Path };
+        var failures = new List<CallbackFailure>();
+        void OnFailed(object? sender, CallbackFailure failure) => failures.Add(failure);
+        CallbackGuard.Failed += OnFailed;
+        var previous = SynchronizationContext.Current;
+        var inner = new InlineContext();
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(inner);
+            var guarded = GuardedSynchronizationContext.Install();
+            Check.True(guarded is not null && ReferenceEquals(SynchronizationContext.Current, guarded) && ReferenceEquals(guarded.Inner, inner),
+                "the thread's context is wrapped (the owner, 2026-11-02: a global handler, the UI thread going on)");
+            Check.True(ReferenceEquals(GuardedSynchronizationContext.Install(), guarded), "once: installing again keeps the guarded one");
+            int ran = 0;
+            guarded!.Post(static _ => throw new InvalidOperationException("thrown in an async handler"), null);
+            guarded.Post(_ => ran++, null);
+            Check.Equal(2, inner.Posted, "both callbacks went through the platform's context");
+            Check.Equal(1, ran, "the next callback still ran: the thread went on");
+            Check.True(CallbackGuard.WhenReported().Wait(TimeSpan.FromSeconds(10)), "the failure was delivered off the failed thread");
+            Check.True(failures is [{ Error: InvalidOperationException { Message: "thrown in an async handler" }, ReportPath: { } report }] && File.Exists(report)
+                && failures[0].Where.Contains("UI thread", StringComparison.Ordinal), "reported once, with a report Craft's dialog shows");
+            Check.True(guarded.CreateCopy() is GuardedSynchronizationContext, "a copy is guarded too");
+            Check.Throws<InvalidOperationException>(() => guarded.Send(static _ => throw new InvalidOperationException("sent"), null), "Send's caller waits for it and gets its exception");
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+            CallbackGuard.Failed -= OnFailed;
+            CallbackGuard.Options = previousOptions;
+            CallbackGuard.Reset();
+        }
+    }
+
+    // A platform context that runs each posted callback at once (a dispatcher's queue, drained), counting them.
+    private sealed class InlineContext : SynchronizationContext
+    {
+        public int Posted { get; private set; }
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Posted++;
+            d(state);
+        }
+
+        public override void Send(SendOrPostCallback d, object? state) => d(state);
+
+        public override SynchronizationContext CreateCopy() => new InlineContext();
     }
 
     private static InvalidOperationException MakeException()

@@ -13,7 +13,9 @@ namespace Craft.App.WinUI;
 /// written as a report, noted in the trail, and handed to <see cref="CallbackGuard"/>, whose page shows it in Craft's own
 /// dialog with Copy report, and in Output; the app goes on. Only an exception that leaves a raw thread of its own ends
 /// the process (.NET gives no way to go on): its report is written and shown in Win32's message box (Ctrl+C copies it),
-/// which shows even when the window's XAML is what failed.
+/// which shows even when the window's XAML is what failed. The UI thread's synchronization context is wrapped in
+/// <see cref="GuardedSynchronizationContext"/>, so an awaited continuation or an async handler that throws is reported too;
+/// queued UI work is guarded where it is queued (the host's Dispatch, the views' UiDispatch).
 /// </summary>
 internal static partial class CrashDialog
 {
@@ -28,6 +30,9 @@ internal static partial class CrashDialog
     public static void Install(Microsoft.UI.Xaml.Application app)
     {
         ArgumentNullException.ThrowIfNull(app);
+        // The UI thread's context guarded (the owner, 2026-11-02): an awaited continuation's or an async handler's exception
+        // is reported there and the thread goes on, instead of leaving WinUI's dispatcher, which ends the process for it.
+        GuardedSynchronizationContext.Install();
         app.UnhandledException += (_, e) =>
         {
             // Handled: the window and its UI thread go on. WinUI's exception may be a bare COM error; its Message carries the
